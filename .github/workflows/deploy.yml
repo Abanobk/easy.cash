@@ -1,0 +1,161 @@
+# Deploy to TrueNAS from GitHub Actions.
+# Uses Tailscale so the runner can reach the NAS Tailscale IP (e.g. 100.x.x.x).
+# Same pattern as easy.shope — see README.md for GitHub Secrets setup.
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Install SSH key
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          test -n "${SSH_PRIVATE_KEY:-}" || { echo "Missing secret SSH_PRIVATE_KEY"; exit 1; }
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "${SSH_PRIVATE_KEY}" | tr -d '\r' > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          echo "Verifying key fingerprint (public side only):"
+          ssh-keygen -l -f ~/.ssh/deploy_key || { echo "SSH_PRIVATE_KEY is not a valid OpenSSH private key. Re-copy from: cat ~/.ssh/github_deploy_easyshope"; exit 1; }
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate Docker build
+        run: docker build .
+
+      - name: Connect Tailscale
+        uses: tailscale/github-action@v2
+        with:
+          authkey: ${{ secrets.TAILSCALE_AUTHKEY }}
+
+      - name: Wait for TrueNAS on Tailscale
+        timeout-minutes: 35
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          WAIT_ROUNDS: ${{ vars.TRUENAS_WAIT_ROUNDS || '90' }}
+          WAIT_SLEEP: ${{ vars.TRUENAS_WAIT_SLEEP || '20' }}
+        run: |
+          set -euo pipefail
+          test -n "${SSH_HOST:-}" || { echo "Missing secret SSH_HOST"; exit 1; }
+          rounds="${WAIT_ROUNDS:-90}"
+          sleep_secs="${WAIT_SLEEP:-20}"
+          total_min=$(( rounds * sleep_secs / 60 ))
+          echo "Waiting up to ~${total_min} min for TrueNAS (${rounds} rounds x ${sleep_secs}s)."
+          for i in $(seq 1 "${rounds}"); do
+            mapfile -t CANDIDATES < <(
+              printf '%s\n' "${SSH_HOST}"
+              tailscale status 2>/dev/null | awk '$2 ~ /^truenas/ && $NF != "offline" { print $1 }' || true
+            )
+            declare -A SEEN=()
+            HOSTS=()
+            for host in "${CANDIDATES[@]}"; do
+              [ -n "${host:-}" ] || continue
+              if [ -z "${SEEN[$host]:-}" ]; then
+                SEEN[$host]=1
+                HOSTS+=("$host")
+              fi
+            done
+            for host in "${HOSTS[@]}"; do
+              if tailscale ping -c 1 -timeout 5s "${host}" >/dev/null 2>&1; then
+                echo "Tailscale ping OK on ${host} (round ${i}/${rounds})"
+                echo "SSH_HOST=${host}" >> "${GITHUB_ENV}"
+                exit 0
+              fi
+            done
+            unset SEEN HOSTS
+            echo "Round ${i}/${rounds}: no TrueNAS peer reachable yet, sleeping ${sleep_secs}s..."
+            sleep "${sleep_secs}"
+          done
+          echo "TrueNAS did not respond to tailscale ping within ~${total_min} minutes."
+          tailscale status || true
+          exit 1
+
+      - name: Trust host key
+        env:
+          SSH_KNOWN_HOSTS: ${{ secrets.SSH_KNOWN_HOSTS }}
+          SSH_HOST: ${{ env.SSH_HOST }}
+        run: |
+          set -euo pipefail
+          test -n "${SSH_HOST:-}" || { echo "Missing secret SSH_HOST"; exit 1; }
+          if [ -n "${SSH_KNOWN_HOSTS:-}" ]; then
+            echo "$SSH_KNOWN_HOSTS" >> ~/.ssh/known_hosts
+          else
+            for i in $(seq 1 12); do
+              if ssh-keyscan -H -T 15 "$SSH_HOST" >> ~/.ssh/known_hosts 2>/dev/null; then
+                break
+              fi
+              sleep 5
+            done
+          fi
+          chmod 644 ~/.ssh/known_hosts
+
+      - name: Upload deploy bundle
+        env:
+          SSH_HOST: ${{ env.SSH_HOST }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+        run: |
+          set -euo pipefail
+          test -n "${SSH_USER:-}" || { echo "Missing secret SSH_USER"; exit 1; }
+          test -n "${DEPLOY_PATH:-}" || { echo "Missing secret DEPLOY_PATH"; exit 1; }
+          SSH_OPTS="-i ~/.ssh/deploy_key -o BatchMode=yes -o IdentitiesOnly=yes -o ConnectTimeout=20 -o ServerAliveInterval=10 -o ServerAliveCountMax=3"
+          retry_ssh() {
+            local attempt=1
+            local max=8
+            while [ "$attempt" -le "$max" ]; do
+              echo "SSH attempt ${attempt}/${max}..."
+              if ssh ${SSH_OPTS} "${SSH_USER}@${SSH_HOST}" "$@"; then
+                return 0
+              fi
+              sleep $((attempt * 5))
+              attempt=$((attempt + 1))
+            done
+            return 1
+          }
+          tar -czf /tmp/easy-cash-deploy.tgz \
+            --exclude=node_modules \
+            --exclude=dist \
+            --exclude=.git \
+            --exclude=.manus-logs \
+            .
+          retry_ssh "set -euo pipefail; mkdir -p \"${DEPLOY_PATH}\""
+          for attempt in $(seq 1 8); do
+            echo "Upload attempt ${attempt}/8..."
+            if cat /tmp/easy-cash-deploy.tgz | ssh ${SSH_OPTS} "${SSH_USER}@${SSH_HOST}" "set -euo pipefail; tar -xzf - -C \"${DEPLOY_PATH}\""; then
+              exit 0
+            fi
+            sleep $((attempt * 5))
+          done
+          echo "Upload failed after retries"
+          exit 1
+
+      - name: Run docker compose on TrueNAS
+        env:
+          SSH_HOST: ${{ env.SSH_HOST }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+        run: |
+          set -euo pipefail
+          SSH_OPTS="-i ~/.ssh/deploy_key -o BatchMode=yes -o IdentitiesOnly=yes -o ConnectTimeout=20 -o ServerAliveInterval=10 -o ServerAliveCountMax=3"
+          for attempt in $(seq 1 8); do
+            echo "Compose deploy attempt ${attempt}/8..."
+            if ssh ${SSH_OPTS} "${SSH_USER}@${SSH_HOST}" \
+              "set -euo pipefail; cd \"${DEPLOY_PATH}\"; test -f .env || cp .env.example .env; (docker compose version >/dev/null 2>&1 || docker-compose version >/dev/null 2>&1) || { echo 'Docker Compose is not available on TrueNAS shell'; exit 1; }; if docker compose version >/dev/null 2>&1; then docker compose up -d mysql; docker compose up -d --build --remove-orphans --force-recreate app; else docker-compose up -d mysql; docker-compose up -d --build --remove-orphans --force-recreate app; fi; for i in \$(seq 1 60); do curl -fsS http://127.0.0.1:8099/api/health | grep -q 'easy-cash-erp' && break; sleep 3; done; curl -fsS http://127.0.0.1:8099/api/health | grep 'easy-cash-erp'; printf '%s %s\n' \"\$(date -u +\"%Y-%m-%dT%H:%M:%SZ\")\" \"${GITHUB_SHA}\" | tee \"${DEPLOY_PATH}/last_deploy.txt\" >/dev/null"; then
+              exit 0
+            fi
+            sleep $((attempt * 5))
+          done
+          exit 1

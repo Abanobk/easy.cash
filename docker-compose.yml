@@ -1,0 +1,49 @@
+services:
+  mysql:
+    image: mysql:8.4
+    container_name: easy-cash-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-easy_cash}
+      MYSQL_USER: ${MYSQL_USER:-easy_cash}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-easy_cash_dev}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-easy_cash_root_dev}
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p\"$$MYSQL_ROOT_PASSWORD\" || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 30s
+    volumes:
+      - mysql-data:/var/lib/mysql
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+
+  app:
+    build:
+      context: .
+      args:
+        VITE_APP_TITLE: ${VITE_APP_TITLE:-Easy Cash - برنامج المحاسبة}
+    container_name: easy-cash-app
+    restart: unless-stopped
+    ports:
+      - "${APP_PORT:-8099}:3000"
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      DATABASE_URL: mysql://${MYSQL_USER:-easy_cash}:${MYSQL_PASSWORD:-easy_cash_dev}@mysql:3306/${MYSQL_DATABASE:-easy_cash}
+      JWT_SECRET: ${JWT_SECRET:-dev-only-change-me}
+      VITE_APP_TITLE: ${VITE_APP_TITLE:-Easy Cash - برنامج المحاسبة}
+    depends_on:
+      mysql:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/health').then(r=>r.text()).then(t=>process.exit(t.includes('easy-cash-erp')?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 40s
+
+volumes:
+  mysql-data:

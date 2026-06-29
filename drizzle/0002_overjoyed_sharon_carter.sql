@@ -1,0 +1,2 @@
+ALTER TABLE `attendance` MODIFY COLUMN `status` enum('present','absent','late','half_day','leave','holiday') DEFAULT 'present';--> statement-breakpoint
+ALTER TABLE `attendance` ADD `overtime` int DEFAULT 0;

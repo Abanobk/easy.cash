@@ -1,0 +1,14 @@
+node_modules
+dist
+.git
+.env
+.env.*
+*.log
+.manus-logs
+.webdev
+coverage
+.DS_Store
+.project-config.json
+template.json
+todo.md
+references
