@@ -543,8 +543,6 @@ export default function SuperAdmin() {
               </div>
             </div>
           )}
-        </main>
-      </div>
 
       {/* ===== EDIT USER MODAL ===== */}
       <Dialog open={!!editUserModal} onOpenChange={() => setEditUserModal(null)}>
@@ -1051,6 +1049,9 @@ export default function SuperAdmin() {
               )}
             </div>
           )}
+
+        </main>
+      </div>
 
       {/* ===== ADD/EDIT SUBSCRIPTION MODAL ===== */}
       <Dialog open={addSubModal || !!editSubModal} onOpenChange={() => { setAddSubModal(false); setEditSubModal(null); }}>
