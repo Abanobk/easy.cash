@@ -341,7 +341,7 @@ const itemsRouter = router({
   all: protectedProcedure.query(async ({ ctx }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-    return db.select().from(items).where(tenantWhere(items, ctx.tenantId, eq(items.isActive, true))).orderBy(items.name));
+    return db.select().from(items).where(tenantWhere(items, ctx.tenantId, eq(items.isActive, true))).orderBy(items.name);
   }),
   byId: protectedProcedure.input(z.number()).query(async ({ ctx, input }) => {
     const db = await getDb();
@@ -1078,7 +1078,7 @@ const hrRouter = router({
             status: r.status as any,
             notes: r.notes,
           }))
-        );
+        ));
       }
       return { success: true, count: input.records.length };
     }),
@@ -1160,7 +1160,7 @@ const accountsRouter = router({
   chart: protectedProcedure.query(async ({ ctx }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-    return db.select().from(accounts).where(tenantWhere(accounts, ctx.tenantId, eq(accounts.isActive, true))).orderBy(accounts.code));
+    return db.select().from(accounts).where(tenantWhere(accounts, ctx.tenantId, eq(accounts.isActive, true))).orderBy(accounts.code);
   }),
   create: protectedProcedure.input(z.object({
     code: z.string().min(1),
@@ -1365,7 +1365,7 @@ const reportsRouter = router({
   balanceSheet: protectedProcedure.query(async ({ ctx }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-    const allAccounts = await db.select().from(accounts).where(tenantWhere(accounts, ctx.tenantId, eq(accounts.isActive, true))).orderBy(accounts.code));
+    const allAccounts = await db.select().from(accounts).where(tenantWhere(accounts, ctx.tenantId, eq(accounts.isActive, true))).orderBy(accounts.code);
     const assets = allAccounts.filter(a => a.type === "asset");
     const liabilities = allAccounts.filter(a => a.type === "liability");
     const equity = allAccounts.filter(a => a.type === "equity");
@@ -1610,7 +1610,7 @@ const loansRouter = router({
     list: protectedProcedure.input(z.number()).query(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      return db.select().from(installments).where(tenantWhere(installments, ctx.tenantId, eq(installments.loanId, input))).orderBy(installments.dueDate));
+      return db.select().from(installments).where(tenantWhere(installments, ctx.tenantId, eq(installments.loanId, input))).orderBy(installments.dueDate);
     }),
     listAll: protectedProcedure.query(async ({ ctx }) => {
       const db = await getDb();
@@ -1631,7 +1631,7 @@ const costCentersRouter = router({
   list: protectedProcedure.query(async ({ ctx }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-    return db.select().from(costCenters).where(tenantWhere(costCenters, ctx.tenantId, eq(costCenters.isActive, true))).orderBy(costCenters.name));
+    return db.select().from(costCenters).where(tenantWhere(costCenters, ctx.tenantId, eq(costCenters.isActive, true))).orderBy(costCenters.name);
   }),
   create: protectedProcedure.input(z.object({
     name: z.string().min(1),
@@ -1650,7 +1650,7 @@ const salesRepsRouter = router({
   list: protectedProcedure.query(async ({ ctx }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-    return db.select().from(salesReps).where(tenantWhere(salesReps, ctx.tenantId, eq(salesReps.isActive, true))).orderBy(salesReps.name));
+    return db.select().from(salesReps).where(tenantWhere(salesReps, ctx.tenantId, eq(salesReps.isActive, true))).orderBy(salesReps.name);
   }),
   create: protectedProcedure.input(z.object({
     name: z.string().min(1),
@@ -1806,7 +1806,7 @@ const settingsRouter = router({
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       const where = input.search ? like(branches.name, `%${input.search}%`) : undefined;
-      const rows = await db.select().from(branches).where(tenantWhere(branches, ctx.tenantId, where)).orderBy(branches.name));
+      const rows = await db.select().from(branches).where(tenantWhere(branches, ctx.tenantId, where)).orderBy(branches.name);
       return { rows };
     }),
   }),
