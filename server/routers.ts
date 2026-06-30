@@ -46,7 +46,7 @@ const dashboardRouter = router({
       .where(tenantWhere(purchaseInvoices, ctx.tenantId, eq(purchaseInvoices.status, "confirmed")));
 
     const [unpaidInvoices] = await db.select({ count: count() }).from(salesInvoices)
-      .where(tenantWhere(salesInvoices, ctx.tenantId, or(eq(salesInvoices.status, "confirmed"), eq(salesInvoices.status, "partial")))));
+      .where(tenantWhere(salesInvoices, ctx.tenantId, or(eq(salesInvoices.status, "confirmed"), eq(salesInvoices.status, "partial"))));
     const [pendingChecks] = await db.select({ count: count() }).from(checks)
       .where(tenantWhere(checks, ctx.tenantId, eq(checks.status, "pending")));
 
@@ -124,7 +124,7 @@ const dashboardRouter = router({
 
     // Invoice status distribution
     const [paidCount] = await db.select({ count: count() }).from(salesInvoices).where(tenantWhere(salesInvoices, ctx.tenantId, eq(salesInvoices.status, "paid")));
-    const [unpaidCount] = await db.select({ count: count() }).from(salesInvoices).where(tenantWhere(salesInvoices, ctx.tenantId, or(eq(salesInvoices.status, "confirmed"), eq(salesInvoices.status, "partial")))));
+    const [unpaidCount] = await db.select({ count: count() }).from(salesInvoices).where(tenantWhere(salesInvoices, ctx.tenantId, or(eq(salesInvoices.status, "confirmed"), eq(salesInvoices.status, "partial"))));
     const [draftCount] = await db.select({ count: count() }).from(salesInvoices).where(tenantWhere(salesInvoices, ctx.tenantId, eq(salesInvoices.status, "draft")));
 
     const salesMap = Object.fromEntries(salesByMonth.map(r => [r.month, Number(r.total) || 0]));
