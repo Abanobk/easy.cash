@@ -41,14 +41,14 @@ const dashboardRouter = router({
     const [employeesCount] = await db.select({ count: count() }).from(employees).where(tenantWhere(employees, ctx.tenantId, eq(employees.status, "active")));
 
     const [totalSales] = await db.select({ total: sum(salesInvoices.total) }).from(salesInvoices)
-      .where(tenantWhere(salesInvoices, ctx.tenantId, eq(salesInvoices.status, "confirmed"))));
+      .where(tenantWhere(salesInvoices, ctx.tenantId, eq(salesInvoices.status, "confirmed")));
     const [totalPurchases] = await db.select({ total: sum(purchaseInvoices.total) }).from(purchaseInvoices)
-      .where(tenantWhere(purchaseInvoices, ctx.tenantId, eq(purchaseInvoices.status, "confirmed"))));
+      .where(tenantWhere(purchaseInvoices, ctx.tenantId, eq(purchaseInvoices.status, "confirmed")));
 
     const [unpaidInvoices] = await db.select({ count: count() }).from(salesInvoices)
       .where(tenantWhere(salesInvoices, ctx.tenantId, or(eq(salesInvoices.status, "confirmed"), eq(salesInvoices.status, "partial")))));
     const [pendingChecks] = await db.select({ count: count() }).from(checks)
-      .where(tenantWhere(checks, ctx.tenantId, eq(checks.status, "pending"))));
+      .where(tenantWhere(checks, ctx.tenantId, eq(checks.status, "pending")));
 
     const recentSales = await db.select({
       id: salesInvoices.id,
@@ -123,9 +123,9 @@ const dashboardRouter = router({
       .groupBy(sql`DATE_FORMAT(${purchaseInvoices.createdAt}, '%Y-%m')`);
 
     // Invoice status distribution
-    const [paidCount] = await db.select({ count: count() }).from(salesInvoices).where(tenantWhere(salesInvoices, ctx.tenantId, eq(salesInvoices.status, \"paid\"))));
-    const [unpaidCount] = await db.select({ count: count() }).from(salesInvoices).where(tenantWhere(salesInvoices, ctx.tenantId, or(eq(salesInvoices.status, "confirmed"), eq(salesInvoices.status, "partial"))));
-    const [draftCount] = await db.select({ count: count() }).from(salesInvoices).where(tenantWhere(salesInvoices, ctx.tenantId, eq(salesInvoices.status, \"draft\"))));
+    const [paidCount] = await db.select({ count: count() }).from(salesInvoices).where(tenantWhere(salesInvoices, ctx.tenantId, eq(salesInvoices.status, "paid")));
+    const [unpaidCount] = await db.select({ count: count() }).from(salesInvoices).where(tenantWhere(salesInvoices, ctx.tenantId, or(eq(salesInvoices.status, "confirmed"), eq(salesInvoices.status, "partial")))));
+    const [draftCount] = await db.select({ count: count() }).from(salesInvoices).where(tenantWhere(salesInvoices, ctx.tenantId, eq(salesInvoices.status, "draft")));
 
     const salesMap = Object.fromEntries(salesByMonth.map(r => [r.month, Number(r.total) || 0]));
     const purchasesMap = Object.fromEntries(purchasesByMonth.map(r => [r.month, Number(r.total) || 0]));
@@ -490,7 +490,7 @@ const purchasesRouter = router({
         itemUnit: items.unit,
       }).from(purchaseInvoiceItems)
         .leftJoin(items, eq(purchaseInvoiceItems.itemId, items.id))
-        .where(tenantWhere(purchaseInvoiceItems, ctx.tenantId, eq(purchaseInvoiceItems.invoiceId, input))));
+        .where(tenantWhere(purchaseInvoiceItems, ctx.tenantId, eq(purchaseInvoiceItems.invoiceId, input)));
       return { ...inv, items: invItems };
     }),
     create: protectedProcedure.input(z.object({
@@ -701,7 +701,7 @@ const salesRouter = router({
         itemUnit: items.unit,
       }).from(salesInvoiceItems)
         .leftJoin(items, eq(salesInvoiceItems.itemId, items.id))
-        .where(tenantWhere(salesInvoiceItems, ctx.tenantId, eq(salesInvoiceItems.invoiceId, input))));
+        .where(tenantWhere(salesInvoiceItems, ctx.tenantId, eq(salesInvoiceItems.invoiceId, input)));
       return { ...inv, items: invItems };
     }),
     create: protectedProcedure.input(z.object({
@@ -1099,7 +1099,7 @@ const hrRouter = router({
         employeeName: employees.name,
       }).from(payroll)
         .leftJoin(employees, eq(payroll.employeeId, employees.id))
-        .where(tenantWhere(payroll, ctx.tenantId, and(eq(payroll.month, input.month), eq(payroll.year, input.year)))));
+        .where(tenantWhere(payroll, ctx.tenantId, and(eq(payroll.month, input.month), eq(payroll.year, input.year))));
     }),
     create: protectedProcedure.input(z.object({
       employeeId: z.number(),
@@ -1374,7 +1374,7 @@ const reportsRouter = router({
   incomeStatement: protectedProcedure.query(async ({ ctx }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-    const [totalRevenue] = await db.select({ total: sum(salesInvoices.total) }).from(salesInvoices).where(tenantWhere(salesInvoices, ctx.tenantId, eq(salesInvoices.status, \"confirmed\"))));
+    const [totalRevenue] = await db.select({ total: sum(salesInvoices.total) }).from(salesInvoices).where(tenantWhere(salesInvoices, ctx.tenantId, eq(salesInvoices.status, "confirmed")));
     const [totalCost] = await db.select({ total: sum(purchaseInvoices.total) }).from(purchaseInvoices).where(tenantWhere(purchaseInvoices, ctx.tenantId, eq(purchaseInvoices.status, "confirmed")));
     const revenue = Number(totalRevenue.total ?? 0);
     const cost = Number(totalCost.total ?? 0);
@@ -1449,7 +1449,7 @@ const reportsRouter = router({
       total: purchaseInvoices.total,
       date: purchaseInvoices.date,
     }).from(purchaseInvoices)
-      .where(tenantWhere(purchaseInvoices, ctx.tenantId, and(eq(purchaseInvoices.status, "confirmed"), gte(purchaseInvoices.date, startStr as any)))));
+      .where(tenantWhere(purchaseInvoices, ctx.tenantId, and(eq(purchaseInvoices.status, "confirmed"), gte(purchaseInvoices.date, startStr as any))));
 
     const purchaseMap: Record<string, number> = {};
     for (const inv of allPurchases) {
@@ -1535,7 +1535,7 @@ const notificationsRouter = router({
     const db = await getDb();
     if (!db) return { count: 0 };
     const [result] = await db.select({ count: count() }).from(notifications)
-      .where(tenantWhere(notifications, ctx.tenantId, and(eq(notifications.isRead, false), eq(notifications.userId, ctx.user.id)))));
+      .where(tenantWhere(notifications, ctx.tenantId, and(eq(notifications.isRead, false), eq(notifications.userId, ctx.user.id))));
     return { count: result.count };
   }),
   list: protectedProcedure.query(async ({ ctx }) => {
