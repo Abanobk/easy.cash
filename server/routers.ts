@@ -2469,7 +2469,14 @@ const saasRouter = router({
     .orderBy(desc(subscriptions.createdAt))
     .limit(input.limit).offset(offset);
     const [total] = await db.select({ count: count() }).from(subscriptions);
-    return { rows, total: total.count };
+    return {
+      rows: rows.map((r) => ({
+        ...r,
+        startDate: r.startDate ? String(r.startDate).split("T")[0] : "",
+        endDate: r.endDate ? String(r.endDate).split("T")[0] : "",
+      })),
+      total: total.count,
+    };
   }),
 
   // إضافة/تعديل اشتراك
@@ -2875,7 +2882,11 @@ const saasRouter = router({
     .leftJoin(appUsers, eq(subscriptions.userId, appUsers.id))
     .leftJoin(subscriptionPlans, eq(subscriptions.planId, subscriptionPlans.id))
     .orderBy(desc(subscriptions.createdAt));
-    return rows;
+    return rows.map((r) => ({
+      ...r,
+      startDate: r.startDate ? String(r.startDate).split("T")[0] : "",
+      endDate: r.endDate ? String(r.endDate).split("T")[0] : "",
+    }));
   }),
 
   // رد السوبر أدمن على تذكرة
@@ -2965,8 +2976,50 @@ const saasRouter = router({
     if (!session || session.role !== "superadmin") throw new TRPCError({ code: "FORBIDDEN", message: "غير مصرح" });
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-    const [row] = await db.select().from(paymobSettings).limit(1);
-    if (!row) {
+
+    const { absoluteUrl } = await import("./paymob");
+    const defaultUrls = {
+      webhookUrl: absoluteUrl(ctx.req, "/api/webhooks/paymob"),
+      returnUrl: absoluteUrl(ctx.req, "/pricing?payment=return"),
+    };
+
+    try {
+      const [row] = await db.select().from(paymobSettings).limit(1);
+      if (!row) {
+        return {
+          configured: false,
+          mode: "test" as const,
+          isEnabled: false,
+          publicKey: "",
+          publicKeyLast8: "",
+          cardIntegrationId: null as number | null,
+          currency: "EGP",
+          hasSecretKey: false,
+          hasHmacSecret: false,
+          ...defaultUrls,
+        };
+      }
+      let publicConfig: Record<string, unknown> = {};
+      try {
+        publicConfig = row.publicConfig ? JSON.parse(row.publicConfig) : {};
+      } catch { /* ignore */ }
+      const secret = row.encryptedSecret
+        ? (await import("./paymob")).decodeSecret<{ secretKey?: string; hmacSecret?: string }>(row.encryptedSecret)
+        : null;
+      return {
+        configured: true,
+        mode: row.mode,
+        isEnabled: row.isEnabled,
+        publicKey: String(publicConfig.publicKey || ""),
+        publicKeyLast8: String(publicConfig.publicKeyLast8 || ""),
+        cardIntegrationId: publicConfig.cardIntegrationId ? Number(publicConfig.cardIntegrationId) : null,
+        currency: String(publicConfig.currency || "EGP"),
+        hasSecretKey: Boolean(secret?.secretKey),
+        hasHmacSecret: Boolean(secret?.hmacSecret),
+        ...defaultUrls,
+      };
+    } catch (error) {
+      console.error("[getPaymobSettings]", error);
       return {
         configured: false,
         mode: "test" as const,
@@ -2977,30 +3030,9 @@ const saasRouter = router({
         currency: "EGP",
         hasSecretKey: false,
         hasHmacSecret: false,
-        webhookUrl: "",
-        returnUrl: "",
+        ...defaultUrls,
       };
     }
-    let publicConfig: Record<string, unknown> = {};
-    try {
-      publicConfig = row.publicConfig ? JSON.parse(row.publicConfig) : {};
-    } catch { /* ignore */ }
-    const secret = row.encryptedSecret ? (await import("./paymob")).decodeSecret<{ secretKey?: string; hmacSecret?: string }>(row.encryptedSecret) : null;
-    const { absoluteUrl } = await import("./paymob");
-    return {
-      configured: true,
-      mode: row.mode,
-      isEnabled: row.isEnabled,
-      publicKey: String(publicConfig.publicKey || ""),
-      publicKeyLast8: String(publicConfig.publicKeyLast8 || ""),
-      cardIntegrationId: publicConfig.cardIntegrationId ? Number(publicConfig.cardIntegrationId) : null,
-      currency: String(publicConfig.currency || "EGP"),
-      hasSecretKey: Boolean(secret?.secretKey),
-      hasHmacSecret: Boolean(secret?.hmacSecret),
-      webhookUrl: absoluteUrl(ctx.req, "/api/webhooks/paymob"),
-      returnUrl: absoluteUrl(ctx.req, "/pricing?payment=return"),
-      updatedAt: row.updatedAt,
-    };
   }),
 
   savePaymobSettings: publicProcedure.input(z.object({

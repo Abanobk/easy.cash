@@ -21,6 +21,22 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
+function formatDateDisplay(value: unknown) {
+  if (value == null || value === "") return "—";
+  if (value instanceof Date) return value.toLocaleDateString("ar-EG");
+  const s = String(value);
+  if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
+  const d = new Date(s);
+  return Number.isNaN(d.getTime()) ? s : d.toLocaleDateString("ar-EG");
+}
+
+function formatDateInput(value: unknown) {
+  if (value == null || value === "") return "";
+  if (value instanceof Date) return value.toISOString().split("T")[0];
+  const s = String(value);
+  return s.includes("T") ? s.split("T")[0] : s.slice(0, 10);
+}
+
 type Tab = "dashboard" | "users" | "subscriptions" | "plans" | "coupons" | "reports" | "support" | "paymob";
 
 const statusColors: Record<string, string> = {
@@ -166,8 +182,8 @@ export default function SuperAdmin() {
       "البريد": s.userEmail || "",
       "الخطة": s.planNameAr || s.planId,
       "الحالة": { active: "نشط", trial: "تجريبي", expired: "منتهي", cancelled: "ملغي", suspended: "موقوف" }[s.status as string] || s.status,
-      "تاريخ البداية": s.startDate,
-      "تاريخ الانتهاء": s.endDate,
+      "تاريخ البداية": formatDateDisplay(s.startDate),
+      "تاريخ الانتهاء": formatDateDisplay(s.endDate),
       "السعر": s.price || "0",
       "ملاحظات": s.notes || "",
     }));
@@ -442,8 +458,8 @@ export default function SuperAdmin() {
                             {statusLabels[sub.status] || sub.status}
                           </span>
                         </td>
-                        <td className="p-3 text-xs text-slate-500">{sub.startDate}</td>
-                        <td className="p-3 text-xs text-slate-500">{sub.endDate}</td>
+                        <td className="p-3 text-xs text-slate-500">{formatDateDisplay(sub.startDate)}</td>
+                        <td className="p-3 text-xs text-slate-500">{formatDateDisplay(sub.endDate)}</td>
                         <td className="p-3 text-sm font-medium text-slate-700">{parseFloat(sub.planPrice || "0").toLocaleString("ar-EG")} ج.م</td>
                         <td className="p-3">
                           <Button
@@ -800,7 +816,15 @@ export default function SuperAdmin() {
                 اربط حساب Paymob لتفعيل الدفع المباشر عند اختيار العميل لخطة مدفوعة.
               </p>
 
-              {paymobQuery.isLoading ? (
+              {paymobQuery.isError && (
+                <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+                  <p className="font-medium mb-1">تعذر تحميل الإعدادات المحفوظة</p>
+                  <p className="text-xs">{paymobQuery.error.message}</p>
+                  <p className="text-xs mt-2">يمكنك إدخال البيانات وحفظها لأول مرة — تأكد من تشغيل migrations على السيرفر.</p>
+                </div>
+              )}
+
+              {paymobQuery.isFetching && !paymobQuery.data && !paymobQuery.isError ? (
                 <div className="text-center py-16 text-slate-400">جاري التحميل...</div>
               ) : (
                 <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 space-y-5">
@@ -886,7 +910,7 @@ export default function SuperAdmin() {
                     <span className="text-sm font-medium text-slate-700">تفعيل الدفع عبر Paymob</span>
                   </label>
 
-                  {paymobQuery.data?.webhookUrl && (
+                  {paymobQuery.data?.webhookUrl ? (
                     <div className="bg-slate-50 rounded-xl p-4 space-y-2 text-sm">
                       <p className="font-medium text-slate-700">روابط Paymob</p>
                       <div>
@@ -897,6 +921,11 @@ export default function SuperAdmin() {
                         <span className="text-slate-500 text-xs">Return URL:</span>
                         <p className="font-mono text-xs break-all text-slate-600 mt-1" dir="ltr">{paymobQuery.data.returnUrl}</p>
                       </div>
+                    </div>
+                  ) : (
+                    <div className="bg-slate-50 rounded-xl p-4 text-sm text-slate-600">
+                      <p className="font-medium text-slate-700 mb-1">روابط Paymob (بعد الحفظ)</p>
+                      <p className="text-xs">Webhook: <span dir="ltr" className="font-mono">https://cash.easytecheg.net/api/webhooks/paymob</span></p>
                     </div>
                   )}
 
@@ -1094,8 +1123,8 @@ function SubForm({ initial, users, plans, onSubmit, isPending }: any) {
     userId: initial?.userId?.toString() || "",
     planId: initial?.planId?.toString() || "",
     status: initial?.status || "active",
-    startDate: initial?.startDate || today,
-    endDate: initial?.endDate || "",
+    startDate: formatDateInput(initial?.startDate) || today,
+    endDate: formatDateInput(initial?.endDate) || "",
     notes: initial?.notes || "",
   });
 
