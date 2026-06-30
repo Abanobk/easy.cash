@@ -15,37 +15,40 @@ import {
   inventoryAdjustments, inventoryAdjustmentItems, stockTransfers, stockTransferItems,
   taxes, salesReps, branches, companySettings, users,
   appUsers, subscriptions, subscriptionPlans,
-  discountCoupons, companyProfile, supportTickets, userNotifications
+  discountCoupons, companyProfile, supportTickets, userNotifications,
+  paymobSettings, subscriptionPayments, tenants
 } from "../drizzle/schema";
 import {
   signSaasToken, verifySaasToken, hashPassword, verifyPassword,
   getAppUserByEmail, getAppUserById, getUserActiveSubscription, isSubscriptionActive,
+  getAccountOwnerId, countAccountUsers, canManageTeamUsers,
   SAAS_COOKIE_NAME
 } from "./saas-auth";
-import { eq, desc, count, sum, and, like, or, sql, gte, lte } from "drizzle-orm";
+import { eq, desc, count, sum, and, like, or, sql, gte, lte, isNull } from "drizzle-orm";
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
+import { tenantWhere, withTenantId } from "./tenant-scope";
 
 // ===================== DASHBOARD =====================
 const dashboardRouter = router({
-  stats: protectedProcedure.query(async () => {
+  stats: protectedProcedure.query(async ({ ctx }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 
-    const [customersCount] = await db.select({ count: count() }).from(customers);
-    const [suppliersCount] = await db.select({ count: count() }).from(suppliers);
-    const [itemsCount] = await db.select({ count: count() }).from(items);
-    const [employeesCount] = await db.select({ count: count() }).from(employees).where(eq(employees.status, "active"));
+    const [customersCount] = await db.select({ count: count() }).from(customers).where(tenantWhere(customers, ctx.tenantId));
+    const [suppliersCount] = await db.select({ count: count() }).from(suppliers).where(tenantWhere(suppliers, ctx.tenantId));
+    const [itemsCount] = await db.select({ count: count() }).from(items).where(tenantWhere(items, ctx.tenantId));
+    const [employeesCount] = await db.select({ count: count() }).from(employees).where(tenantWhere(employees, ctx.tenantId, eq(employees.status, "active")));
 
     const [totalSales] = await db.select({ total: sum(salesInvoices.total) }).from(salesInvoices)
-      .where(eq(salesInvoices.status, "confirmed"));
+      .where(tenantWhere(salesInvoices, ctx.tenantId, eq(salesInvoices.status, "confirmed"))));
     const [totalPurchases] = await db.select({ total: sum(purchaseInvoices.total) }).from(purchaseInvoices)
-      .where(eq(purchaseInvoices.status, "confirmed"));
+      .where(tenantWhere(purchaseInvoices, ctx.tenantId, eq(purchaseInvoices.status, "confirmed"))));
 
     const [unpaidInvoices] = await db.select({ count: count() }).from(salesInvoices)
-      .where(or(eq(salesInvoices.status, "confirmed"), eq(salesInvoices.status, "partial")));
+      .where(tenantWhere(salesInvoices, ctx.tenantId, or(eq(salesInvoices.status, "confirmed"), eq(salesInvoices.status, "partial")))));
     const [pendingChecks] = await db.select({ count: count() }).from(checks)
-      .where(eq(checks.status, "pending"));
+      .where(tenantWhere(checks, ctx.tenantId, eq(checks.status, "pending"))));
 
     const recentSales = await db.select({
       id: salesInvoices.id,
@@ -54,6 +57,7 @@ const dashboardRouter = router({
       status: salesInvoices.status,
       customerName: customers.name,
     }).from(salesInvoices)
+      .where(tenantWhere(salesInvoices, ctx.tenantId))
       .leftJoin(customers, eq(salesInvoices.customerId, customers.id))
       .orderBy(desc(salesInvoices.createdAt))
       .limit(5);
@@ -65,6 +69,7 @@ const dashboardRouter = router({
       status: purchaseInvoices.status,
       supplierName: suppliers.name,
     }).from(purchaseInvoices)
+      .where(tenantWhere(purchaseInvoices, ctx.tenantId))
       .leftJoin(suppliers, eq(purchaseInvoices.supplierId, suppliers.id))
       .orderBy(desc(purchaseInvoices.createdAt))
       .limit(5);
@@ -82,7 +87,7 @@ const dashboardRouter = router({
       recentPurchases,
     };
   }),
-  monthlyCharts: protectedProcedure.query(async () => {
+  monthlyCharts: protectedProcedure.query(async ({ ctx }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 
@@ -101,26 +106,26 @@ const dashboardRouter = router({
       month: sql<string>`DATE_FORMAT(${salesInvoices.createdAt}, '%Y-%m')`,
       total: sum(salesInvoices.total),
     }).from(salesInvoices)
-      .where(and(
+      .where(tenantWhere(salesInvoices, ctx.tenantId, and(
         eq(salesInvoices.status, "confirmed"),
         gte(salesInvoices.createdAt, new Date(now.getFullYear(), now.getMonth() - 5, 1))
-      ))
+      )))
       .groupBy(sql`DATE_FORMAT(${salesInvoices.createdAt}, '%Y-%m')`);
 
     const purchasesByMonth = await db.select({
       month: sql<string>`DATE_FORMAT(${purchaseInvoices.createdAt}, '%Y-%m')`,
       total: sum(purchaseInvoices.total),
     }).from(purchaseInvoices)
-      .where(and(
+      .where(tenantWhere(purchaseInvoices, ctx.tenantId, and(
         eq(purchaseInvoices.status, "confirmed"),
         gte(purchaseInvoices.createdAt, new Date(now.getFullYear(), now.getMonth() - 5, 1))
-      ))
+      )))
       .groupBy(sql`DATE_FORMAT(${purchaseInvoices.createdAt}, '%Y-%m')`);
 
     // Invoice status distribution
-    const [paidCount] = await db.select({ count: count() }).from(salesInvoices).where(eq(salesInvoices.status, "paid"));
-    const [unpaidCount] = await db.select({ count: count() }).from(salesInvoices).where(or(eq(salesInvoices.status, "confirmed"), eq(salesInvoices.status, "partial")));
-    const [draftCount] = await db.select({ count: count() }).from(salesInvoices).where(eq(salesInvoices.status, "draft"));
+    const [paidCount] = await db.select({ count: count() }).from(salesInvoices).where(tenantWhere(salesInvoices, ctx.tenantId, eq(salesInvoices.status, \"paid\"))));
+    const [unpaidCount] = await db.select({ count: count() }).from(salesInvoices).where(tenantWhere(salesInvoices, ctx.tenantId, or(eq(salesInvoices.status, "confirmed"), eq(salesInvoices.status, "partial"))));
+    const [draftCount] = await db.select({ count: count() }).from(salesInvoices).where(tenantWhere(salesInvoices, ctx.tenantId, eq(salesInvoices.status, \"draft\"))));
 
     const salesMap = Object.fromEntries(salesByMonth.map(r => [r.month, Number(r.total) || 0]));
     const purchasesMap = Object.fromEntries(purchasesByMonth.map(r => [r.month, Number(r.total) || 0]));
@@ -149,21 +154,21 @@ const customersRouter = router({
     search: z.string().optional(),
     page: z.number().default(1),
     limit: z.number().default(20),
-  })).query(async ({ input }) => {
+  })).query(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     const offset = (input.page - 1) * input.limit;
     const where = input.search
       ? or(like(customers.name, `%${input.search}%`), like(customers.phone, `%${input.search}%`))
       : undefined;
-    const rows = await db.select().from(customers).where(where).orderBy(desc(customers.createdAt)).limit(input.limit).offset(offset);
-    const [total] = await db.select({ count: count() }).from(customers).where(where);
+    const rows = await db.select().from(customers).where(tenantWhere(customers, ctx.tenantId, where)).orderBy(desc(customers.createdAt)).limit(input.limit).offset(offset);
+    const [total] = await db.select({ count: count() }).from(customers).where(tenantWhere(customers, ctx.tenantId, where));
     return { rows, total: total.count };
   }),
-  byId: protectedProcedure.input(z.number()).query(async ({ input }) => {
+  byId: protectedProcedure.input(z.number()).query(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-    const [row] = await db.select().from(customers).where(eq(customers.id, input));
+    const [row] = await db.select().from(customers).where(tenantWhere(customers, ctx.tenantId, eq(customers.id, input)));
     return row;
   }),
   create: protectedProcedure.input(z.object({
@@ -178,10 +183,10 @@ const customersRouter = router({
     taxNumber: z.string().optional(),
     creditLimit: z.string().optional(),
     notes: z.string().optional(),
-  })).mutation(async ({ input }) => {
+  })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-    await db.insert(customers).values(input as any);
+    await db.insert(customers).values(withTenantId(ctx.tenantId, input) as any);
     return { success: true };
   }),
   update: protectedProcedure.input(z.object({
@@ -198,17 +203,17 @@ const customersRouter = router({
     creditLimit: z.string().optional(),
     notes: z.string().optional(),
     isActive: z.boolean().optional(),
-  })).mutation(async ({ input }) => {
+  })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     const { id, ...data } = input;
-    await db.update(customers).set(data as any).where(eq(customers.id, id));
+    await db.update(customers).set(data as any).where(tenantWhere(customers, ctx.tenantId, eq(customers.id, id)));
     return { success: true };
   }),
-  delete: protectedProcedure.input(z.number()).mutation(async ({ input }) => {
+  delete: protectedProcedure.input(z.number()).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-    await db.delete(customers).where(eq(customers.id, input));
+    await db.delete(customers).where(tenantWhere(customers, ctx.tenantId, eq(customers.id, input)));
     return { success: true };
   }),
 });
@@ -219,21 +224,21 @@ const suppliersRouter = router({
     search: z.string().optional(),
     page: z.number().default(1),
     limit: z.number().default(20),
-  })).query(async ({ input }) => {
+  })).query(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     const offset = (input.page - 1) * input.limit;
     const where = input.search
       ? or(like(suppliers.name, `%${input.search}%`), like(suppliers.phone, `%${input.search}%`))
       : undefined;
-    const rows = await db.select().from(suppliers).where(where).orderBy(desc(suppliers.createdAt)).limit(input.limit).offset(offset);
-    const [total] = await db.select({ count: count() }).from(suppliers).where(where);
+    const rows = await db.select().from(suppliers).where(tenantWhere(suppliers, ctx.tenantId, where)).orderBy(desc(suppliers.createdAt)).limit(input.limit).offset(offset);
+    const [total] = await db.select({ count: count() }).from(suppliers).where(tenantWhere(suppliers, ctx.tenantId, where));
     return { rows, total: total.count };
   }),
-  byId: protectedProcedure.input(z.number()).query(async ({ input }) => {
+  byId: protectedProcedure.input(z.number()).query(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-    const [row] = await db.select().from(suppliers).where(eq(suppliers.id, input));
+    const [row] = await db.select().from(suppliers).where(tenantWhere(suppliers, ctx.tenantId, eq(suppliers.id, input)));
     return row;
   }),
   create: protectedProcedure.input(z.object({
@@ -247,10 +252,10 @@ const suppliersRouter = router({
     city: z.string().optional(),
     taxNumber: z.string().optional(),
     notes: z.string().optional(),
-  })).mutation(async ({ input }) => {
+  })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-    await db.insert(suppliers).values(input as any);
+    await db.insert(suppliers).values(withTenantId(ctx.tenantId, input) as any);
     return { success: true };
   }),
   update: protectedProcedure.input(z.object({
@@ -264,52 +269,52 @@ const suppliersRouter = router({
     taxNumber: z.string().optional(),
     notes: z.string().optional(),
     isActive: z.boolean().optional(),
-  })).mutation(async ({ input }) => {
+  })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     const { id, ...data } = input;
-    await db.update(suppliers).set(data as any).where(eq(suppliers.id, id));
+    await db.update(suppliers).set(data as any).where(tenantWhere(suppliers, ctx.tenantId, eq(suppliers.id, id)));
     return { success: true };
   }),
-  delete: protectedProcedure.input(z.number()).mutation(async ({ input }) => {
+  delete: protectedProcedure.input(z.number()).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-    await db.delete(suppliers).where(eq(suppliers.id, input));
+    await db.delete(suppliers).where(tenantWhere(suppliers, ctx.tenantId, eq(suppliers.id, input)));
     return { success: true };
   }),
 });
 
 // ===================== CONTACT CATEGORIES =====================
 const contactCategoriesRouter = router({
-  list: protectedProcedure.query(async () => {
+  list: protectedProcedure.query(async ({ ctx }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-    return db.select().from(contactCategories).orderBy(contactCategories.name);
+    return db.select().from(contactCategories).where(tenantWhere(contactCategories, ctx.tenantId)).orderBy(contactCategories.name);
   }),
   create: protectedProcedure.input(z.object({
     name: z.string().min(1),
     type: z.enum(["customer", "supplier", "both"]),
-  })).mutation(async ({ input }) => {
+  })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-    await db.insert(contactCategories).values(input);
+    await db.insert(contactCategories).values(withTenantId(ctx.tenantId, input) as any);
     return { success: true };
   }),
   update: protectedProcedure.input(z.object({
     id: z.number(),
     name: z.string().min(1),
     type: z.enum(["customer", "supplier", "both"]),
-  })).mutation(async ({ input }) => {
+  })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     const { id, ...data } = input;
-    await db.update(contactCategories).set(data).where(eq(contactCategories.id, id));
+    await db.update(contactCategories).set(data).where(tenantWhere(contactCategories, ctx.tenantId, eq(contactCategories.id, id)));
     return { success: true };
   }),
-  delete: protectedProcedure.input(z.number()).mutation(async ({ input }) => {
+  delete: protectedProcedure.input(z.number()).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-    await db.delete(contactCategories).where(eq(contactCategories.id, input));
+    await db.delete(contactCategories).where(tenantWhere(contactCategories, ctx.tenantId, eq(contactCategories.id, input)));
     return { success: true };
   }),
 });
@@ -321,7 +326,7 @@ const itemsRouter = router({
     categoryId: z.number().optional(),
     page: z.number().default(1),
     limit: z.number().default(20),
-  })).query(async ({ input }) => {
+  })).query(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     const offset = (input.page - 1) * input.limit;
@@ -329,19 +334,19 @@ const itemsRouter = router({
     if (input.search) conditions.push(or(like(items.name, `%${input.search}%`), like(items.code, `%${input.search}%`)));
     if (input.categoryId) conditions.push(eq(items.categoryId, input.categoryId));
     const where = conditions.length > 0 ? and(...conditions) : undefined;
-    const rows = await db.select().from(items).where(where).orderBy(items.name).limit(input.limit).offset(offset);
-    const [total] = await db.select({ count: count() }).from(items).where(where);
+    const rows = await db.select().from(items).where(tenantWhere(items, ctx.tenantId, where)).orderBy(items.name).limit(input.limit).offset(offset);
+    const [total] = await db.select({ count: count() }).from(items).where(tenantWhere(items, ctx.tenantId, where));
     return { rows, total: total.count };
   }),
-  all: protectedProcedure.query(async () => {
+  all: protectedProcedure.query(async ({ ctx }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-    return db.select().from(items).where(eq(items.isActive, true)).orderBy(items.name);
+    return db.select().from(items).where(tenantWhere(items, ctx.tenantId, eq(items.isActive, true))).orderBy(items.name));
   }),
-  byId: protectedProcedure.input(z.number()).query(async ({ input }) => {
+  byId: protectedProcedure.input(z.number()).query(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-    const [row] = await db.select().from(items).where(eq(items.id, input));
+    const [row] = await db.select().from(items).where(tenantWhere(items, ctx.tenantId, eq(items.id, input)));
     return row;
   }),
   create: protectedProcedure.input(z.object({
@@ -355,10 +360,10 @@ const itemsRouter = router({
     minStock: z.string().optional(),
     taxRate: z.string().optional(),
     description: z.string().optional(),
-  })).mutation(async ({ input }) => {
+  })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-    await db.insert(items).values(input as any);
+    await db.insert(items).values(withTenantId(ctx.tenantId, input) as any);
     return { success: true };
   }),
   update: protectedProcedure.input(z.object({
@@ -374,49 +379,49 @@ const itemsRouter = router({
     taxRate: z.string().optional(),
     description: z.string().optional(),
     isActive: z.boolean().optional(),
-  })).mutation(async ({ input }) => {
+  })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     const { id, ...data } = input;
-    await db.update(items).set(data as any).where(eq(items.id, id));
+    await db.update(items).set(data as any).where(tenantWhere(items, ctx.tenantId, eq(items.id, id)));
     return { success: true };
   }),
-  delete: protectedProcedure.input(z.number()).mutation(async ({ input }) => {
+  delete: protectedProcedure.input(z.number()).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-    await db.delete(items).where(eq(items.id, input));
+    await db.delete(items).where(tenantWhere(items, ctx.tenantId, eq(items.id, input)));
     return { success: true };
   }),
-  categories: protectedProcedure.query(async () => {
+  categories: protectedProcedure.query(async ({ ctx }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-    return db.select().from(itemCategories).orderBy(itemCategories.name);
+    return db.select().from(itemCategories).where(tenantWhere(itemCategories, ctx.tenantId)).orderBy(itemCategories.name);
   }),
   createCategory: protectedProcedure.input(z.object({
     name: z.string().min(1),
     parentId: z.number().optional(),
-  })).mutation(async ({ input }) => {
+  })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-    await db.insert(itemCategories).values(input as any);
+    await db.insert(itemCategories).values(withTenantId(ctx.tenantId, input) as any);
     return { success: true };
   }),
 });
 
 // ===================== WAREHOUSES =====================
 const warehousesRouter = router({
-  list: protectedProcedure.query(async () => {
+  list: protectedProcedure.query(async ({ ctx }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-    return db.select().from(warehouses).orderBy(warehouses.name);
+    return db.select().from(warehouses).where(tenantWhere(warehouses, ctx.tenantId)).orderBy(warehouses.name);
   }),
   create: protectedProcedure.input(z.object({
     name: z.string().min(1),
     address: z.string().optional(),
-  })).mutation(async ({ input }) => {
+  })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-    await db.insert(warehouses).values(input);
+    await db.insert(warehouses).values(withTenantId(ctx.tenantId, input) as any);
     return { success: true };
   }),
   update: protectedProcedure.input(z.object({
@@ -424,17 +429,17 @@ const warehousesRouter = router({
     name: z.string().min(1),
     address: z.string().optional(),
     isActive: z.boolean().optional(),
-  })).mutation(async ({ input }) => {
+  })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     const { id, ...data } = input;
-    await db.update(warehouses).set(data).where(eq(warehouses.id, id));
+    await db.update(warehouses).set(data).where(tenantWhere(warehouses, ctx.tenantId, eq(warehouses.id, id)));
     return { success: true };
   }),
-  delete: protectedProcedure.input(z.number()).mutation(async ({ input }) => {
+  delete: protectedProcedure.input(z.number()).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-    await db.delete(warehouses).where(eq(warehouses.id, input));
+    await db.delete(warehouses).where(tenantWhere(warehouses, ctx.tenantId, eq(warehouses.id, input)));
     return { success: true };
   }),
 });
@@ -447,7 +452,7 @@ const purchasesRouter = router({
       status: z.string().optional(),
       page: z.number().default(1),
       limit: z.number().default(20),
-    })).query(async ({ input }) => {
+    })).query(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       const offset = (input.page - 1) * input.limit;
@@ -462,16 +467,17 @@ const purchasesRouter = router({
         paymentType: purchaseInvoices.paymentType,
         supplierName: suppliers.name,
       }).from(purchaseInvoices)
+        .where(tenantWhere(purchaseInvoices, ctx.tenantId))
         .leftJoin(suppliers, eq(purchaseInvoices.supplierId, suppliers.id))
         .orderBy(desc(purchaseInvoices.createdAt))
         .limit(input.limit).offset(offset);
-      const [total] = await db.select({ count: count() }).from(purchaseInvoices);
+      const [total] = await db.select({ count: count() }).from(purchaseInvoices).where(tenantWhere(purchaseInvoices, ctx.tenantId));
       return { rows, total: total.count };
     }),
-    byId: protectedProcedure.input(z.number()).query(async ({ input }) => {
+    byId: protectedProcedure.input(z.number()).query(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      const [inv] = await db.select().from(purchaseInvoices).where(eq(purchaseInvoices.id, input));
+      const [inv] = await db.select().from(purchaseInvoices).where(tenantWhere(purchaseInvoices, ctx.tenantId, eq(purchaseInvoices.id, input)));
       const invItems = await db.select({
         id: purchaseInvoiceItems.id,
         itemId: purchaseInvoiceItems.itemId,
@@ -484,7 +490,7 @@ const purchasesRouter = router({
         itemUnit: items.unit,
       }).from(purchaseInvoiceItems)
         .leftJoin(items, eq(purchaseInvoiceItems.itemId, items.id))
-        .where(eq(purchaseInvoiceItems.invoiceId, input));
+        .where(tenantWhere(purchaseInvoiceItems, ctx.tenantId, eq(purchaseInvoiceItems.invoiceId, input))));
       return { ...inv, items: invItems };
     }),
     create: protectedProcedure.input(z.object({
@@ -506,12 +512,12 @@ const purchasesRouter = router({
         tax: z.string().default("0"),
         total: z.string(),
       })),
-    })).mutation(async ({ input, ctx }) => {
+    })).mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      const [countResult] = await db.select({ count: count() }).from(purchaseInvoices);
+      const [countResult] = await db.select({ count: count() }).from(purchaseInvoices).where(tenantWhere(purchaseInvoices, ctx.tenantId));
       const number = `PI-${String(countResult.count + 1).padStart(5, "0")}`;
-      const [result] = await db.insert(purchaseInvoices).values({
+      const [result] = await db.insert(purchaseInvoices).values(withTenantId(ctx.tenantId, {
         number,
         supplierId: input.supplierId,
         date: input.date as any,
@@ -526,19 +532,19 @@ const purchasesRouter = router({
         notes: input.notes,
         createdBy: ctx.user.id,
         status: "confirmed",
-      } as any);
+      }) as any);
       const invId = (result as any).insertId;
       for (const item of input.items) {
-        await db.insert(purchaseInvoiceItems).values({ invoiceId: invId, ...item } as any);
+        await db.insert(purchaseInvoiceItems).values(withTenantId(ctx.tenantId, { invoiceId: invId, ...item }) as any);
         await db.update(items).set({
           currentStock: sql`currentStock + ${item.quantity}`,
-        }).where(eq(items.id, item.itemId));
+        }).where(tenantWhere(items, ctx.tenantId, eq(items.id, item.itemId)));
       }
       return { success: true, id: invId, number };
     }),
   }),
   orders: router({
-    list: protectedProcedure.input(z.object({ page: z.number().default(1), limit: z.number().default(20) })).query(async ({ input }) => {
+    list: protectedProcedure.input(z.object({ page: z.number().default(1), limit: z.number().default(20) })).query(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       const offset = (input.page - 1) * input.limit;
@@ -550,9 +556,10 @@ const purchasesRouter = router({
         status: purchaseOrders.status,
         supplierName: suppliers.name,
       }).from(purchaseOrders)
+        .where(tenantWhere(purchaseOrders, ctx.tenantId))
         .leftJoin(suppliers, eq(purchaseOrders.supplierId, suppliers.id))
         .orderBy(desc(purchaseOrders.createdAt)).limit(input.limit).offset(offset);
-      const [total] = await db.select({ count: count() }).from(purchaseOrders);
+      const [total] = await db.select({ count: count() }).from(purchaseOrders).where(tenantWhere(purchaseOrders, ctx.tenantId));
       return { rows, total: total.count };
     }),
     create: protectedProcedure.input(z.object({
@@ -566,35 +573,35 @@ const purchasesRouter = router({
         unitPrice: z.string(),
         notes: z.string().optional(),
       })),
-    })).mutation(async ({ input }) => {
+    })).mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      const [countResult] = await db.select({ count: count() }).from(purchaseOrders);
+      const [countResult] = await db.select({ count: count() }).from(purchaseOrders).where(tenantWhere(purchaseOrders, ctx.tenantId));
       const number = `PO-${String(countResult.count + 1).padStart(5, "0")}`;
       const total = input.items.reduce((s, it) => s + (Number(it.quantity) * Number(it.unitPrice)), 0);
-      const [result] = await db.insert(purchaseOrders).values({
+      const [result] = await db.insert(purchaseOrders).values(withTenantId(ctx.tenantId, {
         number, supplierId: input.supplierId,
         date: input.date as any,
         expectedDate: input.expectedDate as any,
         total: String(total),
         notes: input.notes,
         status: "draft",
-      } as any);
+      }) as any);
       const orderId = (result as any).insertId;
       for (const item of input.items) {
-        await db.insert(purchaseOrderItems).values({ orderId, ...item } as any);
+        await db.insert(purchaseOrderItems).values(withTenantId(ctx.tenantId, { orderId, ...item }) as any);
       }
       return { success: true, id: orderId, number };
     }),
-    approve: protectedProcedure.input(z.number()).mutation(async ({ input }) => {
+    approve: protectedProcedure.input(z.number()).mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      await db.update(purchaseOrders).set({ status: "approved" } as any).where(eq(purchaseOrders.id, input));
+      await db.update(purchaseOrders).set({ status: "approved" } as any).where(tenantWhere(purchaseOrders, ctx.tenantId, eq(purchaseOrders.id, input)));
       return { success: true };
     }),
   }),
   returns: router({
-    list: protectedProcedure.input(z.object({ page: z.number().default(1), limit: z.number().default(20) })).query(async ({ input }) => {
+    list: protectedProcedure.input(z.object({ page: z.number().default(1), limit: z.number().default(20) })).query(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       const offset = (input.page - 1) * input.limit;
@@ -606,9 +613,10 @@ const purchasesRouter = router({
         status: purchaseReturns.status,
         supplierName: suppliers.name,
       }).from(purchaseReturns)
+        .where(tenantWhere(purchaseReturns, ctx.tenantId))
         .leftJoin(suppliers, eq(purchaseReturns.supplierId, suppliers.id))
         .orderBy(desc(purchaseReturns.createdAt)).limit(input.limit).offset(offset);
-      const [total] = await db.select({ count: count() }).from(purchaseReturns);
+      const [total] = await db.select({ count: count() }).from(purchaseReturns).where(tenantWhere(purchaseReturns, ctx.tenantId));
       return { rows, total: total.count };
     }),
     create: protectedProcedure.input(z.object({
@@ -622,13 +630,13 @@ const purchasesRouter = router({
         quantity: z.string(),
         unitPrice: z.string(),
       })),
-    })).mutation(async ({ input }) => {
+    })).mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      const [countResult] = await db.select({ count: count() }).from(purchaseReturns);
+      const [countResult] = await db.select({ count: count() }).from(purchaseReturns).where(tenantWhere(purchaseReturns, ctx.tenantId));
       const number = `PR-${String(countResult.count + 1).padStart(5, "0")}`;
       const total = input.items.reduce((s, it) => s + (Number(it.quantity) * Number(it.unitPrice)), 0);
-      const [result] = await db.insert(purchaseReturns).values({
+      const [result] = await db.insert(purchaseReturns).values(withTenantId(ctx.tenantId, {
         number, supplierId: input.supplierId,
         invoiceId: input.invoiceId,
         date: input.date as any,
@@ -636,11 +644,11 @@ const purchasesRouter = router({
         reason: input.reason,
         notes: input.notes,
         status: "confirmed",
-      } as any);
+      }) as any);
       const retId = (result as any).insertId;
       for (const item of input.items) {
-        await db.insert(purchaseOrderItems).values({ orderId: retId, ...item } as any);
-        await db.update(items).set({ currentStock: sql`currentStock - ${item.quantity}` }).where(eq(items.id, item.itemId));
+        await db.insert(purchaseOrderItems).values(withTenantId(ctx.tenantId, { orderId: retId, ...item }) as any);
+        await db.update(items).set({ currentStock: sql`currentStock - ${item.quantity}` }).where(tenantWhere(items, ctx.tenantId, eq(items.id, item.itemId)));
       }
       return { success: true, id: retId, number };
     }),
@@ -655,7 +663,7 @@ const salesRouter = router({
       status: z.string().optional(),
       page: z.number().default(1),
       limit: z.number().default(20),
-    })).query(async ({ input }) => {
+    })).query(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       const offset = (input.page - 1) * input.limit;
@@ -670,16 +678,17 @@ const salesRouter = router({
         paymentType: salesInvoices.paymentType,
         customerName: customers.name,
       }).from(salesInvoices)
+        .where(tenantWhere(salesInvoices, ctx.tenantId))
         .leftJoin(customers, eq(salesInvoices.customerId, customers.id))
         .orderBy(desc(salesInvoices.createdAt))
         .limit(input.limit).offset(offset);
-      const [total] = await db.select({ count: count() }).from(salesInvoices);
+      const [total] = await db.select({ count: count() }).from(salesInvoices).where(tenantWhere(salesInvoices, ctx.tenantId));
       return { rows, total: total.count };
     }),
-    byId: protectedProcedure.input(z.number()).query(async ({ input }) => {
+    byId: protectedProcedure.input(z.number()).query(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      const [inv] = await db.select().from(salesInvoices).where(eq(salesInvoices.id, input));
+      const [inv] = await db.select().from(salesInvoices).where(tenantWhere(salesInvoices, ctx.tenantId, eq(salesInvoices.id, input)));
       const invItems = await db.select({
         id: salesInvoiceItems.id,
         itemId: salesInvoiceItems.itemId,
@@ -692,7 +701,7 @@ const salesRouter = router({
         itemUnit: items.unit,
       }).from(salesInvoiceItems)
         .leftJoin(items, eq(salesInvoiceItems.itemId, items.id))
-        .where(eq(salesInvoiceItems.invoiceId, input));
+        .where(tenantWhere(salesInvoiceItems, ctx.tenantId, eq(salesInvoiceItems.invoiceId, input))));
       return { ...inv, items: invItems };
     }),
     create: protectedProcedure.input(z.object({
@@ -714,12 +723,12 @@ const salesRouter = router({
         tax: z.string().default("0"),
         total: z.string(),
       })),
-    })).mutation(async ({ input, ctx }) => {
+    })).mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      const [countResult] = await db.select({ count: count() }).from(salesInvoices);
+      const [countResult] = await db.select({ count: count() }).from(salesInvoices).where(tenantWhere(salesInvoices, ctx.tenantId));
       const number = `SI-${String(countResult.count + 1).padStart(5, "0")}`;
-      const [result] = await db.insert(salesInvoices).values({
+      const [result] = await db.insert(salesInvoices).values(withTenantId(ctx.tenantId, {
         number,
         customerId: input.customerId,
         date: input.date as any,
@@ -734,19 +743,19 @@ const salesRouter = router({
         notes: input.notes,
         createdBy: ctx.user.id,
         status: "confirmed",
-      } as any);
+      }) as any);
       const invId = (result as any).insertId;
       for (const item of input.items) {
-        await db.insert(salesInvoiceItems).values({ invoiceId: invId, ...item } as any);
+        await db.insert(salesInvoiceItems).values(withTenantId(ctx.tenantId, { invoiceId: invId, ...item }) as any);
         await db.update(items).set({
           currentStock: sql`currentStock - ${item.quantity}`,
-        }).where(eq(items.id, item.itemId));
+        }).where(tenantWhere(items, ctx.tenantId, eq(items.id, item.itemId)));
       }
       return { success: true, id: invId, number };
     }),
   }),
   orders: router({
-    list: protectedProcedure.input(z.object({ page: z.number().default(1), limit: z.number().default(20) })).query(async ({ input }) => {
+    list: protectedProcedure.input(z.object({ page: z.number().default(1), limit: z.number().default(20) })).query(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       const offset = (input.page - 1) * input.limit;
@@ -758,9 +767,10 @@ const salesRouter = router({
         status: salesOrders.status,
         customerName: customers.name,
       }).from(salesOrders)
+        .where(tenantWhere(salesOrders, ctx.tenantId))
         .leftJoin(customers, eq(salesOrders.customerId, customers.id))
         .orderBy(desc(salesOrders.createdAt)).limit(input.limit).offset(offset);
-      const [total] = await db.select({ count: count() }).from(salesOrders);
+      const [total] = await db.select({ count: count() }).from(salesOrders).where(tenantWhere(salesOrders, ctx.tenantId));
       return { rows, total: total.count };
     }),
     create: protectedProcedure.input(z.object({
@@ -774,35 +784,35 @@ const salesRouter = router({
         unitPrice: z.string(),
         notes: z.string().optional(),
       })),
-    })).mutation(async ({ input }) => {
+    })).mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      const [countResult] = await db.select({ count: count() }).from(salesOrders);
+      const [countResult] = await db.select({ count: count() }).from(salesOrders).where(tenantWhere(salesOrders, ctx.tenantId));
       const number = `SO-${String(countResult.count + 1).padStart(5, "0")}`;
       const total = input.items.reduce((s, it) => s + (Number(it.quantity) * Number(it.unitPrice)), 0);
-      const [result] = await db.insert(salesOrders).values({
+      const [result] = await db.insert(salesOrders).values(withTenantId(ctx.tenantId, {
         number, customerId: input.customerId,
         date: input.date as any,
         expectedDate: input.expectedDate as any,
         total: String(total),
         notes: input.notes,
         status: "draft",
-      } as any);
+      }) as any);
       const orderId = (result as any).insertId;
       for (const item of input.items) {
-        await db.insert(salesOrderItems).values({ orderId, ...item } as any);
+        await db.insert(salesOrderItems).values(withTenantId(ctx.tenantId, { orderId, ...item }) as any);
       }
       return { success: true, id: orderId, number };
     }),
-    approve: protectedProcedure.input(z.number()).mutation(async ({ input }) => {
+    approve: protectedProcedure.input(z.number()).mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      await db.update(salesOrders).set({ status: "approved" } as any).where(eq(salesOrders.id, input));
+      await db.update(salesOrders).set({ status: "approved" } as any).where(tenantWhere(salesOrders, ctx.tenantId, eq(salesOrders.id, input)));
       return { success: true };
     }),
   }),
   returns: router({
-    list: protectedProcedure.input(z.object({ page: z.number().default(1), limit: z.number().default(20) })).query(async ({ input }) => {
+    list: protectedProcedure.input(z.object({ page: z.number().default(1), limit: z.number().default(20) })).query(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       const offset = (input.page - 1) * input.limit;
@@ -814,9 +824,10 @@ const salesRouter = router({
         status: salesReturns.status,
         customerName: customers.name,
       }).from(salesReturns)
+        .where(tenantWhere(salesReturns, ctx.tenantId))
         .leftJoin(customers, eq(salesReturns.customerId, customers.id))
         .orderBy(desc(salesReturns.createdAt)).limit(input.limit).offset(offset);
-      const [total] = await db.select({ count: count() }).from(salesReturns);
+      const [total] = await db.select({ count: count() }).from(salesReturns).where(tenantWhere(salesReturns, ctx.tenantId));
       return { rows, total: total.count };
     }),
     create: protectedProcedure.input(z.object({
@@ -830,13 +841,13 @@ const salesRouter = router({
         quantity: z.string(),
         unitPrice: z.string(),
       })),
-    })).mutation(async ({ input }) => {
+    })).mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      const [countResult] = await db.select({ count: count() }).from(salesReturns);
+      const [countResult] = await db.select({ count: count() }).from(salesReturns).where(tenantWhere(salesReturns, ctx.tenantId));
       const number = `SR-${String(countResult.count + 1).padStart(5, "0")}`;
       const total = input.items.reduce((s, it) => s + (Number(it.quantity) * Number(it.unitPrice)), 0);
-      const [result] = await db.insert(salesReturns).values({
+      const [result] = await db.insert(salesReturns).values(withTenantId(ctx.tenantId, {
         number, customerId: input.customerId,
         invoiceId: input.invoiceId,
         date: input.date as any,
@@ -844,11 +855,11 @@ const salesRouter = router({
         reason: input.reason,
         notes: input.notes,
         status: "confirmed",
-      } as any);
+      }) as any);
       const retId = (result as any).insertId;
       for (const item of input.items) {
-        await db.insert(salesOrderItems).values({ orderId: retId, ...item } as any);
-        await db.update(items).set({ currentStock: sql`currentStock + ${item.quantity}` }).where(eq(items.id, item.itemId));
+        await db.insert(salesOrderItems).values(withTenantId(ctx.tenantId, { orderId: retId, ...item }) as any);
+        await db.update(items).set({ currentStock: sql`currentStock + ${item.quantity}` }).where(tenantWhere(items, ctx.tenantId, eq(items.id, item.itemId)));
       }
       return { success: true, id: retId, number };
     }),
@@ -863,7 +874,7 @@ const hrRouter = router({
       departmentId: z.number().optional(),
       page: z.number().default(1),
       limit: z.number().default(20),
-    })).query(async ({ input }) => {
+    })).query(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       const offset = (input.page - 1) * input.limit;
@@ -878,16 +889,17 @@ const hrRouter = router({
         departmentName: departments.name,
         jobTitleName: jobTitles.name,
       }).from(employees)
+        .where(tenantWhere(employees, ctx.tenantId))
         .leftJoin(departments, eq(employees.departmentId, departments.id))
         .leftJoin(jobTitles, eq(employees.jobTitleId, jobTitles.id))
         .orderBy(employees.name).limit(input.limit).offset(offset);
-      const [total] = await db.select({ count: count() }).from(employees);
+      const [total] = await db.select({ count: count() }).from(employees).where(tenantWhere(employees, ctx.tenantId));
       return { rows, total: total.count };
     }),
-    byId: protectedProcedure.input(z.number()).query(async ({ input }) => {
+    byId: protectedProcedure.input(z.number()).query(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      const [row] = await db.select().from(employees).where(eq(employees.id, input));
+      const [row] = await db.select().from(employees).where(tenantWhere(employees, ctx.tenantId, eq(employees.id, input)));
       return row;
     }),
     create: protectedProcedure.input(z.object({
@@ -904,10 +916,10 @@ const hrRouter = router({
       basicSalary: z.string().optional(),
       bankAccount: z.string().optional(),
       notes: z.string().optional(),
-    })).mutation(async ({ input }) => {
+    })).mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      await db.insert(employees).values(input as any);
+      await db.insert(employees).values(withTenantId(ctx.tenantId, input) as any);
       return { success: true };
     }),
     update: protectedProcedure.input(z.object({
@@ -923,68 +935,68 @@ const hrRouter = router({
       basicSalary: z.string().optional(),
       status: z.enum(["active", "inactive", "terminated"]).optional(),
       notes: z.string().optional(),
-    })).mutation(async ({ input }) => {
+    })).mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       const { id, ...data } = input;
-      await db.update(employees).set(data as any).where(eq(employees.id, id));
+      await db.update(employees).set(data as any).where(tenantWhere(employees, ctx.tenantId, eq(employees.id, id)));
       return { success: true };
     }),
-    delete: protectedProcedure.input(z.number()).mutation(async ({ input }) => {
+    delete: protectedProcedure.input(z.number()).mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      await db.delete(employees).where(eq(employees.id, input));
+      await db.delete(employees).where(tenantWhere(employees, ctx.tenantId, eq(employees.id, input)));
       return { success: true };
     }),
   }),
   departments: router({
-    list: protectedProcedure.query(async () => {
+    list: protectedProcedure.query(async ({ ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      return db.select().from(departments).orderBy(departments.name);
+      return db.select().from(departments).where(tenantWhere(departments, ctx.tenantId)).orderBy(departments.name);
     }),
-    create: protectedProcedure.input(z.object({ name: z.string().min(1), description: z.string().optional(), parentId: z.number().optional() })).mutation(async ({ input }) => {
+    create: protectedProcedure.input(z.object({ name: z.string().min(1), description: z.string().optional(), parentId: z.number().optional() })).mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      await db.insert(departments).values(input as any);
+      await db.insert(departments).values(withTenantId(ctx.tenantId, input) as any);
       return { success: true };
     }),
-    update: protectedProcedure.input(z.object({ id: z.number(), name: z.string().min(1), description: z.string().optional() })).mutation(async ({ input }) => {
+    update: protectedProcedure.input(z.object({ id: z.number(), name: z.string().min(1), description: z.string().optional() })).mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       const { id, ...data } = input;
-      await db.update(departments).set(data as any).where(eq(departments.id, id));
+      await db.update(departments).set(data as any).where(tenantWhere(departments, ctx.tenantId, eq(departments.id, id)));
       return { success: true };
     }),
-    delete: protectedProcedure.input(z.number()).mutation(async ({ input }) => {
+    delete: protectedProcedure.input(z.number()).mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      await db.delete(departments).where(eq(departments.id, input));
+      await db.delete(departments).where(tenantWhere(departments, ctx.tenantId, eq(departments.id, input)));
       return { success: true };
     }),
   }),
   jobTitles: router({
-    list: protectedProcedure.query(async () => {
+    list: protectedProcedure.query(async ({ ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      return db.select().from(jobTitles).orderBy(jobTitles.name);
+      return db.select().from(jobTitles).where(tenantWhere(jobTitles, ctx.tenantId)).orderBy(jobTitles.name);
     }),
-    create: protectedProcedure.input(z.object({ name: z.string().min(1) })).mutation(async ({ input }) => {
+    create: protectedProcedure.input(z.object({ name: z.string().min(1) })).mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      await db.insert(jobTitles).values(input);
+      await db.insert(jobTitles).values(withTenantId(ctx.tenantId, input) as any);
       return { success: true };
     }),
-    update: protectedProcedure.input(z.object({ id: z.number(), name: z.string().min(1) })).mutation(async ({ input }) => {
+    update: protectedProcedure.input(z.object({ id: z.number(), name: z.string().min(1) })).mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      await db.update(jobTitles).set({ name: input.name }).where(eq(jobTitles.id, input.id));
+      await db.update(jobTitles).set({ name: input.name }).where(tenantWhere(jobTitles, ctx.tenantId, eq(jobTitles.id, input.id)));
       return { success: true };
     }),
-    delete: protectedProcedure.input(z.number()).mutation(async ({ input }) => {
+    delete: protectedProcedure.input(z.number()).mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      await db.delete(jobTitles).where(eq(jobTitles.id, input));
+      await db.delete(jobTitles).where(tenantWhere(jobTitles, ctx.tenantId, eq(jobTitles.id, input)));
       return { success: true };
     }),
   }),
@@ -994,7 +1006,7 @@ const hrRouter = router({
       date: z.string().optional(),
       page: z.number().default(1),
       limit: z.number().default(30),
-    })).query(async ({ input }) => {
+    })).query(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       const offset = (input.page - 1) * input.limit;
@@ -1007,6 +1019,7 @@ const hrRouter = router({
         notes: attendance.notes,
         employeeName: employees.name,
       }).from(attendance)
+        .where(tenantWhere(attendance, ctx.tenantId))
         .leftJoin(employees, eq(attendance.employeeId, employees.id))
         .orderBy(desc(attendance.date)).limit(input.limit).offset(offset);
       return rows;
@@ -1018,13 +1031,13 @@ const hrRouter = router({
       checkOut: z.string().optional(),
       status: z.enum(["present", "absent", "late", "leave", "holiday"]).default("present"),
       notes: z.string().optional(),
-    })).mutation(async ({ input }) => {
+    })).mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      await db.insert(attendance).values(input as any);
+      await db.insert(attendance).values(withTenantId(ctx.tenantId, input) as any);
       return { success: true };
     }),
-    getByDate: protectedProcedure.input(z.object({ date: z.string() })).query(async ({ input }) => {
+    getByDate: protectedProcedure.input(z.object({ date: z.string() })).query(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       const rows = await db.select({
@@ -1036,7 +1049,7 @@ const hrRouter = router({
         overtime: attendance.overtime,
         status: attendance.status,
         notes: attendance.notes,
-      }).from(attendance).where(sql`DATE(${attendance.date}) = ${input.date}`);
+      }).from(attendance).where(tenantWhere(attendance, ctx.tenantId, sql`DATE(${attendance.date}) = ${input.date}`));
       return rows;
     }),
     saveDay: protectedProcedure.input(z.object({
@@ -1049,13 +1062,13 @@ const hrRouter = router({
         overtime: z.number().default(0),
         notes: z.string().optional(),
       })),
-    })).mutation(async ({ input }) => {
+    })).mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       // Delete existing records for the day then re-insert
-      await db.delete(attendance).where(eq(attendance.date, new Date(input.date)));
+      await db.delete(attendance).where(tenantWhere(attendance, ctx.tenantId, eq(attendance.date, new Date(input.date))));
       if (input.records.length > 0) {
-        await db.insert(attendance).values(
+        await db.insert(attendance).values(withTenantId(ctx.tenantId, 
           input.records.map(r => ({
             employeeId: r.employeeId,
             date: new Date(input.date),
@@ -1071,7 +1084,7 @@ const hrRouter = router({
     }),
   }),
   payroll: router({
-    list: protectedProcedure.input(z.object({ month: z.number(), year: z.number() })).query(async ({ input }) => {
+    list: protectedProcedure.input(z.object({ month: z.number(), year: z.number() })).query(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       return db.select({
@@ -1086,7 +1099,7 @@ const hrRouter = router({
         employeeName: employees.name,
       }).from(payroll)
         .leftJoin(employees, eq(payroll.employeeId, employees.id))
-        .where(and(eq(payroll.month, input.month), eq(payroll.year, input.year)));
+        .where(tenantWhere(payroll, ctx.tenantId, and(eq(payroll.month, input.month), eq(payroll.year, input.year)))));
     }),
     create: protectedProcedure.input(z.object({
       employeeId: z.number(),
@@ -1099,15 +1112,15 @@ const hrRouter = router({
       tax: z.string().default("0"),
       netSalary: z.string(),
       notes: z.string().optional(),
-    })).mutation(async ({ input }) => {
+    })).mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      await db.insert(payroll).values(input as any);
+      await db.insert(payroll).values(withTenantId(ctx.tenantId, input) as any);
       return { success: true };
     }),
   }),
   advances: router({
-    list: protectedProcedure.query(async () => {
+    list: protectedProcedure.query(async ({ ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       return db.select({
@@ -1118,6 +1131,7 @@ const hrRouter = router({
         status: salaryAdvances.status,
         employeeName: employees.name,
       }).from(salaryAdvances)
+        .where(tenantWhere(salaryAdvances, ctx.tenantId))
         .leftJoin(employees, eq(salaryAdvances.employeeId, employees.id))
         .orderBy(desc(salaryAdvances.createdAt));
     }),
@@ -1126,16 +1140,16 @@ const hrRouter = router({
       amount: z.string(),
       date: z.string(),
       reason: z.string().optional(),
-    })).mutation(async ({ input }) => {
+    })).mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      await db.insert(salaryAdvances).values(input as any);
+      await db.insert(salaryAdvances).values(withTenantId(ctx.tenantId, input) as any);
       return { success: true };
     }),
-    approve: protectedProcedure.input(z.number()).mutation(async ({ input }) => {
+    approve: protectedProcedure.input(z.number()).mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      await db.update(salaryAdvances).set({ status: "approved" } as any).where(eq(salaryAdvances.id, input));
+      await db.update(salaryAdvances).set({ status: "approved" } as any).where(tenantWhere(salaryAdvances, ctx.tenantId, eq(salaryAdvances.id, input)));
       return { success: true };
     }),
   }),
@@ -1143,10 +1157,10 @@ const hrRouter = router({
 
 // ===================== ACCOUNTS =====================
 const accountsRouter = router({
-  chart: protectedProcedure.query(async () => {
+  chart: protectedProcedure.query(async ({ ctx }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-    return db.select().from(accounts).where(eq(accounts.isActive, true)).orderBy(accounts.code);
+    return db.select().from(accounts).where(tenantWhere(accounts, ctx.tenantId, eq(accounts.isActive, true))).orderBy(accounts.code));
   }),
   create: protectedProcedure.input(z.object({
     code: z.string().min(1),
@@ -1155,19 +1169,19 @@ const accountsRouter = router({
     parentId: z.number().optional(),
     isParent: z.boolean().optional(),
     notes: z.string().optional(),
-  })).mutation(async ({ input }) => {
+  })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-    await db.insert(accounts).values(input as any);
+    await db.insert(accounts).values(withTenantId(ctx.tenantId, input) as any);
     return { success: true };
   }),
   journal: router({
-    list: protectedProcedure.input(z.object({ page: z.number().default(1), limit: z.number().default(20) })).query(async ({ input }) => {
+    list: protectedProcedure.input(z.object({ page: z.number().default(1), limit: z.number().default(20) })).query(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       const offset = (input.page - 1) * input.limit;
-      const rows = await db.select().from(journalEntries).orderBy(desc(journalEntries.createdAt)).limit(input.limit).offset(offset);
-      const [total] = await db.select({ count: count() }).from(journalEntries);
+      const rows = await db.select().from(journalEntries).where(tenantWhere(journalEntries, ctx.tenantId)).orderBy(desc(journalEntries.createdAt)).limit(input.limit).offset(offset);
+      const [total] = await db.select({ count: count() }).from(journalEntries).where(tenantWhere(journalEntries, ctx.tenantId));
       return { rows, total: total.count };
     }),
     create: protectedProcedure.input(z.object({
@@ -1180,36 +1194,36 @@ const accountsRouter = router({
         credit: z.string().default("0"),
         description: z.string().optional(),
       })),
-    })).mutation(async ({ input, ctx }) => {
+    })).mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      const [countResult] = await db.select({ count: count() }).from(journalEntries);
+      const [countResult] = await db.select({ count: count() }).from(journalEntries).where(tenantWhere(journalEntries, ctx.tenantId));
       const number = `JE-${String(countResult.count + 1).padStart(5, "0")}`;
-      const [result] = await db.insert(journalEntries).values({
+      const [result] = await db.insert(journalEntries).values(withTenantId(ctx.tenantId, {
         number,
         date: input.date as any,
         description: input.description,
         reference: input.reference,
         createdBy: ctx.user.id,
         status: "posted",
-      } as any);
+      }) as any);
       const entryId = (result as any).insertId;
       for (const line of input.lines) {
-        await db.insert(journalEntryLines).values({ entryId, ...line } as any);
+        await db.insert(journalEntryLines).values(withTenantId(ctx.tenantId, { entryId, ...line }) as any);
       }
       return { success: true, id: entryId, number };
     }),
   }),
   taxes: router({
-    list: protectedProcedure.query(async () => {
+    list: protectedProcedure.query(async ({ ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      return db.select().from(taxes).orderBy(taxes.name);
+      return db.select().from(taxes).where(tenantWhere(taxes, ctx.tenantId)).orderBy(taxes.name);
     }),
-    create: protectedProcedure.input(z.object({ name: z.string().min(1), rate: z.string() })).mutation(async ({ input }) => {
+    create: protectedProcedure.input(z.object({ name: z.string().min(1), rate: z.string() })).mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      await db.insert(taxes).values(input as any);
+      await db.insert(taxes).values(withTenantId(ctx.tenantId, input) as any);
       return { success: true };
     }),
   }),
@@ -1221,12 +1235,12 @@ const cashRouter = router({
     type: z.string().optional(),
     page: z.number().default(1),
     limit: z.number().default(20),
-  })).query(async ({ input }) => {
+  })).query(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     const offset = (input.page - 1) * input.limit;
-    const rows = await db.select().from(cashTransactions).orderBy(desc(cashTransactions.createdAt)).limit(input.limit).offset(offset);
-    const [total] = await db.select({ count: count() }).from(cashTransactions);
+    const rows = await db.select().from(cashTransactions).where(tenantWhere(cashTransactions, ctx.tenantId)).orderBy(desc(cashTransactions.createdAt)).limit(input.limit).offset(offset);
+    const [total] = await db.select({ count: count() }).from(cashTransactions).where(tenantWhere(cashTransactions, ctx.tenantId));
     return { rows, total: total.count };
   }),
   create: protectedProcedure.input(z.object({
@@ -1237,12 +1251,12 @@ const cashRouter = router({
     amount: z.string(),
     description: z.string().optional(),
     reference: z.string().optional(),
-  })).mutation(async ({ input, ctx }) => {
+  })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-    const [countResult] = await db.select({ count: count() }).from(cashTransactions);
+    const [countResult] = await db.select({ count: count() }).from(cashTransactions).where(tenantWhere(cashTransactions, ctx.tenantId));
     const number = `CT-${String(countResult.count + 1).padStart(5, "0")}`;
-    await db.insert(cashTransactions).values({ number, ...input, createdBy: ctx.user.id } as any);
+    await db.insert(cashTransactions).values(withTenantId(ctx.tenantId, { number, ...input, createdBy: ctx.user.id }) as any);
     return { success: true };
   }),
 });
@@ -1250,29 +1264,29 @@ const cashRouter = router({
 // ===================== BANK TRANSACTIONS =====================
 const bankRouter = router({
   accounts: router({
-    list: protectedProcedure.query(async () => {
+    list: protectedProcedure.query(async ({ ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      return db.select().from(bankAccounts).where(eq(bankAccounts.isActive, true));
+      return db.select().from(bankAccounts).where(tenantWhere(bankAccounts, ctx.tenantId, eq(bankAccounts.isActive, true)));
     }),
     create: protectedProcedure.input(z.object({
       name: z.string().min(1),
       bankName: z.string().optional(),
       accountNumber: z.string().optional(),
-    })).mutation(async ({ input }) => {
+    })).mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      await db.insert(bankAccounts).values(input);
+      await db.insert(bankAccounts).values(withTenantId(ctx.tenantId, input) as any);
       return { success: true };
     }),
   }),
   transactions: router({
-    list: protectedProcedure.input(z.object({ page: z.number().default(1), limit: z.number().default(20) })).query(async ({ input }) => {
+    list: protectedProcedure.input(z.object({ page: z.number().default(1), limit: z.number().default(20) })).query(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       const offset = (input.page - 1) * input.limit;
-      const rows = await db.select().from(bankTransactions).orderBy(desc(bankTransactions.createdAt)).limit(input.limit).offset(offset);
-      const [total] = await db.select({ count: count() }).from(bankTransactions);
+      const rows = await db.select().from(bankTransactions).where(tenantWhere(bankTransactions, ctx.tenantId)).orderBy(desc(bankTransactions.createdAt)).limit(input.limit).offset(offset);
+      const [total] = await db.select({ count: count() }).from(bankTransactions).where(tenantWhere(bankTransactions, ctx.tenantId));
       return { rows, total: total.count };
     }),
     create: protectedProcedure.input(z.object({
@@ -1284,12 +1298,12 @@ const bankRouter = router({
       amount: z.string(),
       description: z.string().optional(),
       reference: z.string().optional(),
-    })).mutation(async ({ input, ctx }) => {
+    })).mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      const [countResult] = await db.select({ count: count() }).from(bankTransactions);
+      const [countResult] = await db.select({ count: count() }).from(bankTransactions).where(tenantWhere(bankTransactions, ctx.tenantId));
       const number = `BT-${String(countResult.count + 1).padStart(5, "0")}`;
-      await db.insert(bankTransactions).values({ number, ...input, createdBy: ctx.user.id } as any);
+      await db.insert(bankTransactions).values(withTenantId(ctx.tenantId, { number, ...input, createdBy: ctx.user.id }) as any);
       return { success: true };
     }),
   }),
@@ -1298,13 +1312,13 @@ const bankRouter = router({
       type: z.enum(["incoming", "outgoing"]).optional(),
       page: z.number().default(1),
       limit: z.number().default(20),
-    })).query(async ({ input }) => {
+    })).query(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       const offset = (input.page - 1) * input.limit;
       const where = input.type ? eq(checks.type, input.type) : undefined;
-      const rows = await db.select().from(checks).where(where).orderBy(desc(checks.createdAt)).limit(input.limit).offset(offset);
-      const [total] = await db.select({ count: count() }).from(checks).where(where);
+      const rows = await db.select().from(checks).where(tenantWhere(checks, ctx.tenantId, where)).orderBy(desc(checks.createdAt)).limit(input.limit).offset(offset);
+      const [total] = await db.select({ count: count() }).from(checks).where(tenantWhere(checks, ctx.tenantId, where));
       return { rows, total: total.count };
     }),
     create: protectedProcedure.input(z.object({
@@ -1317,12 +1331,12 @@ const bankRouter = router({
       dueDate: z.string(),
       date: z.string(),
       description: z.string().optional(),
-    })).mutation(async ({ input, ctx }) => {
+    })).mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      const [countResult] = await db.select({ count: count() }).from(checks);
+      const [countResult] = await db.select({ count: count() }).from(checks).where(tenantWhere(checks, ctx.tenantId));
       const number = `CHK-${String(countResult.count + 1).padStart(5, "0")}`;
-      await db.insert(checks).values({ number, ...input, createdBy: ctx.user.id } as any);
+      await db.insert(checks).values(withTenantId(ctx.tenantId, { number, ...input, createdBy: ctx.user.id }) as any);
       return { success: true };
     }),
   }),
@@ -1330,7 +1344,7 @@ const bankRouter = router({
 
 // ===================== REPORTS =====================
 const reportsRouter = router({
-  inventory: protectedProcedure.query(async () => {
+  inventory: protectedProcedure.query(async ({ ctx }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     return db.select({
@@ -1344,23 +1358,24 @@ const reportsRouter = router({
       purchasePrice: items.purchasePrice,
       categoryName: itemCategories.name,
     }).from(items)
+      .where(tenantWhere(items, ctx.tenantId))
       .leftJoin(itemCategories, eq(items.categoryId, itemCategories.id))
       .orderBy(items.name);
   }),
-  balanceSheet: protectedProcedure.query(async () => {
+  balanceSheet: protectedProcedure.query(async ({ ctx }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-    const allAccounts = await db.select().from(accounts).where(eq(accounts.isActive, true)).orderBy(accounts.code);
+    const allAccounts = await db.select().from(accounts).where(tenantWhere(accounts, ctx.tenantId, eq(accounts.isActive, true))).orderBy(accounts.code));
     const assets = allAccounts.filter(a => a.type === "asset");
     const liabilities = allAccounts.filter(a => a.type === "liability");
     const equity = allAccounts.filter(a => a.type === "equity");
     return { assets, liabilities, equity };
   }),
-  incomeStatement: protectedProcedure.query(async () => {
+  incomeStatement: protectedProcedure.query(async ({ ctx }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-    const [totalRevenue] = await db.select({ total: sum(salesInvoices.total) }).from(salesInvoices).where(eq(salesInvoices.status, "confirmed"));
-    const [totalCost] = await db.select({ total: sum(purchaseInvoices.total) }).from(purchaseInvoices).where(eq(purchaseInvoices.status, "confirmed"));
+    const [totalRevenue] = await db.select({ total: sum(salesInvoices.total) }).from(salesInvoices).where(tenantWhere(salesInvoices, ctx.tenantId, eq(salesInvoices.status, \"confirmed\"))));
+    const [totalCost] = await db.select({ total: sum(purchaseInvoices.total) }).from(purchaseInvoices).where(tenantWhere(purchaseInvoices, ctx.tenantId, eq(purchaseInvoices.status, "confirmed")));
     const revenue = Number(totalRevenue.total ?? 0);
     const cost = Number(totalCost.total ?? 0);
     const grossProfit = revenue - cost;
@@ -1369,7 +1384,7 @@ const reportsRouter = router({
 
   analytics: protectedProcedure.input(z.object({
     months: z.number().default(6),
-  })).query(async ({ input }) => {
+  })).query(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     const startDate = new Date();
@@ -1385,8 +1400,8 @@ const reportsRouter = router({
       customerId: salesInvoices.customerId,
       customerName: customers.name,
     }).from(salesInvoices)
-      .leftJoin(customers, eq(salesInvoices.customerId, customers.id))
-      .where(and(eq(salesInvoices.status, "confirmed"), gte(salesInvoices.date, startStr as any)));
+      .where(tenantWhere(salesInvoices, ctx.tenantId, and(eq(salesInvoices.status, "confirmed"), gte(salesInvoices.date, startStr as any))))
+      .leftJoin(customers, eq(salesInvoices.customerId, customers.id));
 
     // تجميع بالشهر
     const monthlyMap: Record<string, { month: string; sales: number; count: number }> = {};
@@ -1416,9 +1431,9 @@ const reportsRouter = router({
       qty: salesInvoiceItems.quantity,
       total: salesInvoiceItems.total,
     }).from(salesInvoiceItems)
+      .where(tenantWhere(salesInvoiceItems, ctx.tenantId, and(eq(salesInvoices.status, "confirmed"), gte(salesInvoices.date, startStr as any))))
       .leftJoin(salesInvoices, eq(salesInvoiceItems.invoiceId, salesInvoices.id))
-      .leftJoin(items, eq(salesInvoiceItems.itemId, items.id))
-      .where(and(eq(salesInvoices.status, "confirmed"), gte(salesInvoices.date, startStr as any)));
+      .leftJoin(items, eq(salesInvoiceItems.itemId, items.id));
 
     const itemMap: Record<number, { id: number; name: string; qty: number; total: number }> = {};
     for (const row of salesItems) {
@@ -1434,7 +1449,7 @@ const reportsRouter = router({
       total: purchaseInvoices.total,
       date: purchaseInvoices.date,
     }).from(purchaseInvoices)
-      .where(and(eq(purchaseInvoices.status, "confirmed"), gte(purchaseInvoices.date, startStr as any)));
+      .where(tenantWhere(purchaseInvoices, ctx.tenantId, and(eq(purchaseInvoices.status, "confirmed"), gte(purchaseInvoices.date, startStr as any)))));
 
     const purchaseMap: Record<string, number> = {};
     for (const inv of allPurchases) {
@@ -1455,7 +1470,7 @@ const reportsRouter = router({
   tax: protectedProcedure.input(z.object({
     startDate: z.string(),
     endDate: z.string(),
-  })).query(async ({ input }) => {
+  })).query(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 
@@ -1472,11 +1487,11 @@ const reportsRouter = router({
       total: salesInvoices.total,
       status: salesInvoices.status,
     }).from(salesInvoices)
-      .where(and(
+      .where(tenantWhere(salesInvoices, ctx.tenantId, and(
         eq(salesInvoices.status, "confirmed"),
         gte(salesInvoices.date, startDateObj),
         lte(salesInvoices.date, endDateObj)
-      ))
+      )))
       .orderBy(desc(salesInvoices.date));
 
     // ضرائب فواتير الشراء (مدفوعة)
@@ -1489,11 +1504,11 @@ const reportsRouter = router({
       total: purchaseInvoices.total,
       status: purchaseInvoices.status,
     }).from(purchaseInvoices)
-      .where(and(
+      .where(tenantWhere(purchaseInvoices, ctx.tenantId, and(
         eq(purchaseInvoices.status, "confirmed"),
         gte(purchaseInvoices.date, startDateObj),
         lte(purchaseInvoices.date, endDateObj)
-      ))
+      )))
       .orderBy(desc(purchaseInvoices.date));
 
     const totalSalesTax = salesRows.reduce((s, r) => s + Number(r.tax ?? 0), 0);
@@ -1520,32 +1535,32 @@ const notificationsRouter = router({
     const db = await getDb();
     if (!db) return { count: 0 };
     const [result] = await db.select({ count: count() }).from(notifications)
-      .where(and(eq(notifications.isRead, false), eq(notifications.userId, ctx.user.id)));
+      .where(tenantWhere(notifications, ctx.tenantId, and(eq(notifications.isRead, false), eq(notifications.userId, ctx.user.id)))));
     return { count: result.count };
   }),
   list: protectedProcedure.query(async ({ ctx }) => {
     const db = await getDb();
     if (!db) return [];
     return db.select().from(notifications)
-      .where(eq(notifications.userId, ctx.user.id))
+      .where(tenantWhere(notifications, ctx.tenantId, eq(notifications.userId, ctx.user.id)))
       .orderBy(desc(notifications.createdAt)).limit(20);
   }),
-  markRead: protectedProcedure.input(z.number()).mutation(async ({ input }) => {
+  markRead: protectedProcedure.input(z.number()).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-    await db.update(notifications).set({ isRead: true }).where(eq(notifications.id, input));
+    await db.update(notifications).set({ isRead: true }).where(tenantWhere(notifications, ctx.tenantId, eq(notifications.id, input)));
     return { success: true };
   }),
 });
 
 // ===================== FIXED ASSETS =====================
 const assetsRouter = router({
-  list: protectedProcedure.input(z.object({ page: z.number().default(1), limit: z.number().default(20) })).query(async ({ input }) => {
+  list: protectedProcedure.input(z.object({ page: z.number().default(1), limit: z.number().default(20) })).query(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     const offset = (input.page - 1) * input.limit;
-    const rows = await db.select().from(fixedAssets).orderBy(fixedAssets.name).limit(input.limit).offset(offset);
-    const [total] = await db.select({ count: count() }).from(fixedAssets);
+    const rows = await db.select().from(fixedAssets).where(tenantWhere(fixedAssets, ctx.tenantId)).orderBy(fixedAssets.name).limit(input.limit).offset(offset);
+    const [total] = await db.select({ count: count() }).from(fixedAssets).where(tenantWhere(fixedAssets, ctx.tenantId));
     return { rows, total: total.count };
   }),
   create: protectedProcedure.input(z.object({
@@ -1557,22 +1572,22 @@ const assetsRouter = router({
     depreciationRate: z.string().optional(),
     location: z.string().optional(),
     notes: z.string().optional(),
-  })).mutation(async ({ input }) => {
+  })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-    await db.insert(fixedAssets).values({ ...input, currentValue: input.purchasePrice } as any);
+    await db.insert(fixedAssets).values(withTenantId(ctx.tenantId, { ...input, currentValue: input.purchasePrice }) as any);
     return { success: true };
   }),
 });
 
 // ===================== LOANS =====================
 const loansRouter = router({
-  list: protectedProcedure.input(z.object({ page: z.number().default(1), limit: z.number().default(20) })).query(async ({ input }) => {
+  list: protectedProcedure.input(z.object({ page: z.number().default(1), limit: z.number().default(20) })).query(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     const offset = (input.page - 1) * input.limit;
-    const rows = await db.select().from(loans).orderBy(desc(loans.createdAt)).limit(input.limit).offset(offset);
-    const [total] = await db.select({ count: count() }).from(loans);
+    const rows = await db.select().from(loans).where(tenantWhere(loans, ctx.tenantId)).orderBy(desc(loans.createdAt)).limit(input.limit).offset(offset);
+    const [total] = await db.select({ count: count() }).from(loans).where(tenantWhere(loans, ctx.tenantId));
     return { rows, total: total.count };
   }),
   create: protectedProcedure.input(z.object({
@@ -1583,29 +1598,29 @@ const loansRouter = router({
     startDate: z.string(),
     endDate: z.string().optional(),
     notes: z.string().optional(),
-  })).mutation(async ({ input }) => {
+  })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-    const [countResult] = await db.select({ count: count() }).from(loans);
+    const [countResult] = await db.select({ count: count() }).from(loans).where(tenantWhere(loans, ctx.tenantId));
     const number = `LN-${String(countResult.count + 1).padStart(5, "0")}`;
-    await db.insert(loans).values({ number, ...input } as any);
+    await db.insert(loans).values(withTenantId(ctx.tenantId, { number, ...input }) as any);
     return { success: true };
   }),
   installments: router({
-    list: protectedProcedure.input(z.number()).query(async ({ input }) => {
+    list: protectedProcedure.input(z.number()).query(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      return db.select().from(installments).where(eq(installments.loanId, input)).orderBy(installments.dueDate);
+      return db.select().from(installments).where(tenantWhere(installments, ctx.tenantId, eq(installments.loanId, input))).orderBy(installments.dueDate));
     }),
-    listAll: protectedProcedure.query(async () => {
+    listAll: protectedProcedure.query(async ({ ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      return db.select().from(installments).orderBy(installments.dueDate);
+      return db.select().from(installments).where(tenantWhere(installments, ctx.tenantId)).orderBy(installments.dueDate);
     }),
-    pay: protectedProcedure.input(z.object({ installmentId: z.number() })).mutation(async ({ input }) => {
+    pay: protectedProcedure.input(z.object({ installmentId: z.number() })).mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      await db.update(installments).set({ status: 'paid', paidDate: new Date() }).where(eq(installments.id, input.installmentId));
+      await db.update(installments).set({ status: 'paid', paidDate: new Date() }).where(tenantWhere(installments, ctx.tenantId, eq(installments.id, input.installmentId)));
       return { success: true };
     }),
   }),
@@ -1613,29 +1628,29 @@ const loansRouter = router({
 
 // ===================== COST CENTERS =====================
 const costCentersRouter = router({
-  list: protectedProcedure.query(async () => {
+  list: protectedProcedure.query(async ({ ctx }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-    return db.select().from(costCenters).where(eq(costCenters.isActive, true)).orderBy(costCenters.name);
+    return db.select().from(costCenters).where(tenantWhere(costCenters, ctx.tenantId, eq(costCenters.isActive, true))).orderBy(costCenters.name));
   }),
   create: protectedProcedure.input(z.object({
     name: z.string().min(1),
     code: z.string().optional(),
     parentId: z.number().optional(),
-  })).mutation(async ({ input }) => {
+  })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-    await db.insert(costCenters).values(input as any);
+    await db.insert(costCenters).values(withTenantId(ctx.tenantId, input) as any);
     return { success: true };
   }),
 });
 
 // ===================== SALES REPS =====================
 const salesRepsRouter = router({
-  list: protectedProcedure.query(async () => {
+  list: protectedProcedure.query(async ({ ctx }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-    return db.select().from(salesReps).where(eq(salesReps.isActive, true)).orderBy(salesReps.name);
+    return db.select().from(salesReps).where(tenantWhere(salesReps, ctx.tenantId, eq(salesReps.isActive, true))).orderBy(salesReps.name));
   }),
   create: protectedProcedure.input(z.object({
     name: z.string().min(1),
@@ -1644,10 +1659,10 @@ const salesRepsRouter = router({
     commissionRate: z.string().optional(),
     address: z.string().optional(),
     notes: z.string().optional(),
-  })).mutation(async ({ input }) => {
+  })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-    await db.insert(salesReps).values(input as any);
+    await db.insert(salesReps).values(withTenantId(ctx.tenantId, input) as any);
     return { success: true };
   }),
   update: protectedProcedure.input(z.object({
@@ -1658,17 +1673,17 @@ const salesRepsRouter = router({
     commissionRate: z.string().optional(),
     address: z.string().optional(),
     notes: z.string().optional(),
-  })).mutation(async ({ input }) => {
+  })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     const { id, ...data } = input;
-    await db.update(salesReps).set(data as any).where(eq(salesReps.id, id));
+    await db.update(salesReps).set(data as any).where(tenantWhere(salesReps, ctx.tenantId, eq(salesReps.id, id)));
     return { success: true };
   }),
-  delete: protectedProcedure.input(z.number()).mutation(async ({ input }) => {
+  delete: protectedProcedure.input(z.number()).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-    await db.update(salesReps).set({ isActive: false } as any).where(eq(salesReps.id, input));
+    await db.update(salesReps).set({ isActive: false } as any).where(tenantWhere(salesReps, ctx.tenantId, eq(salesReps.id, input)));
     return { success: true };
   }),
 });
@@ -1676,21 +1691,21 @@ const salesRepsRouter = router({
 // ===================== SETTINGS =====================
 const settingsRouter = router({
   backup: router({
-    export: protectedProcedure.query(async () => {
+    export: protectedProcedure.query(async ({ ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       // جلب جميع البيانات للنسخة الاحتياطية
       const [customersData, suppliersData, itemsData, salesData, purchasesData, cashData, bankData, checksData, employeesData, journalData] = await Promise.all([
-        db.select().from(customers).limit(5000),
-        db.select().from(suppliers).limit(5000),
-        db.select().from(items).limit(5000),
-        db.select().from(salesInvoices).limit(5000),
-        db.select().from(purchaseInvoices).limit(5000),
-        db.select().from(cashTransactions).limit(5000),
-        db.select().from(bankTransactions).limit(5000),
-        db.select().from(checks).limit(5000),
-        db.select().from(employees).limit(5000),
-        db.select().from(journalEntries).limit(5000),
+        db.select().from(customers).where(tenantWhere(customers, ctx.tenantId)).limit(5000),
+        db.select().from(suppliers).where(tenantWhere(suppliers, ctx.tenantId)).limit(5000),
+        db.select().from(items).where(tenantWhere(items, ctx.tenantId)).limit(5000),
+        db.select().from(salesInvoices).where(tenantWhere(salesInvoices, ctx.tenantId)).limit(5000),
+        db.select().from(purchaseInvoices).where(tenantWhere(purchaseInvoices, ctx.tenantId)).limit(5000),
+        db.select().from(cashTransactions).where(tenantWhere(cashTransactions, ctx.tenantId)).limit(5000),
+        db.select().from(bankTransactions).where(tenantWhere(bankTransactions, ctx.tenantId)).limit(5000),
+        db.select().from(checks).where(tenantWhere(checks, ctx.tenantId)).limit(5000),
+        db.select().from(employees).where(tenantWhere(employees, ctx.tenantId)).limit(5000),
+        db.select().from(journalEntries).where(tenantWhere(journalEntries, ctx.tenantId)).limit(5000),
       ]);
       return {
         exportedAt: new Date().toISOString(),
@@ -1723,10 +1738,10 @@ const settingsRouter = router({
     }),
   }),
   company: router({
-    get: protectedProcedure.query(async () => {
+    get: protectedProcedure.query(async ({ ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      const [row] = await db.select().from(companySettings).limit(1);
+      const [row] = await db.select().from(companySettings).where(tenantWhere(companySettings, ctx.tenantId)).limit(1);
       return row;
     }),
     save: protectedProcedure.input(z.object({
@@ -1736,23 +1751,23 @@ const settingsRouter = router({
       email: z.string().optional(),
       taxNumber: z.string().optional(),
       currency: z.string().optional(),
-    })).mutation(async ({ input }) => {
+    })).mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      const [existing] = await db.select().from(companySettings).limit(1);
+      const [existing] = await db.select().from(companySettings).where(tenantWhere(companySettings, ctx.tenantId)).limit(1);
       if (existing) {
-        await db.update(companySettings).set(input).where(eq(companySettings.id, existing.id));
+        await db.update(companySettings).set(input).where(tenantWhere(companySettings, ctx.tenantId, eq(companySettings.id, existing.id)));
       } else {
-        await db.insert(companySettings).values(input);
+        await db.insert(companySettings).values(withTenantId(ctx.tenantId, input) as any);
       }
       return { success: true };
     }),
   }),
   branches: router({
-    list: protectedProcedure.query(async () => {
+    list: protectedProcedure.query(async ({ ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      return db.select().from(branches).orderBy(branches.name);
+      return db.select().from(branches).where(tenantWhere(branches, ctx.tenantId)).orderBy(branches.name);
     }),
     create: protectedProcedure.input(z.object({
       name: z.string().min(1),
@@ -1760,10 +1775,10 @@ const settingsRouter = router({
       address: z.string().optional(),
       phone: z.string().optional(),
       managerName: z.string().optional(),
-    })).mutation(async ({ input }) => {
+    })).mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      await db.insert(branches).values(input as any);
+      await db.insert(branches).values(withTenantId(ctx.tenantId, input) as any);
       return { success: true };
     }),
     update: protectedProcedure.input(z.object({
@@ -1774,50 +1789,79 @@ const settingsRouter = router({
       phone: z.string().optional(),
       managerName: z.string().optional(),
       isActive: z.boolean().optional(),
-    })).mutation(async ({ input }) => {
+    })).mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       const { id, ...data } = input;
-      await db.update(branches).set(data as any).where(eq(branches.id, id));
+      await db.update(branches).set(data as any).where(tenantWhere(branches, ctx.tenantId, eq(branches.id, id)));
       return { success: true };
     }),
-    delete: protectedProcedure.input(z.number()).mutation(async ({ input }) => {
+    delete: protectedProcedure.input(z.number()).mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      await db.delete(branches).where(eq(branches.id, input));
+      await db.delete(branches).where(tenantWhere(branches, ctx.tenantId, eq(branches.id, input)));
       return { success: true };
     }),
-    listWithSearch: protectedProcedure.input(z.object({ search: z.string().optional() })).query(async ({ input }) => {
+    listWithSearch: protectedProcedure.input(z.object({ search: z.string().optional() })).query(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       const where = input.search ? like(branches.name, `%${input.search}%`) : undefined;
-      const rows = await db.select().from(branches).where(where).orderBy(branches.name);
+      const rows = await db.select().from(branches).where(tenantWhere(branches, ctx.tenantId, where)).orderBy(branches.name));
       return { rows };
     }),
   }),
   users: router({
     list: protectedProcedure.use(({ ctx, next }) => {
-      if (ctx.user?.role !== 'admin') throw new TRPCError({ code: 'FORBIDDEN', message: 'هذه العملية للمديرين فقط' });
+      if (!ctx.saasUser || !canManageTeamUsers(ctx.saasUser.role)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "هذه العملية للمديرين فقط" });
+      }
       return next({ ctx });
-    }).query(async () => {
+    }).query(async ({ ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      return db.select().from(users).orderBy(users.createdAt);
+      const tenantId = ctx.tenantId!;
+      return db
+        .select({
+          id: appUsers.id,
+          name: appUsers.name,
+          email: appUsers.email,
+          role: appUsers.role,
+          jobTitle: appUsers.jobTitle,
+          isActive: appUsers.isActive,
+          createdAt: appUsers.createdAt,
+          ownerUserId: appUsers.ownerUserId,
+        })
+        .from(appUsers)
+        .where(eq(appUsers.tenantId, tenantId))
+        .orderBy(appUsers.createdAt);
     }),
     updateRole: protectedProcedure.use(({ ctx, next }) => {
-      if (ctx.user?.role !== 'admin') throw new TRPCError({ code: 'FORBIDDEN', message: 'هذه العملية للمديرين فقط' });
+      if (!ctx.saasUser || !canManageTeamUsers(ctx.saasUser.role)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "هذه العملية للمديرين فقط" });
+      }
       return next({ ctx });
     }).input(z.object({
       userId: z.number(),
       role: z.enum(["admin", "user", "accountant", "sales_rep", "warehouse_manager"]),
-    })).mutation(async ({ input }) => {
+    })).mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      await db.update(users).set({ role: input.role as any }).where(eq(users.id, input.userId));
+      const tenantId = ctx.tenantId!;
+      const ownerId = ctx.saasUser!.accountOwnerId;
+      const [target] = await db.select().from(appUsers).where(and(eq(appUsers.id, input.userId), eq(appUsers.tenantId, tenantId))).limit(1);
+      if (!target || getAccountOwnerId(target) !== ownerId) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "المستخدم غير موجود" });
+      }
+      if (!target.ownerUserId && target.id === ownerId && input.role !== "admin") {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "لا يمكن تغيير دور مالك الحساب" });
+      }
+      await db.update(appUsers).set({ role: input.role }).where(eq(appUsers.id, input.userId));
       return { success: true };
     }),
     create: protectedProcedure.use(({ ctx, next }) => {
-      if (ctx.user?.role !== 'admin') throw new TRPCError({ code: 'FORBIDDEN', message: 'هذه العملية للمديرين فقط' });
+      if (!ctx.saasUser || !canManageTeamUsers(ctx.saasUser.role)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "هذه العملية للمديرين فقط" });
+      }
       return next({ ctx });
     }).input(z.object({
       name: z.string().min(1),
@@ -1825,43 +1869,78 @@ const settingsRouter = router({
       password: z.string().min(6),
       role: z.enum(["admin", "user", "accountant", "sales_rep", "warehouse_manager"]).default("user"),
       jobTitle: z.string().optional(),
-    })).mutation(async ({ input }) => {
+    })).mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      const { hashPassword } = await import('./saas-auth');
-      const [existing] = await db.select({ id: users.id }).from(users).where(eq(users.email, input.email)).limit(1);
-      if (existing) throw new TRPCError({ code: 'CONFLICT', message: 'البريد الإلكتروني مستخدم بالفعل' });
+      const tenantId = ctx.tenantId!;
+      const ownerId = ctx.saasUser!.accountOwnerId;
+
+      const sub = await getUserActiveSubscription(ownerId);
+      const maxUsers = sub?.maxUsers ?? 1;
+      const currentUsers = await countAccountUsers(tenantId);
+      if (currentUsers >= maxUsers) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: `وصلت للحد الأقصى من المستخدمين (${maxUsers}). رقِّ خطتك لإضافة المزيد.`,
+        });
+      }
+
+      const existing = await getAppUserByEmail(input.email);
+      if (existing) throw new TRPCError({ code: "CONFLICT", message: "البريد الإلكتروني مستخدم بالفعل" });
+
+      const [owner] = await db.select({ companyName: appUsers.companyName }).from(appUsers).where(eq(appUsers.id, ownerId)).limit(1);
       const hashedPassword = await hashPassword(input.password);
-      await db.insert(users).values({
+      await db.insert(appUsers).values({
         name: input.name,
-        email: input.email,
+        email: input.email.toLowerCase(),
         passwordHash: hashedPassword,
         role: input.role,
-      } as any);
+        ownerUserId: ownerId,
+        tenantId,
+        jobTitle: input.jobTitle || null,
+        companyName: owner?.companyName || null,
+      });
       return { success: true };
     }),
     delete: protectedProcedure.use(({ ctx, next }) => {
-      if (ctx.user?.role !== 'admin') throw new TRPCError({ code: 'FORBIDDEN', message: 'هذه العملية للمديرين فقط' });
+      if (!ctx.saasUser || !canManageTeamUsers(ctx.saasUser.role)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "هذه العملية للمديرين فقط" });
+      }
       return next({ ctx });
-    }).input(z.number()).mutation(async ({ input, ctx }) => {
+    }).input(z.number()).mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      if (ctx.user?.id === input) throw new TRPCError({ code: 'FORBIDDEN', message: 'لا يمكنك حذف حسابك الخاص' });
-      await db.delete(users).where(eq(users.id, input));
+      const tenantId = ctx.tenantId!;
+      const ownerId = ctx.saasUser!.accountOwnerId;
+      if (input === ownerId) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "لا يمكنك حذف مالك الحساب" });
+      }
+      const [target] = await db.select().from(appUsers).where(and(eq(appUsers.id, input), eq(appUsers.tenantId, tenantId))).limit(1);
+      if (!target || target.ownerUserId !== ownerId) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "المستخدم غير موجود" });
+      }
+      await db.delete(appUsers).where(eq(appUsers.id, input));
       return { success: true };
     }),
     resetPassword: protectedProcedure.use(({ ctx, next }) => {
-      if (ctx.user?.role !== 'admin') throw new TRPCError({ code: 'FORBIDDEN', message: 'هذه العملية للمديرين فقط' });
+      if (!ctx.saasUser || !canManageTeamUsers(ctx.saasUser.role)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "هذه العملية للمديرين فقط" });
+      }
       return next({ ctx });
     }).input(z.object({
       userId: z.number(),
       newPassword: z.string().min(6),
-    })).mutation(async ({ input }) => {
+    })).mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      const { hashPassword } = await import('./saas-auth');
+      const tenantId = ctx.tenantId!;
+      const ownerId = ctx.saasUser!.accountOwnerId;
+      const [target] = await db.select().from(appUsers).where(and(eq(appUsers.id, input.userId), eq(appUsers.tenantId, tenantId))).limit(1);
+      if (!target || getAccountOwnerId(target) !== ownerId) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "المستخدم غير موجود" });
+      }
       const hashedPassword = await hashPassword(input.newPassword);
-      await db.update(users).set({ passwordHash: hashedPassword } as any).where(eq(users.id, input.userId));
+      await db.update(appUsers).set({ passwordHash: hashedPassword }).where(eq(appUsers.id, input.userId));
       return { success: true };
     }),
   }),
@@ -1869,7 +1948,7 @@ const settingsRouter = router({
 
 // ===================== PRODUCTION =====================
 const productionRouter = router({
-  list: protectedProcedure.input(z.object({ page: z.number().default(1), limit: z.number().default(20) })).query(async () => {
+  list: protectedProcedure.input(z.object({ page: z.number().default(1), limit: z.number().default(20) })).query(async ({ ctx }) => {
     return { rows: [], total: 0 };
   }),
   create: protectedProcedure.input(z.object({
@@ -1879,7 +1958,7 @@ const productionRouter = router({
     date: z.string(),
     notes: z.string().optional(),
     materials: z.array(z.object({ itemId: z.number(), quantity: z.string() })).optional(),
-  })).mutation(async ({ input }) => {
+  })).mutation(async ({ ctx, input }) => {
     return { success: true, id: 1, number: `PO-00001` };
   }),
 });
@@ -1887,7 +1966,7 @@ const productionRouter = router({
 // ===================== INVENTORY =====================
 const inventoryRouter = router({
   transfers: router({
-    list: protectedProcedure.input(z.object({ page: z.number().default(1), limit: z.number().default(20) })).query(async ({ input }) => {
+    list: protectedProcedure.input(z.object({ page: z.number().default(1), limit: z.number().default(20) })).query(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       const offset = (input.page - 1) * input.limit;
@@ -1899,10 +1978,11 @@ const inventoryRouter = router({
         fromWarehouseName: sql<string>`fw.name`,
         toWarehouseName: sql<string>`tw.name`,
       }).from(stockTransfers)
+        .where(tenantWhere(stockTransfers, ctx.tenantId))
         .leftJoin(sql`warehouses fw`, sql`fw.id = ${stockTransfers.fromWarehouseId}`)
         .leftJoin(sql`warehouses tw`, sql`tw.id = ${stockTransfers.toWarehouseId}`)
         .orderBy(desc(stockTransfers.createdAt)).limit(input.limit).offset(offset);
-      const [total] = await db.select({ count: count() }).from(stockTransfers);
+      const [total] = await db.select({ count: count() }).from(stockTransfers).where(tenantWhere(stockTransfers, ctx.tenantId));
       return { rows, total: total.count };
     }),
     create: protectedProcedure.input(z.object({
@@ -1911,24 +1991,24 @@ const inventoryRouter = router({
       date: z.string(),
       notes: z.string().optional(),
       items: z.array(z.object({ itemId: z.number(), quantity: z.string() })),
-    })).mutation(async ({ input }) => {
+    })).mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      const [countResult] = await db.select({ count: count() }).from(stockTransfers);
+      const [countResult] = await db.select({ count: count() }).from(stockTransfers).where(tenantWhere(stockTransfers, ctx.tenantId));
       const number = `ST-${String(countResult.count + 1).padStart(5, "0")}`;
-      const [result] = await db.insert(stockTransfers).values({
+      const [result] = await db.insert(stockTransfers).values(withTenantId(ctx.tenantId, {
         number, fromWarehouseId: input.fromWarehouseId, toWarehouseId: input.toWarehouseId,
         date: input.date as any, notes: input.notes, status: "confirmed",
-      } as any);
+      }) as any);
       const transferId = (result as any).insertId;
       for (const item of input.items) {
-        await db.insert(stockTransferItems).values({ transferId, ...item } as any);
+        await db.insert(stockTransferItems).values(withTenantId(ctx.tenantId, { transferId, ...item }) as any);
       }
       return { success: true, id: transferId, number };
     }),
   }),
   adjustments: router({
-    list: protectedProcedure.input(z.object({ page: z.number().default(1), limit: z.number().default(20) })).query(async ({ input }) => {
+    list: protectedProcedure.input(z.object({ page: z.number().default(1), limit: z.number().default(20) })).query(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       const offset = (input.page - 1) * input.limit;
@@ -1940,9 +2020,10 @@ const inventoryRouter = router({
         status: inventoryAdjustments.status,
         warehouseName: warehouses.name,
       }).from(inventoryAdjustments)
+        .where(tenantWhere(inventoryAdjustments, ctx.tenantId))
         .leftJoin(warehouses, eq(inventoryAdjustments.warehouseId, warehouses.id))
         .orderBy(desc(inventoryAdjustments.createdAt)).limit(input.limit).offset(offset);
-      const [total] = await db.select({ count: count() }).from(inventoryAdjustments);
+      const [total] = await db.select({ count: count() }).from(inventoryAdjustments).where(tenantWhere(inventoryAdjustments, ctx.tenantId));
       return { rows, total: total.count };
     }),
     create: protectedProcedure.input(z.object({
@@ -1951,20 +2032,20 @@ const inventoryRouter = router({
       adjustmentType: z.enum(["addition", "deduction"]),
       notes: z.string().optional(),
       items: z.array(z.object({ itemId: z.number(), quantity: z.string(), reason: z.string().optional() })),
-    })).mutation(async ({ input }) => {
+    })).mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      const [countResult] = await db.select({ count: count() }).from(inventoryAdjustments);
+      const [countResult] = await db.select({ count: count() }).from(inventoryAdjustments).where(tenantWhere(inventoryAdjustments, ctx.tenantId));
       const number = `IA-${String(countResult.count + 1).padStart(5, "0")}`;
-      const [result] = await db.insert(inventoryAdjustments).values({
+      const [result] = await db.insert(inventoryAdjustments).values(withTenantId(ctx.tenantId, {
         number, warehouseId: input.warehouseId, date: input.date as any,
         reason: input.notes, status: "confirmed",
-      } as any);
+      }) as any);
       const adjId = (result as any).insertId;
       for (const item of input.items) {
-        await db.insert(inventoryAdjustmentItems).values({ adjustmentId: adjId, ...item } as any);
+        await db.insert(inventoryAdjustmentItems).values(withTenantId(ctx.tenantId, { adjustmentId: adjId, ...item }) as any);
         const delta = input.adjustmentType === "addition" ? `currentStock + ${item.quantity}` : `currentStock - ${item.quantity}`;
-        await db.update(items).set({ currentStock: sql.raw(delta) } as any).where(eq(items.id, item.itemId));
+        await db.update(items).set({ currentStock: sql.raw(delta) } as any).where(tenantWhere(items, ctx.tenantId, eq(items.id, item.itemId)));
       }
       return { success: true, id: adjId, number };
     }),
@@ -1977,34 +2058,34 @@ const statementRouter = router({
     customerId: z.number(),
     dateFrom: z.string().optional(),
     dateTo: z.string().optional(),
-  })).query(async ({ input }) => {
+  })).query(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-    const [customer] = await db.select().from(customers).where(eq(customers.id, input.customerId));
+    const [customer] = await db.select().from(customers).where(tenantWhere(customers, ctx.tenantId, eq(customers.id, input.customerId)));
     // Sales invoices
-    let siConds: any[] = [eq(salesInvoices.customerId, input.customerId)];
+    let siConds: any[] = [tenantWhere(salesInvoices, ctx.tenantId, eq(salesInvoices.customerId, input.customerId))];
     if (input.dateFrom) siConds.push(gte(salesInvoices.date, input.dateFrom as any));
     if (input.dateTo) siConds.push(lte(salesInvoices.date, input.dateTo as any));
     const siRows = await db.select({
       id: salesInvoices.id, number: salesInvoices.number, date: salesInvoices.date,
       total: salesInvoices.total, paid: salesInvoices.paid, remaining: salesInvoices.remaining,
       status: salesInvoices.status, paymentType: salesInvoices.paymentType,
-    }).from(salesInvoices).where(and(...siConds)).orderBy(salesInvoices.date);
+    }).from(salesInvoices).where(tenantWhere(salesInvoices, ctx.tenantId, and(...siConds))).orderBy(salesInvoices.date);
     // Cash transactions for this customer
-    let ctConds: any[] = [eq(cashTransactions.customerId, input.customerId)];
+    let ctConds: any[] = [tenantWhere(cashTransactions, ctx.tenantId, eq(cashTransactions.customerId, input.customerId))];
     if (input.dateFrom) ctConds.push(gte(cashTransactions.date, input.dateFrom as any));
     if (input.dateTo) ctConds.push(lte(cashTransactions.date, input.dateTo as any));
-    const ctRows = await db.select().from(cashTransactions).where(and(...ctConds)).orderBy(cashTransactions.date);
+    const ctRows = await db.select().from(cashTransactions).where(tenantWhere(cashTransactions, ctx.tenantId, and(...ctConds))).orderBy(cashTransactions.date);
     // Bank transactions for this customer
-    let btConds: any[] = [eq(bankTransactions.customerId, input.customerId)];
+    let btConds: any[] = [tenantWhere(bankTransactions, ctx.tenantId, eq(bankTransactions.customerId, input.customerId))];
     if (input.dateFrom) btConds.push(gte(bankTransactions.date, input.dateFrom as any));
     if (input.dateTo) btConds.push(lte(bankTransactions.date, input.dateTo as any));
-    const btRows = await db.select().from(bankTransactions).where(and(...btConds)).orderBy(bankTransactions.date);
+    const btRows = await db.select().from(bankTransactions).where(tenantWhere(bankTransactions, ctx.tenantId, and(...btConds))).orderBy(bankTransactions.date);
     // Sales returns
-    let srConds: any[] = [eq(salesReturns.customerId, input.customerId)];
+    let srConds: any[] = [tenantWhere(salesReturns, ctx.tenantId, eq(salesReturns.customerId, input.customerId))];
     if (input.dateFrom) srConds.push(gte(salesReturns.date, input.dateFrom as any));
     if (input.dateTo) srConds.push(lte(salesReturns.date, input.dateTo as any));
-    const srRows = await db.select().from(salesReturns).where(and(...srConds)).orderBy(salesReturns.date);
+    const srRows = await db.select().from(salesReturns).where(tenantWhere(salesReturns, ctx.tenantId, and(...srConds))).orderBy(salesReturns.date);
     const totalInvoices = siRows.reduce((s, r) => s + parseFloat(r.total || "0"), 0);
     const totalPaid = siRows.reduce((s, r) => s + parseFloat(r.paid || "0"), 0);
     const totalRemaining = siRows.reduce((s, r) => s + parseFloat(r.remaining || "0"), 0);
@@ -2015,31 +2096,31 @@ const statementRouter = router({
     supplierId: z.number(),
     dateFrom: z.string().optional(),
     dateTo: z.string().optional(),
-  })).query(async ({ input }) => {
+  })).query(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-    const [supplier] = await db.select().from(suppliers).where(eq(suppliers.id, input.supplierId));
-    let piConds: any[] = [eq(purchaseInvoices.supplierId, input.supplierId)];
+    const [supplier] = await db.select().from(suppliers).where(tenantWhere(suppliers, ctx.tenantId, eq(suppliers.id, input.supplierId)));
+    let piConds: any[] = [tenantWhere(purchaseInvoices, ctx.tenantId, eq(purchaseInvoices.supplierId, input.supplierId))];
     if (input.dateFrom) piConds.push(gte(purchaseInvoices.date, input.dateFrom as any));
     if (input.dateTo) piConds.push(lte(purchaseInvoices.date, input.dateTo as any));
     const piRows = await db.select({
       id: purchaseInvoices.id, number: purchaseInvoices.number, date: purchaseInvoices.date,
       total: purchaseInvoices.total, paid: purchaseInvoices.paid, remaining: purchaseInvoices.remaining,
       status: purchaseInvoices.status, paymentType: purchaseInvoices.paymentType,
-    }).from(purchaseInvoices).where(and(...piConds)).orderBy(purchaseInvoices.date);
-    let ctConds: any[] = [eq(cashTransactions.supplierId, input.supplierId)];
+    }).from(purchaseInvoices).where(tenantWhere(purchaseInvoices, ctx.tenantId, and(...piConds))).orderBy(purchaseInvoices.date);
+    let ctConds: any[] = [tenantWhere(cashTransactions, ctx.tenantId, eq(cashTransactions.supplierId, input.supplierId))];
     if (input.dateFrom) ctConds.push(gte(cashTransactions.date, input.dateFrom as any));
     if (input.dateTo) ctConds.push(lte(cashTransactions.date, input.dateTo as any));
-    const ctRows = await db.select().from(cashTransactions).where(and(...ctConds)).orderBy(cashTransactions.date);
+    const ctRows = await db.select().from(cashTransactions).where(tenantWhere(cashTransactions, ctx.tenantId, and(...ctConds))).orderBy(cashTransactions.date);
     // Bank transactions for this supplier
-    let btConds: any[] = [eq(bankTransactions.supplierId, input.supplierId)];
+    let btConds: any[] = [tenantWhere(bankTransactions, ctx.tenantId, eq(bankTransactions.supplierId, input.supplierId))];
     if (input.dateFrom) btConds.push(gte(bankTransactions.date, input.dateFrom as any));
     if (input.dateTo) btConds.push(lte(bankTransactions.date, input.dateTo as any));
-    const btRows = await db.select().from(bankTransactions).where(and(...btConds)).orderBy(bankTransactions.date);
-    let prConds: any[] = [eq(purchaseReturns.supplierId, input.supplierId)];
+    const btRows = await db.select().from(bankTransactions).where(tenantWhere(bankTransactions, ctx.tenantId, and(...btConds))).orderBy(bankTransactions.date);
+    let prConds: any[] = [tenantWhere(purchaseReturns, ctx.tenantId, eq(purchaseReturns.supplierId, input.supplierId))];
     if (input.dateFrom) prConds.push(gte(purchaseReturns.date, input.dateFrom as any));
     if (input.dateTo) prConds.push(lte(purchaseReturns.date, input.dateTo as any));
-    const prRows = await db.select().from(purchaseReturns).where(and(...prConds)).orderBy(purchaseReturns.date);
+    const prRows = await db.select().from(purchaseReturns).where(tenantWhere(purchaseReturns, ctx.tenantId, and(...prConds))).orderBy(purchaseReturns.date);
     const totalInvoices = piRows.reduce((s, r) => s + parseFloat(r.total || "0"), 0);
     const totalPaid = piRows.reduce((s, r) => s + parseFloat(r.paid || "0"), 0);
     const totalRemaining = piRows.reduce((s, r) => s + parseFloat(r.remaining || "0"), 0);
@@ -2054,24 +2135,50 @@ const saasRouter = router({
   login: publicProcedure.input(z.object({
     email: z.string().email(),
     password: z.string().min(6),
+    tenantSlug: z.string().optional(),
   })).mutation(async ({ input, ctx }) => {
     const user = await getAppUserByEmail(input.email);
     if (!user) throw new TRPCError({ code: "UNAUTHORIZED", message: "البريد الإلكتروني أو كلمة المرور غير صحيحة" });
     if (!user.isActive) throw new TRPCError({ code: "FORBIDDEN", message: "الحساب موقوف، تواصل مع الإدارة" });
     const valid = await verifyPassword(input.password, user.passwordHash);
     if (!valid) throw new TRPCError({ code: "UNAUTHORIZED", message: "البريد الإلكتروني أو كلمة المرور غير صحيحة" });
-    // Check subscription (superadmin always allowed)
+
+    if (input.tenantSlug && user.role !== "superadmin") {
+      const { getTenantBySlug } = await import("./tenant");
+      const tenant = await getTenantBySlug(input.tenantSlug);
+      if (!tenant || tenant.id !== user.tenantId) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "هذا الحساب غير مرتبط بهذه الشركة" });
+      }
+    }
+
     if (user.role !== "superadmin") {
       const active = await isSubscriptionActive(user.id);
       if (!active) throw new TRPCError({ code: "FORBIDDEN", message: "انتهى اشتراكك، تواصل مع الإدارة لتجديده" });
     }
-    const token = await signSaasToken({ userId: user.id, email: user.email, role: user.role });
+
+    let tenantSlug = input.tenantSlug ?? null;
+    if (!tenantSlug && user.tenantId) {
+      const { getTenantById } = await import("./tenant");
+      const tenant = await getTenantById(user.tenantId);
+      tenantSlug = tenant?.slug ?? null;
+    }
+
+    const token = await signSaasToken({
+      userId: user.id,
+      email: user.email,
+      role: user.role,
+      tenantId: user.tenantId,
+      tenantSlug,
+    });
     const cookieOptions = getSessionCookieOptions(ctx.req);
     ctx.res.cookie(SAAS_COOKIE_NAME, token, { ...cookieOptions, maxAge: 365 * 24 * 60 * 60 * 1000 });
-    // Update lastLoginAt
     const db = await getDb();
     if (db) await db.update(appUsers).set({ lastLoginAt: new Date() }).where(eq(appUsers.id, user.id));
-    return { success: true, user: { id: user.id, name: user.name, email: user.email, role: user.role, companyName: user.companyName } };
+    return {
+      success: true,
+      user: { id: user.id, name: user.name, email: user.email, role: user.role, companyName: user.companyName },
+      tenantSlug,
+    };
   }),
 
   // تسجيل الخروج
@@ -2118,6 +2225,12 @@ const saasRouter = router({
       const now = new Date();
       daysRemaining = Math.ceil((end.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
     }
+    let tenantSlug = ctx.tenantSlug;
+    if (!tenantSlug && user.tenantId) {
+      const { getTenantById } = await import("./tenant");
+      const tenant = await getTenantById(user.tenantId);
+      tenantSlug = tenant?.slug ?? null;
+    }
     return {
       id: user.id,
       name: user.name,
@@ -2128,7 +2241,38 @@ const saasRouter = router({
       subscription: latestSub,
       hasActiveSubscription: Boolean(sub),
       daysRemaining,
+      tenantSlug,
+      tenantId: user.tenantId,
     };
+  }),
+
+  // فتح برنامج مشترك (سوبر أدمن)
+  impersonateTenant: publicProcedure.input(z.object({ userId: z.number() })).mutation(async ({ ctx, input }) => {
+    const cookies = ctx.req.headers.cookie || "";
+    const match = cookies.match(new RegExp(`${SAAS_COOKIE_NAME}=([^;]+)`));
+    const session = await verifySaasToken(match?.[1]);
+    if (!session || session.role !== "superadmin") {
+      throw new TRPCError({ code: "FORBIDDEN", message: "غير مصرح" });
+    }
+    const target = await getAppUserById(input.userId);
+    if (!target?.tenantId) {
+      throw new TRPCError({ code: "NOT_FOUND", message: "الشركة غير موجودة" });
+    }
+    const { getTenantById } = await import("./tenant");
+    const tenant = await getTenantById(target.tenantId);
+    if (!tenant) throw new TRPCError({ code: "NOT_FOUND", message: "الشركة غير موجودة" });
+
+    const token = await signSaasToken({
+      userId: target.id,
+      email: target.email,
+      role: target.role,
+      tenantId: target.tenantId,
+      tenantSlug: tenant.slug,
+      impersonatorId: session.userId,
+    });
+    const cookieOptions = getSessionCookieOptions(ctx.req);
+    ctx.res.cookie(SAAS_COOKIE_NAME, token, { ...cookieOptions, maxAge: 365 * 24 * 60 * 60 * 1000 });
+    return { redirectUrl: `/${tenant.slug}/`, tenantSlug: tenant.slug, companyName: tenant.name };
   }),
 
   // إنشاء حساب جديد
@@ -2136,7 +2280,7 @@ const saasRouter = router({
     name: z.string().min(2),
     email: z.string().email(),
     password: z.string().min(6),
-    companyName: z.string().optional(),
+    companyName: z.string().min(2, "اسم الشركة مطلوب"),
     phone: z.string().optional(),
     couponCode: z.string().optional(),
   })).mutation(async ({ input }) => {
@@ -2145,15 +2289,18 @@ const saasRouter = router({
     const existing = await getAppUserByEmail(input.email);
     if (existing) throw new TRPCError({ code: "CONFLICT", message: "البريد الإلكتروني مسجل مسبقاً" });
     const passwordHash = await hashPassword(input.password);
+    const companyName = input.companyName.trim();
     const [result] = await db.insert(appUsers).values({
       name: input.name,
       email: input.email.toLowerCase(),
       passwordHash,
-      role: "user",
-      companyName: input.companyName || null,
+      role: "admin",
+      companyName,
       phone: input.phone || null,
     });
     const userId = (result as any).insertId;
+    const { createTenantForOwner } = await import("./tenant");
+    const { tenantId, slug } = await createTenantForOwner({ name: input.name, companyName, ownerUserId: userId });
     // التحقق من الكوبون إن وجد
     let couponId: number | null = null;
     if (input.couponCode) {
@@ -2175,7 +2322,14 @@ const saasRouter = router({
     // كوبون نسبة يمدد التجربة بنسبة مئوية
     const trialDays = couponId ? 14 : 14; // يمكن توسيع لاحقاً
     const endDate = new Date(Date.now() + trialDays * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
-    await db.insert(subscriptions).values({ userId, planId, status: "trial", startDate: startDate as any, endDate: endDate as any });
+    await db.insert(subscriptions).values({
+      tenantId,
+      userId,
+      planId,
+      status: "trial",
+      startDate: startDate as any,
+      endDate: endDate as any,
+    });
     const msg = couponId ? `تم إنشاء الحساب بنجاح مع تطبيق كود الخصم بنجاح!` : `تم إنشاء الحساب بنجاح، لديك 14 يوم تجريبي`;
     // إشعار المالك بالتسجيل الجديد
     try {
@@ -2185,7 +2339,12 @@ const saasRouter = router({
         content: `انضم مستخدم جديد إلى Easy Cash\nالاسم: ${input.name}\nالبريد: ${input.email}\nالشركة: ${input.companyName || 'غير محدد'}\nالتاريخ: ${new Date().toLocaleDateString('ar-EG')}`,
       });
     } catch { /* لا نوقف التسجيل إذا فشل الإشعار */ }
-    return { success: true, message: msg };
+    return {
+      success: true,
+      message: msg,
+      tenantSlug: slug,
+      loginUrl: `/${slug}/login`,
+    };
   }),
 
   // ===================== SUPER ADMIN PROCEDURES =====================
@@ -2203,14 +2362,28 @@ const saasRouter = router({
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     const offset = (input.page - 1) * input.limit;
-    let query = db.select({
-      id: appUsers.id, name: appUsers.name, email: appUsers.email,
-      role: appUsers.role, isActive: appUsers.isActive,
-      companyName: appUsers.companyName, phone: appUsers.phone,
-      createdAt: appUsers.createdAt, lastLoginAt: appUsers.lastLoginAt,
-    }).from(appUsers);
-    const rows = await query.orderBy(desc(appUsers.createdAt)).limit(input.limit).offset(offset);
-    const [total] = await db.select({ count: count() }).from(appUsers);
+    const rows = await db.select({
+      id: appUsers.id,
+      name: appUsers.name,
+      email: appUsers.email,
+      role: appUsers.role,
+      isActive: appUsers.isActive,
+      companyName: appUsers.companyName,
+      phone: appUsers.phone,
+      tenantId: appUsers.tenantId,
+      createdAt: appUsers.createdAt,
+      lastLoginAt: appUsers.lastLoginAt,
+      tenantSlug: tenants.slug,
+      tenantName: tenants.name,
+    })
+      .from(appUsers)
+      .leftJoin(tenants, eq(appUsers.tenantId, tenants.id))
+      .where(and(sql`${appUsers.role} != 'superadmin'`, isNull(appUsers.ownerUserId)))
+      .orderBy(desc(appUsers.createdAt))
+      .limit(input.limit)
+      .offset(offset);
+    const [total] = await db.select({ count: count() }).from(appUsers)
+      .where(and(sql`${appUsers.role} != 'superadmin'`, isNull(appUsers.ownerUserId)));
     return { rows, total: total.count };
   }),
 
@@ -2218,6 +2391,7 @@ const saasRouter = router({
   updateUser: publicProcedure.input(z.object({
     id: z.number(),
     name: z.string().optional(),
+    email: z.string().email("بريد إلكتروني غير صالح").optional(),
     role: z.enum(["superadmin", "admin", "user"]).optional(),
     isActive: z.boolean().optional(),
     companyName: z.string().optional(),
@@ -2230,8 +2404,15 @@ const saasRouter = router({
     if (!session || session.role !== "superadmin") throw new TRPCError({ code: "FORBIDDEN", message: "غير مصرح" });
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    if (input.email) {
+      const existing = await getAppUserByEmail(input.email);
+      if (existing && existing.id !== input.id) {
+        throw new TRPCError({ code: "CONFLICT", message: "البريد الإلكتروني مستخدم بالفعل" });
+      }
+    }
     const updateData: any = {};
     if (input.name !== undefined) updateData.name = input.name;
+    if (input.email !== undefined) updateData.email = input.email;
     if (input.role !== undefined) updateData.role = input.role;
     if (input.isActive !== undefined) updateData.isActive = input.isActive;
     if (input.companyName !== undefined) updateData.companyName = input.companyName;
@@ -2763,6 +2944,299 @@ const saasRouter = router({
     await db.update(userNotifications).set({ isRead: true })
       .where(eq(userNotifications.userId, session.userId));
     return { success: true };
+  }),
+
+  // ===================== PUBLIC PLANS =====================
+  listPublicPlans: publicProcedure.query(async () => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    return db
+      .select()
+      .from(subscriptionPlans)
+      .where(eq(subscriptionPlans.isActive, true))
+      .orderBy(subscriptionPlans.price);
+  }),
+
+  // ===================== PAYMOB SETTINGS (SUPER ADMIN) =====================
+  getPaymobSettings: publicProcedure.query(async ({ ctx }) => {
+    const cookies = ctx.req.headers.cookie || "";
+    const match = cookies.match(new RegExp(`${SAAS_COOKIE_NAME}=([^;]+)`));
+    const session = await verifySaasToken(match?.[1]);
+    if (!session || session.role !== "superadmin") throw new TRPCError({ code: "FORBIDDEN", message: "غير مصرح" });
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    const [row] = await db.select().from(paymobSettings).limit(1);
+    if (!row) {
+      return {
+        configured: false,
+        mode: "test" as const,
+        isEnabled: false,
+        publicKey: "",
+        publicKeyLast8: "",
+        cardIntegrationId: null as number | null,
+        currency: "EGP",
+        hasSecretKey: false,
+        hasHmacSecret: false,
+        webhookUrl: "",
+        returnUrl: "",
+      };
+    }
+    let publicConfig: Record<string, unknown> = {};
+    try {
+      publicConfig = row.publicConfig ? JSON.parse(row.publicConfig) : {};
+    } catch { /* ignore */ }
+    const secret = row.encryptedSecret ? (await import("./paymob")).decodeSecret<{ secretKey?: string; hmacSecret?: string }>(row.encryptedSecret) : null;
+    const { absoluteUrl } = await import("./paymob");
+    return {
+      configured: true,
+      mode: row.mode,
+      isEnabled: row.isEnabled,
+      publicKey: String(publicConfig.publicKey || ""),
+      publicKeyLast8: String(publicConfig.publicKeyLast8 || ""),
+      cardIntegrationId: publicConfig.cardIntegrationId ? Number(publicConfig.cardIntegrationId) : null,
+      currency: String(publicConfig.currency || "EGP"),
+      hasSecretKey: Boolean(secret?.secretKey),
+      hasHmacSecret: Boolean(secret?.hmacSecret),
+      webhookUrl: absoluteUrl(ctx.req, "/api/webhooks/paymob"),
+      returnUrl: absoluteUrl(ctx.req, "/pricing?payment=return"),
+      updatedAt: row.updatedAt,
+    };
+  }),
+
+  savePaymobSettings: publicProcedure.input(z.object({
+    mode: z.enum(["test", "live"]).default("test"),
+    publicKey: z.string().min(8).optional(),
+    secretKey: z.string().min(8).optional(),
+    hmacSecret: z.string().optional(),
+    cardIntegrationId: z.coerce.number().int().positive().optional(),
+    currency: z.string().min(3).max(3).default("EGP"),
+    isEnabled: z.boolean().default(false),
+  })).mutation(async ({ ctx, input }) => {
+    const cookies = ctx.req.headers.cookie || "";
+    const match = cookies.match(new RegExp(`${SAAS_COOKIE_NAME}=([^;]+)`));
+    const session = await verifySaasToken(match?.[1]);
+    if (!session || session.role !== "superadmin") throw new TRPCError({ code: "FORBIDDEN", message: "غير مصرح" });
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+    const {
+      encodeSecret, decodeSecret, assertPaymobPublicKey,
+    } = await import("./paymob");
+
+    const [existing] = await db.select().from(paymobSettings).limit(1);
+    if ((!input.publicKey || !input.secretKey || !input.cardIntegrationId) && !existing) {
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: "Public Key و Secret Key و Card Integration ID مطلوبة في أول حفظ",
+      });
+    }
+
+    let existingConfig: Record<string, unknown> = {};
+    let existingSecret: { secretKey?: string; hmacSecret?: string } | null = null;
+    if (existing) {
+      try {
+        existingConfig = existing.publicConfig ? JSON.parse(existing.publicConfig) : {};
+      } catch { /* ignore */ }
+      if (existing.encryptedSecret) {
+        existingSecret = decodeSecret(existing.encryptedSecret);
+      }
+    }
+
+    const publicKey = input.publicKey ?? String(existingConfig.publicKey ?? "");
+    const cardIntegrationId = input.cardIntegrationId ?? Number(existingConfig.cardIntegrationId ?? 0);
+    assertPaymobPublicKey(publicKey);
+
+    const publicConfig = {
+      publicKey,
+      publicKeyLast8: publicKey.slice(-8),
+      cardIntegrationId,
+      currency: input.currency.toUpperCase(),
+    };
+
+    const encryptedSecret = encodeSecret({
+      secretKey: input.secretKey ?? existingSecret?.secretKey ?? "",
+      hmacSecret: input.hmacSecret ?? existingSecret?.hmacSecret ?? "",
+    });
+
+    if (existing) {
+      await db.update(paymobSettings).set({
+        mode: input.mode,
+        publicConfig: JSON.stringify(publicConfig),
+        encryptedSecret,
+        isEnabled: input.isEnabled,
+      }).where(eq(paymobSettings.id, existing.id));
+    } else {
+      await db.insert(paymobSettings).values({
+        mode: input.mode,
+        publicConfig: JSON.stringify(publicConfig),
+        encryptedSecret,
+        isEnabled: input.isEnabled,
+      });
+    }
+
+    return { success: true };
+  }),
+
+  testPaymobConnection: publicProcedure.mutation(async ({ ctx }) => {
+    const cookies = ctx.req.headers.cookie || "";
+    const match = cookies.match(new RegExp(`${SAAS_COOKIE_NAME}=([^;]+)`));
+    const session = await verifySaasToken(match?.[1]);
+    if (!session || session.role !== "superadmin") throw new TRPCError({ code: "FORBIDDEN", message: "غير مصرح" });
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+    const { decodeSecret, assertPaymobPublicKey, paymobErrorMessage } = await import("./paymob");
+    const [row] = await db.select().from(paymobSettings).limit(1);
+    if (!row?.encryptedSecret) {
+      throw new TRPCError({ code: "NOT_FOUND", message: "إعدادات Paymob غير موجودة" });
+    }
+
+    const publicConfig = JSON.parse(row.publicConfig || "{}") as { publicKey: string; cardIntegrationId: number; currency?: string };
+    const secret = decodeSecret<{ secretKey: string }>(row.encryptedSecret);
+    assertPaymobPublicKey(publicConfig.publicKey);
+
+    const response = await fetch("https://accept.paymob.com/v1/intention/", {
+      method: "POST",
+      headers: { Authorization: `Token ${secret.secretKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        amount: 100,
+        currency: publicConfig.currency || "EGP",
+        payment_methods: [Number(publicConfig.cardIntegrationId)],
+        items: [{ name: "Easy Cash test", amount: 100, description: "Connection test", quantity: 1 }],
+        billing_data: {
+          first_name: "Easy", last_name: "Cash", phone_number: "01000000000",
+          email: "test@easycash.app", country: "EG", city: "Cairo",
+          street: "NA", building: "NA", apartment: "NA", floor: "NA",
+        },
+        special_reference: `easy-cash-test-${Date.now()}`,
+        expiration: 600,
+      }),
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: (data as { message?: string }).message || paymobErrorMessage(data),
+      });
+    }
+    return { ok: true, intentionId: (data as { id?: string }).id, hasClientSecret: Boolean((data as { client_secret?: string }).client_secret) };
+  }),
+
+  // ===================== PLAN CHECKOUT =====================
+  createPlanCheckout: publicProcedure.input(z.object({
+    planId: z.number().optional(),
+    planName: z.string().optional(),
+  })).mutation(async ({ ctx, input }) => {
+    const cookies = ctx.req.headers.cookie || "";
+    const match = cookies.match(new RegExp(`${SAAS_COOKIE_NAME}=([^;]+)`));
+    const session = await verifySaasToken(match?.[1]);
+    if (!session) throw new TRPCError({ code: "UNAUTHORIZED", message: "يجب تسجيل الدخول أولاً" });
+
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+    const [gateway] = await db.select().from(paymobSettings).where(eq(paymobSettings.isEnabled, true)).limit(1);
+    if (!gateway?.encryptedSecret) {
+      throw new TRPCError({ code: "BAD_REQUEST", message: "بوابة Paymob غير مفعّلة. تواصل مع الإدارة." });
+    }
+
+    let plan;
+    if (input.planId) {
+      [plan] = await db.select().from(subscriptionPlans).where(eq(subscriptionPlans.id, input.planId)).limit(1);
+    } else if (input.planName) {
+      [plan] = await db.select().from(subscriptionPlans).where(eq(subscriptionPlans.name, input.planName)).limit(1);
+    }
+    if (!plan || !plan.isActive) {
+      throw new TRPCError({ code: "NOT_FOUND", message: "الخطة غير موجودة" });
+    }
+    if (Number(plan.price) <= 0 || plan.name === "trial") {
+      throw new TRPCError({ code: "BAD_REQUEST", message: "هذه الخطة مجانية — سجّل حساباً جديداً" });
+    }
+
+    const user = await getAppUserById(session.userId);
+    if (!user) throw new TRPCError({ code: "NOT_FOUND", message: "المستخدم غير موجود" });
+
+    const {
+      decodeSecret, assertPaymobPublicKey, paymobCheckoutUrl, paymobErrorMessage,
+      splitName, absoluteUrl, amountToCents,
+    } = await import("./paymob");
+
+    const publicConfig = JSON.parse(gateway.publicConfig || "{}") as { publicKey: string; cardIntegrationId: number; currency?: string };
+    const secret = decodeSecret<{ secretKey: string }>(gateway.encryptedSecret);
+    assertPaymobPublicKey(publicConfig.publicKey);
+
+    const amountCents = amountToCents(plan.price);
+    const [paymentResult] = await db.insert(subscriptionPayments).values({
+      userId: session.userId,
+      planId: plan.id,
+      amount: plan.price,
+      currency: publicConfig.currency || plan.currency || "EGP",
+      status: "pending",
+    });
+    const paymentId = (paymentResult as { insertId: number }).insertId;
+    const paymentReference = `easy_cash_payment:${paymentId}`;
+    const customerName = splitName(user.name || "Customer");
+
+    const intentionResponse = await fetch("https://accept.paymob.com/v1/intention/", {
+      method: "POST",
+      headers: { Authorization: `Token ${secret.secretKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        amount: amountCents,
+        currency: publicConfig.currency || "EGP",
+        payment_methods: [Number(publicConfig.cardIntegrationId)],
+        items: [{
+          name: `Easy Cash ${plan.nameAr}`.slice(0, 50),
+          amount: amountCents,
+          description: `اشتراك ${plan.nameAr}`,
+          quantity: 1,
+        }],
+        billing_data: {
+          first_name: customerName.firstName,
+          last_name: customerName.lastName,
+          phone_number: user.phone || "01000000000",
+          email: user.email,
+          country: "EG",
+          city: "Cairo",
+          street: "NA",
+          building: "NA",
+          apartment: "NA",
+          floor: "NA",
+        },
+        special_reference: paymentReference,
+        notification_url: absoluteUrl(ctx.req, "/api/webhooks/paymob"),
+        redirection_url: absoluteUrl(ctx.req, `/pricing?payment=return&paymentId=${paymentId}`),
+        expiration: 3600,
+      }),
+    });
+
+    const intention = await intentionResponse.json().catch(() => ({}));
+    if (!intentionResponse.ok || !(intention as { client_secret?: string }).client_secret) {
+      await db.update(subscriptionPayments).set({ status: "failed" }).where(eq(subscriptionPayments.id, paymentId));
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: paymobErrorMessage(intention),
+      });
+    }
+
+    const intentionId = String((intention as { id?: string; intention_order_id?: string }).id || (intention as { intention_order_id?: string }).intention_order_id || "");
+    await db.update(subscriptionPayments).set({ providerReference: intentionId }).where(eq(subscriptionPayments.id, paymentId));
+
+    const checkoutUrl = paymobCheckoutUrl(publicConfig.publicKey, (intention as { client_secret: string }).client_secret);
+    return { checkoutUrl, paymentId, planName: plan.nameAr, amount: plan.price };
+  }),
+
+  getPaymentStatus: publicProcedure.input(z.object({ paymentId: z.number() })).query(async ({ ctx, input }) => {
+    const cookies = ctx.req.headers.cookie || "";
+    const match = cookies.match(new RegExp(`${SAAS_COOKIE_NAME}=([^;]+)`));
+    const session = await verifySaasToken(match?.[1]);
+    if (!session) throw new TRPCError({ code: "UNAUTHORIZED" });
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    const [payment] = await db.select().from(subscriptionPayments)
+      .where(and(eq(subscriptionPayments.id, input.paymentId), eq(subscriptionPayments.userId, session.userId)))
+      .limit(1);
+    if (!payment) throw new TRPCError({ code: "NOT_FOUND" });
+    return { status: payment.status, paymentId: payment.id };
   }),
 });
 

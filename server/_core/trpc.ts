@@ -17,10 +17,15 @@ const requireUser = t.middleware(async opts => {
     throw new TRPCError({ code: "UNAUTHORIZED", message: UNAUTHED_ERR_MSG });
   }
 
+  if (ctx.saasUser && ctx.saasUser.role !== "superadmin" && !ctx.tenantId) {
+    throw new TRPCError({ code: "FORBIDDEN", message: "الحساب غير مرتبط بشركة. تواصل مع الدعم." });
+  }
+
   return next({
     ctx: {
       ...ctx,
       user: ctx.user,
+      tenantId: ctx.tenantId ?? 1,
     },
   });
 });

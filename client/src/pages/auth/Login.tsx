@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { trpc } from "@/lib/trpc";
-import { useLocation } from "wouter";
+import { useLocation, useSearch } from "wouter";
+import { getTenantSlugFromPath, tenantPath } from "@/lib/tenant";
 import { toast } from "sonner";
 import { Eye, EyeOff, BookOpen, Lock, Mail, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -9,6 +10,9 @@ import { Label } from "@/components/ui/label";
 
 export default function Login() {
   const [, navigate] = useLocation();
+  const search = useSearch();
+  const redirect = new URLSearchParams(search).get("redirect") || tenantPath(getTenantSlugFromPath(), "/");
+  const tenantSlug = getTenantSlugFromPath() || "";
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -19,7 +23,8 @@ export default function Login() {
       if (data.user.role === "superadmin") {
         navigate("/super-admin");
       } else {
-        navigate("/");
+        const dest = data.tenantSlug ? tenantPath(data.tenantSlug, "/") : redirect;
+        navigate(dest.startsWith("/") ? dest : "/");
       }
     },
     onError: (err) => {
@@ -33,7 +38,7 @@ export default function Login() {
       toast.error("يرجى إدخال البريد الإلكتروني وكلمة المرور");
       return;
     }
-    loginMutation.mutate({ email, password });
+    loginMutation.mutate({ email, password, tenantSlug: tenantSlug || undefined });
   };
 
   return (

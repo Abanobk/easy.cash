@@ -9,7 +9,7 @@ import { SignJWT, jwtVerify } from "jose";
 import { ENV } from "./_core/env";
 import { getDb } from "./db";
 import { appUsers, subscriptions, subscriptionPlans } from "../drizzle/schema";
-import { eq, and, gte } from "drizzle-orm";
+import { eq, and, gte, or, count } from "drizzle-orm";
 
 const SAAS_COOKIE_NAME = "easy_cash_session";
 const ONE_YEAR_MS = 1000 * 60 * 60 * 24 * 365;
@@ -26,6 +26,9 @@ export async function signSaasToken(payload: {
   userId: number;
   email: string;
   role: string;
+  tenantId?: number | null;
+  tenantSlug?: string | null;
+  impersonatorId?: number | null;
 }): Promise<string> {
   const issuedAt = Date.now();
   const expiresInMs = ONE_YEAR_MS;
@@ -35,6 +38,9 @@ export async function signSaasToken(payload: {
     userId: payload.userId,
     email: payload.email,
     role: payload.role,
+    tenantId: payload.tenantId ?? null,
+    tenantSlug: payload.tenantSlug ?? null,
+    impersonatorId: payload.impersonatorId ?? null,
     type: "saas",
   })
     .setProtectedHeader({ alg: "HS256", typ: "JWT" })
@@ -46,15 +52,25 @@ export async function verifySaasToken(token: string | undefined | null): Promise
   userId: number;
   email: string;
   role: string;
+  tenantId: number | null;
+  tenantSlug: string | null;
+  impersonatorId: number | null;
 } | null> {
   if (!token) return null;
   try {
     const { payload } = await jwtVerify(token, getSecret(), { algorithms: ["HS256"] });
-    const { userId, email, role, type } = payload as Record<string, unknown>;
+    const { userId, email, role, type, tenantId, tenantSlug, impersonatorId } = payload as Record<string, unknown>;
     if (type !== "saas" || typeof userId !== "number" || typeof email !== "string" || typeof role !== "string") {
       return null;
     }
-    return { userId, email, role };
+    return {
+      userId,
+      email,
+      role,
+      tenantId: typeof tenantId === "number" ? tenantId : null,
+      tenantSlug: typeof tenantSlug === "string" ? tenantSlug : null,
+      impersonatorId: typeof impersonatorId === "number" ? impersonatorId : null,
+    };
   } catch {
     return null;
   }
@@ -86,11 +102,31 @@ export async function getAppUserByEmail(email: string) {
   return user || null;
 }
 
+export function getAccountOwnerId(user: { id: number; ownerUserId?: number | null }) {
+  return user.ownerUserId ?? user.id;
+}
+
+export async function countAccountUsers(tenantId: number) {
+  const db = await getDb();
+  if (!db) return 0;
+  const [row] = await db
+    .select({ total: count() })
+    .from(appUsers)
+    .where(eq(appUsers.tenantId, tenantId));
+  return row?.total ?? 0;
+}
+
+export function canManageTeamUsers(role: string) {
+  return role === "admin" || role === "superadmin";
+}
+
 // ===================== Subscription Helpers =====================
 
 export async function getUserActiveSubscription(userId: number) {
   const db = await getDb();
   if (!db) return null;
+  const user = await getAppUserById(userId);
+  if (!user?.tenantId) return null;
   const today = new Date().toISOString().split("T")[0];
   const [sub] = await db
     .select({
@@ -107,7 +143,7 @@ export async function getUserActiveSubscription(userId: number) {
     .leftJoin(subscriptionPlans, eq(subscriptions.planId, subscriptionPlans.id))
     .where(
       and(
-        eq(subscriptions.userId, userId),
+        eq(subscriptions.tenantId, user.tenantId),
         gte(subscriptions.endDate, today as any)
       )
     )

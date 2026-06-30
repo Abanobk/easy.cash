@@ -6,6 +6,7 @@ import { createRoot } from "react-dom/client";
 import superjson from "superjson";
 import App from "./App";
 import { getLoginUrl } from "./const";
+import { getTenantSlugFromPath } from "./lib/tenant";
 import "./index.css";
 
 const queryClient = new QueryClient();
@@ -63,6 +64,10 @@ const trpcClient = trpc.createClient({
           }
         } catch {
           // sessionStorage unavailable
+        }
+        const slug = getTenantSlugFromPath();
+        if (slug) {
+          return { "x-tenant-slug": slug };
         }
         return {};
       },

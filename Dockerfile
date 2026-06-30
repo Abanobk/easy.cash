@@ -1,7 +1,8 @@
 FROM node:22-alpine AS deps
 WORKDIR /app
 RUN corepack enable && corepack prepare pnpm@10.4.1 --activate
-COPY package.json pnpm-lock.yaml patches ./
+COPY package.json pnpm-lock.yaml ./
+COPY patches ./patches
 RUN pnpm install --frozen-lockfile
 
 FROM deps AS build

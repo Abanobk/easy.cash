@@ -16,9 +16,20 @@ export const users = mysqlTable("users", {
   lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),
 });
 
+// ===================== TENANTS (SaaS companies) =====================
+export const tenants = mysqlTable("tenants", {
+  id: int("id").autoincrement().primaryKey(),
+  slug: varchar("slug", { length: 100 }).notNull().unique(),
+  name: varchar("name", { length: 255 }).notNull(),
+  ownerUserId: int("ownerUserId"),
+  isActive: boolean("isActive").default(true).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
 // ===================== COMPANY SETTINGS =====================
 export const companySettings = mysqlTable("company_settings", {
   id: int("id").autoincrement().primaryKey(),
+  tenantId: int("tenantId").notNull().default(1),
   name: varchar("name", { length: 255 }).notNull(),
   address: text("address"),
   phone: varchar("phone", { length: 50 }),
@@ -624,6 +635,9 @@ export const appUsers = mysqlTable("app_users", {
   isActive: boolean("isActive").default(true).notNull(),
   companyName: varchar("companyName", { length: 255 }),
   phone: varchar("phone", { length: 50 }),
+  ownerUserId: int("ownerUserId"),
+  jobTitle: varchar("jobTitle", { length: 255 }),
+  tenantId: int("tenantId"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   lastLoginAt: timestamp("lastLoginAt"),
@@ -647,6 +661,7 @@ export const subscriptionPlans = mysqlTable("subscription_plans", {
 // ===================== SUBSCRIPTIONS =====================
 export const subscriptions = mysqlTable("subscriptions", {
   id: int("id").autoincrement().primaryKey(),
+  tenantId: int("tenantId"),
   userId: int("userId").notNull(),
   planId: int("planId").notNull(),
   status: mysqlEnum("status", ["trial", "active", "expired", "cancelled", "suspended"]).default("trial").notNull(),
@@ -706,6 +721,29 @@ export const supportTickets = mysqlTable("support_tickets", {
   priority: mysqlEnum("priority", ["low", "medium", "high", "urgent"]).default("medium").notNull(),
   adminReply: text("adminReply"),
   repliedAt: timestamp("repliedAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+// ===================== PAYMOB SETTINGS =====================
+export const paymobSettings = mysqlTable("paymob_settings", {
+  id: int("id").autoincrement().primaryKey(),
+  mode: mysqlEnum("mode", ["test", "live"]).default("test").notNull(),
+  publicConfig: text("publicConfig"),
+  encryptedSecret: text("encryptedSecret"),
+  isEnabled: boolean("isEnabled").default(false).notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+// ===================== SUBSCRIPTION PAYMENTS =====================
+export const subscriptionPayments = mysqlTable("subscription_payments", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  planId: int("planId").notNull(),
+  amount: decimal("amount", { precision: 10, scale: 2 }).notNull(),
+  currency: varchar("currency", { length: 10 }).default("EGP").notNull(),
+  status: mysqlEnum("status", ["pending", "paid", "failed"]).default("pending").notNull(),
+  providerReference: varchar("providerReference", { length: 255 }),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });

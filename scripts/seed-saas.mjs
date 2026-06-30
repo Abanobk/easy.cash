@@ -27,9 +27,9 @@ async function main() {
 
     // 1. Insert default subscription plans
     const plans = [
-      { name: "trial", nameAr: "تجريبي مجاني", price: "0", durationDays: 14, maxUsers: 2, maxInvoices: 50, features: "جميع الميزات الأساسية" },
-      { name: "monthly", nameAr: "الخطة الشهرية", price: "299", durationDays: 30, maxUsers: 5, maxInvoices: 500, features: "جميع الميزات + الدعم الفني" },
-      { name: "yearly", nameAr: "الخطة السنوية", price: "2499", durationDays: 365, maxUsers: 20, maxInvoices: 99999, features: "جميع الميزات + الدعم الفني + تقارير متقدمة" },
+      { name: "trial", nameAr: "تجريبي مجاني", price: "0", durationDays: 14, maxUsers: 3, maxInvoices: 50, features: "جميع الميزات الأساسية" },
+      { name: "monthly", nameAr: "الخطة الشهرية", price: "1300", durationDays: 30, maxUsers: 5, maxInvoices: 500, features: "جميع الميزات + الدعم الفني" },
+      { name: "yearly", nameAr: "الخطة السنوية", price: "10000", durationDays: 365, maxUsers: 20, maxInvoices: 99999, features: "جميع الميزات + الدعم الفني + تقارير متقدمة" },
     ];
 
     for (const plan of plans) {

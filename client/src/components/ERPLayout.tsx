@@ -1,4 +1,5 @@
 import { useState, ReactNode, useEffect } from "react";
+import { getTenantSlugFromPath, tenantPath } from "@/lib/tenant";
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { getLoginUrl } from "@/const";
@@ -181,18 +182,19 @@ interface SidebarItemProps {
   onNavigate?: () => void;
 }
 
-function SidebarItem({ item, level = 0, onNavigate }: SidebarItemProps) {
+function SidebarItem({ item, level = 0, onNavigate, tenantSlug }: SidebarItemProps & { tenantSlug: string }) {
   const [location] = useLocation();
+  const href = tenantPath(tenantSlug, item.path || "/");
   const [open, setOpen] = useState(() => {
     if (!item.children) return false;
-    return item.children.some(c => c.path && location.startsWith(c.path));
+    return item.children.some(c => c.path && location.startsWith(tenantPath(tenantSlug, c.path)));
   });
 
-  const isActive = item.path && (location === item.path || (item.path !== "/" && location.startsWith(item.path)));
+  const isActive = item.path && (location === href || (item.path !== "/" && location.startsWith(href)));
 
   if (!item.children) {
     return (
-      <Link href={item.path || "/"} onClick={onNavigate}>
+      <Link href={href} onClick={onNavigate}>
         <div
           className={`flex items-center gap-2 px-3 py-2 rounded-md cursor-pointer transition-all duration-150 text-sm
             ${isActive
@@ -226,7 +228,7 @@ function SidebarItem({ item, level = 0, onNavigate }: SidebarItemProps) {
       {open && (
         <div className="mt-0.5 space-y-0.5 border-r-2 border-blue-500/30 mr-4">
           {item.children.map((child, i) => (
-            <SidebarItem key={i} item={child} level={level + 1} onNavigate={onNavigate} />
+            <SidebarItem key={i} item={child} level={level + 1} onNavigate={onNavigate} tenantSlug={tenantSlug} />
           ))}
         </div>
       )}
@@ -243,6 +245,7 @@ export default function ERPLayout({ children, title }: ERPLayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [, navigate] = useLocation();
+  const tenantSlug = getTenantSlugFromPath();
   const { user, isAuthenticated, logout } = useAuth();
   // جلب الإشعارات الداخلية للمستخدم
   const notifQuery = trpc.saas.getMyNotifications.useQuery(undefined, {
@@ -262,9 +265,9 @@ export default function ERPLayout({ children, title }: ERPLayoutProps) {
     if (!saasUser) return;
     if (saasUser.role === "superadmin") return;
     if (!saasUser.hasActiveSubscription) {
-      navigate("/subscription-expired");
+      navigate(tenantPath(tenantSlug, "/subscription-expired"));
     }
-  }, [saasUser, saasMe.isLoading, navigate]);
+  }, [saasUser, saasMe.isLoading, navigate, tenantSlug]);
 
   if (!isAuthenticated) {
     return (
@@ -275,7 +278,7 @@ export default function ERPLayout({ children, title }: ERPLayoutProps) {
           </div>
           <h1 className="text-2xl font-bold text-slate-800 mb-2">Easy Cash</h1>
           <p className="text-slate-500 mb-8 text-sm">نظام المحاسبة والإدارة المتكامل</p>
-          <a href="/login">
+          <a href={tenantPath(tenantSlug, "/login")}>
             <Button className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 text-base font-semibold rounded-xl">
               تسجيل الدخول
             </Button>
@@ -303,7 +306,7 @@ export default function ERPLayout({ children, title }: ERPLayoutProps) {
       {/* Nav */}
       <nav className="flex-1 overflow-y-auto py-3 px-2 space-y-0.5">
         {navItems.map((item, i) => (
-          <SidebarItem key={i} item={item} onNavigate={() => setMobileSidebarOpen(false)} />
+          <SidebarItem key={i} item={item} onNavigate={() => setMobileSidebarOpen(false)} tenantSlug={tenantSlug || ""} />
         ))}
       </nav>
 
@@ -351,7 +354,7 @@ export default function ERPLayout({ children, title }: ERPLayoutProps) {
             </div>
             <nav className="flex-1 overflow-y-auto py-3 px-2 space-y-0.5">
               {navItems.map((item, i) => (
-                <SidebarItem key={i} item={item} onNavigate={() => setMobileSidebarOpen(false)} />
+                <SidebarItem key={i} item={item} onNavigate={() => setMobileSidebarOpen(false)} tenantSlug={tenantSlug || ""} />
               ))}
             </nav>
           </aside>

@@ -1,190 +1,144 @@
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/NotFound";
-import { Route, Switch } from "wouter";
+import { Route, Switch, useLocation } from "wouter";
+import { useEffect } from "react";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
+import { TenantProvider } from "@/lib/tenant";
 
-// Auth (SaaS)
 import Login from "./pages/auth/Login";
 import Register from "./pages/auth/Register";
 import SuperAdmin from "./pages/admin/SuperAdmin";
 import SubscriptionExpired from "./pages/auth/SubscriptionExpired";
 import Pricing from "./pages/Pricing";
-
-// Dashboard
 import Dashboard from "./pages/Dashboard";
-
-// Contacts
 import Customers from "./pages/contacts/Customers";
 import Suppliers from "./pages/contacts/Suppliers";
 import ContactCategories from "./pages/contacts/ContactCategories";
-
-// Inventory
 import Items from "./pages/inventory/Items";
 import StockTransfers from "./pages/inventory/StockTransfers";
 import InventoryAdjustments from "./pages/inventory/InventoryAdjustments";
-
-// Sales
 import SalesInvoices from "./pages/sales/SalesInvoices";
 import SalesOrders from "./pages/sales/SalesOrders";
 import SalesReturns from "./pages/sales/SalesReturns";
 import SalesReps from "./pages/sales/SalesReps";
-
-// Purchases
 import PurchaseInvoices from "./pages/purchases/PurchaseInvoices";
 import PurchaseOrders from "./pages/purchases/PurchaseOrders";
 import PurchaseReturns from "./pages/purchases/PurchaseReturns";
-
-// Finance
 import CashTransactions from "./pages/finance/CashTransactions";
 import BankTransactions from "./pages/finance/BankTransactions";
 import Checks from "./pages/finance/Checks";
-
-// Accounts
 import ChartOfAccounts from "./pages/accounts/ChartOfAccounts";
 import JournalEntries from "./pages/accounts/JournalEntries";
 import FundTransfer from "./pages/accounts/FundTransfer";
-
-// HR
 import Employees from "./pages/hr/Employees";
 import Departments from "./pages/hr/Departments";
 import JobTitles from "./pages/hr/JobTitles";
 import Attendance from "./pages/hr/Attendance";
 import Payroll from "./pages/hr/Payroll";
 import Advances from "./pages/hr/Advances";
-
-// Assets
 import FixedAssets from "./pages/assets/FixedAssets";
-
-// Loans
 import Loans from "./pages/loans/Loans";
 import Installments from "./pages/loans/Installments";
-
-// Cost Centers
 import CostCenters from "./pages/costcenters/CostCenters";
-
-// Production
 import Production from "./pages/production/Production";
-
-// Reports
 import Reports from "./pages/reports/Reports";
 import SalesAnalytics from "./pages/reports/SalesAnalytics";
 import TaxReport from "./pages/reports/TaxReport";
-
-// Invoice Details
 import SalesInvoiceDetail from "./pages/sales/SalesInvoiceDetail";
 import PurchaseInvoiceDetail from "./pages/purchases/PurchaseInvoiceDetail";
-
-// Contact Statement
 import ContactStatement from "./pages/contacts/ContactStatement";
-
-// Settings
 import CompanySettings from "./pages/settings/CompanySettings";
 import CompanyProfile from "./pages/settings/CompanyProfile";
 import Branches from "./pages/settings/Branches";
 import UsersPermissions from "./pages/settings/UsersPermissions";
-
-// Support
 import Support from "./pages/Support";
 
+/** مسار ERP تحت slug الشركة: /:tenantSlug/customers */
+const T = (path: string) => `/:tenantSlug${path === "/" ? "" : path}`;
+
+function HomeRedirect() {
+  const [, navigate] = useLocation();
+  useEffect(() => { navigate("/register"); }, [navigate]);
+  return null;
+}
+
+function TenantPage({ component: Component }: { component: React.ComponentType }) {
+  const [location] = useLocation();
+  const slug = location.split("/").filter(Boolean)[0];
+  if (!slug) return <NotFound />;
+  return (
+    <TenantProvider slug={slug}>
+      <Component />
+    </TenantProvider>
+  );
+}
+
 function Router() {
+  const wrap = (C: React.ComponentType) => () => <TenantPage component={C} />;
+
   return (
     <Switch>
-      {/* SaaS Auth & Public */}
-      <Route path="/login" component={Login} />
       <Route path="/register" component={Register} />
       <Route path="/super-admin" component={SuperAdmin} />
-      <Route path="/subscription-expired" component={SubscriptionExpired} />
       <Route path="/pricing" component={Pricing} />
+      <Route path="/" component={HomeRedirect} />
 
-      {/* Dashboard */}
-      <Route path="/" component={Dashboard} />
-      <Route path="/dashboard" component={Dashboard} />
-
-      {/* Contacts */}
-      <Route path="/customers" component={Customers} />
-      <Route path="/suppliers" component={Suppliers} />
-      <Route path="/contact-categories" component={ContactCategories} />
-
-      {/* Inventory */}
-      <Route path="/items" component={Items} />
-      <Route path="/inventory/adjustments" component={InventoryAdjustments} />
-      <Route path="/inventory/transfers" component={StockTransfers} />
-
-      {/* Sales */}
-      <Route path="/sales/invoices" component={SalesInvoices} />
-      <Route path="/sales/orders" component={SalesOrders} />
-      <Route path="/sales/returns" component={SalesReturns} />
-      <Route path="/sales/reps" component={SalesReps} />
-
-      {/* Purchases */}
-      <Route path="/purchases/invoices" component={PurchaseInvoices} />
-      <Route path="/purchases/orders" component={PurchaseOrders} />
-      <Route path="/purchases/returns" component={PurchaseReturns} />
-
-      {/* Finance - Cash */}
-      <Route path="/cash/receive" component={CashTransactions} />
-      <Route path="/cash/pay" component={CashTransactions} />
-      <Route path="/cash/receive-customer" component={CashTransactions} />
-      <Route path="/cash/pay-supplier" component={CashTransactions} />
-
-      {/* Finance - Bank */}
-      <Route path="/bank/transactions" component={BankTransactions} />
-      <Route path="/bank/checks" component={Checks} />
-
-      {/* Accounts */}
-      <Route path="/accounts/chart" component={ChartOfAccounts} />
-      <Route path="/accounts/journal" component={JournalEntries} />
-      <Route path="/accounts/transfer" component={FundTransfer} />
-
-      {/* HR */}
-      <Route path="/hr/employees" component={Employees} />
-      <Route path="/hr/departments" component={Departments} />
-      <Route path="/hr/jobs" component={JobTitles} />
-      <Route path="/hr/attendance" component={Attendance} />
-      <Route path="/hr/payroll" component={Payroll} />
-      <Route path="/hr/advances" component={Advances} />
-
-      {/* Assets */}
-      <Route path="/assets" component={FixedAssets} />
-
-      {/* Loans */}
-      <Route path="/loans" component={Loans} />
-      <Route path="/installments" component={Installments} />
-
-      {/* Cost Centers */}
-      <Route path="/cost-centers" component={CostCenters} />
-
-      {/* Production */}
-      <Route path="/production" component={Production} />
-
-      {/* Invoice Details */}
-      <Route path="/sales/invoices/:id" component={SalesInvoiceDetail} />
-      <Route path="/purchases/invoices/:id" component={PurchaseInvoiceDetail} />
-
-      {/* Contact Statement */}
-      <Route path="/contacts/statement" component={ContactStatement} />
-
-      {/* Reports */}
-      <Route path="/reports" component={Reports} />
-      <Route path="/reports/sales" component={Reports} />
-      <Route path="/reports/purchases" component={Reports} />
-      <Route path="/reports/inventory" component={Reports} />
-      <Route path="/reports/hr" component={Reports} />
-      <Route path="/reports/balance-sheet" component={Reports} />
-      <Route path="/reports/income-statement" component={Reports} />
-      <Route path="/reports/analytics" component={SalesAnalytics} />
-      <Route path="/reports/tax" component={TaxReport} />
-
-      {/* Settings */}
-      <Route path="/settings" component={CompanySettings} />
-      <Route path="/settings/company" component={CompanyProfile} />
-      <Route path="/settings/branches" component={Branches} />
-      <Route path="/settings/users" component={UsersPermissions} />
-
-      {/* Support */}
-      <Route path="/support" component={Support} />
+      <Route path={T("/login")} component={wrap(Login)} />
+      <Route path={T("/subscription-expired")} component={wrap(SubscriptionExpired)} />
+      <Route path={T("/")} component={wrap(Dashboard)} />
+      <Route path={T("/dashboard")} component={wrap(Dashboard)} />
+      <Route path={T("/customers")} component={wrap(Customers)} />
+      <Route path={T("/suppliers")} component={wrap(Suppliers)} />
+      <Route path={T("/contact-categories")} component={wrap(ContactCategories)} />
+      <Route path={T("/items")} component={wrap(Items)} />
+      <Route path={T("/inventory/adjustments")} component={wrap(InventoryAdjustments)} />
+      <Route path={T("/inventory/transfers")} component={wrap(StockTransfers)} />
+      <Route path={T("/sales/invoices")} component={wrap(SalesInvoices)} />
+      <Route path={T("/sales/orders")} component={wrap(SalesOrders)} />
+      <Route path={T("/sales/returns")} component={wrap(SalesReturns)} />
+      <Route path={T("/sales/reps")} component={wrap(SalesReps)} />
+      <Route path={T("/purchases/invoices")} component={wrap(PurchaseInvoices)} />
+      <Route path={T("/purchases/orders")} component={wrap(PurchaseOrders)} />
+      <Route path={T("/purchases/returns")} component={wrap(PurchaseReturns)} />
+      <Route path={T("/cash/receive")} component={wrap(CashTransactions)} />
+      <Route path={T("/cash/pay")} component={wrap(CashTransactions)} />
+      <Route path={T("/cash/receive-customer")} component={wrap(CashTransactions)} />
+      <Route path={T("/cash/pay-supplier")} component={wrap(CashTransactions)} />
+      <Route path={T("/bank/transactions")} component={wrap(BankTransactions)} />
+      <Route path={T("/bank/checks")} component={wrap(Checks)} />
+      <Route path={T("/accounts/chart")} component={wrap(ChartOfAccounts)} />
+      <Route path={T("/accounts/journal")} component={wrap(JournalEntries)} />
+      <Route path={T("/accounts/transfer")} component={wrap(FundTransfer)} />
+      <Route path={T("/hr/employees")} component={wrap(Employees)} />
+      <Route path={T("/hr/departments")} component={wrap(Departments)} />
+      <Route path={T("/hr/jobs")} component={wrap(JobTitles)} />
+      <Route path={T("/hr/attendance")} component={wrap(Attendance)} />
+      <Route path={T("/hr/payroll")} component={wrap(Payroll)} />
+      <Route path={T("/hr/advances")} component={wrap(Advances)} />
+      <Route path={T("/assets")} component={wrap(FixedAssets)} />
+      <Route path={T("/loans")} component={wrap(Loans)} />
+      <Route path={T("/installments")} component={wrap(Installments)} />
+      <Route path={T("/cost-centers")} component={wrap(CostCenters)} />
+      <Route path={T("/production")} component={wrap(Production)} />
+      <Route path={T("/sales/invoices/:id")} component={wrap(SalesInvoiceDetail)} />
+      <Route path={T("/purchases/invoices/:id")} component={wrap(PurchaseInvoiceDetail)} />
+      <Route path={T("/contacts/statement")} component={wrap(ContactStatement)} />
+      <Route path={T("/reports")} component={wrap(Reports)} />
+      <Route path={T("/reports/sales")} component={wrap(Reports)} />
+      <Route path={T("/reports/purchases")} component={wrap(Reports)} />
+      <Route path={T("/reports/inventory")} component={wrap(Reports)} />
+      <Route path={T("/reports/hr")} component={wrap(Reports)} />
+      <Route path={T("/reports/balance-sheet")} component={wrap(Reports)} />
+      <Route path={T("/reports/income-statement")} component={wrap(Reports)} />
+      <Route path={T("/reports/analytics")} component={wrap(SalesAnalytics)} />
+      <Route path={T("/reports/tax")} component={wrap(TaxReport)} />
+      <Route path={T("/settings")} component={wrap(CompanySettings)} />
+      <Route path={T("/settings/company")} component={wrap(CompanyProfile)} />
+      <Route path={T("/settings/branches")} component={wrap(Branches)} />
+      <Route path={T("/settings/users")} component={wrap(UsersPermissions)} />
+      <Route path={T("/support")} component={wrap(Support)} />
 
       <Route path="/404" component={NotFound} />
       <Route component={NotFound} />

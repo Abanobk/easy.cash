@@ -34,6 +34,7 @@ services:
       PORT: 3000
       DATABASE_URL: mysql://${MYSQL_USER:-easy_cash}:${MYSQL_PASSWORD:-easy_cash_dev}@mysql:3306/${MYSQL_DATABASE:-easy_cash}
       JWT_SECRET: ${JWT_SECRET:-dev-only-change-me}
+      APP_URL: ${APP_URL:-https://cash.easytecheg.net}
       VITE_APP_TITLE: ${VITE_APP_TITLE:-Easy Cash - برنامج المحاسبة}
     depends_on:
       mysql:

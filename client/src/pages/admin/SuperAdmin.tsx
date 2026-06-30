@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
 import { useLocation } from "wouter";
 import { toast } from "sonner";
@@ -21,7 +21,7 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
-type Tab = "dashboard" | "users" | "subscriptions" | "plans" | "coupons" | "reports" | "support";
+type Tab = "dashboard" | "users" | "subscriptions" | "plans" | "coupons" | "reports" | "support" | "paymob";
 
 const statusColors: Record<string, string> = {
   active: "bg-green-100 text-green-700",
@@ -61,12 +61,51 @@ export default function SuperAdmin() {
   // Queries
   const meQuery = trpc.saas.me.useQuery();
   const statsQuery = trpc.saas.adminStats.useQuery();
+  const impersonateMut = trpc.saas.impersonateTenant.useMutation({
+    onSuccess: (data) => {
+      toast.success(`فتح برنامج ${data.companyName}`);
+      window.location.href = data.redirectUrl;
+    },
+    onError: (e) => toast.error(e.message),
+  });
   const usersQuery = trpc.saas.listUsers.useQuery({ page: userPage, limit: 15 });
   const subsQuery = trpc.saas.listSubscriptions.useQuery({ page: subPage, limit: 15 });
   const plansQuery = trpc.saas.listPlans.useQuery();
   const couponsQuery = trpc.saas.listCoupons.useQuery(undefined, { enabled: tab === "coupons" });
   const reportQuery = trpc.saas.subscriptionReport.useQuery(undefined, { enabled: tab === "reports" });
   const ticketsQuery = trpc.saas.listTickets.useQuery({ status: "all" }, { enabled: tab === "support" });
+  const paymobQuery = trpc.saas.getPaymobSettings.useQuery(undefined, { enabled: tab === "paymob" });
+  const savePaymobMutation = trpc.saas.savePaymobSettings.useMutation({
+    onSuccess: () => { toast.success("تم حفظ إعدادات Paymob"); paymobQuery.refetch(); },
+    onError: (e) => toast.error(e.message),
+  });
+  const testPaymobMutation = trpc.saas.testPaymobConnection.useMutation({
+    onSuccess: () => toast.success("الاتصال بـ Paymob ناجح"),
+    onError: (e) => toast.error(e.message),
+  });
+  const [paymobForm, setPaymobForm] = useState({
+    mode: "test" as "test" | "live",
+    publicKey: "",
+    secretKey: "",
+    hmacSecret: "",
+    cardIntegrationId: "",
+    currency: "EGP",
+    isEnabled: false,
+  });
+
+  useEffect(() => {
+    if (!paymobQuery.data) return;
+    setPaymobForm((prev) => ({
+      ...prev,
+      mode: paymobQuery.data.mode as "test" | "live",
+      publicKey: paymobQuery.data.publicKey || "",
+      cardIntegrationId: paymobQuery.data.cardIntegrationId ? String(paymobQuery.data.cardIntegrationId) : "",
+      currency: paymobQuery.data.currency || "EGP",
+      isEnabled: paymobQuery.data.isEnabled,
+      secretKey: "",
+      hmacSecret: "",
+    }));
+  }, [paymobQuery.data]);
   const [ticketFilter, setTicketFilter] = useState<"all" | "open" | "in_progress" | "resolved" | "closed">("all");
   const [replyModal, setReplyModal] = useState<any>(null);
   const [expandedTicket, setExpandedTicket] = useState<number | null>(null);
@@ -191,6 +230,7 @@ export default function SuperAdmin() {
               { id: "subscriptions", label: "الاشتراكات", icon: <CreditCard size={16} /> },
               { id: "plans", label: "خطط الاشتراك", icon: <Package size={16} /> },
               { id: "coupons", label: "كوبونات الخصم", icon: <Tag size={16} /> },
+              { id: "paymob", label: "Paymob", icon: <DollarSign size={16} /> },
               { id: "reports", label: "تقرير الاشتراكات", icon: <PieChart size={16} /> },
               { id: "support", label: "طلبات الدعم", icon: <LifeBuoy size={16} /> },
             ].map((item) => (
@@ -278,6 +318,7 @@ export default function SuperAdmin() {
                       <th className="p-3 text-right text-xs text-slate-500 font-medium">الاسم</th>
                       <th className="p-3 text-right text-xs text-slate-500 font-medium">البريد</th>
                       <th className="p-3 text-right text-xs text-slate-500 font-medium">الشركة</th>
+                      <th className="p-3 text-right text-xs text-slate-500 font-medium">رابط الشركة</th>
                       <th className="p-3 text-right text-xs text-slate-500 font-medium">الدور</th>
                       <th className="p-3 text-right text-xs text-slate-500 font-medium">الحالة</th>
                       <th className="p-3 text-right text-xs text-slate-500 font-medium">آخر دخول</th>
@@ -289,7 +330,8 @@ export default function SuperAdmin() {
                       <tr key={user.id} className="border-b border-slate-50 hover:bg-slate-50/50">
                         <td className="p-3 font-medium text-slate-800">{user.name}</td>
                         <td className="p-3 text-slate-500 text-xs" dir="ltr">{user.email}</td>
-                        <td className="p-3 text-slate-500 text-xs">{user.companyName || "—"}</td>
+                        <td className="p-3 text-slate-500 text-xs">{user.companyName || user.tenantName || "—"}</td>
+                        <td className="p-3 text-xs text-blue-600 font-mono" dir="ltr">/{user.tenantSlug || "—"}</td>
                         <td className="p-3">
                           <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${roleColors[user.role] || "bg-gray-100 text-gray-600"}`}>
                             {roleLabels[user.role] || user.role}
@@ -304,7 +346,17 @@ export default function SuperAdmin() {
                           {user.lastLoginAt ? new Date(user.lastLoginAt).toLocaleDateString("ar-EG") : "لم يدخل"}
                         </td>
                         <td className="p-3">
-                          <div className="flex items-center gap-1">
+                          <div className="flex items-center gap-1 flex-wrap">
+                            {user.tenantSlug && (
+                              <Button
+                                variant="ghost" size="sm"
+                                className="h-7 text-xs gap-1 text-green-700 hover:bg-green-50"
+                                disabled={impersonateMut.isPending}
+                                onClick={() => impersonateMut.mutate({ userId: user.id })}
+                              >
+                                <Eye size={12} /> فتح
+                              </Button>
+                            )}
                             <Button
                               variant="ghost" size="sm"
                               className="h-7 w-7 p-0 text-blue-600 hover:bg-blue-50"
@@ -491,6 +543,16 @@ export default function SuperAdmin() {
                 <Input value={editUserModal.name} onChange={(e) => setEditUserModal({ ...editUserModal, name: e.target.value })} />
               </div>
               <div>
+                <Label className="text-sm mb-1.5 block">البريد الإلكتروني</Label>
+                <Input
+                  type="email"
+                  value={editUserModal.email || ""}
+                  onChange={(e) => setEditUserModal({ ...editUserModal, email: e.target.value })}
+                  dir="ltr"
+                  autoComplete="email"
+                />
+              </div>
+              <div>
                 <Label className="text-sm mb-1.5 block">اسم الشركة</Label>
                 <Input value={editUserModal.companyName || ""} onChange={(e) => setEditUserModal({ ...editUserModal, companyName: e.target.value })} />
               </div>
@@ -536,6 +598,7 @@ export default function SuperAdmin() {
                   onClick={() => updateUserMutation.mutate({
                     id: editUserModal.id,
                     name: editUserModal.name,
+                    email: editUserModal.email,
                     role: editUserModal.role,
                     isActive: editUserModal.isActive,
                     companyName: editUserModal.companyName,
@@ -723,6 +786,143 @@ export default function SuperAdmin() {
                         ))}
                       </div>
                     </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ===== PAYMOB TAB ===== */}
+          {tab === "paymob" && (
+            <div className="max-w-2xl">
+              <h2 className="text-xl font-bold text-slate-800 mb-2">إعدادات Paymob</h2>
+              <p className="text-sm text-slate-500 mb-6">
+                اربط حساب Paymob لتفعيل الدفع المباشر عند اختيار العميل لخطة مدفوعة.
+              </p>
+
+              {paymobQuery.isLoading ? (
+                <div className="text-center py-16 text-slate-400">جاري التحميل...</div>
+              ) : (
+                <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 space-y-5">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label>الوضع</Label>
+                      <Select
+                        value={paymobForm.mode}
+                        onValueChange={(v) => setPaymobForm((f) => ({ ...f, mode: v as "test" | "live" }))}
+                      >
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="test">تجريبي (Test)</SelectItem>
+                          <SelectItem value="live">مباشر (Live)</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label>العملة</Label>
+                      <Input
+                        value={paymobForm.currency}
+                        onChange={(e) => setPaymobForm((f) => ({ ...f, currency: e.target.value.toUpperCase() }))}
+                        maxLength={3}
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <Label>Public Key</Label>
+                    <Input
+                      value={paymobForm.publicKey}
+                      onChange={(e) => setPaymobForm((f) => ({ ...f, publicKey: e.target.value }))}
+                      placeholder="pk_test_... أو egy_pk_..."
+                      dir="ltr"
+                      className="font-mono text-sm"
+                    />
+                    {paymobQuery.data?.publicKeyLast8 && (
+                      <p className="text-xs text-slate-400 mt-1">المحفوظ ينتهي بـ: ...{paymobQuery.data.publicKeyLast8}</p>
+                    )}
+                  </div>
+
+                  <div>
+                    <Label>Secret Key (API Token)</Label>
+                    <Input
+                      type="password"
+                      value={paymobForm.secretKey}
+                      onChange={(e) => setPaymobForm((f) => ({ ...f, secretKey: e.target.value }))}
+                      placeholder={paymobQuery.data?.hasSecretKey ? "اتركه فارغاً للإبقاء على المفتاح الحالي" : "أدخل Secret Key"}
+                      dir="ltr"
+                      className="font-mono text-sm"
+                    />
+                  </div>
+
+                  <div>
+                    <Label>HMAC Secret (للـ Webhook)</Label>
+                    <Input
+                      type="password"
+                      value={paymobForm.hmacSecret}
+                      onChange={(e) => setPaymobForm((f) => ({ ...f, hmacSecret: e.target.value }))}
+                      placeholder={paymobQuery.data?.hasHmacSecret ? "اتركه فارغاً للإبقاء على القيمة الحالية" : "من Paymob > Developers > Webhooks"}
+                      dir="ltr"
+                      className="font-mono text-sm"
+                    />
+                  </div>
+
+                  <div>
+                    <Label>Card Integration ID</Label>
+                    <Input
+                      value={paymobForm.cardIntegrationId}
+                      onChange={(e) => setPaymobForm((f) => ({ ...f, cardIntegrationId: e.target.value }))}
+                      placeholder="مثال: 123456"
+                      dir="ltr"
+                    />
+                  </div>
+
+                  <label className="flex items-center gap-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={paymobForm.isEnabled}
+                      onChange={(e) => setPaymobForm((f) => ({ ...f, isEnabled: e.target.checked }))}
+                      className="w-4 h-4 rounded"
+                    />
+                    <span className="text-sm font-medium text-slate-700">تفعيل الدفع عبر Paymob</span>
+                  </label>
+
+                  {paymobQuery.data?.webhookUrl && (
+                    <div className="bg-slate-50 rounded-xl p-4 space-y-2 text-sm">
+                      <p className="font-medium text-slate-700">روابط Paymob</p>
+                      <div>
+                        <span className="text-slate-500 text-xs">Webhook URL (ضعه في Paymob):</span>
+                        <p className="font-mono text-xs break-all text-blue-700 mt-1" dir="ltr">{paymobQuery.data.webhookUrl}</p>
+                      </div>
+                      <div>
+                        <span className="text-slate-500 text-xs">Return URL:</span>
+                        <p className="font-mono text-xs break-all text-slate-600 mt-1" dir="ltr">{paymobQuery.data.returnUrl}</p>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="flex flex-wrap gap-3 pt-2">
+                    <Button
+                      onClick={() => savePaymobMutation.mutate({
+                        mode: paymobForm.mode,
+                        publicKey: paymobForm.publicKey || undefined,
+                        secretKey: paymobForm.secretKey || undefined,
+                        hmacSecret: paymobForm.hmacSecret || undefined,
+                        cardIntegrationId: paymobForm.cardIntegrationId ? Number(paymobForm.cardIntegrationId) : undefined,
+                        currency: paymobForm.currency,
+                        isEnabled: paymobForm.isEnabled,
+                      })}
+                      disabled={savePaymobMutation.isPending}
+                      className="bg-blue-600 hover:bg-blue-700"
+                    >
+                      {savePaymobMutation.isPending ? "جاري الحفظ..." : "حفظ الإعدادات"}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={() => testPaymobMutation.mutate()}
+                      disabled={testPaymobMutation.isPending || !paymobQuery.data?.configured}
+                    >
+                      {testPaymobMutation.isPending ? "جاري الاختبار..." : "اختبار الاتصال"}
+                    </Button>
                   </div>
                 </div>
               )}

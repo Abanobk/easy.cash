@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { useLocation } from "wouter";
+import { tenantPath } from "@/lib/tenant";
 import { toast } from "sonner";
 import { Eye, EyeOff, BookOpen, Lock, Mail, User, Building2, Phone, CheckCircle, Tag, Check, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -51,8 +52,11 @@ export default function Register() {
     setForm(f => ({ ...f, couponCode: "" }));
   };
 
+  const [successData, setSuccessData] = useState<{ tenantSlug?: string } | null>(null);
+
   const registerMutation = trpc.saas.register.useMutation({
     onSuccess: (data) => {
+      setSuccessData({ tenantSlug: data.tenantSlug });
       setSuccess(true);
       toast.success(data.message);
     },
@@ -79,7 +83,7 @@ export default function Register() {
       name: form.name,
       email: form.email,
       password: form.password,
-      companyName: form.companyName || undefined,
+      companyName: form.companyName,
       phone: form.phone || undefined,
       couponCode: form.couponCode || undefined,
     });
@@ -94,9 +98,12 @@ export default function Register() {
           </div>
           <h2 className="text-2xl font-bold text-slate-800 mb-3">تم إنشاء حسابك بنجاح!</h2>
           <p className="text-slate-500 mb-2">لديك <strong className="text-blue-600">14 يوم تجريبي</strong> مجاناً</p>
-          <p className="text-slate-400 text-sm mb-8">يمكنك الآن تسجيل الدخول والبدء في استخدام Easy Cash</p>
+          <p className="text-slate-400 text-sm mb-2">
+            رابط برنامجك: <strong dir="ltr" className="text-blue-600">/{successData?.tenantSlug}</strong>
+          </p>
+          <p className="text-slate-400 text-sm mb-8">برنامجك جاهز وفاضي — ابدأ بإدخال بيانات شركتك</p>
           <Button
-            onClick={() => navigate("/login")}
+            onClick={() => navigate(tenantPath(successData?.tenantSlug || null, "/login"))}
             className="w-full h-11 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl"
           >
             تسجيل الدخول الآن
@@ -192,7 +199,7 @@ export default function Register() {
                 </div>
 
                 <div>
-                  <Label className="text-slate-700 font-medium mb-1.5 block text-sm">اسم الشركة</Label>
+                  <Label className="text-slate-700 font-medium mb-1.5 block text-sm">اسم الشركة *</Label>
                   <div className="relative">
                     <Building2 size={15} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400" />
                     <Input
