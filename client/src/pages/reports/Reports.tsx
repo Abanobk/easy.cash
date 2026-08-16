@@ -29,7 +29,7 @@ export default function Reports() {
   const { data: incomeStatement } = trpc.reports.incomeStatement.useQuery();
 
   const formatCurrency = (v: number | string) =>
-    `${Number(v).toLocaleString("ar-EG", { minimumFractionDigits: 2 })} ج.م`;
+    `${Number(v).toLocaleString("en-US", { minimumFractionDigits: 2 })} ج.م`;
 
   return (
     <ERPLayout title="التقارير المالية">
@@ -185,8 +185,8 @@ export default function Reports() {
                         <tr key={i} className={`border-b border-slate-50 hover:bg-blue-50/30 ${isLow ? "bg-red-50/30" : ""}`}>
                           <td className="px-4 py-2.5 text-slate-700 font-medium">{row.name}</td>
                           <td className="px-4 py-2.5 text-slate-500">{row.unit}</td>
-                          <td className="px-4 py-2.5 font-semibold">{Number(row.currentStock).toLocaleString("ar-EG")}</td>
-                          <td className="px-4 py-2.5 text-slate-500">{Number(row.minStock).toLocaleString("ar-EG")}</td>
+                          <td className="px-4 py-2.5 font-semibold">{Number(row.currentStock).toLocaleString("en-US")}</td>
+                          <td className="px-4 py-2.5 text-slate-500">{Number(row.minStock).toLocaleString("en-US")}</td>
                           <td className="px-4 py-2.5 text-slate-600">{formatCurrency(row.purchasePrice || 0)}</td>
                           <td className="px-4 py-2.5 font-semibold text-blue-600">{formatCurrency(Number(row.currentStock) * Number(row.purchasePrice || 0))}</td>
                           <td className="px-4 py-2.5">

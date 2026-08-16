@@ -1,6 +1,13 @@
 import { trpc } from "@/lib/trpc";
 import { TRPCClientError } from "@trpc/client";
+import { getDefaultLoginPath } from "@/lib/tenant-login";
 import { useCallback, useEffect, useMemo } from "react";
+
+function resolveRedirectPath(path?: string) {
+  if (path) return path;
+  if (typeof window === "undefined") return "/login";
+  return getDefaultLoginPath();
+}
 
 type UseAuthOptions = {
   redirectOnUnauthenticated?: boolean;
@@ -8,7 +15,8 @@ type UseAuthOptions = {
 };
 
 export function useAuth(options?: UseAuthOptions) {
-  const { redirectOnUnauthenticated = false, redirectPath = "/login" } =
+  const resolvedRedirect = resolveRedirectPath(options?.redirectPath);
+  const { redirectOnUnauthenticated = false, redirectPath = resolvedRedirect } =
     options ?? {};
   const utils = trpc.useUtils();
 
@@ -63,6 +71,7 @@ export function useAuth(options?: UseAuthOptions) {
     if (typeof window === "undefined") return;
     if (window.location.pathname === redirectPath) return;
     if (window.location.pathname === "/login") return;
+    if (window.location.pathname.endsWith("/login")) return;
     if (window.location.pathname === "/register") return;
     if (window.location.pathname === "/super-admin") return;
 

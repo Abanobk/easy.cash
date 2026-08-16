@@ -17,20 +17,61 @@ const requireUser = t.middleware(async opts => {
     throw new TRPCError({ code: "UNAUTHORIZED", message: UNAUTHED_ERR_MSG });
   }
 
-  if (ctx.saasUser && ctx.saasUser.role !== "superadmin" && !ctx.tenantId) {
-    throw new TRPCError({ code: "FORBIDDEN", message: "الحساب غير مرتبط بشركة. تواصل مع الدعم." });
+  // Never fall back to tenant 1 — require an explicit tenant for ERP work
+  if (!ctx.tenantId) {
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message:
+        ctx.saasUser?.role === "superadmin"
+          ? "افتح الشركة أولاً (انتحال مستأجر) قبل استخدام شاشات النظام."
+          : "الحساب غير مرتبط بشركة. تأكد أنك تدخل من رابط شركتك الصحيح (/اسم-الشركة/login) أو تواصل مع الدعم.",
+    });
   }
 
   return next({
     ctx: {
       ...ctx,
       user: ctx.user,
-      tenantId: ctx.tenantId ?? 1,
+      tenantId: ctx.tenantId,
     },
   });
 });
 
-export const protectedProcedure = t.procedure.use(requireUser);
+const requirePermission = t.middleware(async (opts) => {
+  const { ctx, next, path } = opts;
+  if (ctx.saasUser) {
+    const { assertTrpcPermission } = await import("../permission-middleware");
+    await assertTrpcPermission(ctx.saasUser, path);
+  }
+  return next({ ctx });
+});
+
+/** يسجّل حركات الإضافة/التعديل/الحذف بعد نجاح العملية */
+const auditActivity = t.middleware(async (opts) => {
+  const result = await opts.next();
+  if (result.ok && opts.type === "mutation") {
+    try {
+      const { getDb } = await import("../db");
+      const { logTrpcMutationActivity } = await import("../user-activity");
+      const db = await getDb();
+      void logTrpcMutationActivity({
+        db,
+        ctx: opts.ctx,
+        path: opts.path,
+        type: opts.type,
+        input: opts.getRawInput ? await opts.getRawInput() : undefined,
+      });
+    } catch {
+      // تجاهل فشل السجل
+    }
+  }
+  return result;
+});
+
+export const protectedProcedure = t.procedure
+  .use(requireUser)
+  .use(requirePermission)
+  .use(auditActivity);
 
 export const adminProcedure = t.procedure.use(
   t.middleware(async opts => {

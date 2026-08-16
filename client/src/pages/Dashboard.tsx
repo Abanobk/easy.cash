@@ -1,5 +1,7 @@
 import ERPLayout from "@/components/ERPLayout";
 import { trpc } from "@/lib/trpc";
+import { OperationalAlertsPanel } from "@/components/OperationalAlertsPanel";
+import { DebtAgingPanel } from "@/components/DebtAgingPanel";
 import {
   TrendingUp, TrendingDown, DollarSign, Users, Package,
   ShoppingCart, AlertCircle, FileText, ArrowUpRight, ArrowDownRight,
@@ -25,21 +27,21 @@ function StatCard({
   trendValue?: string;
 }) {
   return (
-    <Card className="border-0 shadow-sm hover:shadow-md transition-shadow">
+    <Card className="border border-slate-200 shadow-md shadow-slate-900/5 hover:shadow-lg transition-shadow bg-white">
       <CardContent className="p-5">
         <div className="flex items-start justify-between">
           <div className="flex-1">
-            <p className="text-sm text-slate-500 font-medium mb-1">{title}</p>
-            <p className="text-2xl font-bold text-slate-800">{value}</p>
-            {subtitle && <p className="text-xs text-slate-400 mt-1">{subtitle}</p>}
+            <p className="text-[15px] text-slate-600 font-bold mb-1.5">{title}</p>
+            <p className="text-[1.7rem] font-extrabold text-slate-900 tracking-tight tabular-nums">{value}</p>
+            {subtitle && <p className="text-sm text-slate-500 font-semibold mt-1.5">{subtitle}</p>}
             {trendValue && (
-              <div className={`flex items-center gap-1 mt-2 text-xs font-medium ${trend === "up" ? "text-green-600" : "text-red-500"}`}>
-                {trend === "up" ? <ArrowUpRight size={12} /> : <ArrowDownRight size={12} />}
+              <div className={`flex items-center gap-1 mt-2 text-sm font-bold ${trend === "up" ? "text-emerald-700" : "text-red-600"}`}>
+                {trend === "up" ? <ArrowUpRight size={14} /> : <ArrowDownRight size={14} />}
                 {trendValue}
               </div>
             )}
           </div>
-          <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${color}`}>
+          <div className={`w-14 h-14 rounded-2xl flex items-center justify-center shadow-sm ${color}`}>
             {icon}
           </div>
         </div>
@@ -51,11 +53,11 @@ function StatCard({
 function QuickAction({ label, icon, href, color }: { label: string; icon: React.ReactNode; href: string; color: string }) {
   return (
     <Link href={href}>
-      <div className={`flex flex-col items-center gap-2 p-4 rounded-xl border-2 border-dashed cursor-pointer transition-all hover:border-solid hover:shadow-sm ${color}`}>
-        <div className="w-10 h-10 rounded-lg bg-white shadow-sm flex items-center justify-center">
+      <div className={`flex flex-col items-center gap-2.5 p-4 rounded-xl border-2 cursor-pointer transition-all hover:shadow-md hover:-translate-y-0.5 ${color}`}>
+        <div className="w-11 h-11 rounded-xl bg-white shadow-sm flex items-center justify-center">
           {icon}
         </div>
-        <span className="text-xs font-medium text-center leading-tight">{label}</span>
+        <span className="text-sm font-bold text-center leading-tight text-slate-800">{label}</span>
       </div>
     </Link>
   );
@@ -77,7 +79,7 @@ function MonthlySalesChart({ data }: { data: { month: string; sales: number; pur
         <YAxis tick={{ fontSize: 10, fill: "#94a3b8" }} axisLine={false} tickLine={false} tickFormatter={(v: number) => v >= 1000 ? `${(v/1000).toFixed(0)}ك` : v.toString()} />
         <Tooltip
           contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid #e2e8f0", direction: "rtl" }}
-          formatter={(value: number) => [`${value.toLocaleString("ar-EG")} ج.م`, ""]}
+          formatter={(value: number) => [`${value.toLocaleString("en-US")} ج.م`, ""]}
         />
         <Legend wrapperStyle={{ fontSize: 11 }} />
         <Bar dataKey="sales" name="مبيعات" fill="#3b82f6" radius={[4, 4, 0, 0]} />
@@ -142,7 +144,7 @@ export default function Dashboard() {
   const summaryCards = [
     {
       title: "إجمالي المبيعات",
-      value: stats ? `${Number(stats.totalSales).toLocaleString("ar-EG")} ج.م` : "0 ج.م",
+      value: stats ? `${Number(stats.totalSales).toLocaleString("en-US")} ج.م` : "0 ج.م",
       subtitle: "هذا الشهر",
       icon: <TrendingUp size={22} className="text-blue-600" />,
       color: "bg-blue-50",
@@ -151,7 +153,7 @@ export default function Dashboard() {
     },
     {
       title: "إجمالي المشتريات",
-      value: stats ? `${Number(stats.totalPurchases).toLocaleString("ar-EG")} ج.م` : "0 ج.م",
+      value: stats ? `${Number(stats.totalPurchases).toLocaleString("en-US")} ج.م` : "0 ج.م",
       subtitle: "هذا الشهر",
       icon: <ShoppingCart size={22} className="text-purple-600" />,
       color: "bg-purple-50",
@@ -201,14 +203,14 @@ export default function Dashboard() {
   ];
 
   const quickActions = [
-    { label: "فاتورة بيع جديدة", icon: <TrendingUp size={18} className="text-blue-600" />, href: "/sales/invoices/new", color: "border-blue-200 hover:bg-blue-50 text-blue-700" },
-    { label: "فاتورة شراء جديدة", icon: <ShoppingCart size={18} className="text-purple-600" />, href: "/purchases/invoices/new", color: "border-purple-200 hover:bg-purple-50 text-purple-700" },
-    { label: "استلام نقدية", icon: <Banknote size={18} className="text-green-600" />, href: "/cash/receive/new", color: "border-green-200 hover:bg-green-50 text-green-700" },
-    { label: "صرف نقدية", icon: <DollarSign size={18} className="text-red-500" />, href: "/cash/pay/new", color: "border-red-200 hover:bg-red-50 text-red-700" },
-    { label: "عميل جديد", icon: <Users size={18} className="text-cyan-600" />, href: "/contacts/customers/new", color: "border-cyan-200 hover:bg-cyan-50 text-cyan-700" },
-    { label: "صنف جديد", icon: <Package size={18} className="text-orange-600" />, href: "/inventory/items/new", color: "border-orange-200 hover:bg-orange-50 text-orange-700" },
-    { label: "قيد يومية", icon: <BarChart3 size={18} className="text-indigo-600" />, href: "/accounts/journal/new", color: "border-indigo-200 hover:bg-indigo-50 text-indigo-700" },
-    { label: "تقرير المبيعات", icon: <TrendingUp size={18} className="text-teal-600" />, href: "/reports/accounts", color: "border-teal-200 hover:bg-teal-50 text-teal-700" },
+    { label: "فاتورة بيع جديدة", icon: <TrendingUp size={18} className="text-blue-600" />, href: "/sales/invoices", color: "border-blue-200 hover:bg-blue-50 text-blue-700" },
+    { label: "فاتورة شراء جديدة", icon: <ShoppingCart size={18} className="text-purple-600" />, href: "/purchases/invoices", color: "border-purple-200 hover:bg-purple-50 text-purple-700" },
+    { label: "استلام نقدية", icon: <Banknote size={18} className="text-green-600" />, href: "/cash/receive", color: "border-green-200 hover:bg-green-50 text-green-700" },
+    { label: "صرف نقدية", icon: <DollarSign size={18} className="text-red-500" />, href: "/cash/pay", color: "border-red-200 hover:bg-red-50 text-red-700" },
+    { label: "عميل جديد", icon: <Users size={18} className="text-cyan-600" />, href: "/customers", color: "border-cyan-200 hover:bg-cyan-50 text-cyan-700" },
+    { label: "صنف جديد", icon: <Package size={18} className="text-orange-600" />, href: "/items", color: "border-orange-200 hover:bg-orange-50 text-orange-700" },
+    { label: "قيد يومية", icon: <BarChart3 size={18} className="text-indigo-600" />, href: "/accounts/journal", color: "border-indigo-200 hover:bg-indigo-50 text-indigo-700" },
+    { label: "تقرير المبيعات", icon: <TrendingUp size={18} className="text-teal-600" />, href: "/reports/accounting", color: "border-teal-200 hover:bg-teal-50 text-teal-700" },
   ];
 
   return (
@@ -225,7 +227,7 @@ export default function Dashboard() {
               <div className="bg-white/20 rounded-xl px-4 py-2 text-center">
                 <div className="text-2xl font-bold">{new Date().getDate()}</div>
                 <div className="text-xs text-blue-100">
-                  {new Date().toLocaleDateString("ar-EG", { month: "long", year: "numeric" })}
+                  {new Date().toLocaleDateString("en-GB", { month: "long", year: "numeric" })}
                 </div>
               </div>
             </div>
@@ -240,6 +242,11 @@ export default function Dashboard() {
               <StatCard key={i} {...card} />
             ))}
           </div>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <OperationalAlertsPanel />
+          <DebtAgingPanel />
         </div>
 
         {/* Quick Actions */}
@@ -307,7 +314,7 @@ export default function Dashboard() {
                         <p className="text-xs text-slate-400">{inv.customerName}</p>
                       </div>
                       <div className="text-left">
-                        <p className="text-sm font-semibold text-slate-800">{Number(inv.total).toLocaleString("ar-EG")} ج.م</p>
+                        <p className="text-sm font-semibold text-slate-800">{Number(inv.total).toLocaleString("en-US")} ج.م</p>
                         <Badge variant="outline" className={`text-xs ${
                           inv.status === "paid" ? "border-green-300 text-green-700 bg-green-50" :
                           inv.status === "partial" ? "border-yellow-300 text-yellow-700 bg-yellow-50" :
@@ -348,7 +355,7 @@ export default function Dashboard() {
                         <p className="text-xs text-slate-400">{inv.supplierName}</p>
                       </div>
                       <div className="text-left">
-                        <p className="text-sm font-semibold text-slate-800">{Number(inv.total).toLocaleString("ar-EG")} ج.م</p>
+                        <p className="text-sm font-semibold text-slate-800">{Number(inv.total).toLocaleString("en-US")} ج.م</p>
                         <Badge variant="outline" className={`text-xs ${
                           inv.status === "paid" ? "border-green-300 text-green-700 bg-green-50" :
                           "border-purple-300 text-purple-700 bg-purple-50"

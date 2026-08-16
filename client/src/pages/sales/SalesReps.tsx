@@ -1,15 +1,16 @@
 import { useState } from "react";
 import ERPLayout from "@/components/ERPLayout";
 import { trpc } from "@/lib/trpc";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Plus, UserCheck, Pencil, Trash2, Search } from "lucide-react";
+import { Plus, UserCheck, Search } from "lucide-react";
 import { toast } from "sonner";
+import { AddActionButton } from "@/components/AddActionButton";
+import { EntityRowActions } from "@/components/EntityRowActions";
+import { FormModal } from "@/components/FormModal";
+import { FieldLabel, FormSection, entryControlClass } from "@/components/form/EntryForm";
 
 const emptyForm = { name: "", phone: "", email: "", commissionRate: "0", address: "", notes: "" };
 
@@ -20,16 +21,30 @@ export default function SalesReps() {
   const [search, setSearch] = useState("");
 
   const { data, refetch } = trpc.salesReps.list.useQuery();
-  const createMut = trpc.salesReps.create.useMutation({ onSuccess: () => { toast.success("تم إضافة المندوب"); refetch(); setOpen(false); setForm({ ...emptyForm }); } });
-  const updateMut = trpc.salesReps.update.useMutation({ onSuccess: () => { toast.success("تم تحديث المندوب"); refetch(); setOpen(false); setEditId(null); setForm({ ...emptyForm }); } });
+  const createMut = trpc.salesReps.create.useMutation({
+    onSuccess: () => { toast.success("تم إضافة المندوب"); refetch(); setOpen(false); setForm({ ...emptyForm }); },
+    onError: (err) => toast.error(err.message || "فشل إضافة المندوب"),
+  });
+  const updateMut = trpc.salesReps.update.useMutation({
+    onSuccess: () => { toast.success("تم تحديث المندوب"); refetch(); setOpen(false); setEditId(null); setForm({ ...emptyForm }); },
+    onError: (err) => toast.error(err.message || "فشل تحديث المندوب"),
+  });
   const deleteMut = trpc.salesReps.delete.useMutation({ onSuccess: () => { toast.success("تم حذف المندوب"); refetch(); } });
 
   const handleSubmit = () => {
     if (!form.name.trim()) return toast.error("اسم المندوب مطلوب");
+    const payload = {
+      name: form.name.trim(),
+      phone: form.phone.trim() || undefined,
+      email: form.email.trim() || undefined,
+      commissionRate: form.commissionRate.trim() || undefined,
+      address: form.address.trim() || undefined,
+      notes: form.notes.trim() || undefined,
+    };
     if (editId) {
-      updateMut.mutate({ id: editId, ...form, commissionRate: form.commissionRate });
+      updateMut.mutate({ id: editId, ...payload });
     } else {
-      createMut.mutate({ ...form });
+      createMut.mutate(payload);
     }
   };
 
@@ -56,9 +71,9 @@ export default function SalesReps() {
                 <Search size={14} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400" />
                 <Input value={search} onChange={e => setSearch(e.target.value)} placeholder="بحث..." className="h-8 text-sm pr-7 w-48" />
               </div>
-              <Button size="sm" className="bg-blue-600 hover:bg-blue-700 text-white gap-1" onClick={() => { setEditId(null); setForm({ ...emptyForm }); setOpen(true); }}>
-                <Plus size={14} /> مندوب جديد
-              </Button>
+              <AddActionButton module="sales_reps" className="bg-blue-600 hover:bg-blue-700 text-white gap-2 h-10 px-4 text-sm font-semibold" onClick={() => { setEditId(null); setForm({ ...emptyForm }); setOpen(true); }}>
+                <Plus size={16} /> مندوب جديد
+              </AddActionButton>
             </div>
           </div>
         </CardHeader>
@@ -89,8 +104,12 @@ export default function SalesReps() {
                   <TableCell><Badge variant={row.isActive ? "default" : "secondary"} className="text-xs">{row.isActive ? "نشط" : "غير نشط"}</Badge></TableCell>
                   <TableCell>
                     <div className="flex items-center gap-1">
-                      <Button variant="ghost" size="icon" className="h-7 w-7 text-blue-600 hover:bg-blue-50" onClick={() => handleEdit(row)}><Pencil size={12} /></Button>
-                      <Button variant="ghost" size="icon" className="h-7 w-7 text-red-500 hover:bg-red-50" onClick={() => { if (confirm("هل تريد حذف هذا المندوب؟")) deleteMut.mutate(row.id); }}><Trash2 size={12} /></Button>
+                      <EntityRowActions
+                        module="sales_reps"
+                        onEdit={() => handleEdit(row)}
+                        onDelete={() => deleteMut.mutate(row.id)}
+                        deleteConfirm="هل تريد حذف هذا المندوب؟"
+                      />
                     </div>
                   </TableCell>
                 </TableRow>
@@ -100,47 +119,43 @@ export default function SalesReps() {
         </CardContent>
       </Card>
 
-      <Dialog open={open} onOpenChange={v => { setOpen(v); if (!v) { setEditId(null); setForm({ ...emptyForm }); } }}>
-        <DialogContent className="max-w-lg" dir="rtl">
-          <DialogHeader><DialogTitle>{editId ? "تعديل مندوب" : "مندوب بيع جديد"}</DialogTitle></DialogHeader>
-          <div className="grid gap-3 py-2">
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <Label className="text-xs">الاسم *</Label>
-                <Input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} className="h-9 text-sm" placeholder="اسم المندوب" />
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs">الهاتف</Label>
-                <Input value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} className="h-9 text-sm" placeholder="رقم الهاتف" />
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <Label className="text-xs">البريد الإلكتروني</Label>
-                <Input type="email" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} className="h-9 text-sm" placeholder="example@email.com" />
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs">نسبة العمولة %</Label>
-                <Input type="number" value={form.commissionRate} onChange={e => setForm(f => ({ ...f, commissionRate: e.target.value }))} className="h-9 text-sm" min="0" max="100" />
-              </div>
-            </div>
-            <div className="space-y-1">
-              <Label className="text-xs">العنوان</Label>
-              <Input value={form.address} onChange={e => setForm(f => ({ ...f, address: e.target.value }))} className="h-9 text-sm" placeholder="العنوان" />
-            </div>
-            <div className="space-y-1">
-              <Label className="text-xs">ملاحظات</Label>
-              <Input value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} className="h-9 text-sm" placeholder="ملاحظات إضافية" />
-            </div>
+      <FormModal
+        open={open}
+        onClose={() => { setOpen(false); setEditId(null); setForm({ ...emptyForm }); }}
+        title={editId ? "تعديل مندوب" : "مندوب بيع جديد"}
+        description="نسبة العمولة الافتراضية تُستخدم عند ربط المندوب بعميل جديد ويمكن تخصيصها لكل عميل."
+        onSubmit={handleSubmit}
+        isLoading={createMut.isPending || updateMut.isPending}
+        size="lg"
+        submitLabel={editId ? "تحديث" : "حفظ"}
+      >
+        <FormSection title="بيانات المندوب" accent="blue">
+          <div>
+            <FieldLabel required>الاسم</FieldLabel>
+            <Input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} className={entryControlClass} placeholder="اسم المندوب" />
           </div>
-          <DialogFooter className="gap-2">
-            <Button variant="outline" size="sm" onClick={() => { setOpen(false); setEditId(null); setForm({ ...emptyForm }); }}>إلغاء</Button>
-            <Button size="sm" className="bg-blue-600 hover:bg-blue-700 text-white" onClick={handleSubmit} disabled={createMut.isPending || updateMut.isPending}>
-              {editId ? "تحديث" : "حفظ"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          <div>
+            <FieldLabel>الهاتف</FieldLabel>
+            <Input value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} className={entryControlClass} placeholder="رقم الهاتف" />
+          </div>
+          <div>
+            <FieldLabel>البريد الإلكتروني</FieldLabel>
+            <Input type="email" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} className={entryControlClass} placeholder="example@email.com" />
+          </div>
+          <div>
+            <FieldLabel>نسبة العمولة %</FieldLabel>
+            <Input type="number" value={form.commissionRate} onChange={e => setForm(f => ({ ...f, commissionRate: e.target.value }))} className={entryControlClass} min="0" max="100" step="0.0001" inputMode="decimal" placeholder="مثال: 0.0625" />
+          </div>
+          <div className="sm:col-span-2">
+            <FieldLabel>العنوان</FieldLabel>
+            <Input value={form.address} onChange={e => setForm(f => ({ ...f, address: e.target.value }))} className={entryControlClass} placeholder="العنوان" />
+          </div>
+          <div className="sm:col-span-2">
+            <FieldLabel>ملاحظات</FieldLabel>
+            <Input value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} className={entryControlClass} placeholder="ملاحظات إضافية" />
+          </div>
+        </FormSection>
+      </FormModal>
     </ERPLayout>
   );
 }

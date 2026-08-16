@@ -2,8 +2,9 @@ import { useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { useLocation, useSearch } from "wouter";
 import { getTenantSlugFromPath, tenantPath } from "@/lib/tenant";
+import { buildTenantLoginUrl } from "@/lib/tenant-login";
 import { toast } from "sonner";
-import { Eye, EyeOff, BookOpen, Lock, Mail, ArrowLeft } from "lucide-react";
+import { Eye, EyeOff, Lock, Mail, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -13,9 +14,16 @@ export default function Login() {
   const search = useSearch();
   const redirect = new URLSearchParams(search).get("redirect") || tenantPath(getTenantSlugFromPath(), "/");
   const tenantSlug = getTenantSlugFromPath() || "";
+  const isTenantLogin = Boolean(tenantSlug);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+
+  const tenantQuery = trpc.saas.resolveTenant.useQuery(
+    { slug: tenantSlug },
+    { enabled: isTenantLogin, retry: false },
+  );
+  const companyName = tenantQuery.data?.name;
 
   const loginMutation = trpc.saas.login.useMutation({
     onSuccess: (data) => {
@@ -38,30 +46,54 @@ export default function Login() {
       toast.error("يرجى إدخال البريد الإلكتروني وكلمة المرور");
       return;
     }
-    loginMutation.mutate({ email, password, tenantSlug: tenantSlug || undefined });
+    if (isTenantLogin && tenantQuery.isFetched && !tenantQuery.data) {
+      toast.error("رابط الشركة غير صالح");
+      return;
+    }
+    loginMutation.mutate({
+      email,
+      password,
+      tenantSlug: isTenantLogin ? tenantSlug : undefined,
+    });
   };
+
+  if (isTenantLogin && tenantQuery.isFetched && !tenantQuery.data) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-950 to-slate-900 flex items-center justify-center p-4" dir="rtl">
+        <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-md text-center">
+          <h1 className="text-xl font-bold text-slate-800 mb-2">رابط غير صالح</h1>
+          <p className="text-slate-500 text-sm mb-6">لم نجد شركة بهذا الرابط. تأكد من الرابط الذي أرسله لك مدير الشركة.</p>
+          <Button variant="outline" onClick={() => navigate("/login")}>دخول الإدارة</Button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-950 to-slate-900 flex items-center justify-center p-4" dir="rtl">
-      {/* Background Pattern */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div className="absolute top-1/4 right-1/4 w-96 h-96 bg-blue-500/10 rounded-full blur-3xl" />
         <div className="absolute bottom-1/4 left-1/4 w-96 h-96 bg-blue-700/10 rounded-full blur-3xl" />
       </div>
 
       <div className="relative w-full max-w-md">
-        {/* Card */}
         <div className="bg-white/95 backdrop-blur-sm rounded-3xl shadow-2xl overflow-hidden">
-          {/* Header */}
           <div className="bg-gradient-to-r from-blue-600 to-blue-800 p-8 text-center">
-            <div className="w-16 h-16 bg-white/20 rounded-2xl flex items-center justify-center mx-auto mb-4 backdrop-blur-sm">
-              <BookOpen size={32} className="text-white" />
-            </div>
-            <h1 className="text-2xl font-bold text-white mb-1">Easy Cash</h1>
-            <p className="text-blue-200 text-sm">نظام المحاسبة والإدارة المتكامل</p>
+            <img
+              src="/easy-cash-brand.png"
+              alt="Easy Cash"
+              className="w-24 h-24 object-contain mx-auto mb-3 rounded-2xl bg-white p-1.5 shadow-lg"
+            />
+            <h1 className="text-2xl font-bold text-white mb-1">
+              {isTenantLogin ? (companyName || "جاري التحميل...") : "Easy Cash"}
+            </h1>
+            <p className="text-blue-200 text-sm">
+              {isTenantLogin
+                ? "تسجيل دخول الموظفين — حسابات هذه الشركة فقط"
+                : "حساباتك .. أسهل معانا"}
+            </p>
           </div>
 
-          {/* Form */}
           <div className="p-8">
             <h2 className="text-xl font-bold text-slate-800 mb-6 text-center">تسجيل الدخول</h2>
 
@@ -107,7 +139,7 @@ export default function Login() {
 
               <Button
                 type="submit"
-                disabled={loginMutation.isPending}
+                disabled={loginMutation.isPending || (isTenantLogin && tenantQuery.isLoading)}
                 className="w-full h-11 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl transition-all duration-200 active:scale-[0.98]"
               >
                 {loginMutation.isPending ? (
@@ -124,22 +156,35 @@ export default function Login() {
               </Button>
             </form>
 
-            <div className="mt-6 pt-6 border-t border-slate-100 text-center">
-              <p className="text-slate-500 text-sm">
-                ليس لديك حساب؟{" "}
-                <button
-                  onClick={() => navigate("/register")}
-                  className="text-blue-600 hover:text-blue-700 font-semibold"
-                >
-                  إنشاء حساب جديد
-                </button>
+            {isTenantLogin ? (
+              <p className="mt-6 pt-6 border-t border-slate-100 text-center text-slate-500 text-xs">
+                هذا الرابط خاص بـ <span className="font-semibold text-slate-700">{companyName}</span> فقط.
+                <br />
+                لا يمكن إنشاء حساب جديد من هنا — اطلب من مدير الشركة إضافتك.
               </p>
-            </div>
+            ) : (
+              <div className="mt-6 pt-6 border-t border-slate-100 text-center">
+                <p className="text-slate-500 text-sm">
+                  شركة جديدة؟{" "}
+                  <button
+                    onClick={() => navigate("/register")}
+                    className="text-blue-600 hover:text-blue-700 font-semibold"
+                  >
+                    إنشاء حساب واشتراك
+                  </button>
+                </p>
+              </div>
+            )}
           </div>
         </div>
 
-        {/* Footer */}
-        <p className="text-center text-slate-400 text-xs mt-6">
+        {isTenantLogin && tenantSlug && (
+          <p className="text-center text-slate-500 text-[11px] mt-4 font-mono" dir="ltr">
+            {buildTenantLoginUrl(tenantSlug)}
+          </p>
+        )}
+
+        <p className="text-center text-slate-400 text-xs mt-4">
           © 2024 Easy Cash - جميع الحقوق محفوظة
         </p>
       </div>

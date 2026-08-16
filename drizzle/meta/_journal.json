@@ -85,6 +85,251 @@
       "when": 1783000000000,
       "tag": "0011_multi_tenant",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "5",
+      "when": 1783100000000,
+      "tag": "0012_mega_cash_parity",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "5",
+      "when": 1783200000000,
+      "tag": "0013_production_vacations",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "5",
+      "when": 1783300000000,
+      "tag": "0014_mega_cash_report_fields",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "5",
+      "when": 1783400000000,
+      "tag": "0015_optional_parity",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "5",
+      "when": 1783500000000,
+      "tag": "0016_hr_zkteco_tcp",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "5",
+      "when": 1783600000000,
+      "tag": "0017_paymob_payment_methods",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "5",
+      "when": 1783700000000,
+      "tag": "0018_permissions",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "5",
+      "when": 1783800000000,
+      "tag": "0019_operational_notifications",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "5",
+      "when": 1783900000000,
+      "tag": "0020_alert_email_settings",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "5",
+      "when": 1784000000000,
+      "tag": "0021_phase_a_b",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "5",
+      "when": 1784100000000,
+      "tag": "0022_inventory_engine",
+      "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "5",
+      "when": 1784200000000,
+      "tag": "0023_session1_offers",
+      "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "5",
+      "when": 1784300000000,
+      "tag": "0024_session2_fx_serial_screens",
+      "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "5",
+      "when": 1784400000000,
+      "tag": "0025_session3_bom_wip",
+      "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "5",
+      "when": 1784500000000,
+      "tag": "0026_session5_print_eta_batches",
+      "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "5",
+      "when": 1784600000000,
+      "tag": "0027_session6_hr_dep_scope",
+      "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "5",
+      "when": 1784700000000,
+      "tag": "0028_session9_print_eta",
+      "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "5",
+      "when": 1784800000000,
+      "tag": "0029_check_routing",
+      "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "5",
+      "when": 1784900000000,
+      "tag": "0030_bank_gl_link",
+      "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "5",
+      "when": 1785000000000,
+      "tag": "0031_import_costing",
+      "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "5",
+      "when": 1785100000000,
+      "tag": "0032_shipping_quote",
+      "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "5",
+      "when": 1785200000000,
+      "tag": "0033_audit_office",
+      "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "5",
+      "when": 1785300000000,
+      "tag": "0034_audit_coverage",
+      "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "5",
+      "when": 1785400000000,
+      "tag": "0035_document_attachments",
+      "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "5",
+      "when": 1785500000000,
+      "tag": "0036_ops_inbox_factory",
+      "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "5",
+      "when": 1785600000000,
+      "tag": "0037_contact_dual_role",
+      "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "5",
+      "when": 1785700000000,
+      "tag": "0038_contact_mega_fields",
+      "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "5",
+      "when": 1785800000000,
+      "tag": "0039_customer_multi_reps",
+      "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "5",
+      "when": 1785900000000,
+      "tag": "0040_customer_refund_types",
+      "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "5",
+      "when": 1786000000000,
+      "tag": "0041_opening_balance_date",
+      "breakpoints": true
+    },
+    {
+      "idx": 42,
+      "version": "5",
+      "when": 1786100000000,
+      "tag": "0042_commission_precision",
+      "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "5",
+      "when": 1786200000000,
+      "tag": "0043_warehouse_branch",
+      "breakpoints": true
+    },
+    {
+      "idx": 44,
+      "version": "5",
+      "when": 1786300000000,
+      "tag": "0044_production_mega_fields",
+      "breakpoints": true
+    },
+    {
+      "idx": 45,
+      "version": "5",
+      "when": 1786400000000,
+      "tag": "0045_custom_roles",
+      "breakpoints": true
+    },
+    {
+      "idx": 46,
+      "version": "5",
+      "when": 1786500000000,
+      "tag": "0046_measure_units",
+      "breakpoints": true
     }
   ]
 }

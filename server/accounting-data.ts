@@ -1,0 +1,1804 @@
+import { and, eq, gte, lte, lt, sql, desc, asc, inArray } from "drizzle-orm";
+import type { MySql2Database } from "drizzle-orm/mysql2";
+import { customerDebtAgingReport, supplierDebtAgingReport } from "./debt-aging";
+import {
+  accounts,
+  bankTransactions,
+  branches,
+  cashTransactions,
+  checks,
+  costCenters,
+  customers,
+  items,
+  journalEntries,
+  journalEntryLines,
+  purchaseInvoiceItems,
+  purchaseInvoices,
+  salesAreas,
+  salesInvoiceItems,
+  salesInvoices,
+  salesReps,
+  salesReturns,
+  salesReturnItems,
+  suppliers,
+  warehouses,
+  customerSalesReps,
+} from "../drizzle/schema";
+import { tenantWhere } from "./tenant-scope";
+
+export type ReportFilters = {
+  tenantId: number;
+  dateFrom?: string;
+  dateTo?: string;
+  accountId?: number;
+  customerId?: number;
+  supplierId?: number;
+  warehouseId?: number;
+  /** نطاق مخازن المستخدم (متعدد) */
+  warehouseIds?: number[];
+  branchId?: number;
+  /** نطاق فروع المستخدم (متعدد) */
+  branchIds?: number[];
+  costCenterId?: number;
+  repId?: number;
+  itemId?: number;
+  categoryId?: number;
+  areaId?: number;
+  paymentType?: "cash" | "credit";
+  search?: string;
+};
+
+/** شرط فرع: فرع واحد أو قائمة نطاق */
+export function reportBranchCond(column: any, filters: ReportFilters) {
+  if (filters.branchId != null) return eq(column, filters.branchId);
+  if (filters.branchIds?.length) return inArray(column, filters.branchIds);
+  return undefined;
+}
+
+/** شرط مخزن: مخزن واحد أو قائمة نطاق */
+export function reportWarehouseCond(column: any, filters: ReportFilters) {
+  if (filters.warehouseId != null) return eq(column, filters.warehouseId);
+  if (filters.warehouseIds?.length) return inArray(column, filters.warehouseIds);
+  return undefined;
+}
+
+/** فلاتر فواتير البيع (يتطلب join customers للمنطقة/المندوب) */
+function salesInvoiceExtraFilters(filters: ReportFilters) {
+  return [
+    reportBranchCond(salesInvoices.branchId, filters),
+    reportWarehouseCond(salesInvoices.warehouseId, filters),
+    filters.paymentType ? eq(salesInvoices.paymentType, filters.paymentType) : undefined,
+    filters.customerId ? eq(salesInvoices.customerId, filters.customerId) : undefined,
+    filters.areaId ? eq(customers.areaId, filters.areaId) : undefined,
+    repInvoiceFilter(filters),
+    filters.itemId ? eq(salesInvoiceItems.itemId, filters.itemId) : undefined,
+    filters.categoryId ? eq(items.categoryId, filters.categoryId) : undefined,
+  ];
+}
+
+/** فلاتر فواتير الشراء */
+function purchaseInvoiceExtraFilters(filters: ReportFilters) {
+  return [
+    reportBranchCond(purchaseInvoices.branchId, filters),
+    reportWarehouseCond(purchaseInvoices.warehouseId, filters),
+    filters.paymentType ? eq(purchaseInvoices.paymentType, filters.paymentType) : undefined,
+    filters.supplierId ? eq(purchaseInvoices.supplierId, filters.supplierId) : undefined,
+    filters.itemId ? eq(purchaseInvoiceItems.itemId, filters.itemId) : undefined,
+    filters.categoryId ? eq(items.categoryId, filters.categoryId) : undefined,
+  ];
+}
+
+/** فرع العميل في معاملات نقدية/بنكية */
+function paymentCustomerBranchCond(filters: ReportFilters) {
+  if (filters.branchId != null) {
+    return sql`(${customers.id} IS NULL OR ${customers.branchId} = ${filters.branchId})`;
+  }
+  if (filters.branchIds?.length) {
+    return sql`(${customers.id} IS NULL OR ${customers.branchId} IN (${sql.join(filters.branchIds.map((id) => sql`${id}`), sql`, `)}))`;
+  }
+  return undefined;
+}
+
+export function num(v: unknown) {
+  return Number(v ?? 0);
+}
+
+export function dateOnly(v: unknown) {
+  if (!v) return "";
+  const s = String(v);
+  return s.includes("T") ? s.split("T")[0] : s.slice(0, 10);
+}
+
+function dateConds(table: { date: { name: string } }, from?: string, to?: string) {
+  const parts = [];
+  if (from) parts.push(gte(table.date, from as any));
+  if (to) parts.push(lte(table.date, to as any));
+  return parts;
+}
+
+/** فواتير مُرحّلة (آجلة + نقدية + جزئية) */
+function salesPostedFilter() {
+  return inArray(salesInvoices.status, ["confirmed", "paid", "partial"]);
+}
+
+function purchasePostedFilter() {
+  return inArray(purchaseInvoices.status, ["confirmed", "paid", "partial"]);
+}
+
+/** فواتير آجلة بمتبقي */
+function salesOpenFilter() {
+  return inArray(salesInvoices.status, ["confirmed", "partial"]);
+}
+
+function purchaseOpenFilter() {
+  return inArray(purchaseInvoices.status, ["confirmed", "partial"]);
+}
+
+export async function getPostedMovementByAccount(
+  db: MySql2Database<Record<string, never>>,
+  tenantId: number,
+  opts: { before?: string; from?: string; to?: string } = {},
+) {
+  const dateParts = [];
+  if (opts.before) dateParts.push(lt(journalEntries.date, opts.before as any));
+  if (opts.from) dateParts.push(gte(journalEntries.date, opts.from as any));
+  if (opts.to) dateParts.push(lte(journalEntries.date, opts.to as any));
+
+  const rawLines = await db.select({
+    accountId: journalEntryLines.accountId,
+    debit: journalEntryLines.debit,
+    credit: journalEntryLines.credit,
+  }).from(journalEntryLines)
+    .innerJoin(journalEntries, eq(journalEntryLines.entryId, journalEntries.id))
+    .where(tenantWhere(journalEntries, tenantId,
+      and(eq(journalEntries.status, "posted"), ...(dateParts.length ? [and(...dateParts)] : []))));
+
+  const totals = new Map<number, { debit: number; credit: number }>();
+  for (const l of rawLines) {
+    const cur = totals.get(l.accountId) || { debit: 0, credit: 0 };
+    cur.debit += num(l.debit);
+    cur.credit += num(l.credit);
+    totals.set(l.accountId, cur);
+  }
+  return totals;
+}
+
+export async function getAccountBalancesAsOf(
+  db: MySql2Database<Record<string, never>>,
+  tenantId: number,
+  asOf?: string,
+) {
+  const allAccounts = await db.select().from(accounts)
+    .where(tenantWhere(accounts, tenantId, eq(accounts.isActive, true)));
+  const movement = await getPostedMovementByAccount(db, tenantId, asOf ? { to: asOf } : {});
+  return allAccounts.map((a) => {
+    const m = movement.get(a.id) || { debit: 0, credit: 0 };
+    const balance = num(a.balance) + m.debit - m.credit;
+    return { ...a, balance: balance };
+  });
+}
+
+export async function loadPostedJournalLines(db: MySql2Database<Record<string, never>>, filters: ReportFilters) {
+  const dateParts = dateConds(journalEntries, filters.dateFrom, filters.dateTo);
+  const rows = await db
+    .select({
+      entryId: journalEntries.id,
+      entryNumber: journalEntries.number,
+      entryDate: journalEntries.date,
+      entryDescription: journalEntries.description,
+      accountId: journalEntryLines.accountId,
+      accountCode: accounts.code,
+      accountName: accounts.name,
+      debit: journalEntryLines.debit,
+      credit: journalEntryLines.credit,
+      lineDescription: journalEntryLines.description,
+      costCenterName: costCenters.name,
+    })
+    .from(journalEntryLines)
+    .innerJoin(journalEntries, eq(journalEntryLines.entryId, journalEntries.id))
+    .innerJoin(accounts, eq(journalEntryLines.accountId, accounts.id))
+    .leftJoin(costCenters, eq(journalEntryLines.costCenterId, costCenters.id))
+    .where(
+      tenantWhere(
+        journalEntries,
+        filters.tenantId,
+        and(eq(journalEntries.status, "posted"), ...(dateParts.length ? [and(...dateParts)] : [])),
+        filters.accountId ? eq(journalEntryLines.accountId, filters.accountId) : undefined,
+        filters.costCenterId ? eq(journalEntryLines.costCenterId, filters.costCenterId) : undefined,
+      ),
+    )
+    .orderBy(asc(journalEntries.date), asc(journalEntries.id));
+
+  let running = 0;
+  return rows.map((r) => {
+    running += num(r.debit) - num(r.credit);
+    return {
+      date: dateOnly(r.entryDate),
+      documentNumber: r.entryNumber,
+      accountCode: r.accountCode,
+      accountName: r.accountName,
+      description: r.lineDescription || r.entryDescription || "",
+      costCenter: r.costCenterName || "",
+      debit: num(r.debit),
+      credit: num(r.credit),
+      balance: running,
+    };
+  });
+}
+
+export async function trialBalanceReport(db: MySql2Database<Record<string, never>>, filters: ReportFilters) {
+  const allAccounts = await db.select().from(accounts)
+    .where(tenantWhere(accounts, filters.tenantId, eq(accounts.isActive, true)))
+    .orderBy(accounts.code);
+
+  const openingMovement = filters.dateFrom
+    ? await getPostedMovementByAccount(db, filters.tenantId, { before: filters.dateFrom })
+    : new Map<number, { debit: number; credit: number }>();
+  const periodMovement = await getPostedMovementByAccount(db, filters.tenantId, {
+    from: filters.dateFrom,
+    to: filters.dateTo,
+  });
+
+  return allAccounts
+    .filter((a) => !a.isParent)
+    .map((a) => {
+      const open = openingMovement.get(a.id) || { debit: 0, credit: 0 };
+      const period = periodMovement.get(a.id) || { debit: 0, credit: 0 };
+      const openingNet = num(a.balance) + open.debit - open.credit;
+      const closingNet = openingNet + period.debit - period.credit;
+      return {
+        accountCode: a.code,
+        accountName: a.name,
+        accountType: a.type,
+        openingDebit: openingNet > 0 ? openingNet : 0,
+        openingCredit: openingNet < 0 ? Math.abs(openingNet) : 0,
+        periodDebit: period.debit,
+        periodCredit: period.credit,
+        closingDebit: closingNet > 0 ? closingNet : 0,
+        closingCredit: closingNet < 0 ? Math.abs(closingNet) : 0,
+      };
+    })
+    .filter((r) => r.periodDebit || r.periodCredit || r.openingDebit || r.openingCredit || r.closingDebit || r.closingCredit);
+}
+
+export async function generalJournalReport(db: MySql2Database<Record<string, never>>, filters: ReportFilters) {
+  const dateParts = dateConds(journalEntries, filters.dateFrom, filters.dateTo);
+  const entries = await db.select().from(journalEntries)
+    .where(tenantWhere(journalEntries, filters.tenantId,
+      and(eq(journalEntries.status, "posted"), ...(dateParts.length ? [and(...dateParts)] : []))))
+    .orderBy(asc(journalEntries.date), asc(journalEntries.id));
+
+  const result: Record<string, unknown>[] = [];
+  for (const e of entries) {
+    const lines = await db.select({
+      accountCode: accounts.code,
+      accountName: accounts.name,
+      debit: journalEntryLines.debit,
+      credit: journalEntryLines.credit,
+      description: journalEntryLines.description,
+    }).from(journalEntryLines)
+      .innerJoin(accounts, eq(journalEntryLines.accountId, accounts.id))
+      .where(tenantWhere(journalEntryLines, filters.tenantId, eq(journalEntryLines.entryId, e.id)));
+
+    for (const l of lines) {
+      result.push({
+        date: dateOnly(e.date),
+        entryNumber: e.number,
+        description: l.description || e.description || "",
+        accountCode: l.accountCode,
+        accountName: l.accountName,
+        debit: num(l.debit),
+        credit: num(l.credit),
+      });
+    }
+  }
+  return result;
+}
+
+export async function salesInvoicesReport(db: MySql2Database<Record<string, never>>, filters: ReportFilters) {
+  const dateParts = dateConds(salesInvoices, filters.dateFrom, filters.dateTo);
+  const rows = await db.select({
+    number: salesInvoices.number,
+    date: salesInvoices.date,
+    dueDate: salesInvoices.dueDate,
+    customerCode: customers.code,
+    customerName: customers.name,
+    branchName: branches.name,
+    warehouseName: warehouses.name,
+    repName: salesReps.name,
+    areaName: salesAreas.name,
+    subtotal: salesInvoices.subtotal,
+    discount: salesInvoices.discount,
+    tax: salesInvoices.tax,
+    total: salesInvoices.total,
+    foreignTotal: salesInvoices.foreignTotal,
+    currencyCode: salesInvoices.currencyCode,
+    exchangeRate: salesInvoices.exchangeRate,
+    paid: salesInvoices.paid,
+    remaining: salesInvoices.remaining,
+    status: salesInvoices.status,
+    paymentType: salesInvoices.paymentType,
+  }).from(salesInvoices)
+    .leftJoin(customers, eq(salesInvoices.customerId, customers.id))
+    .leftJoin(branches, eq(salesInvoices.branchId, branches.id))
+    .leftJoin(warehouses, eq(salesInvoices.warehouseId, warehouses.id))
+    .leftJoin(salesReps, eq(salesInvoices.salesRepId, salesReps.id))
+    .leftJoin(salesAreas, eq(customers.areaId, salesAreas.id))
+    .where(tenantWhere(salesInvoices, filters.tenantId,
+      and(salesPostedFilter(), ...(dateParts.length ? [and(...dateParts)] : []),
+        filters.customerId ? eq(salesInvoices.customerId, filters.customerId) : undefined,
+        reportBranchCond(salesInvoices.branchId, filters),
+        reportWarehouseCond(salesInvoices.warehouseId, filters),
+        filters.paymentType ? eq(salesInvoices.paymentType, filters.paymentType) : undefined,
+        filters.areaId ? eq(customers.areaId, filters.areaId) : undefined,
+        filters.repId
+          ? sql`(${salesInvoices.salesRepId} = ${filters.repId} OR ${customers.salesRepId} = ${filters.repId})`
+          : undefined,
+        filters.search
+          ? sql`(${salesInvoices.number} LIKE ${`%${filters.search}%`} OR ${customers.name} LIKE ${`%${filters.search}%`})`
+          : undefined)))
+    .orderBy(desc(salesInvoices.date));
+
+  return rows.map((r) => ({
+    documentNumber: r.number,
+    date: dateOnly(r.date),
+    dueDate: dateOnly(r.dueDate),
+    partyCode: r.customerCode || "",
+    partyName: r.customerName || "",
+    branchName: r.branchName || "",
+    warehouseName: r.warehouseName || "",
+    repName: r.repName || "",
+    areaName: r.areaName || "",
+    currencyCode: r.currencyCode || "EGP",
+    exchangeRate: num(r.exchangeRate) || 1,
+    foreignTotal: r.foreignTotal != null ? num(r.foreignTotal) : null,
+    subtotal: num(r.subtotal),
+    discount: num(r.discount),
+    tax: num(r.tax),
+    total: num(r.total),
+    paid: num(r.paid),
+    remaining: num(r.remaining),
+    status: r.status,
+    paymentType: r.paymentType === "cash" ? "نقدي" : r.paymentType === "credit" ? "آجل" : r.paymentType,
+  }));
+}
+
+export async function purchasesInvoicesReport(db: MySql2Database<Record<string, never>>, filters: ReportFilters) {
+  const dateParts = dateConds(purchaseInvoices, filters.dateFrom, filters.dateTo);
+  const rows = await db.select({
+    number: purchaseInvoices.number,
+    date: purchaseInvoices.date,
+    dueDate: purchaseInvoices.dueDate,
+    supplierCode: suppliers.code,
+    supplierName: suppliers.name,
+    branchName: branches.name,
+    warehouseName: warehouses.name,
+    subtotal: purchaseInvoices.subtotal,
+    discount: purchaseInvoices.discount,
+    tax: purchaseInvoices.tax,
+    total: purchaseInvoices.total,
+    foreignTotal: purchaseInvoices.foreignTotal,
+    currencyCode: purchaseInvoices.currencyCode,
+    exchangeRate: purchaseInvoices.exchangeRate,
+    paid: purchaseInvoices.paid,
+    remaining: purchaseInvoices.remaining,
+    status: purchaseInvoices.status,
+    paymentType: purchaseInvoices.paymentType,
+  }).from(purchaseInvoices)
+    .leftJoin(suppliers, eq(purchaseInvoices.supplierId, suppliers.id))
+    .leftJoin(branches, eq(purchaseInvoices.branchId, branches.id))
+    .leftJoin(warehouses, eq(purchaseInvoices.warehouseId, warehouses.id))
+    .where(tenantWhere(purchaseInvoices, filters.tenantId,
+      and(purchasePostedFilter(), ...(dateParts.length ? [and(...dateParts)] : []),
+        filters.supplierId ? eq(purchaseInvoices.supplierId, filters.supplierId) : undefined,
+        reportBranchCond(purchaseInvoices.branchId, filters),
+        reportWarehouseCond(purchaseInvoices.warehouseId, filters),
+        filters.paymentType ? eq(purchaseInvoices.paymentType, filters.paymentType) : undefined,
+        filters.search
+          ? sql`(${purchaseInvoices.number} LIKE ${`%${filters.search}%`} OR ${suppliers.name} LIKE ${`%${filters.search}%`})`
+          : undefined)))
+    .orderBy(desc(purchaseInvoices.date));
+
+  return rows.map((r) => ({
+    documentNumber: r.number,
+    date: dateOnly(r.date),
+    dueDate: dateOnly(r.dueDate),
+    partyCode: r.supplierCode || "",
+    partyName: r.supplierName || "",
+    branchName: r.branchName || "",
+    warehouseName: r.warehouseName || "",
+    currencyCode: r.currencyCode || "EGP",
+    exchangeRate: num(r.exchangeRate) || 1,
+    foreignTotal: r.foreignTotal != null ? num(r.foreignTotal) : null,
+    subtotal: num(r.subtotal),
+    discount: num(r.discount),
+    tax: num(r.tax),
+    total: num(r.total),
+    paid: num(r.paid),
+    remaining: num(r.remaining),
+    status: r.status,
+    paymentType: r.paymentType === "cash" ? "نقدي" : r.paymentType === "credit" ? "آجل" : r.paymentType,
+  }));
+}
+
+export async function checksReport(db: MySql2Database<Record<string, never>>, filters: ReportFilters, type: "incoming" | "outgoing") {
+  const dateParts = dateConds(checks, filters.dateFrom, filters.dateTo);
+  const rows = await db.select({
+    number: checks.number,
+    date: checks.date,
+    dueDate: checks.dueDate,
+    amount: checks.amount,
+    status: checks.status,
+    customerName: customers.name,
+    supplierName: suppliers.name,
+  }).from(checks)
+    .leftJoin(customers, eq(checks.customerId, customers.id))
+    .leftJoin(suppliers, eq(checks.supplierId, suppliers.id))
+    .where(tenantWhere(checks, filters.tenantId,
+      and(eq(checks.type, type), ...(dateParts.length ? [and(...dateParts)] : []),
+        type === "incoming" && filters.customerId ? eq(checks.customerId, filters.customerId) : undefined,
+        type === "outgoing" && filters.supplierId ? eq(checks.supplierId, filters.supplierId) : undefined,
+        filters.search
+          ? sql`(${checks.number} LIKE ${`%${filters.search}%`} OR ${customers.name} LIKE ${`%${filters.search}%`} OR ${suppliers.name} LIKE ${`%${filters.search}%`})`
+          : undefined)))
+    .orderBy(desc(checks.date));
+
+  return rows.map((r) => ({
+    checkNumber: r.number,
+    date: dateOnly(r.date),
+    dueDate: dateOnly(r.dueDate),
+    partyName: r.customerName || r.supplierName || "",
+    amount: num(r.amount),
+    status: r.status,
+  }));
+}
+
+export async function customersListReport(db: MySql2Database<Record<string, never>>, filters: ReportFilters) {
+  const rows = await db.select({
+    code: customers.code,
+    name: customers.name,
+    phone: customers.phone,
+    email: customers.email,
+    balance: customers.balance,
+    creditLimit: customers.creditLimit,
+    branchName: branches.name,
+    areaName: salesAreas.name,
+    repName: salesReps.name,
+  }).from(customers)
+    .leftJoin(branches, eq(customers.branchId, branches.id))
+    .leftJoin(salesAreas, eq(customers.areaId, salesAreas.id))
+    .leftJoin(salesReps, eq(customers.salesRepId, salesReps.id))
+    .where(tenantWhere(customers, filters.tenantId,
+      and(eq(customers.isActive, true),
+        reportBranchCond(customers.branchId, filters),
+        filters.areaId ? eq(customers.areaId, filters.areaId) : undefined,
+        filters.repId ? eq(customers.salesRepId, filters.repId) : undefined)))
+    .orderBy(customers.name);
+  return rows.map((c) => ({
+    code: c.code || "",
+    name: c.name,
+    phone: c.phone || "",
+    email: c.email || "",
+    branchName: c.branchName || "",
+    areaName: c.areaName || "",
+    repName: c.repName || "",
+    balance: num(c.balance),
+    creditLimit: num(c.creditLimit),
+  }));
+}
+
+export async function customersSummaryReport(db: MySql2Database<Record<string, never>>, filters: ReportFilters) {
+  const custRows = await db.select({
+    id: customers.id,
+    code: customers.code,
+    name: customers.name,
+    phone: customers.phone,
+    balance: customers.balance,
+    creditLimit: customers.creditLimit,
+    branchName: branches.name,
+    areaName: salesAreas.name,
+    repName: salesReps.name,
+  }).from(customers)
+    .leftJoin(branches, eq(customers.branchId, branches.id))
+    .leftJoin(salesAreas, eq(customers.areaId, salesAreas.id))
+    .leftJoin(salesReps, eq(customers.salesRepId, salesReps.id))
+    .where(tenantWhere(customers, filters.tenantId,
+      and(eq(customers.isActive, true),
+        reportBranchCond(customers.branchId, filters),
+        filters.areaId ? eq(customers.areaId, filters.areaId) : undefined,
+        filters.repId ? eq(customers.salesRepId, filters.repId) : undefined)))
+    .orderBy(customers.name);
+  const dateParts = dateConds(salesInvoices, filters.dateFrom, filters.dateTo);
+  const cashDate = dateConds(cashTransactions, filters.dateFrom, filters.dateTo);
+  const sales = await db.select({
+    customerId: salesInvoices.customerId,
+    total: salesInvoices.total,
+    paid: salesInvoices.paid,
+    remaining: salesInvoices.remaining,
+  }).from(salesInvoices).where(tenantWhere(salesInvoices, filters.tenantId,
+    and(salesPostedFilter(), ...(dateParts.length ? [and(...dateParts)] : []),
+      reportBranchCond(salesInvoices.branchId, filters))));
+  const collections = await db.select({
+    customerId: cashTransactions.customerId,
+    amount: cashTransactions.amount,
+    type: cashTransactions.type,
+  }).from(cashTransactions)
+    .leftJoin(customers, eq(cashTransactions.customerId, customers.id))
+    .where(tenantWhere(cashTransactions, filters.tenantId,
+      ...(cashDate.length ? [and(...cashDate)] : []),
+      reportBranchCond(customers.branchId, filters)));
+
+  const salesMap = new Map<number, { total: number; paid: number; remaining: number; count: number }>();
+  for (const s of sales) {
+    if (!s.customerId) continue;
+    const cur = salesMap.get(s.customerId) || { total: 0, paid: 0, remaining: 0, count: 0 };
+    cur.total += num(s.total);
+    cur.paid += num(s.paid);
+    cur.remaining += num(s.remaining);
+    cur.count += 1;
+    salesMap.set(s.customerId, cur);
+  }
+  const collectMap = new Map<number, number>();
+  for (const c of collections) {
+    if (!c.customerId || !String(c.type).includes("receive")) continue;
+    collectMap.set(c.customerId, (collectMap.get(c.customerId) || 0) + num(c.amount));
+  }
+
+  return custRows.map((c) => {
+    const s = salesMap.get(c.id) || { total: 0, paid: 0, remaining: 0, count: 0 };
+    return {
+      code: c.code || "",
+      name: c.name,
+      phone: c.phone || "",
+      branchName: c.branchName || "",
+      areaName: c.areaName || "",
+      repName: c.repName || "",
+      balance: num(c.balance),
+      creditLimit: num(c.creditLimit),
+      totalSales: s.total,
+      totalPaid: s.paid,
+      remaining: s.remaining,
+      totalCollected: collectMap.get(c.id) || 0,
+      invoiceCount: s.count,
+    };
+  });
+}
+
+export async function vendorsSummaryReport(db: MySql2Database<Record<string, never>>, filters: ReportFilters) {
+  const vendorRows = await db.select({
+    id: suppliers.id,
+    code: suppliers.code,
+    name: suppliers.name,
+    phone: suppliers.phone,
+    balance: suppliers.balance,
+    branchName: branches.name,
+  }).from(suppliers)
+    .leftJoin(branches, eq(suppliers.branchId, branches.id))
+    .where(tenantWhere(suppliers, filters.tenantId,
+      and(eq(suppliers.isActive, true), reportBranchCond(suppliers.branchId, filters))))
+    .orderBy(suppliers.name);
+  const dateParts = dateConds(purchaseInvoices, filters.dateFrom, filters.dateTo);
+  const cashDate = dateConds(cashTransactions, filters.dateFrom, filters.dateTo);
+  const purchases = await db.select({
+    supplierId: purchaseInvoices.supplierId,
+    total: purchaseInvoices.total,
+    paid: purchaseInvoices.paid,
+    remaining: purchaseInvoices.remaining,
+  }).from(purchaseInvoices).where(tenantWhere(purchaseInvoices, filters.tenantId,
+    and(purchasePostedFilter(), ...(dateParts.length ? [and(...dateParts)] : []),
+      reportBranchCond(purchaseInvoices.branchId, filters))));
+  const payments = await db.select({
+    supplierId: cashTransactions.supplierId,
+    amount: cashTransactions.amount,
+    type: cashTransactions.type,
+  }).from(cashTransactions).where(tenantWhere(cashTransactions, filters.tenantId,
+    ...(cashDate.length ? [and(...cashDate)] : [])));
+
+  const purchaseMap = new Map<number, { total: number; paid: number; remaining: number; count: number }>();
+  for (const p of purchases) {
+    if (!p.supplierId) continue;
+    const cur = purchaseMap.get(p.supplierId) || { total: 0, paid: 0, remaining: 0, count: 0 };
+    cur.total += num(p.total);
+    cur.paid += num(p.paid);
+    cur.remaining += num(p.remaining);
+    cur.count += 1;
+    purchaseMap.set(p.supplierId, cur);
+  }
+  const payMap = new Map<number, number>();
+  for (const p of payments) {
+    if (!p.supplierId || !String(p.type).includes("pay")) continue;
+    payMap.set(p.supplierId, (payMap.get(p.supplierId) || 0) + num(p.amount));
+  }
+
+  return vendorRows.map((v) => {
+    const p = purchaseMap.get(v.id) || { total: 0, paid: 0, remaining: 0, count: 0 };
+    return {
+      code: v.code || "",
+      name: v.name,
+      phone: v.phone || "",
+      branchName: v.branchName || "",
+      balance: num(v.balance),
+      totalPurchases: p.total,
+      totalPaid: p.paid,
+      remaining: p.remaining,
+      totalPaidCash: payMap.get(v.id) || 0,
+      invoiceCount: p.count,
+    };
+  });
+}
+
+export async function vendorsListReport(db: MySql2Database<Record<string, never>>, filters: ReportFilters) {
+  const rows = await db.select({
+    code: suppliers.code,
+    name: suppliers.name,
+    phone: suppliers.phone,
+    email: suppliers.email,
+    balance: suppliers.balance,
+    branchName: branches.name,
+  }).from(suppliers)
+    .leftJoin(branches, eq(suppliers.branchId, branches.id))
+    .where(tenantWhere(suppliers, filters.tenantId,
+      and(eq(suppliers.isActive, true), reportBranchCond(suppliers.branchId, filters))))
+    .orderBy(suppliers.name);
+  return rows.map((s) => ({
+    code: s.code || "",
+    name: s.name,
+    phone: s.phone || "",
+    email: s.email || "",
+    branchName: s.branchName || "",
+    balance: num(s.balance),
+  }));
+}
+
+export async function debitsAgingReport(db: MySql2Database<Record<string, never>>, filters: ReportFilters, bucket: "default" | "year" | "half" = "default") {
+  return customerDebtAgingReport(db, filters.tenantId, bucket);
+}
+
+export async function creditsAgingReport(db: MySql2Database<Record<string, never>>, filters: ReportFilters, bucket: "default" | "year" | "half" = "default") {
+  return supplierDebtAgingReport(db, filters.tenantId, bucket);
+}
+
+export async function salesByItemsReport(db: MySql2Database<Record<string, never>>, filters: ReportFilters, monthly = false) {
+  const dateParts = dateConds(salesInvoices, filters.dateFrom, filters.dateTo);
+  const rows = await db.select({
+    itemCode: items.code,
+    itemName: items.name,
+    purchasePrice: items.purchasePrice,
+    quantity: salesInvoiceItems.quantity,
+    total: salesInvoiceItems.total,
+    date: salesInvoices.date,
+  }).from(salesInvoiceItems)
+    .innerJoin(salesInvoices, eq(salesInvoiceItems.invoiceId, salesInvoices.id))
+    .innerJoin(customers, eq(salesInvoices.customerId, customers.id))
+    .leftJoin(items, eq(salesInvoiceItems.itemId, items.id))
+    .where(tenantWhere(salesInvoiceItems, filters.tenantId,
+      and(salesPostedFilter(), ...(dateParts.length ? [and(...dateParts)] : []),
+        filters.itemId ? eq(salesInvoiceItems.itemId, filters.itemId) : undefined,
+        filters.categoryId ? eq(items.categoryId, filters.categoryId) : undefined,
+        filters.customerId ? eq(salesInvoices.customerId, filters.customerId) : undefined,
+        reportBranchCond(salesInvoices.branchId, filters),
+        reportWarehouseCond(salesInvoices.warehouseId, filters),
+        filters.repId
+          ? sql`(${salesInvoices.salesRepId} = ${filters.repId} OR ${customers.salesRepId} = ${filters.repId})`
+          : undefined)));
+
+  const map = new Map<string, { itemCode: string; itemName: string; quantity: number; total: number; profit: number; month?: string }>();
+  for (const r of rows) {
+    const d = new Date(dateOnly(r.date));
+    const monthKey = monthly ? `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}` : "";
+    const key = monthly ? `${r.itemCode}-${monthKey}` : String(r.itemCode || r.itemName);
+    const cur = map.get(key) || { itemCode: r.itemCode || "", itemName: r.itemName || "", quantity: 0, total: 0, profit: 0, month: monthKey };
+    cur.quantity += num(r.quantity);
+    cur.total += num(r.total);
+    cur.profit += num(r.total) - num(r.purchasePrice) * num(r.quantity);
+    map.set(key, cur);
+  }
+  return Array.from(map.values());
+}
+
+export async function monthlySalesTotalsReport(db: MySql2Database<Record<string, never>>, filters: ReportFilters) {
+  const rows = await salesByItemsReport(db, filters, true);
+  const map = new Map<string, { month: string; quantity: number; total: number; profit: number }>();
+  for (const r of rows) {
+    const key = r.month || "";
+    const cur = map.get(key) || { month: key, quantity: 0, total: 0, profit: 0 };
+    cur.quantity += r.quantity;
+    cur.total += r.total;
+    cur.profit += r.profit;
+    map.set(key, cur);
+  }
+  return Array.from(map.values()).sort((a, b) => a.month.localeCompare(b.month));
+}
+
+export async function purchasesByItemsReport(db: MySql2Database<Record<string, never>>, filters: ReportFilters) {
+  const dateParts = dateConds(purchaseInvoices, filters.dateFrom, filters.dateTo);
+  const rows = await db.select({
+    itemCode: items.code,
+    itemName: items.name,
+    quantity: purchaseInvoiceItems.quantity,
+    total: purchaseInvoiceItems.total,
+    date: purchaseInvoices.date,
+    supplierName: suppliers.name,
+  }).from(purchaseInvoiceItems)
+    .innerJoin(purchaseInvoices, eq(purchaseInvoiceItems.invoiceId, purchaseInvoices.id))
+    .leftJoin(items, eq(purchaseInvoiceItems.itemId, items.id))
+    .leftJoin(suppliers, eq(purchaseInvoices.supplierId, suppliers.id))
+    .where(tenantWhere(purchaseInvoiceItems, filters.tenantId,
+      and(purchasePostedFilter(), ...(dateParts.length ? [and(...dateParts)] : []),
+        filters.supplierId ? eq(purchaseInvoices.supplierId, filters.supplierId) : undefined,
+        filters.categoryId ? eq(items.categoryId, filters.categoryId) : undefined,
+        reportWarehouseCond(purchaseInvoices.warehouseId, filters),
+        filters.itemId ? eq(purchaseInvoiceItems.itemId, filters.itemId) : undefined,
+        reportBranchCond(purchaseInvoices.branchId, filters))));
+
+  const map = new Map<string, { itemCode: string; itemName: string; quantity: number; total: number; supplierName: string }>();
+  for (const r of rows) {
+    const key = String(r.itemCode || r.itemName);
+    const cur = map.get(key) || { itemCode: r.itemCode || "", itemName: r.itemName || "", quantity: 0, total: 0, supplierName: r.supplierName || "" };
+    cur.quantity += num(r.quantity);
+    cur.total += num(r.total);
+    map.set(key, cur);
+  }
+  return Array.from(map.values());
+}
+
+export async function customerStatementReport(db: MySql2Database<Record<string, never>>, filters: ReportFilters) {
+  return buildContactLedger(db, filters, "customer");
+}
+
+export async function vendorStatementReport(db: MySql2Database<Record<string, never>>, filters: ReportFilters) {
+  return buildContactLedger(db, filters, "supplier");
+}
+
+async function buildContactLedger(
+  db: MySql2Database<Record<string, never>>,
+  filters: ReportFilters,
+  type: "customer" | "supplier",
+) {
+  const rows: { date: string; sortKey: string; documentType: string; documentNumber: string; debit: number; credit: number; description: string }[] = [];
+
+  if (type === "customer") {
+    const dateParts = dateConds(salesInvoices, filters.dateFrom, filters.dateTo);
+    const invoices = await db.select({
+      number: salesInvoices.number,
+      date: salesInvoices.date,
+      total: salesInvoices.total,
+    }).from(salesInvoices).where(tenantWhere(salesInvoices, filters.tenantId,
+      and(salesPostedFilter(), ...(dateParts.length ? [and(...dateParts)] : []),
+        filters.customerId ? eq(salesInvoices.customerId, filters.customerId) : undefined)));
+    for (const inv of invoices) {
+      rows.push({
+        date: dateOnly(inv.date),
+        sortKey: `${dateOnly(inv.date)}-1-${inv.number}`,
+        documentType: "فاتورة مبيعات",
+        documentNumber: inv.number,
+        debit: num(inv.total),
+        credit: 0,
+        description: "",
+      });
+    }
+    const retDate = dateConds(salesReturns, filters.dateFrom, filters.dateTo);
+    const returns = await db.select({ number: salesReturns.number, date: salesReturns.date, total: salesReturns.total })
+      .from(salesReturns).where(tenantWhere(salesReturns, filters.tenantId,
+        and(...(retDate.length ? [and(...retDate)] : []), filters.customerId ? eq(salesReturns.customerId, filters.customerId) : undefined)));
+    for (const r of returns) {
+      rows.push({
+        date: dateOnly(r.date),
+        sortKey: `${dateOnly(r.date)}-2-${r.number}`,
+        documentType: "مرتجع مبيعات",
+        documentNumber: r.number,
+        debit: 0,
+        credit: num(r.total),
+        description: "",
+      });
+    }
+    const cashDate = dateConds(cashTransactions, filters.dateFrom, filters.dateTo);
+    const cash = await db.select({ number: cashTransactions.number, date: cashTransactions.date, amount: cashTransactions.amount, description: cashTransactions.description, type: cashTransactions.type })
+      .from(cashTransactions).where(tenantWhere(cashTransactions, filters.tenantId,
+        and(...(cashDate.length ? [and(...cashDate)] : []), filters.customerId ? eq(cashTransactions.customerId, filters.customerId) : undefined)));
+    for (const c of cash) {
+      const isReceive = String(c.type).includes("receive");
+      rows.push({
+        date: dateOnly(c.date),
+        sortKey: `${dateOnly(c.date)}-3-${c.number}`,
+        documentType: isReceive ? "تحصيل نقدي" : "صرف نقدي",
+        documentNumber: c.number,
+        debit: isReceive ? 0 : num(c.amount),
+        credit: isReceive ? num(c.amount) : 0,
+        description: c.description || "",
+      });
+    }
+    const bankDate = dateConds(bankTransactions, filters.dateFrom, filters.dateTo);
+    const bank = await db.select({ reference: bankTransactions.reference, date: bankTransactions.date, amount: bankTransactions.amount, description: bankTransactions.description, type: bankTransactions.type })
+      .from(bankTransactions).where(tenantWhere(bankTransactions, filters.tenantId,
+        and(...(bankDate.length ? [and(...bankDate)] : []), filters.customerId ? eq(bankTransactions.customerId, filters.customerId) : undefined)));
+    for (const b of bank) {
+      const isDeposit = String(b.type).includes("deposit") || String(b.type).includes("receive");
+      rows.push({
+        date: dateOnly(b.date),
+        sortKey: `${dateOnly(b.date)}-4-${b.reference || ""}`,
+        documentType: isDeposit ? "تحصيل بنكي" : "صرف بنكي",
+        documentNumber: b.reference || "",
+        debit: isDeposit ? 0 : num(b.amount),
+        credit: isDeposit ? num(b.amount) : 0,
+        description: b.description || "",
+      });
+    }
+  } else {
+    const dateParts = dateConds(purchaseInvoices, filters.dateFrom, filters.dateTo);
+    const invoices = await db.select({
+      number: purchaseInvoices.number,
+      date: purchaseInvoices.date,
+      total: purchaseInvoices.total,
+    }).from(purchaseInvoices).where(tenantWhere(purchaseInvoices, filters.tenantId,
+      and(purchasePostedFilter(), ...(dateParts.length ? [and(...dateParts)] : []),
+        filters.supplierId ? eq(purchaseInvoices.supplierId, filters.supplierId) : undefined)));
+    for (const inv of invoices) {
+      rows.push({
+        date: dateOnly(inv.date),
+        sortKey: `${dateOnly(inv.date)}-1-${inv.number}`,
+        documentType: "فاتورة مشتريات",
+        documentNumber: inv.number,
+        debit: 0,
+        credit: num(inv.total),
+        description: "",
+      });
+    }
+    const cashDate = dateConds(cashTransactions, filters.dateFrom, filters.dateTo);
+    const cash = await db.select({ number: cashTransactions.number, date: cashTransactions.date, amount: cashTransactions.amount, description: cashTransactions.description, type: cashTransactions.type })
+      .from(cashTransactions).where(tenantWhere(cashTransactions, filters.tenantId,
+        and(...(cashDate.length ? [and(...cashDate)] : []), filters.supplierId ? eq(cashTransactions.supplierId, filters.supplierId) : undefined)));
+    for (const c of cash) {
+      const isPay = String(c.type).includes("pay");
+      rows.push({
+        date: dateOnly(c.date),
+        sortKey: `${dateOnly(c.date)}-2-${c.number}`,
+        documentType: isPay ? "سداد نقدي" : "تحصيل",
+        documentNumber: c.number,
+        debit: isPay ? num(c.amount) : 0,
+        credit: isPay ? 0 : num(c.amount),
+        description: c.description || "",
+      });
+    }
+  }
+
+  rows.sort((a, b) => a.sortKey.localeCompare(b.sortKey));
+  let running = 0;
+  return rows.map(({ sortKey: _, ...r }) => {
+    running += r.debit - r.credit;
+    return { ...r, runningBalance: running };
+  });
+}
+
+export async function customerItemStatementReport(db: MySql2Database<Record<string, never>>, filters: ReportFilters) {
+  if (!filters.customerId) return [{ message: "يجب اختيار عميل" }];
+  const dateParts = dateConds(salesInvoices, filters.dateFrom, filters.dateTo);
+  const rows = await db.select({
+    date: salesInvoices.date,
+    number: salesInvoices.number,
+    itemCode: items.code,
+    itemName: items.name,
+    quantity: salesInvoiceItems.quantity,
+    total: salesInvoiceItems.total,
+  }).from(salesInvoiceItems)
+    .innerJoin(salesInvoices, eq(salesInvoiceItems.invoiceId, salesInvoices.id))
+    .leftJoin(items, eq(salesInvoiceItems.itemId, items.id))
+    .where(tenantWhere(salesInvoiceItems, filters.tenantId,
+      and(salesPostedFilter(), eq(salesInvoices.customerId, filters.customerId),
+        ...(dateParts.length ? [and(...dateParts)] : []))));
+
+  const retDate = dateConds(salesReturns, filters.dateFrom, filters.dateTo);
+  const returns = await db.select({
+    date: salesReturns.date,
+    number: salesReturns.number,
+    itemCode: items.code,
+    itemName: items.name,
+    quantity: salesReturnItems.quantity,
+    total: salesReturnItems.total,
+  }).from(salesReturnItems)
+    .innerJoin(salesReturns, eq(salesReturnItems.returnId, salesReturns.id))
+    .leftJoin(items, eq(salesReturnItems.itemId, items.id))
+    .where(tenantWhere(salesReturnItems, filters.tenantId,
+      and(eq(salesReturns.customerId, filters.customerId), ...(retDate.length ? [and(...retDate)] : []))));
+
+  const ledger: { date: string; sortKey: string; documentNumber: string; itemCode: string; itemName: string; qtyOut: number; qtyIn: number; debit: number; credit: number }[] = [];
+  for (const r of rows) {
+    ledger.push({
+      date: dateOnly(r.date), sortKey: `${dateOnly(r.date)}-1-${r.number}`,
+      documentNumber: r.number, itemCode: r.itemCode || "", itemName: r.itemName || "",
+      qtyOut: num(r.quantity), qtyIn: 0, debit: num(r.total), credit: 0,
+    });
+  }
+  for (const r of returns) {
+    ledger.push({
+      date: dateOnly(r.date), sortKey: `${dateOnly(r.date)}-2-${r.number}`,
+      documentNumber: r.number, itemCode: r.itemCode || "", itemName: r.itemName || "",
+      qtyOut: 0, qtyIn: num(r.quantity), debit: 0, credit: num(r.total),
+    });
+  }
+  ledger.sort((a, b) => a.sortKey.localeCompare(b.sortKey));
+  let running = 0;
+  return ledger.map(({ sortKey: _, ...r }) => {
+    running += r.debit - r.credit;
+    return { ...r, balance: running };
+  });
+}
+
+export async function vendorItemStatementReport(db: MySql2Database<Record<string, never>>, filters: ReportFilters) {
+  if (!filters.supplierId) return [{ message: "يجب اختيار مورد" }];
+  const dateParts = dateConds(purchaseInvoices, filters.dateFrom, filters.dateTo);
+  const rows = await db.select({
+    date: purchaseInvoices.date,
+    number: purchaseInvoices.number,
+    itemCode: items.code,
+    itemName: items.name,
+    quantity: purchaseInvoiceItems.quantity,
+    total: purchaseInvoiceItems.total,
+  }).from(purchaseInvoiceItems)
+    .innerJoin(purchaseInvoices, eq(purchaseInvoiceItems.invoiceId, purchaseInvoices.id))
+    .leftJoin(items, eq(purchaseInvoiceItems.itemId, items.id))
+    .where(tenantWhere(purchaseInvoiceItems, filters.tenantId,
+      and(purchasePostedFilter(), eq(purchaseInvoices.supplierId, filters.supplierId),
+        ...(dateParts.length ? [and(...dateParts)] : []))));
+
+  const ledger = rows.map((r) => ({
+    date: dateOnly(r.date),
+    documentNumber: r.number,
+    itemCode: r.itemCode || "",
+    itemName: r.itemName || "",
+    qtyIn: num(r.quantity),
+    qtyOut: 0,
+    debit: 0,
+    credit: num(r.total),
+  }));
+  let running = 0;
+  return ledger.map((r) => {
+    running += r.debit - r.credit;
+    return { ...r, balance: running };
+  });
+}
+
+export async function costCenterStatementReport(db: MySql2Database<Record<string, never>>, filters: ReportFilters) {
+  const lines = await loadPostedJournalLines(db, filters);
+  if (!filters.costCenterId) return lines;
+  const [cc] = await db.select().from(costCenters).where(eq(costCenters.id, filters.costCenterId));
+  return lines.map((l) => ({ ...l, costCenter: cc?.name || "" }));
+}
+
+export async function monthlyExpensesReport(db: MySql2Database<Record<string, never>>, filters: ReportFilters) {
+  const expenseAccounts = await db.select({ id: accounts.id, code: accounts.code, name: accounts.name })
+    .from(accounts).where(tenantWhere(accounts, filters.tenantId, eq(accounts.type, "expense")));
+  const expenseIds = new Set(expenseAccounts.map((a) => a.id));
+  const lines = await loadPostedJournalLines(db, filters);
+  const map = new Map<string, { month: string; accountCode: string; accountName: string; debit: number; credit: number; net: number }>();
+  for (const l of lines) {
+    const acc = expenseAccounts.find((a) => a.code === l.accountCode);
+    if (!acc || !expenseIds.has(acc.id)) continue;
+    const month = String(l.date).slice(0, 7);
+    const key = `${month}-${acc.code}`;
+    const cur = map.get(key) || { month, accountCode: acc.code, accountName: acc.name, debit: 0, credit: 0, net: 0 };
+    cur.debit += num(l.debit);
+    cur.credit += num(l.credit);
+    cur.net += num(l.debit) - num(l.credit);
+    map.set(key, cur);
+  }
+  return Array.from(map.values()).sort((a, b) => a.month.localeCompare(b.month) || a.accountCode.localeCompare(b.accountCode));
+}
+
+export async function itemsProfitsReport(db: MySql2Database<Record<string, never>>, filters: ReportFilters) {
+  const rows = await salesByItemsReport(db, filters, false);
+  return rows.map((r) => ({
+    itemCode: r.itemCode,
+    itemName: r.itemName,
+    quantity: r.quantity,
+    salesTotal: r.total,
+    costTotal: num(r.total) - num(r.profit),
+    profit: r.profit,
+    profitPercent: r.total ? ((num(r.profit) / num(r.total)) * 100).toFixed(2) : "0",
+  }));
+}
+
+export async function invoiceProfitsReport(db: MySql2Database<Record<string, never>>, filters: ReportFilters) {
+  const dateParts = dateConds(salesInvoices, filters.dateFrom, filters.dateTo);
+  const rows = await db.select({
+    invoiceNumber: salesInvoices.number,
+    date: salesInvoices.date,
+    customerName: customers.name,
+    itemTotal: salesInvoiceItems.total,
+    purchasePrice: items.purchasePrice,
+    quantity: salesInvoiceItems.quantity,
+    invoiceTotal: salesInvoices.total,
+  }).from(salesInvoiceItems)
+    .innerJoin(salesInvoices, eq(salesInvoiceItems.invoiceId, salesInvoices.id))
+    .leftJoin(items, eq(salesInvoiceItems.itemId, items.id))
+    .leftJoin(customers, eq(salesInvoices.customerId, customers.id))
+    .where(tenantWhere(salesInvoiceItems, filters.tenantId,
+      and(salesPostedFilter(), ...(dateParts.length ? [and(...dateParts)] : []),
+        ...salesInvoiceExtraFilters(filters),
+        filters.search
+          ? sql`(${salesInvoices.number} LIKE ${`%${filters.search}%`} OR ${customers.name} LIKE ${`%${filters.search}%`})`
+          : undefined)));
+
+  const map = new Map<string, { invoiceNumber: string; date: string; customerName: string; salesTotal: number; costTotal: number }>();
+  for (const r of rows) {
+    const key = String(r.invoiceNumber);
+    const cur = map.get(key) || {
+      invoiceNumber: r.invoiceNumber,
+      date: dateOnly(r.date),
+      customerName: r.customerName || "",
+      salesTotal: num(r.invoiceTotal),
+      costTotal: 0,
+    };
+    cur.costTotal += num(r.purchasePrice) * num(r.quantity);
+    map.set(key, cur);
+  }
+  return Array.from(map.values()).map((v) => ({
+    ...v,
+    profit: v.salesTotal - v.costTotal,
+    profitPercent: v.salesTotal ? ((v.salesTotal - v.costTotal) / v.salesTotal * 100).toFixed(2) : "0",
+  }));
+}
+
+export async function lastPricesReport(db: MySql2Database<Record<string, never>>, filters: ReportFilters) {
+  const dateParts = dateConds(salesInvoices, filters.dateFrom, filters.dateTo);
+  const rows = await db.select({
+    itemCode: items.code,
+    itemName: items.name,
+    price: salesInvoiceItems.price,
+    date: salesInvoices.date,
+    invoiceNumber: salesInvoices.number,
+  }).from(salesInvoiceItems)
+    .innerJoin(salesInvoices, eq(salesInvoiceItems.invoiceId, salesInvoices.id))
+    .leftJoin(items, eq(salesInvoiceItems.itemId, items.id))
+    .leftJoin(customers, eq(salesInvoices.customerId, customers.id))
+    .where(tenantWhere(salesInvoiceItems, filters.tenantId,
+      and(salesPostedFilter(), ...(dateParts.length ? [and(...dateParts)] : []),
+        ...salesInvoiceExtraFilters(filters))))
+    .orderBy(desc(salesInvoices.date));
+
+  const pmap = dateConds(purchaseInvoices, filters.dateFrom, filters.dateTo);
+  const purchases = await db.select({
+    itemCode: items.code,
+    itemName: items.name,
+    price: purchaseInvoiceItems.price,
+    date: purchaseInvoices.date,
+    invoiceNumber: purchaseInvoices.number,
+  }).from(purchaseInvoiceItems)
+    .innerJoin(purchaseInvoices, eq(purchaseInvoiceItems.invoiceId, purchaseInvoices.id))
+    .leftJoin(items, eq(purchaseInvoiceItems.itemId, items.id))
+    .where(tenantWhere(purchaseInvoiceItems, filters.tenantId,
+      and(purchasePostedFilter(), ...(pmap.length ? [and(...pmap)] : []),
+        ...purchaseInvoiceExtraFilters(filters))))
+    .orderBy(desc(purchaseInvoices.date));
+
+  const map = new Map<string, Record<string, unknown>>();
+  for (const r of rows) {
+    const key = String(r.itemCode || r.itemName);
+    if (!map.has(key)) {
+      map.set(key, {
+        itemCode: r.itemCode || "",
+        itemName: r.itemName || "",
+        lastSalePrice: num(r.price),
+        lastSaleDate: dateOnly(r.date),
+        lastSaleInvoice: r.invoiceNumber,
+        lastPurchasePrice: 0,
+        lastPurchaseDate: "",
+        lastPurchaseInvoice: "",
+      });
+    }
+  }
+  for (const r of purchases) {
+    const key = String(r.itemCode || r.itemName);
+    const cur = map.get(key) || {
+      itemCode: r.itemCode || "",
+      itemName: r.itemName || "",
+      lastSalePrice: 0,
+      lastSaleDate: "",
+      lastSaleInvoice: "",
+      lastPurchasePrice: 0,
+      lastPurchaseDate: "",
+      lastPurchaseInvoice: "",
+    };
+    if (!cur.lastPurchasePrice) {
+      cur.lastPurchasePrice = num(r.price);
+      cur.lastPurchaseDate = dateOnly(r.date);
+      cur.lastPurchaseInvoice = r.invoiceNumber;
+      map.set(key, cur);
+    }
+  }
+  return Array.from(map.values());
+}
+
+export async function customersProfitsReport(db: MySql2Database<Record<string, never>>, filters: ReportFilters) {
+  const dateParts = dateConds(salesInvoices, filters.dateFrom, filters.dateTo);
+  const rows = await db.select({
+    customerName: customers.name,
+    itemTotal: salesInvoiceItems.total,
+    purchasePrice: items.purchasePrice,
+    quantity: salesInvoiceItems.quantity,
+  }).from(salesInvoiceItems)
+    .innerJoin(salesInvoices, eq(salesInvoiceItems.invoiceId, salesInvoices.id))
+    .leftJoin(items, eq(salesInvoiceItems.itemId, items.id))
+    .leftJoin(customers, eq(salesInvoices.customerId, customers.id))
+    .where(tenantWhere(salesInvoiceItems, filters.tenantId,
+      and(salesPostedFilter(), ...(dateParts.length ? [and(...dateParts)] : []),
+        ...salesInvoiceExtraFilters(filters))));
+
+  const map = new Map<string, { customerName: string; salesTotal: number; costTotal: number; profit: number }>();
+  for (const r of rows) {
+    const name = r.customerName || "غير محدد";
+    const cur = map.get(name) || { customerName: name, salesTotal: 0, costTotal: 0, profit: 0 };
+    const sales = num(r.itemTotal);
+    const cost = num(r.purchasePrice) * num(r.quantity);
+    cur.salesTotal += sales;
+    cur.costTotal += cost;
+    cur.profit += sales - cost;
+    map.set(name, cur);
+  }
+  return Array.from(map.values());
+}
+
+export async function matureInvoicesReport(db: MySql2Database<Record<string, never>>, filters: ReportFilters) {
+  const today = new Date().toISOString().split("T")[0];
+  const dateParts = dateConds(salesInvoices, filters.dateFrom, filters.dateTo);
+  const rows = await db.select({
+    number: salesInvoices.number,
+    date: salesInvoices.date,
+    dueDate: salesInvoices.dueDate,
+    customerName: customers.name,
+    total: salesInvoices.total,
+    remaining: salesInvoices.remaining,
+  }).from(salesInvoices)
+    .leftJoin(customers, eq(salesInvoices.customerId, customers.id))
+    .where(tenantWhere(salesInvoices, filters.tenantId,
+      and(salesOpenFilter(), sql`${salesInvoices.remaining} > 0`,
+        ...(dateParts.length ? [and(...dateParts)] : []),
+        filters.customerId ? eq(salesInvoices.customerId, filters.customerId) : undefined,
+        reportBranchCond(salesInvoices.branchId, filters),
+        filters.search
+          ? sql`(${salesInvoices.number} LIKE ${`%${filters.search}%`} OR ${customers.name} LIKE ${`%${filters.search}%`})`
+          : undefined)))
+    .orderBy(salesInvoices.dueDate);
+
+  return rows
+    .filter((r) => {
+      const due = dateOnly(r.dueDate) || dateOnly(r.date);
+      return due <= today;
+    })
+    .map((r) => ({
+      documentNumber: r.number,
+      date: dateOnly(r.date),
+      dueDate: dateOnly(r.dueDate),
+      customerName: r.customerName || "",
+      total: num(r.total),
+      remaining: num(r.remaining),
+    }));
+}
+
+export async function matureReceiptsReport(db: MySql2Database<Record<string, never>>, filters: ReportFilters) {
+  const today = new Date().toISOString().split("T")[0];
+  const dateParts = dateConds(purchaseInvoices, filters.dateFrom, filters.dateTo);
+  const rows = await db.select({
+    number: purchaseInvoices.number,
+    date: purchaseInvoices.date,
+    dueDate: purchaseInvoices.dueDate,
+    supplierName: suppliers.name,
+    total: purchaseInvoices.total,
+    remaining: purchaseInvoices.remaining,
+  }).from(purchaseInvoices)
+    .leftJoin(suppliers, eq(purchaseInvoices.supplierId, suppliers.id))
+    .where(tenantWhere(purchaseInvoices, filters.tenantId,
+      and(purchaseOpenFilter(), sql`${purchaseInvoices.remaining} > 0`,
+        ...(dateParts.length ? [and(...dateParts)] : []),
+        filters.supplierId ? eq(purchaseInvoices.supplierId, filters.supplierId) : undefined,
+        reportBranchCond(purchaseInvoices.branchId, filters),
+        filters.search
+          ? sql`(${purchaseInvoices.number} LIKE ${`%${filters.search}%`} OR ${suppliers.name} LIKE ${`%${filters.search}%`})`
+          : undefined)))
+    .orderBy(purchaseInvoices.dueDate);
+
+  return rows
+    .filter((r) => {
+      const due = dateOnly(r.dueDate) || dateOnly(r.date);
+      return due <= today;
+    })
+    .map((r) => ({
+      documentNumber: r.number,
+      date: dateOnly(r.date),
+      dueDate: dateOnly(r.dueDate),
+      supplierName: r.supplierName || "",
+      total: num(r.total),
+      remaining: num(r.remaining),
+    }));
+}
+
+export async function branchesSummaryReport(db: MySql2Database<Record<string, never>>, filters: ReportFilters) {
+  const branchRows = await db.select().from(branches).where(tenantWhere(branches, filters.tenantId,
+    reportBranchCond(branches.id, filters))).orderBy(branches.name);
+  const salesDate = dateConds(salesInvoices, filters.dateFrom, filters.dateTo);
+  const purchaseDate = dateConds(purchaseInvoices, filters.dateFrom, filters.dateTo);
+  const cashDate = dateConds(cashTransactions, filters.dateFrom, filters.dateTo);
+
+  const sales = await db.select({
+    branchId: salesInvoices.branchId,
+    total: salesInvoices.total,
+    paid: salesInvoices.paid,
+    remaining: salesInvoices.remaining,
+  }).from(salesInvoices).where(tenantWhere(salesInvoices, filters.tenantId,
+    and(salesPostedFilter(), ...(salesDate.length ? [and(...salesDate)] : []),
+      reportBranchCond(salesInvoices.branchId, filters))));
+
+  const purchases = await db.select({
+    branchId: purchaseInvoices.branchId,
+    total: purchaseInvoices.total,
+  }).from(purchaseInvoices).where(tenantWhere(purchaseInvoices, filters.tenantId,
+    and(purchasePostedFilter(), ...(purchaseDate.length ? [and(...purchaseDate)] : []),
+      reportBranchCond(purchaseInvoices.branchId, filters))));
+
+  const collections = await db.select({
+    branchId: customers.branchId,
+    amount: cashTransactions.amount,
+    type: cashTransactions.type,
+  }).from(cashTransactions)
+    .leftJoin(customers, eq(cashTransactions.customerId, customers.id))
+    .where(tenantWhere(cashTransactions, filters.tenantId,
+      ...(cashDate.length ? [and(...cashDate)] : [])));
+
+  type BranchAgg = { sales: number; paid: number; remaining: number; salesCount: number; purchases: number; purchaseCount: number; collected: number };
+  const map = new Map<number, BranchAgg>();
+  const ensure = (id: number): BranchAgg => {
+    const cur = map.get(id) || { sales: 0, paid: 0, remaining: 0, salesCount: 0, purchases: 0, purchaseCount: 0, collected: 0 };
+    map.set(id, cur);
+    return cur;
+  };
+  for (const s of sales) {
+    if (!s.branchId) continue;
+    const cur = ensure(s.branchId);
+    cur.sales += num(s.total);
+    cur.paid += num(s.paid);
+    cur.remaining += num(s.remaining);
+    cur.salesCount += 1;
+  }
+  for (const p of purchases) {
+    if (!p.branchId) continue;
+    const cur = ensure(p.branchId);
+    cur.purchases += num(p.total);
+    cur.purchaseCount += 1;
+  }
+  for (const c of collections) {
+    if (!c.branchId || !String(c.type).includes("receive")) continue;
+    ensure(c.branchId).collected += num(c.amount);
+  }
+
+  const custCounts = await db.select({ branchId: customers.branchId, count: sql<number>`count(*)` })
+    .from(customers).where(tenantWhere(customers, filters.tenantId)).groupBy(customers.branchId);
+  const custMap = new Map(custCounts.map((c) => [c.branchId!, Number(c.count)]));
+
+  const supplierCounts = await db.select({ branchId: suppliers.branchId, count: sql<number>`count(*)` })
+    .from(suppliers).where(tenantWhere(suppliers, filters.tenantId)).groupBy(suppliers.branchId);
+  const supplierMap = new Map(supplierCounts.map((c) => [c.branchId!, Number(c.count)]));
+
+  const warehouseCounts = await db.select({ branchId: warehouses.branchId, count: sql<number>`count(*)` })
+    .from(warehouses).where(tenantWhere(warehouses, filters.tenantId)).groupBy(warehouses.branchId);
+  const warehouseMap = new Map(warehouseCounts.map((c) => [c.branchId!, Number(c.count)]));
+
+  return branchRows.map((b) => {
+    const a = map.get(b.id) || { sales: 0, paid: 0, remaining: 0, salesCount: 0, purchases: 0, purchaseCount: 0, collected: 0 };
+    return {
+      branchName: b.name,
+      address: b.address || "",
+      phone: b.phone || "",
+      customersCount: custMap.get(b.id) || 0,
+      suppliersCount: supplierMap.get(b.id) || 0,
+      warehousesCount: warehouseMap.get(b.id) || 0,
+      salesInvoicesCount: a.salesCount,
+      salesTotal: a.sales,
+      salesPaid: a.paid,
+      salesRemaining: a.remaining,
+      purchasesInvoicesCount: a.purchaseCount,
+      purchasesTotal: a.purchases,
+      collectionsTotal: a.collected,
+      netSalesPurchases: a.sales - a.purchases,
+      isActive: b.isActive ? "نعم" : "لا",
+    };
+  });
+}
+
+export async function areasSummaryReport(db: MySql2Database<Record<string, never>>, filters: ReportFilters) {
+  const areaRows = await db.select().from(salesAreas).where(tenantWhere(salesAreas, filters.tenantId,
+    filters.areaId ? eq(salesAreas.id, filters.areaId) : undefined)).orderBy(salesAreas.name);
+  const dateParts = dateConds(salesInvoices, filters.dateFrom, filters.dateTo);
+
+  const salesByCustomer = await db.select({
+    areaId: customers.areaId,
+    total: salesInvoices.total,
+    paid: salesInvoices.paid,
+    remaining: salesInvoices.remaining,
+  }).from(salesInvoices)
+    .innerJoin(customers, eq(salesInvoices.customerId, customers.id))
+    .where(tenantWhere(salesInvoices, filters.tenantId,
+      and(salesPostedFilter(), ...(dateParts.length ? [and(...dateParts)] : []),
+        reportBranchCond(customers.branchId, filters),
+        filters.areaId ? eq(customers.areaId, filters.areaId) : undefined)));
+
+  const totals = new Map<number, { sales: number; paid: number; remaining: number; invoices: number }>();
+  for (const s of salesByCustomer) {
+    if (!s.areaId) continue;
+    const cur = totals.get(s.areaId) || { sales: 0, paid: 0, remaining: 0, invoices: 0 };
+    cur.sales += num(s.total);
+    cur.paid += num(s.paid);
+    cur.remaining += num(s.remaining);
+    cur.invoices += 1;
+    totals.set(s.areaId, cur);
+  }
+
+  const custCounts = await db.select({ areaId: customers.areaId, count: sql<number>`count(*)` })
+    .from(customers).where(tenantWhere(customers, filters.tenantId, eq(customers.isActive, true)))
+    .groupBy(customers.areaId);
+  const custMap = new Map(custCounts.map((c) => [c.areaId!, Number(c.count)]));
+
+  return areaRows.map((a) => {
+    const t = totals.get(a.id) || { sales: 0, paid: 0, remaining: 0, invoices: 0 };
+    return {
+      areaName: a.name,
+      description: a.description || "",
+      customersCount: custMap.get(a.id) || 0,
+      invoicesCount: t.invoices,
+      salesTotal: t.sales,
+      salesPaid: t.paid,
+      salesRemaining: t.remaining,
+      isActive: a.isActive ? "نعم" : "لا",
+    };
+  });
+}
+
+function repCustomerFilter(filters: ReportFilters) {
+  if (!filters.repId) return undefined;
+  return sql`(
+    ${customers.salesRepId} = ${filters.repId}
+    OR EXISTS (
+      SELECT 1 FROM customer_sales_reps csr
+      WHERE csr.customerId = ${customers.id}
+        AND csr.tenantId = ${filters.tenantId}
+        AND csr.salesRepId = ${filters.repId}
+    )
+  )`;
+}
+
+function repInvoiceFilter(filters: ReportFilters) {
+  if (!filters.repId) return undefined;
+  return sql`(
+    ${salesInvoices.salesRepId} = ${filters.repId}
+    OR ${customers.salesRepId} = ${filters.repId}
+    OR EXISTS (
+      SELECT 1 FROM customer_sales_reps csr
+      WHERE csr.customerId = ${customers.id}
+        AND csr.tenantId = ${filters.tenantId}
+        AND csr.salesRepId = ${filters.repId}
+    )
+  )`;
+}
+
+export async function repSalesByItemsReport(db: MySql2Database<Record<string, never>>, filters: ReportFilters) {
+  const dateParts = dateConds(salesInvoices, filters.dateFrom, filters.dateTo);
+  const rows = await db.select({
+    repName: salesReps.name,
+    itemCode: items.code,
+    itemName: items.name,
+    quantity: salesInvoiceItems.quantity,
+    total: salesInvoiceItems.total,
+    purchasePrice: items.purchasePrice,
+    commissionRate: sql<string>`COALESCE(${customerSalesReps.commissionRate}, ${salesReps.commissionRate})`,
+  }).from(salesInvoiceItems)
+    .innerJoin(salesInvoices, eq(salesInvoiceItems.invoiceId, salesInvoices.id))
+    .innerJoin(customers, eq(salesInvoices.customerId, customers.id))
+    .innerJoin(customerSalesReps, and(
+      eq(customerSalesReps.customerId, customers.id),
+      eq(customerSalesReps.tenantId, filters.tenantId),
+    ))
+    .leftJoin(salesReps, eq(customerSalesReps.salesRepId, salesReps.id))
+    .leftJoin(items, eq(salesInvoiceItems.itemId, items.id))
+    .where(tenantWhere(salesInvoiceItems, filters.tenantId,
+      and(salesPostedFilter(), ...(dateParts.length ? [and(...dateParts)] : []),
+        filters.repId ? eq(customerSalesReps.salesRepId, filters.repId) : undefined,
+        reportBranchCond(salesInvoices.branchId, filters),
+        reportWarehouseCond(salesInvoices.warehouseId, filters),
+        filters.itemId ? eq(salesInvoiceItems.itemId, filters.itemId) : undefined,
+        filters.categoryId ? eq(items.categoryId, filters.categoryId) : undefined)));
+
+  const map = new Map<string, { repName: string; itemCode: string; itemName: string; quantity: number; total: number; profit: number; commissionRate: number }>();
+  for (const r of rows) {
+    if (!r.repName) continue;
+    const key = `${r.repName}-${r.itemCode || r.itemName}`;
+    const cur = map.get(key) || {
+      repName: r.repName,
+      itemCode: r.itemCode || "",
+      itemName: r.itemName || "",
+      quantity: 0,
+      total: 0,
+      profit: 0,
+      commissionRate: num(r.commissionRate),
+    };
+    cur.quantity += num(r.quantity);
+    cur.total += num(r.total);
+    cur.profit += num(r.total) - num(r.purchasePrice) * num(r.quantity);
+    map.set(key, cur);
+  }
+  return Array.from(map.values()).map((v) => ({
+    ...v,
+    commission: v.total * v.commissionRate / 100,
+  }));
+}
+
+export async function repCollectingsReport(db: MySql2Database<Record<string, never>>, filters: ReportFilters) {
+  type Raw = {
+    date: string | Date | null;
+    number: string | null;
+    amount: string | null;
+    customerName: string | null;
+    repName: string | null;
+    commissionRate: string | null;
+    description: string | null;
+    channel: string | null;
+    sign: number;
+  };
+
+  const mapRow = (r: Raw) => {
+    const amount = num(r.amount) * r.sign;
+    const commissionRate = num(r.commissionRate);
+    return {
+      date: dateOnly(r.date),
+      documentNumber: r.number || "—",
+      repName: r.repName || "",
+      customerName: r.customerName || "",
+      amount,
+      commissionRate,
+      commission: amount * commissionRate / 100,
+      channel: r.channel || "",
+      description: r.description || "",
+    };
+  };
+
+  const cashDate = dateConds(cashTransactions, filters.dateFrom, filters.dateTo);
+  const cashRows = await db.select({
+    date: cashTransactions.date,
+    number: cashTransactions.number,
+    amount: cashTransactions.amount,
+    customerName: customers.name,
+    repName: salesReps.name,
+    commissionRate: sql<string>`COALESCE(${customerSalesReps.commissionRate}, ${salesReps.commissionRate})`,
+    description: cashTransactions.description,
+    type: cashTransactions.type,
+  }).from(cashTransactions)
+    .innerJoin(customers, eq(cashTransactions.customerId, customers.id))
+    .innerJoin(customerSalesReps, and(
+      eq(customerSalesReps.customerId, customers.id),
+      eq(customerSalesReps.tenantId, filters.tenantId),
+    ))
+    .leftJoin(salesReps, eq(customerSalesReps.salesRepId, salesReps.id))
+    .where(tenantWhere(cashTransactions, filters.tenantId,
+      and(
+        inArray(cashTransactions.type, ["receive_customer", "pay_customer"]),
+        ...(cashDate.length ? [and(...cashDate)] : []),
+        filters.repId ? eq(customerSalesReps.salesRepId, filters.repId) : undefined,
+      )));
+
+  const bankDate = dateConds(bankTransactions, filters.dateFrom, filters.dateTo);
+  const bankRows = await db.select({
+    date: bankTransactions.date,
+    number: bankTransactions.number,
+    amount: bankTransactions.amount,
+    customerName: customers.name,
+    repName: salesReps.name,
+    commissionRate: sql<string>`COALESCE(${customerSalesReps.commissionRate}, ${salesReps.commissionRate})`,
+    description: bankTransactions.description,
+    type: bankTransactions.type,
+  }).from(bankTransactions)
+    .innerJoin(customers, eq(bankTransactions.customerId, customers.id))
+    .innerJoin(customerSalesReps, and(
+      eq(customerSalesReps.customerId, customers.id),
+      eq(customerSalesReps.tenantId, filters.tenantId),
+    ))
+    .leftJoin(salesReps, eq(customerSalesReps.salesRepId, salesReps.id))
+    .where(tenantWhere(bankTransactions, filters.tenantId,
+      and(
+        inArray(bankTransactions.type, ["deposit_customer", "withdraw_customer"]),
+        ...(bankDate.length ? [and(...bankDate)] : []),
+        filters.repId ? eq(customerSalesReps.salesRepId, filters.repId) : undefined,
+      )));
+
+  /** شيك وارد محصّل (cleared) فقط — المرتد قبل التحصيل لا يُحتسب أصلاً */
+  const checkDate = dateConds(checks, filters.dateFrom, filters.dateTo);
+  const checkRows = await db.select({
+    date: checks.date,
+    number: checks.checkNumber,
+    amount: checks.amount,
+    customerName: customers.name,
+    repName: salesReps.name,
+    commissionRate: sql<string>`COALESCE(${customerSalesReps.commissionRate}, ${salesReps.commissionRate})`,
+    description: checks.description,
+  }).from(checks)
+    .innerJoin(customers, eq(checks.customerId, customers.id))
+    .innerJoin(customerSalesReps, and(
+      eq(customerSalesReps.customerId, customers.id),
+      eq(customerSalesReps.tenantId, filters.tenantId),
+    ))
+    .leftJoin(salesReps, eq(customerSalesReps.salesRepId, salesReps.id))
+    .where(tenantWhere(checks, filters.tenantId,
+      and(
+        eq(checks.type, "incoming"),
+        eq(checks.status, "cleared"),
+        ...(checkDate.length ? [and(...checkDate)] : []),
+        filters.repId ? eq(customerSalesReps.salesRepId, filters.repId) : undefined,
+      )));
+
+  const mapped = [
+    ...cashRows.map((r) => mapRow({
+      ...r,
+      channel: r.type === "pay_customer" ? "رد نقدي للعميل" : "نقدية",
+      sign: r.type === "pay_customer" ? -1 : 1,
+    })),
+    ...bankRows.map((r) => mapRow({
+      ...r,
+      channel: r.type === "withdraw_customer" ? "رد بنكي للعميل" : "بنك",
+      sign: r.type === "withdraw_customer" ? -1 : 1,
+    })),
+    ...checkRows.map((r) => mapRow({
+      ...r,
+      number: r.number,
+      channel: "شيك محصّل",
+      sign: 1,
+      description: r.description || "تحصيل بشيك",
+    })),
+  ];
+
+  return mapped.sort((a, b) => String(b.date).localeCompare(String(a.date)));
+}
+
+export async function repDailyReport(db: MySql2Database<Record<string, never>>, filters: ReportFilters) {
+  const collections = await repCollectingsReport(db, filters);
+  const dateParts = dateConds(salesInvoices, filters.dateFrom, filters.dateTo);
+  const salesRows = await db.select({
+    date: salesInvoices.date,
+    repName: salesReps.name,
+    total: salesInvoices.total,
+    paid: salesInvoices.paid,
+  }).from(salesInvoices)
+    .innerJoin(customers, eq(salesInvoices.customerId, customers.id))
+    .leftJoin(salesReps, sql`COALESCE(${salesInvoices.salesRepId}, ${customers.salesRepId}) = ${salesReps.id}`)
+    .where(tenantWhere(salesInvoices, filters.tenantId,
+      and(salesPostedFilter(), ...(dateParts.length ? [and(...dateParts)] : []),
+        repInvoiceFilter(filters),
+        reportBranchCond(salesInvoices.branchId, filters))));
+
+  type DayAgg = {
+    date: string;
+    repName: string;
+    salesTotal: number;
+    salesPaid: number;
+    invoicesCount: number;
+    totalCollected: number;
+    collectionsCount: number;
+  };
+  const map = new Map<string, DayAgg>();
+  for (const r of salesRows) {
+    const repName = r.repName || "بدون مندوب";
+    const date = dateOnly(r.date);
+    const key = `${date}-${repName}`;
+    const cur = map.get(key) || {
+      date, repName, salesTotal: 0, salesPaid: 0, invoicesCount: 0, totalCollected: 0, collectionsCount: 0,
+    };
+    cur.salesTotal += num(r.total);
+    cur.salesPaid += num(r.paid);
+    cur.invoicesCount += 1;
+    map.set(key, cur);
+  }
+  for (const r of collections) {
+    const key = `${r.date}-${r.repName || "بدون مندوب"}`;
+    const cur = map.get(key) || {
+      date: String(r.date),
+      repName: String(r.repName || "بدون مندوب"),
+      salesTotal: 0,
+      salesPaid: 0,
+      invoicesCount: 0,
+      totalCollected: 0,
+      collectionsCount: 0,
+    };
+    cur.totalCollected += num(r.amount);
+    cur.collectionsCount += 1;
+    map.set(key, cur);
+  }
+  return Array.from(map.values()).sort((a, b) => a.date.localeCompare(b.date) || a.repName.localeCompare(b.repName));
+}
+
+export async function repDebitReport(db: MySql2Database<Record<string, never>>, filters: ReportFilters) {
+  const rows = await db.select({
+    customerName: customers.name,
+    phone: customers.phone,
+    balance: customers.balance,
+    creditLimit: customers.creditLimit,
+    repName: salesReps.name,
+  }).from(customers)
+    .leftJoin(salesReps, eq(customers.salesRepId, salesReps.id))
+    .where(tenantWhere(customers, filters.tenantId,
+      and(sql`${customers.balance} > 0`, repCustomerFilter(filters))))
+    .orderBy(customers.name);
+
+  return rows.map((r) => ({
+    repName: r.repName || "",
+    customerName: r.customerName,
+    phone: r.phone || "",
+    balance: num(r.balance),
+    creditLimit: num(r.creditLimit),
+  }));
+}
+
+export async function subLedgerReport(db: MySql2Database<Record<string, never>>, filters: ReportFilters) {
+  const parentAccounts = await db.select({ id: accounts.id }).from(accounts)
+    .where(tenantWhere(accounts, filters.tenantId, eq(accounts.isParent, true)));
+  const parentIds = new Set(parentAccounts.map((a) => a.id));
+  const lines = await loadPostedJournalLines(db, filters);
+  if (!parentIds.size) return lines;
+  const raw = await db.select({ accountId: journalEntryLines.accountId, accountCode: accounts.code })
+    .from(journalEntryLines)
+    .innerJoin(accounts, eq(journalEntryLines.accountId, accounts.id))
+    .where(tenantWhere(journalEntryLines, filters.tenantId));
+  const leafCodes = new Set(raw.filter((r) => !parentIds.has(r.accountId)).map((r) => r.accountCode));
+  return lines.filter((l) => leafCodes.has(String(l.accountCode)));
+}
+
+function isCashLikeAccount(code: string, name: string) {
+  const n = name.toLowerCase();
+  return n.includes("نقد") || n.includes("خزينة") || n.includes("cash") || n.includes("بنك") || n.includes("bank") || /^11/.test(code) || /^12/.test(code);
+}
+
+export async function cashAccountStatementReport(db: MySql2Database<Record<string, never>>, filters: ReportFilters) {
+  if (filters.accountId) {
+    return loadPostedJournalLines(db, filters);
+  }
+  const accountRows = await db.select({ id: accounts.id, code: accounts.code, name: accounts.name }).from(accounts)
+    .where(tenantWhere(accounts, filters.tenantId, eq(accounts.isActive, true), eq(accounts.isParent, false)));
+  const cashIds = accountRows.filter((a) => isCashLikeAccount(a.code, a.name)).map((a) => a.id);
+  if (!cashIds.length) return paymentsReport(db, filters);
+
+  const lines: Awaited<ReturnType<typeof loadPostedJournalLines>> = [];
+  for (const id of cashIds) {
+    const part = await loadPostedJournalLines(db, { ...filters, accountId: id });
+    lines.push(...part);
+  }
+  return lines.sort((a, b) => String(a.date).localeCompare(String(b.date)) || String(a.documentNumber).localeCompare(String(b.documentNumber)));
+}
+
+export async function paymentsReport(db: MySql2Database<Record<string, never>>, filters: ReportFilters) {
+  const cashDate = dateConds(cashTransactions, filters.dateFrom, filters.dateTo);
+  const bankDate = dateConds(bankTransactions, filters.dateFrom, filters.dateTo);
+  const cashRows = await db.select({
+    date: cashTransactions.date,
+    type: cashTransactions.type,
+    amount: cashTransactions.amount,
+    description: cashTransactions.description,
+    number: cashTransactions.number,
+    customerName: customers.name,
+    supplierName: suppliers.name,
+  }).from(cashTransactions)
+    .leftJoin(customers, eq(cashTransactions.customerId, customers.id))
+    .leftJoin(suppliers, eq(cashTransactions.supplierId, suppliers.id))
+    .where(tenantWhere(cashTransactions, filters.tenantId,
+      ...(cashDate.length ? [and(...cashDate)] : []),
+      filters.customerId ? eq(cashTransactions.customerId, filters.customerId) : undefined,
+      filters.supplierId ? eq(cashTransactions.supplierId, filters.supplierId) : undefined,
+      paymentCustomerBranchCond(filters),
+      filters.search
+        ? sql`(${cashTransactions.number} LIKE ${`%${filters.search}%`} OR ${customers.name} LIKE ${`%${filters.search}%`} OR ${suppliers.name} LIKE ${`%${filters.search}%`} OR ${cashTransactions.description} LIKE ${`%${filters.search}%`})`
+        : undefined))
+    .orderBy(desc(cashTransactions.date));
+  const bankRows = await db.select({
+    date: bankTransactions.date,
+    type: bankTransactions.type,
+    amount: bankTransactions.amount,
+    description: bankTransactions.description,
+    number: bankTransactions.number,
+    reference: bankTransactions.reference,
+    customerName: customers.name,
+    supplierName: suppliers.name,
+  }).from(bankTransactions)
+    .leftJoin(customers, eq(bankTransactions.customerId, customers.id))
+    .leftJoin(suppliers, eq(bankTransactions.supplierId, suppliers.id))
+    .where(tenantWhere(bankTransactions, filters.tenantId,
+      ...(bankDate.length ? [and(...bankDate)] : []),
+      filters.customerId ? eq(bankTransactions.customerId, filters.customerId) : undefined,
+      filters.supplierId ? eq(bankTransactions.supplierId, filters.supplierId) : undefined,
+      paymentCustomerBranchCond(filters),
+      filters.search
+        ? sql`(${bankTransactions.number} LIKE ${`%${filters.search}%`} OR ${customers.name} LIKE ${`%${filters.search}%`} OR ${suppliers.name} LIKE ${`%${filters.search}%`} OR ${bankTransactions.description} LIKE ${`%${filters.search}%`})`
+        : undefined))
+    .orderBy(desc(bankTransactions.date));
+
+  const directionLabel = (t: string) => {
+    const map: Record<string, string> = {
+      receive: "قبض",
+      pay: "صرف",
+      receive_customer: "تحصيل عميل",
+      pay_customer: "رد للعميل",
+      pay_supplier: "دفع مورد",
+      deposit: "إيداع",
+      withdraw: "سحب",
+      deposit_customer: "إيداع عميل",
+      withdraw_customer: "رد بنكي للعميل",
+      withdraw_supplier: "سحب لمورد",
+    };
+    return map[t] || t;
+  };
+
+  const result: Record<string, unknown>[] = [];
+  for (const c of cashRows) {
+    result.push({
+      date: dateOnly(c.date),
+      type: "نقدية",
+      direction: directionLabel(String(c.type)),
+      partyName: c.customerName || c.supplierName || "",
+      amount: num(c.amount),
+      description: c.description || "",
+      reference: c.number || "",
+    });
+  }
+  for (const b of bankRows) {
+    result.push({
+      date: dateOnly(b.date),
+      type: "بنكية",
+      direction: directionLabel(String(b.type)),
+      partyName: b.customerName || b.supplierName || "",
+      amount: num(b.amount),
+      description: b.description || "",
+      reference: b.reference || b.number || "",
+    });
+  }
+  return result.sort((a, b) => String(a.date).localeCompare(String(b.date)));
+}
+
+export async function balanceSheetFromAccounts(db: MySql2Database<Record<string, never>>, tenantId: number, asOf?: string) {
+  const balanced = await getAccountBalancesAsOf(db, tenantId, asOf);
+  return {
+    assets: balanced.filter((a) => a.type === "asset" && !a.isParent).map((a) => ({ code: a.code, name: a.name, balance: num(a.balance) })),
+    liabilities: balanced.filter((a) => a.type === "liability" && !a.isParent).map((a) => ({ code: a.code, name: a.name, balance: Math.abs(num(a.balance)) })),
+    equity: balanced.filter((a) => a.type === "equity" && !a.isParent).map((a) => ({ code: a.code, name: a.name, balance: num(a.balance) })),
+  };
+}
+
+export async function incomeStatementFromData(db: MySql2Database<Record<string, never>>, filters: ReportFilters) {
+  const periodMovement = await getPostedMovementByAccount(db, filters.tenantId, {
+    from: filters.dateFrom,
+    to: filters.dateTo,
+  });
+  const accountsRows = await db.select().from(accounts).where(tenantWhere(accounts, filters.tenantId, eq(accounts.isActive, true)));
+  let revenue = 0;
+  let operatingExpenses = 0;
+  let cost = 0;
+
+  const isCogsAccount = (a: { code: string; name: string }) => {
+    const n = String(a.name).toLowerCase();
+    return a.code.startsWith("510") || n.includes("تكلفة المبيعات") || n.includes("cogs");
+  };
+
+  for (const a of accountsRows) {
+    if (a.isParent) continue;
+    const m = periodMovement.get(a.id) || { debit: 0, credit: 0 };
+    if (a.type === "revenue") revenue += m.credit - m.debit;
+    else if (a.type === "expense" && isCogsAccount(a)) cost += m.debit - m.credit;
+    else if (a.type === "expense") operatingExpenses += m.debit - m.credit;
+  }
+
+  if (!revenue && !cost && !operatingExpenses) {
+    const sales = await salesInvoicesReport(db, filters);
+    const purchases = await purchasesInvoicesReport(db, filters);
+    revenue = sales.reduce((s, r) => s + num(r.total), 0);
+    cost = purchases.reduce((s, r) => s + num(r.total), 0);
+    operatingExpenses = accountsRows
+      .filter((a) => a.type === "expense" && !isCogsAccount(a))
+      .reduce((s, a) => s + num(a.balance), 0);
+  }
+
+  const grossProfit = revenue - cost;
+  const netProfit = grossProfit - operatingExpenses;
+  return { revenue, cost, grossProfit, expenses: operatingExpenses, netProfit };
+}

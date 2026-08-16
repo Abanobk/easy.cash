@@ -8,6 +8,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { DollarSign, Users, Calculator, CheckCircle } from "lucide-react";
+import { statusBadge } from "@/components/DataTable";
+import PermissionGate from "@/components/PermissionGate";
 
 const months = [
   { value: "1", label: "يناير" }, { value: "2", label: "فبراير" },
@@ -23,17 +25,51 @@ export default function Payroll() {
   const [month, setMonth] = useState(String(currentDate.getMonth() + 1));
   const [year, setYear] = useState(String(currentDate.getFullYear()));
 
-  const { data: employees, isLoading } = trpc.hr.employees.list.useQuery({ page: 1, limit: 100 });
+  const monthNum = Number(month);
+  const yearNum = Number(year);
 
-  const totalBasic = employees?.rows?.reduce((s: number, e: any) => s + Number(e.basicSalary || 0), 0) || 0;
-  const totalAllowances = employees?.rows?.reduce((s: number, e: any) => s + Number(e.allowances || 0), 0) || 0;
-  const totalNet = totalBasic + totalAllowances;
+  const { data: payrollRows, isLoading, refetch } = trpc.hr.payroll.list.useQuery(
+    { month: monthNum, year: yearNum },
+    { enabled: monthNum >= 1 && monthNum <= 12 && yearNum > 2000 },
+  );
+
+  const calculateMut = trpc.hr.payroll.calculate.useMutation({
+    onSuccess: (res) => {
+      toast.success(`تم احتساب الرواتب — ${res.created} جديد، ${res.updated} محدّث`);
+      refetch();
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const payMut = trpc.hr.payroll.payMonth.useMutation({
+    onSuccess: (res) => {
+      toast.success(`تم صرف ${res.paidCount} راتب`);
+      refetch();
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const totalBasic = payrollRows?.reduce((s, r) => s + Number(r.basicSalary || 0), 0) || 0;
+  const totalAllowances = payrollRows?.reduce((s, r) => s + Number(r.allowances || 0), 0) || 0;
+  const totalDeductions = payrollRows?.reduce((s, r) => s + Number(r.deductions || 0) + Number(r.advances || 0), 0) || 0;
+  const totalNet = payrollRows?.reduce((s, r) => s + Number(r.netSalary || 0), 0) || 0;
+  const employeeCount = payrollRows?.length || 0;
+
+  const handleCalculate = () => {
+    if (!monthNum || !yearNum) { toast.error("اختر الشهر والسنة"); return; }
+    calculateMut.mutate({ month: monthNum, year: yearNum });
+  };
+
+  const handlePay = () => {
+    if (!payrollRows?.length) { toast.error("احتساب الرواتب أولاً"); return; }
+    if (!confirm(`تأكيد صرف رواتب ${months.find(m => m.value === month)?.label} ${year}؟`)) return;
+    payMut.mutate({ month: monthNum, year: yearNum });
+  };
 
   return (
     <ERPLayout title="الرواتب">
       <div className="space-y-5">
-        {/* Controls */}
-        <div className="flex items-center gap-3 bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
+        <div className="flex items-center gap-3 bg-white border border-slate-200 rounded-xl p-4 shadow-sm flex-wrap">
           <div className="flex items-center gap-2">
             <Label className="text-xs font-medium text-slate-600 whitespace-nowrap">الشهر:</Label>
             <Select value={month} onValueChange={setMonth}>
@@ -45,16 +81,30 @@ export default function Payroll() {
             <Label className="text-xs font-medium text-slate-600 whitespace-nowrap">السنة:</Label>
             <Input value={year} onChange={e => setYear(e.target.value)} className="h-8 text-sm w-24" />
           </div>
-          <Button className="bg-blue-600 hover:bg-blue-700 text-white h-8 text-xs gap-1.5 mr-auto" onClick={() => toast.success("تم احتساب الرواتب بنجاح")}>
-            <Calculator size={13} /> احتساب الرواتب
-          </Button>
-          <Button variant="outline" className="h-8 text-xs gap-1.5 border-green-300 text-green-700 hover:bg-green-50" onClick={() => toast.success("تم صرف الرواتب بنجاح")}>
-            <CheckCircle size={13} /> صرف الرواتب
-          </Button>
+          <PermissionGate module="hr" action="edit">
+            <Button
+              className="bg-blue-600 hover:bg-blue-700 text-white h-8 text-xs gap-1.5 mr-auto"
+              onClick={handleCalculate}
+              disabled={calculateMut.isPending}
+            >
+              <Calculator size={13} />
+              {calculateMut.isPending ? "جاري الاحتساب..." : "احتساب الرواتب"}
+            </Button>
+          </PermissionGate>
+          <PermissionGate module="hr" action="edit">
+            <Button
+              variant="outline"
+              className="h-8 text-xs gap-1.5 border-green-300 text-green-700 hover:bg-green-50"
+              onClick={handlePay}
+              disabled={payMut.isPending || !payrollRows?.length}
+            >
+              <CheckCircle size={13} />
+              {payMut.isPending ? "جاري الصرف..." : "صرف الرواتب"}
+            </Button>
+          </PermissionGate>
         </div>
 
-        {/* Summary Cards */}
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <Card className="border-0 shadow-sm">
             <CardContent className="p-4">
               <div className="flex items-center gap-3">
@@ -63,7 +113,7 @@ export default function Payroll() {
                 </div>
                 <div>
                   <p className="text-xs text-slate-500">عدد الموظفين</p>
-                  <p className="text-xl font-bold text-slate-800">{employees?.total || 0}</p>
+                  <p className="text-xl font-bold text-slate-800">{employeeCount}</p>
                 </div>
               </div>
             </CardContent>
@@ -75,8 +125,21 @@ export default function Payroll() {
                   <DollarSign size={18} className="text-green-600" />
                 </div>
                 <div>
-                  <p className="text-xs text-slate-500">إجمالي الرواتب الأساسية</p>
-                  <p className="text-xl font-bold text-slate-800">{totalBasic.toLocaleString("ar-EG")} ج.م</p>
+                  <p className="text-xs text-slate-500">إجمالي الأساسي</p>
+                  <p className="text-xl font-bold text-slate-800">{totalBasic.toLocaleString("en-US")} ج.م</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          <Card className="border-0 shadow-sm">
+            <CardContent className="p-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-lg bg-red-100 flex items-center justify-center">
+                  <Calculator size={18} className="text-red-600" />
+                </div>
+                <div>
+                  <p className="text-xs text-slate-500">الخصومات والسلف</p>
+                  <p className="text-xl font-bold text-slate-800">{totalDeductions.toLocaleString("en-US")} ج.م</p>
                 </div>
               </div>
             </CardContent>
@@ -89,14 +152,13 @@ export default function Payroll() {
                 </div>
                 <div>
                   <p className="text-xs text-slate-500">صافي الرواتب</p>
-                  <p className="text-xl font-bold text-slate-800">{totalNet.toLocaleString("ar-EG")} ج.م</p>
+                  <p className="text-xl font-bold text-slate-800">{totalNet.toLocaleString("en-US")} ج.م</p>
                 </div>
               </div>
             </CardContent>
           </Card>
         </div>
 
-        {/* Payroll Table */}
         <Card className="border-0 shadow-sm">
           <CardHeader className="pb-3 border-b border-slate-100">
             <CardTitle className="text-sm font-semibold text-slate-800">
@@ -106,8 +168,10 @@ export default function Payroll() {
           <CardContent className="p-0">
             {isLoading ? (
               <div className="py-10 text-center text-slate-400 text-sm">جاري التحميل...</div>
-            ) : employees?.rows?.length === 0 ? (
-              <div className="py-10 text-center text-slate-400 text-sm">لا يوجد موظفون</div>
+            ) : !payrollRows?.length ? (
+              <div className="py-10 text-center text-slate-400 text-sm">
+                لا توجد سجلات رواتب لهذا الشهر — اضغط «احتساب الرواتب»
+              </div>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
@@ -119,39 +183,37 @@ export default function Payroll() {
                       <th className="px-4 py-2.5 text-right text-xs font-semibold text-slate-600">الراتب الأساسي</th>
                       <th className="px-4 py-2.5 text-right text-xs font-semibold text-slate-600">البدلات</th>
                       <th className="px-4 py-2.5 text-right text-xs font-semibold text-slate-600">الخصومات</th>
+                      <th className="px-4 py-2.5 text-right text-xs font-semibold text-slate-600">السلف</th>
                       <th className="px-4 py-2.5 text-right text-xs font-semibold text-slate-600">صافي الراتب</th>
                       <th className="px-4 py-2.5 text-right text-xs font-semibold text-slate-600">الحالة</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {employees?.rows?.map((emp: any, idx: number) => {
-                      const basic = Number(emp.basicSalary || 0);
-                      const allowances = Number(emp.allowances || 0);
-                      const deductions = 0;
-                      const net = basic + allowances - deductions;
-                      return (
-                        <tr key={emp.id} className="border-b border-slate-50 hover:bg-blue-50/30">
-                          <td className="px-4 py-2.5 text-slate-500 text-xs">{idx + 1}</td>
-                          <td className="px-4 py-2.5 font-medium text-slate-700">{emp.name}</td>
-                          <td className="px-4 py-2.5 text-slate-500">{emp.jobTitle || "-"}</td>
-                          <td className="px-4 py-2.5 text-slate-700">{basic.toLocaleString("ar-EG")} ج.م</td>
-                          <td className="px-4 py-2.5 text-green-600">{allowances.toLocaleString("ar-EG")} ج.م</td>
-                          <td className="px-4 py-2.5 text-red-500">{deductions.toLocaleString("ar-EG")} ج.م</td>
-                          <td className="px-4 py-2.5 font-semibold text-blue-700">{net.toLocaleString("ar-EG")} ج.م</td>
-                          <td className="px-4 py-2.5">
-                            <span className="text-xs font-medium px-2 py-0.5 rounded-full text-orange-600 bg-orange-100">معلق</span>
-                          </td>
-                        </tr>
-                      );
-                    })}
+                    {payrollRows.map((row, idx) => (
+                      <tr key={row.id} className="border-b border-slate-50 hover:bg-blue-50/30">
+                        <td className="px-4 py-2.5 text-slate-500 text-xs">{idx + 1}</td>
+                        <td className="px-4 py-2.5 font-medium text-slate-700">{row.employeeName || "—"}</td>
+                        <td className="px-4 py-2.5 text-slate-500">{row.jobTitle || "—"}</td>
+                        <td className="px-4 py-2.5 text-slate-700">{Number(row.basicSalary).toLocaleString("en-US")} ج.م</td>
+                        <td className="px-4 py-2.5 text-green-600">{Number(row.allowances).toLocaleString("en-US")} ج.م</td>
+                        <td className="px-4 py-2.5 text-red-500">{Number(row.deductions).toLocaleString("en-US")} ج.م</td>
+                        <td className="px-4 py-2.5 text-orange-600">{Number(row.advances).toLocaleString("en-US")} ج.م</td>
+                        <td className="px-4 py-2.5 font-semibold text-blue-700">{Number(row.netSalary).toLocaleString("en-US")} ج.م</td>
+                        <td className="px-4 py-2.5">
+                          {statusBadge(row.status || "draft")}
+                          {row.notes && <p className="text-[10px] text-slate-400 mt-0.5">{row.notes}</p>}
+                        </td>
+                      </tr>
+                    ))}
                   </tbody>
                   <tfoot>
                     <tr className="bg-blue-50 border-t-2 border-blue-200">
                       <td colSpan={3} className="px-4 py-2.5 font-bold text-slate-700 text-xs">الإجمالي</td>
-                      <td className="px-4 py-2.5 font-bold text-slate-700 text-xs">{totalBasic.toLocaleString("ar-EG")} ج.م</td>
-                      <td className="px-4 py-2.5 font-bold text-green-600 text-xs">{totalAllowances.toLocaleString("ar-EG")} ج.م</td>
-                      <td className="px-4 py-2.5 font-bold text-red-500 text-xs">0 ج.م</td>
-                      <td className="px-4 py-2.5 font-bold text-blue-700 text-xs">{totalNet.toLocaleString("ar-EG")} ج.م</td>
+                      <td className="px-4 py-2.5 font-bold text-slate-700 text-xs">{totalBasic.toLocaleString("en-US")} ج.م</td>
+                      <td className="px-4 py-2.5 font-bold text-green-600 text-xs">{totalAllowances.toLocaleString("en-US")} ج.م</td>
+                      <td className="px-4 py-2.5 font-bold text-red-500 text-xs">{payrollRows.reduce((s, r) => s + Number(r.deductions), 0).toLocaleString("en-US")} ج.م</td>
+                      <td className="px-4 py-2.5 font-bold text-orange-600 text-xs">{payrollRows.reduce((s, r) => s + Number(r.advances), 0).toLocaleString("en-US")} ج.م</td>
+                      <td className="px-4 py-2.5 font-bold text-blue-700 text-xs">{totalNet.toLocaleString("en-US")} ج.م</td>
                       <td></td>
                     </tr>
                   </tfoot>

@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { CheckCircle, XCircle, Clock, Calendar, Users, Save } from "lucide-react";
+import PermissionGate from "@/components/PermissionGate";
 
 type AttendanceStatus = "present" | "absent" | "late" | "half_day" | "holiday";
 
@@ -110,36 +111,42 @@ export default function Attendance() {
                   className="h-8 text-sm w-40"
                 />
               </div>
-              <Button
-                onClick={initRecords}
-                disabled={empLoading}
-                className="h-8 text-xs bg-blue-600 hover:bg-blue-700 text-white gap-1.5"
-              >
-                <Users size={13} />
-                {initialized ? "إعادة تحميل" : "تحميل الموظفين"}
-              </Button>
+              <PermissionGate module="hr" action="edit">
+                <Button
+                  onClick={initRecords}
+                  disabled={empLoading}
+                  className="h-8 text-xs bg-blue-600 hover:bg-blue-700 text-white gap-1.5"
+                >
+                  <Users size={13} />
+                  {initialized ? "إعادة تحميل" : "تحميل الموظفين"}
+                </Button>
+              </PermissionGate>
               {initialized && (
                 <>
-                  <div className="flex items-center gap-1 mr-auto">
-                    <span className="text-xs text-slate-500 ml-2">تحديد الكل:</span>
-                    {(Object.keys(statusConfig) as AttendanceStatus[]).map(s => (
-                      <button
-                        key={s}
-                        onClick={() => setAllStatus(s)}
-                        className={`text-xs px-2 py-1 rounded border font-medium transition-colors ${statusConfig[s].color}`}
-                      >
-                        {statusConfig[s].label}
-                      </button>
-                    ))}
-                  </div>
-                  <Button
-                    onClick={handleSave}
-                    disabled={saveMut.isPending}
-                    className="h-8 text-xs bg-green-600 hover:bg-green-700 text-white gap-1.5"
-                  >
-                    <Save size={13} />
-                    {saveMut.isPending ? "جاري الحفظ..." : "حفظ الحضور"}
-                  </Button>
+                  <PermissionGate module="hr" action="edit">
+                    <div className="flex items-center gap-1 mr-auto">
+                      <span className="text-xs text-slate-500 ml-2">تحديد الكل:</span>
+                      {(Object.keys(statusConfig) as AttendanceStatus[]).map(s => (
+                        <button
+                          key={s}
+                          onClick={() => setAllStatus(s)}
+                          className={`text-xs px-2 py-1 rounded border font-medium transition-colors ${statusConfig[s].color}`}
+                        >
+                          {statusConfig[s].label}
+                        </button>
+                      ))}
+                    </div>
+                  </PermissionGate>
+                  <PermissionGate module="hr" action="edit">
+                    <Button
+                      onClick={handleSave}
+                      disabled={saveMut.isPending}
+                      className="h-8 text-xs bg-green-600 hover:bg-green-700 text-white gap-1.5"
+                    >
+                      <Save size={13} />
+                      {saveMut.isPending ? "جاري الحفظ..." : "حفظ الحضور"}
+                    </Button>
+                  </PermissionGate>
                 </>
               )}
             </div>
@@ -169,7 +176,7 @@ export default function Attendance() {
             <CardHeader className="pb-3 border-b border-slate-100">
               <CardTitle className="text-sm font-semibold text-slate-800 flex items-center gap-2">
                 <Users size={15} className="text-blue-600" />
-                سجل حضور {new Date(selectedDate).toLocaleDateString("ar-EG", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}
+                سجل حضور {new Date(selectedDate).toLocaleDateString("en-GB", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}
                 <span className="text-xs font-normal text-slate-500 mr-1">({records.length} موظف)</span>
               </CardTitle>
             </CardHeader>

@@ -32,10 +32,30 @@ services:
     environment:
       NODE_ENV: production
       PORT: 3000
-      DATABASE_URL: mysql://${MYSQL_USER:-easy_cash}:${MYSQL_PASSWORD:-easy_cash_dev}@mysql:3306/${MYSQL_DATABASE:-easy_cash}
-      JWT_SECRET: ${JWT_SECRET:-dev-only-change-me}
+      MYSQL_HOST: mysql
+      MYSQL_PORT: "3306"
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-easy_cash}
+      MYSQL_USER: ${MYSQL_USER:-easy_cash}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-easy_cash_dev}
+      JWT_SECRET: ${JWT_SECRET}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY}
       APP_URL: ${APP_URL:-https://cash.easytecheg.net}
+      CORS_ORIGINS: ${CORS_ORIGINS:-}
+      ALLOW_WEAK_SECRETS: ${ALLOW_WEAK_SECRETS:-0}
       VITE_APP_TITLE: ${VITE_APP_TITLE:-Easy Cash - برنامج المحاسبة}
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://ix-ollama-ollama-1:11434}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen3:14b}
+      OLLAMA_MODEL_HEAVY: ${OLLAMA_MODEL_HEAVY:-qwen3:14b}
+      OLLAMA_VISION_MODEL: ${OLLAMA_VISION_MODEL:-}
+      OLLAMA_ENABLED: ${OLLAMA_ENABLED:-1}
+      SHOPE_INTEGRATION_SECRET: ${SHOPE_INTEGRATION_SECRET}
+      SHOPE_API_URL: ${SHOPE_API_URL:-http://host.docker.internal:8098}
+      PAYMOB_REQUIRE_HMAC: ${PAYMOB_REQUIRE_HMAC:-1}
+      TURNSTILE_SITE_KEY: ${TURNSTILE_SITE_KEY:-}
+      TURNSTILE_SECRET_KEY: ${TURNSTILE_SECRET_KEY:-}
+    networks:
+      - default
+      - ollama
     depends_on:
       mysql:
         condition: service_healthy
@@ -48,3 +68,8 @@ services:
 
 volumes:
   mysql-data:
+
+networks:
+  ollama:
+    external: true
+    name: ${OLLAMA_DOCKER_NETWORK:-ix-ollama_default}

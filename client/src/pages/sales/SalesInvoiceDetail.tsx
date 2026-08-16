@@ -1,10 +1,15 @@
-import { useParams, useLocation } from "wouter";
+import { useParams, useLocation, Link } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
-import { ArrowRight, Printer, FileText } from "lucide-react";
-import { useRef } from "react";
+import { ArrowRight, FileText, Banknote, BookOpen, Send, RefreshCw } from "lucide-react";
+import { useState } from "react";
+import ERPLayout from "@/components/ERPLayout";
+import PermissionGate from "@/components/PermissionGate";
+import { InvoicePaymentDialog } from "@/components/InvoicePaymentDialog";
+import { InvoicePrintButton } from "@/components/InvoicePrintButton";
+import { DocumentAttachmentsPanel } from "@/components/DocumentAttachmentsPanel";
+import { toast } from "sonner";
+import { currencyLabel, isForeignCurrency } from "@shared/currency";
 
 const statusMap: Record<string, { label: string; color: string }> = {
   draft: { label: "مسودة", color: "bg-gray-100 text-gray-700" },
@@ -19,62 +24,42 @@ const paymentTypeMap: Record<string, string> = {
   credit: "آجل",
 };
 
+const ETA_STATUS_LABEL: Record<string, string> = {
+  submitted: "مُرسلة",
+  accepted: "مقبولة",
+  rejected: "مرفوضة",
+  failed: "فشل الإرسال",
+  cancelled: "ملغاة",
+};
+
 export default function SalesInvoiceDetail() {
   const params = useParams<{ id: string }>();
   const [, navigate] = useLocation();
-  const printRef = useRef<HTMLDivElement>(null);
   const id = parseInt(params.id || "0");
+  const [showPayment, setShowPayment] = useState(false);
 
-  const { data: invoice, isLoading } = trpc.sales.invoices.byId.useQuery(id, { enabled: !!id });
+  const { data: invoice, isLoading, refetch } = trpc.sales.invoices.byId.useQuery(id, { enabled: !!id });
   const { data: company } = trpc.saas.getCompanyProfile.useQuery();
-
-  const handlePrint = () => {
-    const printContent = printRef.current;
-    if (!printContent) return;
-    const win = window.open("", "_blank");
-    if (!win) return;
-    win.document.write(`
-      <!DOCTYPE html>
-      <html dir="rtl" lang="ar">
-      <head>
-        <meta charset="UTF-8">
-        <title>فاتورة بيع - ${(invoice as any)?.number || ""}</title>
-        <style>
-          * { margin: 0; padding: 0; box-sizing: border-box; }
-          body { font-family: 'Segoe UI', Tahoma, Arial, sans-serif; font-size: 13px; color: #1a1a1a; direction: rtl; }
-          .invoice-wrapper { max-width: 800px; margin: 20px auto; padding: 30px; border: 1px solid #e0e0e0; }
-          .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 24px; padding-bottom: 16px; border-bottom: 2px solid #1d4ed8; }
-          .company-name { font-size: 22px; font-weight: bold; color: #1d4ed8; }
-          .invoice-title { font-size: 18px; font-weight: bold; color: #1d4ed8; text-align: left; }
-          .invoice-number { font-size: 14px; color: #555; margin-top: 4px; }
-          .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px; }
-          .info-box { background: #f8fafc; padding: 12px; border-radius: 6px; border: 1px solid #e2e8f0; }
-          .info-label { font-size: 11px; color: #64748b; margin-bottom: 4px; }
-          .info-value { font-size: 13px; font-weight: 600; }
-          table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
-          th { background: #1d4ed8; color: white; padding: 10px 8px; text-align: right; font-size: 12px; }
-          td { padding: 9px 8px; border-bottom: 1px solid #e2e8f0; font-size: 12px; }
-          tr:nth-child(even) td { background: #f8fafc; }
-          .totals { display: flex; justify-content: flex-start; }
-          .totals-box { width: 280px; }
-          .total-row { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid #f0f0f0; font-size: 13px; }
-          .total-row.grand { font-weight: bold; font-size: 15px; color: #1d4ed8; border-top: 2px solid #1d4ed8; padding-top: 8px; }
-          .notes { margin-top: 20px; padding: 12px; background: #fffbeb; border: 1px solid #fde68a; border-radius: 6px; font-size: 12px; }
-          .footer { margin-top: 30px; text-align: center; font-size: 11px; color: #94a3b8; border-top: 1px solid #e2e8f0; padding-top: 12px; }
-          @media print { body { print-color-adjust: exact; -webkit-print-color-adjust: exact; } }
-        </style>
-      </head>
-      <body>
-        <div class="invoice-wrapper">
-          ${printContent.innerHTML}
-        </div>
-      </body>
-      </html>
-    `);
-    win.document.close();
-    win.focus();
-    setTimeout(() => { win.print(); win.close(); }, 500);
-  };
+  const payMut = trpc.sales.invoices.recordPayment.useMutation({
+    onError: (e) => toast.error(e.message),
+  });
+  const attachMut = trpc.documentAttachments.upload.useMutation({
+    onError: (e) => toast.error(e.message),
+  });
+  const etaMut = trpc.sales.invoices.submitToEta.useMutation({
+    onSuccess: (res) => {
+      toast.success(`تم الإرسال لـ ETA — UUID: ${res.uuid}`);
+      refetch();
+    },
+    onError: (e) => toast.error(e.message),
+  });
+  const etaCheckMut = trpc.sales.invoices.checkEtaStatus.useMutation({
+    onSuccess: (res) => {
+      toast.success(`حالة ETA: ${ETA_STATUS_LABEL[res.status] || res.status}`);
+      refetch();
+    },
+    onError: (e) => toast.error(e.message),
+  });
 
   if (isLoading) {
     return (
@@ -98,11 +83,16 @@ export default function SalesInvoiceDetail() {
 
   const inv = invoice as any;
   const statusInfo = statusMap[inv.status] || { label: inv.status, color: "bg-gray-100 text-gray-700" };
+  const remaining = parseFloat(inv.remaining || "0");
+  const foreign = isForeignCurrency(inv.currencyCode);
+  const unitLabel = currencyLabel(inv.currencyCode);
+  const displayTotal = foreign && inv.foreignTotal != null ? Number(inv.foreignTotal) : Number(inv.total || 0);
 
   return (
-    <div className="p-6 max-w-4xl mx-auto">
+    <ERPLayout title={`فاتورة بيع - ${inv.number}`}>
+    <div className="max-w-4xl mx-auto">
       {/* Toolbar */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
         <div className="flex items-center gap-3">
           <Button variant="outline" size="sm" onClick={() => navigate("/sales/invoices")}>
             <ArrowRight className="h-4 w-4 ml-1" /> رجوع
@@ -112,13 +102,72 @@ export default function SalesInvoiceDetail() {
             {statusInfo.label}
           </span>
         </div>
-        <Button onClick={handlePrint} className="bg-blue-600 hover:bg-blue-700 text-white gap-2">
-          <Printer className="h-4 w-4" /> طباعة الفاتورة
-        </Button>
+        <div className="flex items-center gap-2">
+          {remaining > 0 && (
+            <PermissionGate module="cash" action="create">
+              <Button onClick={() => setShowPayment(true)} className="bg-green-600 hover:bg-green-700 text-white gap-2">
+                <Banknote className="h-4 w-4" /> تحصيل ({remaining.toLocaleString("en-US")} ج.م)
+              </Button>
+            </PermissionGate>
+          )}
+          {inv.journalEntry?.id && (
+            <Link href={`/accounts/journal/${inv.journalEntry.id}`}>
+              <Button variant="outline" className="gap-2">
+                <BookOpen className="h-4 w-4" /> قيد {inv.journalEntry.number}
+              </Button>
+            </Link>
+          )}
+          {["confirmed", "paid", "partial"].includes(inv.status) && !["submitted", "accepted"].includes(inv.etaStatus || "") && (
+            <PermissionGate module="sales" action="edit" featureKey="sales-invoiceslist-invoice">
+              <Button
+                variant="outline"
+                className="gap-2 border-emerald-300 text-emerald-700"
+                disabled={etaMut.isPending}
+                onClick={() => {
+                  if (company?.etaMode === "production" && !confirm("سيتم الإرسال لبيئة الإنتاج في مصلحة الضرائب. متابعة؟")) return;
+                  etaMut.mutate(id);
+                }}
+              >
+                <Send className="h-4 w-4" />
+                {etaMut.isPending
+                  ? "جاري الإرسال..."
+                  : inv.etaStatus === "failed" || inv.etaStatus === "rejected"
+                    ? "إعادة إرسال لـ ETA"
+                    : "إرسال لـ ETA"}
+              </Button>
+            </PermissionGate>
+          )}
+          {inv.etaUuid && (
+            <Button
+              variant="outline"
+              className="gap-2"
+              disabled={etaCheckMut.isPending}
+              onClick={() => etaCheckMut.mutate(id)}
+            >
+              <RefreshCw className={`h-4 w-4 ${etaCheckMut.isPending ? "animate-spin" : ""}`} />
+              تحديث حالة ETA
+            </Button>
+          )}
+          <InvoicePrintButton
+            invoiceId={id}
+            type="sale"
+            fallback={{
+              number: inv.number,
+              date: inv.date,
+              partyName: inv.customerName,
+              total: Number(inv.total || 0),
+              foreignTotal: inv.foreignTotal != null ? Number(inv.foreignTotal) : null,
+              currencyCode: inv.currencyCode,
+              exchangeRate: inv.exchangeRate,
+              status: inv.status,
+              paymentType: inv.paymentType,
+            }}
+          />
+        </div>
       </div>
 
-      {/* Printable Content */}
-      <div ref={printRef} className="bg-white rounded-xl border border-gray-200 shadow-sm p-8">
+      {/* Invoice Content */}
+      <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-8">
         {/* Invoice Header */}
         <div className="flex justify-between items-start mb-6 pb-4 border-b-2 border-blue-600">
           <div className="flex items-start gap-3">
@@ -136,9 +185,9 @@ export default function SalesInvoiceDetail() {
           <div className="text-left">
             <div className="text-xl font-bold text-blue-700">فاتورة مبيعات</div>
             <div className="text-sm text-gray-600 mt-1">رقم: {inv.number}</div>
-            <div className="text-sm text-gray-600">التاريخ: {inv.date ? new Date(inv.date).toLocaleDateString("ar-EG") : "-"}</div>
+            <div className="text-sm text-gray-600">التاريخ: {inv.date ? new Date(inv.date).toLocaleDateString("en-GB") : "-"}</div>
             {inv.dueDate && (
-              <div className="text-sm text-gray-600">تاريخ الاستحقاق: {new Date(inv.dueDate).toLocaleDateString("ar-EG")}</div>
+              <div className="text-sm text-gray-600">تاريخ الاستحقاق: {new Date(inv.dueDate).toLocaleDateString("en-GB")}</div>
             )}
           </div>
         </div>
@@ -153,14 +202,40 @@ export default function SalesInvoiceDetail() {
             <div className="text-xs text-gray-500 mb-1">طريقة الدفع</div>
             <div className="font-semibold text-gray-800">{paymentTypeMap[inv.paymentType] || inv.paymentType}</div>
           </div>
+          {foreign && (
+            <div className="bg-amber-50 p-4 rounded-lg border border-amber-100">
+              <div className="text-xs text-amber-600 mb-1">العملة وسعر الصرف</div>
+              <div className="font-semibold text-gray-800">
+                {(inv.currencyCode || "EGP").toUpperCase()} — {Number(inv.exchangeRate || 1).toLocaleString("en-US")}
+              </div>
+            </div>
+          )}
+          {inv.etaStatus && (
+            <div className={`p-4 rounded-lg border ${
+              inv.etaStatus === "failed" || inv.etaStatus === "rejected"
+                ? "bg-red-50 border-red-100"
+                : inv.etaStatus === "accepted"
+                  ? "bg-emerald-50 border-emerald-100"
+                  : "bg-blue-50 border-blue-100"
+            }`}>
+              <div className="text-xs text-slate-600 mb-1">حالة الفاتورة الإلكترونية (ETA)</div>
+              <div className="font-semibold text-gray-800 text-sm">
+                {ETA_STATUS_LABEL[inv.etaStatus] || inv.etaStatus}
+                {inv.etaUuid && <span className="block text-xs font-mono mt-1 text-slate-500">{inv.etaUuid}</span>}
+                {inv.etaLastError && (
+                  <span className="block text-xs text-red-600 mt-1 whitespace-pre-wrap">{inv.etaLastError}</span>
+                )}
+              </div>
+            </div>
+          )}
           <div className="bg-gray-50 p-4 rounded-lg border border-gray-100">
             <div className="text-xs text-gray-500 mb-1">المبلغ المدفوع</div>
-            <div className="font-semibold text-green-700">{parseFloat(inv.paid || "0").toLocaleString("ar-EG", { minimumFractionDigits: 2 })} ج.م</div>
+            <div className="font-semibold text-green-700">{parseFloat(inv.paid || "0").toLocaleString("en-US", { minimumFractionDigits: 2 })} ج.م</div>
           </div>
           <div className="bg-gray-50 p-4 rounded-lg border border-gray-100">
             <div className="text-xs text-gray-500 mb-1">المبلغ المتبقي</div>
             <div className={`font-semibold ${parseFloat(inv.remaining || "0") > 0 ? "text-red-600" : "text-green-600"}`}>
-              {parseFloat(inv.remaining || "0").toLocaleString("ar-EG", { minimumFractionDigits: 2 })} ج.م
+              {parseFloat(inv.remaining || "0").toLocaleString("en-US", { minimumFractionDigits: 2 })} ج.م
             </div>
           </div>
         </div>
@@ -187,12 +262,12 @@ export default function SalesInvoiceDetail() {
                   <td className="p-3 text-xs text-gray-500 border-b border-gray-100">{idx + 1}</td>
                   <td className="p-3 text-sm font-medium border-b border-gray-100">{item.itemName || `صنف #${item.itemId}`}</td>
                   <td className="p-3 text-xs text-gray-600 border-b border-gray-100">{item.itemUnit || "-"}</td>
-                  <td className="p-3 text-sm border-b border-gray-100">{parseFloat(item.quantity).toLocaleString("ar-EG")}</td>
-                  <td className="p-3 text-sm border-b border-gray-100">{parseFloat(item.price).toLocaleString("ar-EG", { minimumFractionDigits: 2 })}</td>
+                  <td className="p-3 text-sm border-b border-gray-100">{parseFloat(item.quantity).toLocaleString("en-US")}</td>
+                  <td className="p-3 text-sm border-b border-gray-100">{parseFloat(item.price).toLocaleString("en-US", { minimumFractionDigits: 2 })} {unitLabel}</td>
                   <td className="p-3 text-sm border-b border-gray-100">{parseFloat(item.discount || "0")}%</td>
                   <td className="p-3 text-sm border-b border-gray-100">{parseFloat(item.tax || "0")}%</td>
                   <td className="p-3 text-sm font-semibold text-blue-700 border-b border-gray-100">
-                    {parseFloat(item.total).toLocaleString("ar-EG", { minimumFractionDigits: 2 })}
+                    {parseFloat(item.total).toLocaleString("en-US", { minimumFractionDigits: 2 })} {unitLabel}
                   </td>
                 </tr>
               ))}
@@ -210,23 +285,30 @@ export default function SalesInvoiceDetail() {
           <div className="w-72 space-y-2">
             <div className="flex justify-between text-sm py-1 border-b border-gray-100">
               <span className="text-gray-600">المجموع الفرعي</span>
-              <span className="font-medium">{parseFloat(inv.subtotal || "0").toLocaleString("ar-EG", { minimumFractionDigits: 2 })} ج.م</span>
+              <span className="font-medium">{parseFloat(inv.subtotal || "0").toLocaleString("en-US", { minimumFractionDigits: 2 })} ج.م</span>
             </div>
             {parseFloat(inv.discount || "0") > 0 && (
               <div className="flex justify-between text-sm py-1 border-b border-gray-100">
                 <span className="text-gray-600">الخصم</span>
-                <span className="font-medium text-red-600">- {parseFloat(inv.discount).toLocaleString("ar-EG", { minimumFractionDigits: 2 })} ج.م</span>
+                <span className="font-medium text-red-600">- {parseFloat(inv.discount).toLocaleString("en-US", { minimumFractionDigits: 2 })} ج.م</span>
               </div>
             )}
             {parseFloat(inv.tax || "0") > 0 && (
               <div className="flex justify-between text-sm py-1 border-b border-gray-100">
                 <span className="text-gray-600">الضريبة</span>
-                <span className="font-medium text-orange-600">+ {parseFloat(inv.tax).toLocaleString("ar-EG", { minimumFractionDigits: 2 })} ج.م</span>
+                <span className="font-medium text-orange-600">+ {parseFloat(inv.tax).toLocaleString("en-US", { minimumFractionDigits: 2 })} ج.م</span>
               </div>
             )}
             <div className="flex justify-between py-2 border-t-2 border-blue-600">
               <span className="font-bold text-blue-700 text-base">الإجمالي</span>
-              <span className="font-bold text-blue-700 text-base">{parseFloat(inv.total || "0").toLocaleString("ar-EG", { minimumFractionDigits: 2 })} ج.م</span>
+              <span className="font-bold text-blue-700 text-base">
+                {displayTotal.toLocaleString("en-US", { minimumFractionDigits: 2 })} {unitLabel}
+                {foreign && (
+                  <span className="text-xs font-normal text-gray-500 mr-2">
+                    (≈ {parseFloat(inv.total || "0").toLocaleString("en-US", { minimumFractionDigits: 2 })} ج.م)
+                  </span>
+                )}
+              </span>
             </div>
           </div>
         </div>
@@ -241,9 +323,45 @@ export default function SalesInvoiceDetail() {
 
         {/* Footer */}
         <div className="mt-8 pt-4 border-t border-gray-200 text-center text-xs text-gray-400">
-          {company?.invoiceFooter || (company?.name || "Easy Cash") + " - نظام المحاسبة والإدارة المتكامل"} | تم إنشاء هذه الفاتورة بتاريخ {new Date().toLocaleDateString("ar-EG")}
+          {company?.invoiceFooter || (company?.name || "Easy Cash") + " - نظام المحاسبة والإدارة المتكامل"} | تم إنشاء هذه الفاتورة بتاريخ {new Date().toLocaleDateString("en-GB")}
         </div>
       </div>
+
+      <DocumentAttachmentsPanel entityType="sales_invoice" entityId={id} />
+
+      <InvoicePaymentDialog
+        open={showPayment}
+        onClose={() => setShowPayment(false)}
+        title="تحصيل من عميل"
+        partyLabel="العميل"
+        partyName={inv.customerName}
+        invoiceNumber={inv.number}
+        remaining={remaining}
+        isLoading={payMut.isPending || attachMut.isPending}
+        onSubmit={(amount, date, receipt) => {
+          void (async () => {
+            try {
+              const res = await payMut.mutateAsync({ invoiceId: id, amount, date });
+              if (receipt) {
+                await attachMut.mutateAsync({
+                  entityType: "sales_invoice",
+                  entityId: id,
+                  kind: "payment_receipt",
+                  fileName: receipt.fileName,
+                  mimeType: receipt.mimeType,
+                  contentBase64: receipt.contentBase64,
+                });
+              }
+              toast.success(`تم التحصيل — إيصال ${res.cashNumber}`);
+              setShowPayment(false);
+              refetch();
+            } catch {
+              /* toasts from mutations */
+            }
+          })();
+        }}
+      />
     </div>
+    </ERPLayout>
   );
 }

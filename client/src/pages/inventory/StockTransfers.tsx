@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { Plus, ArrowLeftRight, Trash2 } from "lucide-react";
 import { toast } from "sonner";
+import { AddActionButton } from "@/components/AddActionButton";
 
 export default function StockTransfers() {
   const [open, setOpen] = useState(false);
@@ -58,9 +59,9 @@ export default function StockTransfers() {
             <CardTitle className="text-base font-semibold text-slate-800 flex items-center gap-2">
               <ArrowLeftRight size={18} className="text-purple-600" /> التحويلات بين المخازن
             </CardTitle>
-            <Button size="sm" className="bg-purple-600 hover:bg-purple-700 text-white gap-1" onClick={() => { resetForm(); setOpen(true); }}>
+            <AddActionButton module="inventory" size="sm" className="bg-purple-600 hover:bg-purple-700 text-white gap-1" onClick={() => { resetForm(); setOpen(true); }}>
               <Plus size={14} /> تحويل جديد
-            </Button>
+            </AddActionButton>
           </div>
         </CardHeader>
         <CardContent className="p-0">
@@ -83,7 +84,7 @@ export default function StockTransfers() {
                   <TableCell className="text-sm font-medium text-purple-700">#{row.number}</TableCell>
                   <TableCell className="text-sm text-slate-700">{row.fromWarehouseName}</TableCell>
                   <TableCell className="text-sm text-slate-700">{row.toWarehouseName}</TableCell>
-                  <TableCell className="text-xs text-slate-500">{row.date ? new Date(row.date).toLocaleDateString("ar-EG") : "-"}</TableCell>
+                  <TableCell className="text-xs text-slate-500">{row.date ? new Date(row.date).toLocaleDateString("en-GB") : "-"}</TableCell>
                   <TableCell><Badge variant={statusColor(row.status)} className="text-xs">{statusLabel(row.status)}</Badge></TableCell>
                 </TableRow>
               ))}

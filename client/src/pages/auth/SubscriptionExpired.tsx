@@ -2,8 +2,10 @@ import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { AlertTriangle, RefreshCw, Phone, Mail, ArrowLeft, Clock, Loader2 } from "lucide-react";
+import { getDefaultLoginPath } from "@/lib/tenant-login";
 import { useLocation } from "wouter";
 import { toast } from "sonner";
+import { SUPPORT_EMAIL, SUPPORT_PHONE_TEL } from "@/config/support-contact";
 
 export default function SubscriptionExpired() {
   const [, navigate] = useLocation();
@@ -14,7 +16,7 @@ export default function SubscriptionExpired() {
     onError: (e) => toast.error(e.message),
   });
   const logoutMutation = trpc.saas.logout.useMutation({
-    onSuccess: () => navigate("/login"),
+    onSuccess: () => navigate(getDefaultLoginPath()),
   });
 
   const user = meQuery.data;
@@ -58,7 +60,7 @@ export default function SubscriptionExpired() {
                 <span className="text-slate-400 text-sm">تاريخ الانتهاء</span>
                 <span className="text-red-400 font-semibold flex items-center gap-1">
                   <Clock size={13} />
-                  {sub.endDate ? new Date(sub.endDate).toLocaleDateString("ar-EG") : "—"}
+                  {sub.endDate ? new Date(sub.endDate).toLocaleDateString("en-GB") : "—"}
                 </span>
               </div>
               <div className="flex items-center justify-between">
@@ -82,7 +84,7 @@ export default function SubscriptionExpired() {
                     {checkoutMutation.isPending ? (
                       <><Loader2 size={18} className="ml-2 animate-spin" /> جاري التحويل...</>
                     ) : (
-                      <><RefreshCw size={18} className="ml-2" /> {plan.nameAr} — {Number(plan.price).toLocaleString("ar-EG")} ج.م</>
+                      <><RefreshCw size={18} className="ml-2" /> {plan.nameAr} — {Number(plan.price).toLocaleString("en-US")} ج.م</>
                     )}
                   </Button>
                 ))}
@@ -98,7 +100,7 @@ export default function SubscriptionExpired() {
             )}
 
             <div className="grid grid-cols-2 gap-3">
-              <a href="tel:+201000000000">
+              <a href={`tel:${SUPPORT_PHONE_TEL}`}>
                 <Button
                   variant="outline"
                   className="w-full border-white/20 text-white hover:bg-white/10 rounded-xl"
@@ -107,7 +109,7 @@ export default function SubscriptionExpired() {
                   اتصل بنا
                 </Button>
               </a>
-              <a href="mailto:support@easycash.app">
+              <a href={`mailto:${SUPPORT_EMAIL}`}>
                 <Button
                   variant="outline"
                   className="w-full border-white/20 text-white hover:bg-white/10 rounded-xl"

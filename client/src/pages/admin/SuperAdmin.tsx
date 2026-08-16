@@ -20,14 +20,16 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import TenantLoginShareActions from "@/components/TenantLoginShareActions";
+import PaymobSettingsPanel from "@/components/admin/PaymobSettingsPanel";
 
 function formatDateDisplay(value: unknown) {
   if (value == null || value === "") return "—";
-  if (value instanceof Date) return value.toLocaleDateString("ar-EG");
+  if (value instanceof Date) return value.toLocaleDateString("en-GB");
   const s = String(value);
   if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
   const d = new Date(s);
-  return Number.isNaN(d.getTime()) ? s : d.toLocaleDateString("ar-EG");
+  return Number.isNaN(d.getTime()) ? s : d.toLocaleDateString("en-GB");
 }
 
 function formatDateInput(value: unknown) {
@@ -37,17 +39,18 @@ function formatDateInput(value: unknown) {
   return s.includes("T") ? s.split("T")[0] : s.slice(0, 10);
 }
 
-type Tab = "dashboard" | "users" | "subscriptions" | "plans" | "coupons" | "reports" | "support" | "paymob";
+type Tab = "dashboard" | "users" | "subscriptions" | "plans" | "coupons" | "reports" | "support" | "paymob" | "payments";
 
 const statusColors: Record<string, string> = {
   active: "bg-green-100 text-green-700",
   trial: "bg-blue-100 text-blue-700",
   expired: "bg-red-100 text-red-700",
+  expired_trial: "bg-rose-100 text-rose-700",
   cancelled: "bg-gray-100 text-gray-600",
   suspended: "bg-orange-100 text-orange-700",
 };
 const statusLabels: Record<string, string> = {
-  active: "نشط", trial: "تجريبي", expired: "منتهي", cancelled: "ملغي", suspended: "موقوف",
+  active: "نشط", trial: "تجريبي", expired: "منتهي", expired_trial: "تجربة منتهية", cancelled: "ملغي", suspended: "موقوف",
 };
 const roleColors: Record<string, string> = {
   superadmin: "bg-purple-100 text-purple-700",
@@ -63,6 +66,11 @@ export default function SuperAdmin() {
   const [tab, setTab] = useState<Tab>("dashboard");
   const [userPage, setUserPage] = useState(1);
   const [subPage, setSubPage] = useState(1);
+  const [subStatusFilter, setSubStatusFilter] = useState<"all" | "active" | "trial" | "expired" | "expired_trial" | "cancelled" | "suspended">("all");
+  const [subSearch, setSubSearch] = useState("");
+  const [renewTrialModal, setRenewTrialModal] = useState<any>(null);
+  const [paymentsPage, setPaymentsPage] = useState(1);
+  const [paymentsStatus, setPaymentsStatus] = useState<"all" | "pending" | "paid" | "failed">("all");
 
   // Modals
   const [editUserModal, setEditUserModal] = useState<any>(null);
@@ -85,43 +93,39 @@ export default function SuperAdmin() {
     onError: (e) => toast.error(e.message),
   });
   const usersQuery = trpc.saas.listUsers.useQuery({ page: userPage, limit: 15 });
-  const subsQuery = trpc.saas.listSubscriptions.useQuery({ page: subPage, limit: 15 });
+  const subsQuery = trpc.saas.listSubscriptions.useQuery({
+    page: subPage,
+    limit: 15,
+    status: subStatusFilter,
+    search: subSearch.trim() || undefined,
+  });
   const plansQuery = trpc.saas.listPlans.useQuery();
   const couponsQuery = trpc.saas.listCoupons.useQuery(undefined, { enabled: tab === "coupons" });
   const reportQuery = trpc.saas.subscriptionReport.useQuery(undefined, { enabled: tab === "reports" });
   const ticketsQuery = trpc.saas.listTickets.useQuery({ status: "all" }, { enabled: tab === "support" });
-  const paymobQuery = trpc.saas.getPaymobSettings.useQuery(undefined, { enabled: tab === "paymob" });
-  const savePaymobMutation = trpc.saas.savePaymobSettings.useMutation({
-    onSuccess: () => { toast.success("تم حفظ إعدادات Paymob"); paymobQuery.refetch(); },
+  const paymentsQuery = trpc.saas.listSubscriptionPayments.useQuery(
+    { page: paymentsPage, limit: 20, status: paymentsStatus },
+    { enabled: tab === "payments" },
+  );
+  const smartActivateMutation = trpc.saas.smartActivateSubscriptionPayment.useMutation({
+    onSuccess: (data) => {
+      toast.success(data.message);
+      paymentsQuery.refetch();
+      utils.saas.listSubscriptions.invalidate();
+      utils.saas.adminStats.invalidate();
+    },
     onError: (e) => toast.error(e.message),
   });
-  const testPaymobMutation = trpc.saas.testPaymobConnection.useMutation({
-    onSuccess: () => toast.success("الاتصال بـ Paymob ناجح"),
+  const reconcileMutation = trpc.saas.reconcilePendingPayments.useMutation({
+    onSuccess: (data) => {
+      toast.success(`تم تفعيل ${data.activated} من ${data.checked} عملية`);
+      if (data.skipped.length) toast.message(data.skipped.slice(0, 3).join(" · "));
+      paymentsQuery.refetch();
+      utils.saas.listSubscriptions.invalidate();
+      utils.saas.adminStats.invalidate();
+    },
     onError: (e) => toast.error(e.message),
   });
-  const [paymobForm, setPaymobForm] = useState({
-    mode: "test" as "test" | "live",
-    publicKey: "",
-    secretKey: "",
-    hmacSecret: "",
-    cardIntegrationId: "",
-    currency: "EGP",
-    isEnabled: false,
-  });
-
-  useEffect(() => {
-    if (!paymobQuery.data) return;
-    setPaymobForm((prev) => ({
-      ...prev,
-      mode: paymobQuery.data.mode as "test" | "live",
-      publicKey: paymobQuery.data.publicKey || "",
-      cardIntegrationId: paymobQuery.data.cardIntegrationId ? String(paymobQuery.data.cardIntegrationId) : "",
-      currency: paymobQuery.data.currency || "EGP",
-      isEnabled: paymobQuery.data.isEnabled,
-      secretKey: "",
-      hmacSecret: "",
-    }));
-  }, [paymobQuery.data]);
   const [ticketFilter, setTicketFilter] = useState<"all" | "open" | "in_progress" | "resolved" | "closed">("all");
   const [replyModal, setReplyModal] = useState<any>(null);
   const [expandedTicket, setExpandedTicket] = useState<number | null>(null);
@@ -140,6 +144,17 @@ export default function SuperAdmin() {
   });
   const upsertSubMutation = trpc.saas.upsertSubscription.useMutation({
     onSuccess: () => { toast.success("تم حفظ الاشتراك"); setAddSubModal(false); setEditSubModal(null); utils.saas.listSubscriptions.invalidate(); utils.saas.adminStats.invalidate(); },
+    onError: (e) => toast.error(e.message),
+  });
+  const renewTrialMutation = trpc.saas.renewTrial.useMutation({
+    onSuccess: (data) => {
+      toast.success(data.message);
+      setRenewTrialModal(null);
+      setSubStatusFilter("trial");
+      setSubPage(1);
+      utils.saas.listSubscriptions.invalidate();
+      utils.saas.adminStats.invalidate();
+    },
     onError: (e) => toast.error(e.message),
   });
   const upsertPlanMutation = trpc.saas.upsertPlan.useMutation({
@@ -247,6 +262,7 @@ export default function SuperAdmin() {
               { id: "plans", label: "خطط الاشتراك", icon: <Package size={16} /> },
               { id: "coupons", label: "كوبونات الخصم", icon: <Tag size={16} /> },
               { id: "paymob", label: "Paymob", icon: <DollarSign size={16} /> },
+              { id: "payments", label: "مدفوعات الاشتراك", icon: <CreditCard size={16} /> },
               { id: "reports", label: "تقرير الاشتراكات", icon: <PieChart size={16} /> },
               { id: "support", label: "طلبات الدعم", icon: <LifeBuoy size={16} /> },
             ].map((item) => (
@@ -282,15 +298,20 @@ export default function SuperAdmin() {
           {tab === "dashboard" && (
             <div>
               <h2 className="text-xl font-bold text-slate-800 mb-6">نظرة عامة</h2>
-              <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-8">
                 {[
                   { label: "إجمالي المستخدمين", value: stats?.totalUsers ?? "—", icon: <Users size={20} />, color: "blue" },
-                  { label: "مستخدمون نشطون", value: stats?.activeUsers ?? "—", icon: <UserCheck size={20} />, color: "green" },
                   { label: "اشتراكات نشطة", value: stats?.activeSubscriptions ?? "—", icon: <CreditCard size={20} />, color: "indigo" },
                   { label: "اشتراكات تجريبية", value: stats?.trialSubscriptions ?? "—", icon: <Calendar size={20} />, color: "orange" },
+                  { label: "اشتراكات منتهية", value: stats?.expiredSubscriptions ?? "—", icon: <XCircle size={20} />, color: "red", onClick: () => { setSubStatusFilter("expired"); setSubPage(1); setTab("subscriptions"); } },
+                  { label: "تجارب منتهية", value: stats?.expiredTrialSubscriptions ?? "—", icon: <AlertCircle size={20} />, color: "rose", onClick: () => { setSubStatusFilter("expired_trial"); setSubPage(1); setTab("subscriptions"); } },
                   { label: "خطط متاحة", value: stats?.totalPlans ?? "—", icon: <Package size={20} />, color: "purple" },
                 ].map((stat, i) => (
-                  <div key={i} className="bg-white rounded-2xl p-5 shadow-sm border border-slate-100">
+                  <div
+                    key={i}
+                    className={`bg-white rounded-2xl p-5 shadow-sm border border-slate-100 ${stat.onClick ? "cursor-pointer hover:border-blue-200 hover:shadow-md transition-all" : ""}`}
+                    onClick={stat.onClick}
+                  >
                     <div className={`w-10 h-10 rounded-xl flex items-center justify-center mb-3 bg-${stat.color}-100 text-${stat.color}-600`}>
                       {stat.icon}
                     </div>
@@ -347,7 +368,11 @@ export default function SuperAdmin() {
                         <td className="p-3 font-medium text-slate-800">{user.name}</td>
                         <td className="p-3 text-slate-500 text-xs" dir="ltr">{user.email}</td>
                         <td className="p-3 text-slate-500 text-xs">{user.companyName || user.tenantName || "—"}</td>
-                        <td className="p-3 text-xs text-blue-600 font-mono" dir="ltr">/{user.tenantSlug || "—"}</td>
+                        <td className="p-3 text-xs" dir="ltr">
+                          {user.tenantSlug ? (
+                            <span className="text-blue-600 font-mono">/{user.tenantSlug}/login</span>
+                          ) : "—"}
+                        </td>
                         <td className="p-3">
                           <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${roleColors[user.role] || "bg-gray-100 text-gray-600"}`}>
                             {roleLabels[user.role] || user.role}
@@ -359,10 +384,17 @@ export default function SuperAdmin() {
                           </span>
                         </td>
                         <td className="p-3 text-xs text-slate-400">
-                          {user.lastLoginAt ? new Date(user.lastLoginAt).toLocaleDateString("ar-EG") : "لم يدخل"}
+                          {user.lastLoginAt ? new Date(user.lastLoginAt).toLocaleDateString("en-GB") : "لم يدخل"}
                         </td>
                         <td className="p-3">
                           <div className="flex items-center gap-1 flex-wrap">
+                            {user.tenantSlug && (
+                              <TenantLoginShareActions
+                                slug={user.tenantSlug}
+                                companyName={user.companyName || user.tenantName || user.tenantSlug}
+                                copyClassName="h-7 text-indigo-700 hover:bg-indigo-50"
+                              />
+                            )}
                             {user.tenantSlug && (
                               <Button
                                 variant="ghost" size="sm"
@@ -432,6 +464,29 @@ export default function SuperAdmin() {
                   </Button>
                 </div>
               </div>
+              <div className="flex flex-wrap items-center gap-3 mb-4">
+                <Select
+                  value={subStatusFilter}
+                  onValueChange={(v) => { setSubStatusFilter(v as typeof subStatusFilter); setSubPage(1); }}
+                >
+                  <SelectTrigger className="w-48 h-9"><SelectValue placeholder="فلتر الحالة" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">كل الاشتراكات</SelectItem>
+                    <SelectItem value="active">نشطة</SelectItem>
+                    <SelectItem value="trial">تجريبية</SelectItem>
+                    <SelectItem value="expired">منتهية</SelectItem>
+                    <SelectItem value="expired_trial">تجارب منتهية</SelectItem>
+                    <SelectItem value="cancelled">ملغاة</SelectItem>
+                    <SelectItem value="suspended">موقوفة</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Input
+                  className="max-w-xs h-9"
+                  placeholder="بحث بالاسم أو البريد أو الخطة..."
+                  value={subSearch}
+                  onChange={(e) => { setSubSearch(e.target.value); setSubPage(1); }}
+                />
+              </div>
               <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
                 <table className="w-full text-sm">
                   <thead>
@@ -454,14 +509,26 @@ export default function SuperAdmin() {
                         </td>
                         <td className="p-3 text-slate-600 text-sm">{sub.planName}</td>
                         <td className="p-3">
-                          <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${statusColors[sub.status] || "bg-gray-100 text-gray-600"}`}>
-                            {statusLabels[sub.status] || sub.status}
+                          <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${statusColors[sub.effectiveStatus || sub.status] || "bg-gray-100 text-gray-600"}`}>
+                            {statusLabels[sub.effectiveStatus || sub.status] || sub.status}
                           </span>
+                          {sub.isExpired && sub.status !== sub.effectiveStatus && (
+                            <div className="text-[10px] text-slate-400 mt-1">مسجّل: {statusLabels[sub.status] || sub.status}</div>
+                          )}
                         </td>
                         <td className="p-3 text-xs text-slate-500">{formatDateDisplay(sub.startDate)}</td>
                         <td className="p-3 text-xs text-slate-500">{formatDateDisplay(sub.endDate)}</td>
-                        <td className="p-3 text-sm font-medium text-slate-700">{parseFloat(sub.planPrice || "0").toLocaleString("ar-EG")} ج.م</td>
+                        <td className="p-3 text-sm font-medium text-slate-700">{parseFloat(sub.planPrice || "0").toLocaleString("en-US")} ج.م</td>
                         <td className="p-3">
+                          {(sub.effectiveStatus === "expired" || sub.effectiveStatus === "expired_trial") && (
+                            <Button
+                              variant="ghost" size="sm"
+                              className="h-7 px-2 text-xs text-green-700 hover:bg-green-50"
+                              onClick={() => setRenewTrialModal(sub)}
+                            >
+                              <RefreshCw size={12} className="ml-1" /> تجديد تجربة
+                            </Button>
+                          )}
                           <Button
                             variant="ghost" size="sm"
                             className="h-7 w-7 p-0 text-blue-600 hover:bg-blue-50"
@@ -524,7 +591,7 @@ export default function SuperAdmin() {
                       </div>
                     </div>
                     <div className="text-3xl font-bold text-blue-600 mb-1">
-                      {parseFloat(plan.price).toLocaleString("ar-EG")}
+                      {parseFloat(plan.price).toLocaleString("en-US")}
                       <span className="text-sm font-normal text-slate-400 mr-1">{plan.currency}</span>
                     </div>
                     <p className="text-slate-500 text-sm mb-4">{plan.durationDays} يوم</p>
@@ -660,10 +727,10 @@ export default function SuperAdmin() {
                         <td className="px-4 py-3 font-mono font-bold text-blue-700">{c.code}</td>
                         <td className="px-4 py-3 text-slate-600">{c.discountType === "percentage" ? "نسبة %" : "مبلغ ثابت"}</td>
                         <td className="px-4 py-3 font-semibold text-green-700">
-                          {c.discountType === "percentage" ? `${parseFloat(c.discountValue)}%` : `${parseFloat(c.discountValue).toLocaleString("ar-EG")} ج.م`}
+                          {c.discountType === "percentage" ? `${parseFloat(c.discountValue)}%` : `${parseFloat(c.discountValue).toLocaleString("en-US")} ج.م`}
                         </td>
                         <td className="px-4 py-3 text-slate-600">{c.usedCount} / {c.maxUses ?? "غير محدود"}</td>
-                        <td className="px-4 py-3 text-slate-600">{c.expiresAt ? new Date(c.expiresAt).toLocaleDateString("ar-EG") : "دائم"}</td>
+                        <td className="px-4 py-3 text-slate-600">{c.expiresAt ? new Date(c.expiresAt).toLocaleDateString("en-GB") : "دائم"}</td>
                         <td className="px-4 py-3">
                           <button
                             onClick={() => updateCouponMutation.mutate({ id: c.id, isActive: !c.isActive })}
@@ -713,7 +780,7 @@ export default function SuperAdmin() {
                       <div className="w-10 h-10 bg-green-100 text-green-600 rounded-xl flex items-center justify-center mb-3">
                         <DollarSign size={20} />
                       </div>
-                      <div className="text-2xl font-bold text-slate-800">{(reportQuery.data?.totalRevenue ?? 0).toLocaleString("ar-EG")} ج.م</div>
+                      <div className="text-2xl font-bold text-slate-800">{(reportQuery.data?.totalRevenue ?? 0).toLocaleString("en-US")} ج.م</div>
                       <div className="text-xs text-slate-500 mt-1">إجمالي الإيرادات</div>
                     </div>
                     <div className="bg-white rounded-2xl p-5 shadow-sm border border-slate-100">
@@ -806,155 +873,151 @@ export default function SuperAdmin() {
             </div>
           )}
 
-          {/* ===== PAYMOB TAB ===== */}
-          {tab === "paymob" && (
-            <div className="max-w-2xl">
-              <h2 className="text-xl font-bold text-slate-800 mb-2">إعدادات Paymob</h2>
-              <p className="text-sm text-slate-500 mb-6">
-                اربط حساب Paymob لتفعيل الدفع المباشر عند اختيار العميل لخطة مدفوعة.
-              </p>
-
-              {paymobQuery.isError && (
-                <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
-                  <p className="font-medium mb-1">تعذر تحميل الإعدادات المحفوظة</p>
-                  <p className="text-xs">{paymobQuery.error.message}</p>
-                  <p className="text-xs mt-2">يمكنك إدخال البيانات وحفظها لأول مرة — تأكد من تشغيل migrations على السيرفر.</p>
+          {/* ===== PAYMENTS TAB ===== */}
+          {tab === "payments" && (
+            <div>
+              <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
+                <div>
+                  <h2 className="text-xl font-bold text-slate-800">مدفوعات الاشتراك</h2>
+                  <p className="text-sm text-slate-500 mt-1">
+                    تفعيل ذكي: يُفعَّل تلقائياً عند تطابق المبلغ مع الخطة ونجاح الدفع عبر Paymob
+                  </p>
                 </div>
-              )}
+                <div className="flex flex-wrap gap-2">
+                  <Select
+                    value={paymentsStatus}
+                    onValueChange={(v) => {
+                      setPaymentsStatus(v as typeof paymentsStatus);
+                      setPaymentsPage(1);
+                    }}
+                  >
+                    <SelectTrigger className="w-36"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">الكل</SelectItem>
+                      <SelectItem value="pending">معلّق</SelectItem>
+                      <SelectItem value="paid">مدفوع</SelectItem>
+                      <SelectItem value="failed">فاشل</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Button
+                    variant="outline"
+                    className="gap-2"
+                    disabled={reconcileMutation.isPending}
+                    onClick={() => reconcileMutation.mutate()}
+                  >
+                    <RefreshCw size={15} className={reconcileMutation.isPending ? "animate-spin" : ""} />
+                    تفعيل المؤهّل تلقائياً
+                  </Button>
+                </div>
+              </div>
 
-              {paymobQuery.isFetching && !paymobQuery.data && !paymobQuery.isError ? (
-                <div className="text-center py-16 text-slate-400">جاري التحميل...</div>
-              ) : (
-                <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 space-y-5">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <Label>الوضع</Label>
-                      <Select
-                        value={paymobForm.mode}
-                        onValueChange={(v) => setPaymobForm((f) => ({ ...f, mode: v as "test" | "live" }))}
-                      >
-                        <SelectTrigger><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="test">تجريبي (Test)</SelectItem>
-                          <SelectItem value="live">مباشر (Live)</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div>
-                      <Label>العملة</Label>
-                      <Input
-                        value={paymobForm.currency}
-                        onChange={(e) => setPaymobForm((f) => ({ ...f, currency: e.target.value.toUpperCase() }))}
-                        maxLength={3}
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <Label>Public Key</Label>
-                    <Input
-                      value={paymobForm.publicKey}
-                      onChange={(e) => setPaymobForm((f) => ({ ...f, publicKey: e.target.value }))}
-                      placeholder="pk_test_... أو egy_pk_..."
-                      dir="ltr"
-                      className="font-mono text-sm"
-                    />
-                    {paymobQuery.data?.publicKeyLast8 && (
-                      <p className="text-xs text-slate-400 mt-1">المحفوظ ينتهي بـ: ...{paymobQuery.data.publicKeyLast8}</p>
+              <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+                {paymentsQuery.isLoading ? (
+                  <div className="text-center py-16 text-slate-400">جاري التحميل...</div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead className="bg-slate-50 border-b">
+                        <tr>
+                          <th className="text-right p-3 font-semibold text-slate-600">#</th>
+                          <th className="text-right p-3 font-semibold text-slate-600">المستخدم</th>
+                          <th className="text-right p-3 font-semibold text-slate-600">الخطة</th>
+                          <th className="text-right p-3 font-semibold text-slate-600">المبلغ</th>
+                          <th className="text-right p-3 font-semibold text-slate-600">الحالة</th>
+                          <th className="text-right p-3 font-semibold text-slate-600">تطابق</th>
+                          <th className="text-right p-3 font-semibold text-slate-600">Paymob</th>
+                          <th className="text-right p-3 font-semibold text-slate-600">إجراء</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(paymentsQuery.data?.rows || []).map((row) => (
+                          <tr key={row.id} className="border-b border-slate-50 hover:bg-slate-50/50">
+                            <td className="p-3 text-slate-500">{row.id}</td>
+                            <td className="p-3">
+                              <div className="font-medium text-slate-800">{row.userName || "—"}</div>
+                              <div className="text-xs text-slate-400">{row.userEmail}</div>
+                            </td>
+                            <td className="p-3">{row.planName || "—"}</td>
+                            <td className="p-3 font-medium">
+                              {Number(row.amount).toLocaleString("en-US")} {row.currency}
+                            </td>
+                            <td className="p-3">
+                              <Badge className={
+                                row.status === "paid"
+                                  ? "bg-green-100 text-green-700"
+                                  : row.status === "pending"
+                                    ? "bg-amber-100 text-amber-700"
+                                    : "bg-red-100 text-red-700"
+                              }>
+                                {row.status === "paid" ? "مدفوع" : row.status === "pending" ? "معلّق" : "فاشل"}
+                              </Badge>
+                            </td>
+                            <td className="p-3">
+                              {row.amountMatches ? (
+                                <Badge className="bg-green-50 text-green-700 border-green-200">مطابق</Badge>
+                              ) : (
+                                <Badge className="bg-red-50 text-red-700 border-red-200">غير مطابق</Badge>
+                              )}
+                            </td>
+                            <td className="p-3 text-xs text-slate-500 font-mono max-w-[120px] truncate" dir="ltr">
+                              {row.providerReference || "—"}
+                            </td>
+                            <td className="p-3">
+                              {row.status === "pending" && (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="text-xs h-8"
+                                  disabled={smartActivateMutation.isPending}
+                                  onClick={() => smartActivateMutation.mutate({ paymentId: row.id })}
+                                >
+                                  تفعيل
+                                </Button>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                    {!paymentsQuery.data?.rows?.length && (
+                      <div className="text-center py-12 text-slate-400">لا توجد مدفوعات</div>
                     )}
                   </div>
-
-                  <div>
-                    <Label>Secret Key (API Token)</Label>
-                    <Input
-                      type="password"
-                      value={paymobForm.secretKey}
-                      onChange={(e) => setPaymobForm((f) => ({ ...f, secretKey: e.target.value }))}
-                      placeholder={paymobQuery.data?.hasSecretKey ? "اتركه فارغاً للإبقاء على المفتاح الحالي" : "أدخل Secret Key"}
-                      dir="ltr"
-                      className="font-mono text-sm"
-                    />
-                  </div>
-
-                  <div>
-                    <Label>HMAC Secret (للـ Webhook)</Label>
-                    <Input
-                      type="password"
-                      value={paymobForm.hmacSecret}
-                      onChange={(e) => setPaymobForm((f) => ({ ...f, hmacSecret: e.target.value }))}
-                      placeholder={paymobQuery.data?.hasHmacSecret ? "اتركه فارغاً للإبقاء على القيمة الحالية" : "من Paymob > Developers > Webhooks"}
-                      dir="ltr"
-                      className="font-mono text-sm"
-                    />
-                  </div>
-
-                  <div>
-                    <Label>Card Integration ID</Label>
-                    <Input
-                      value={paymobForm.cardIntegrationId}
-                      onChange={(e) => setPaymobForm((f) => ({ ...f, cardIntegrationId: e.target.value }))}
-                      placeholder="مثال: 123456"
-                      dir="ltr"
-                    />
-                  </div>
-
-                  <label className="flex items-center gap-3 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={paymobForm.isEnabled}
-                      onChange={(e) => setPaymobForm((f) => ({ ...f, isEnabled: e.target.checked }))}
-                      className="w-4 h-4 rounded"
-                    />
-                    <span className="text-sm font-medium text-slate-700">تفعيل الدفع عبر Paymob</span>
-                  </label>
-
-                  {paymobQuery.data?.webhookUrl ? (
-                    <div className="bg-slate-50 rounded-xl p-4 space-y-2 text-sm">
-                      <p className="font-medium text-slate-700">روابط Paymob</p>
-                      <div>
-                        <span className="text-slate-500 text-xs">Webhook URL (ضعه في Paymob):</span>
-                        <p className="font-mono text-xs break-all text-blue-700 mt-1" dir="ltr">{paymobQuery.data.webhookUrl}</p>
-                      </div>
-                      <div>
-                        <span className="text-slate-500 text-xs">Return URL:</span>
-                        <p className="font-mono text-xs break-all text-slate-600 mt-1" dir="ltr">{paymobQuery.data.returnUrl}</p>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="bg-slate-50 rounded-xl p-4 text-sm text-slate-600">
-                      <p className="font-medium text-slate-700 mb-1">روابط Paymob (بعد الحفظ)</p>
-                      <p className="text-xs">Webhook: <span dir="ltr" className="font-mono">https://cash.easytecheg.net/api/webhooks/paymob</span></p>
-                    </div>
-                  )}
-
-                  <div className="flex flex-wrap gap-3 pt-2">
+                )}
+                {(paymentsQuery.data?.total ?? 0) > 20 && (
+                  <div className="flex justify-center gap-2 p-4 border-t">
                     <Button
-                      onClick={() => savePaymobMutation.mutate({
-                        mode: paymobForm.mode,
-                        publicKey: paymobForm.publicKey || undefined,
-                        secretKey: paymobForm.secretKey || undefined,
-                        hmacSecret: paymobForm.hmacSecret || undefined,
-                        cardIntegrationId: paymobForm.cardIntegrationId ? Number(paymobForm.cardIntegrationId) : undefined,
-                        currency: paymobForm.currency,
-                        isEnabled: paymobForm.isEnabled,
-                      })}
-                      disabled={savePaymobMutation.isPending}
-                      className="bg-blue-600 hover:bg-blue-700"
-                    >
-                      {savePaymobMutation.isPending ? "جاري الحفظ..." : "حفظ الإعدادات"}
-                    </Button>
-                    <Button
+                      size="sm"
                       variant="outline"
-                      onClick={() => testPaymobMutation.mutate()}
-                      disabled={testPaymobMutation.isPending || !paymobQuery.data?.configured}
+                      disabled={paymentsPage <= 1}
+                      onClick={() => setPaymentsPage((p) => p - 1)}
                     >
-                      {testPaymobMutation.isPending ? "جاري الاختبار..." : "اختبار الاتصال"}
+                      السابق
+                    </Button>
+                    <span className="text-sm text-slate-500 self-center">صفحة {paymentsPage}</span>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={paymentsPage * 20 >= (paymentsQuery.data?.total ?? 0)}
+                      onClick={() => setPaymentsPage((p) => p + 1)}
+                    >
+                      التالي
                     </Button>
                   </div>
-                </div>
-              )}
+                )}
+              </div>
             </div>
           )}
+
+          {/* ===== PAYMOB TAB ===== */}
+          {/* Paymob — يبقى mounted حتى لا تُمسح المسودة عند تغيير التبويب */}
+          <div className={tab === "paymob" ? "max-w-2xl" : "hidden"}>
+            <h2 className="text-xl font-bold text-slate-800 mb-2">إعدادات Paymob</h2>
+            <p className="text-sm text-slate-500 mb-6">
+              اربط حساب Paymob لتفعيل الدفع المباشر عند اختيار العميل لخطة مدفوعة.
+            </p>
+            <PaymobSettingsPanel />
+          </div>
 
           {/* ===== SUPPORT TAB ===== */}
           {tab === "support" && (
@@ -1007,7 +1070,7 @@ export default function SuperAdmin() {
                               <div className="flex-1 min-w-0">
                                 <div className="font-semibold text-slate-800 text-sm">{ticket.subject}</div>
                                 <div className="text-xs text-slate-400 mt-0.5">
-                                  {ticket.userName || ticket.userEmail} • {new Date(ticket.createdAt).toLocaleDateString("ar-EG")}
+                                  {ticket.userName || ticket.userEmail} • {new Date(ticket.createdAt).toLocaleDateString("en-GB")}
                                 </div>
                               </div>
                               <div className="flex items-center gap-2 flex-shrink-0">
@@ -1096,6 +1159,22 @@ export default function SuperAdmin() {
         </DialogContent>
       </Dialog>
 
+      {/* ===== RENEW TRIAL MODAL ===== */}
+      <Dialog open={!!renewTrialModal} onOpenChange={() => setRenewTrialModal(null)}>
+        <DialogContent className="max-w-md" dir="rtl">
+          <DialogHeader>
+            <DialogTitle>تجديد فترة تجريبية</DialogTitle>
+          </DialogHeader>
+          {renewTrialModal && (
+            <RenewTrialForm
+              subscription={renewTrialModal}
+              onSubmit={(days) => renewTrialMutation.mutate({ subscriptionId: renewTrialModal.id, days })}
+              isPending={renewTrialMutation.isPending}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
+
       {/* ===== REPLY TICKET MODAL ===== */}
       <Dialog open={!!replyModal} onOpenChange={() => setReplyModal(null)}>
         <DialogContent className="max-w-md" dir="rtl">
@@ -1117,15 +1196,49 @@ export default function SuperAdmin() {
 
 // ===== Sub-components =====
 
+function RenewTrialForm({ subscription, onSubmit, isPending }: { subscription: any; onSubmit: (days: number) => void; isPending: boolean }) {
+  const [days, setDays] = useState("14");
+  return (
+    <div className="space-y-4 pt-2">
+      <div className="rounded-lg bg-slate-50 p-3 text-sm text-slate-600">
+        <div className="font-medium text-slate-800">{subscription.userName}</div>
+        <div className="text-xs" dir="ltr">{subscription.userEmail}</div>
+        <div className="text-xs mt-2">انتهى في: {formatDateDisplay(subscription.endDate)}</div>
+      </div>
+      <div>
+        <Label className="text-sm mb-1.5 block">مدة التجربة الجديدة (أيام)</Label>
+        <Select value={days} onValueChange={setDays}>
+          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="7">7 أيام</SelectItem>
+            <SelectItem value="14">14 يوم (افتراضي)</SelectItem>
+            <SelectItem value="30">30 يوم</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+      <Button
+        className="w-full bg-green-600 hover:bg-green-700 text-white"
+        disabled={isPending}
+        onClick={() => onSubmit(parseInt(days, 10))}
+      >
+        {isPending ? "جاري التجديد..." : "تفعيل تجربة جديدة"}
+      </Button>
+    </div>
+  );
+}
+
 function SubForm({ initial, users, plans, onSubmit, isPending }: any) {
   const today = new Date().toISOString().split("T")[0];
+  const defaultEnd = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+  const initialEnd = formatDateInput(initial?.endDate);
+  const isExpired = initial?.isExpired || (initialEnd && initialEnd < today);
   const [form, setForm] = useState({
     id: initial?.id,
     userId: initial?.userId?.toString() || "",
     planId: initial?.planId?.toString() || "",
-    status: initial?.status || "active",
-    startDate: formatDateInput(initial?.startDate) || today,
-    endDate: formatDateInput(initial?.endDate) || "",
+    status: isExpired ? "trial" : (initial?.effectiveStatus === "expired_trial" ? "trial" : (initial?.status || "active")),
+    startDate: isExpired ? today : (formatDateInput(initial?.startDate) || today),
+    endDate: isExpired ? defaultEnd : (initialEnd || defaultEnd),
     notes: initial?.notes || "",
   });
 
@@ -1148,7 +1261,7 @@ function SubForm({ initial, users, plans, onSubmit, isPending }: any) {
           <SelectTrigger><SelectValue placeholder="اختر خطة" /></SelectTrigger>
           <SelectContent>
             {plans.map((p: any) => (
-              <SelectItem key={p.id} value={p.id.toString()}>{p.nameAr} - {parseFloat(p.price).toLocaleString("ar-EG")} ج.م</SelectItem>
+              <SelectItem key={p.id} value={p.id.toString()}>{p.nameAr} - {parseFloat(p.price).toLocaleString("en-US")} ج.م</SelectItem>
             ))}
           </SelectContent>
         </Select>

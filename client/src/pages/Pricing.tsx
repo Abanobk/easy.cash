@@ -3,11 +3,12 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
   Check, Star, Zap, Shield, Users, FileText,
-  Phone, Mail, BookOpen, ChevronDown, Loader2, CheckCircle2, XCircle
+  Phone, Mail, ChevronDown, Loader2, CheckCircle2, XCircle
 } from "lucide-react";
 import { useLocation, useSearch } from "wouter";
 import { useState, useEffect, useCallback } from "react";
 import { toast } from "sonner";
+import { SUPPORT_EMAIL, SUPPORT_PHONE_DISPLAY, SUPPORT_PHONE_TEL } from "@/config/support-contact";
 
 const features = [
   "فواتير البيع والشراء",
@@ -89,22 +90,26 @@ export default function Pricing() {
   const [, navigate] = useLocation();
   const search = useSearch();
   const params = new URLSearchParams(search);
-  const returnPaymentId = params.get("paymentId");
   const isReturn = params.get("payment") === "return";
+  const returnPaymentId = params.get("paymentId");
 
   const meQuery = trpc.saas.me.useQuery(undefined, { retry: false });
   const plansQuery = trpc.saas.listPublicPlans.useQuery();
+  const paymentStatusQuery = trpc.saas.getPaymentStatus.useQuery(
+    { paymentId: Number(returnPaymentId) },
+    {
+      enabled: isReturn && !!returnPaymentId && !!meQuery.data,
+      refetchInterval: (q) => (q.state.data?.status === "pending" ? 3000 : false),
+    },
+  );
+  const displayStatus = paymentStatusQuery.data?.status;
+
   const checkoutMutation = trpc.saas.createPlanCheckout.useMutation({
     onSuccess: (data) => {
       window.location.href = data.checkoutUrl;
     },
     onError: (e) => toast.error(e.message),
   });
-
-  const paymentStatusQuery = trpc.saas.getPaymentStatus.useQuery(
-    { paymentId: Number(returnPaymentId) },
-    { enabled: isReturn && !!returnPaymentId && !!meQuery.data, refetchInterval: (q) => (q.state.data?.status === "pending" ? 3000 : false) }
-  );
 
   const startCheckout = useCallback((plan: { id: number; name: string; price: string }) => {
     if (Number(plan.price) <= 0 || plan.name === "trial") {
@@ -134,7 +139,7 @@ export default function Pricing() {
     const featureCount = plan.name === "trial" ? 6 : plan.name === "monthly" ? 8 : features.length;
     return {
       ...plan,
-      priceDisplay: priceNum.toLocaleString("ar-EG"),
+      priceDisplay: priceNum.toLocaleString("en-US"),
       period,
       features: features.slice(0, featureCount),
       ...meta,
@@ -145,11 +150,11 @@ export default function Pricing() {
     <div className="min-h-screen bg-white" dir="rtl">
       {isReturn && (
         <div className="bg-slate-900 text-white py-4 px-4 text-center">
-          {paymentStatusQuery.data?.status === "paid" ? (
+          {displayStatus === "paid" ? (
             <p className="flex items-center justify-center gap-2 text-green-300">
-              <CheckCircle2 size={18} /> تم الدفع بنجاح! جاري تفعيل اشتراكك...
+              <CheckCircle2 size={18} /> تم الدفع بنجاح! تم تفعيل اشتراكك.
             </p>
-          ) : paymentStatusQuery.data?.status === "failed" ? (
+          ) : displayStatus === "failed" ? (
             <p className="flex items-center justify-center gap-2 text-red-300">
               <XCircle size={18} /> فشل الدفع. حاول مرة أخرى أو تواصل معنا.
             </p>
@@ -164,9 +169,7 @@ export default function Pricing() {
       <nav className="border-b border-slate-100 sticky top-0 bg-white/90 backdrop-blur z-10">
         <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
-              <BookOpen size={16} className="text-white" />
-            </div>
+            <img src="/easy-cash-brand.png" alt="Easy Cash" className="w-9 h-9 object-contain rounded-lg bg-white" />
             <span className="font-bold text-slate-800">Easy Cash</span>
           </div>
           <div className="flex items-center gap-3">
@@ -316,18 +319,16 @@ export default function Pricing() {
 
       <footer className="py-6 px-4 border-t border-slate-100 text-center">
         <div className="flex items-center justify-center gap-2 mb-2">
-          <div className="w-6 h-6 bg-blue-600 rounded-md flex items-center justify-center">
-            <BookOpen size={12} className="text-white" />
-          </div>
+          <img src="/easy-cash-brand.png" alt="Easy Cash" className="w-7 h-7 object-contain rounded-md bg-white" />
           <span className="font-bold text-slate-700 text-sm">Easy Cash</span>
         </div>
         <p className="text-slate-400 text-xs">© Easy Cash 2024 — جميع الحقوق محفوظة</p>
         <div className="flex items-center justify-center gap-4 mt-2">
-          <a href="mailto:support@easycash.app" className="text-slate-400 hover:text-slate-600 text-xs flex items-center gap-1">
-            <Mail size={11} /> support@easycash.app
+          <a href={`mailto:${SUPPORT_EMAIL}`} className="text-slate-400 hover:text-slate-600 text-xs flex items-center gap-1">
+            <Mail size={11} /> {SUPPORT_EMAIL}
           </a>
-          <a href="tel:+201000000000" className="text-slate-400 hover:text-slate-600 text-xs flex items-center gap-1">
-            <Phone size={11} /> 01000000000
+          <a href={`tel:${SUPPORT_PHONE_TEL}`} className="text-slate-400 hover:text-slate-600 text-xs flex items-center gap-1">
+            <Phone size={11} /> {SUPPORT_PHONE_DISPLAY}
           </a>
         </div>
       </footer>

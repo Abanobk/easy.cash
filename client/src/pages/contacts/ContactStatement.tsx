@@ -1,24 +1,54 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
+import ERPLayout from "@/components/ERPLayout";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Printer, Search, FileText, TrendingUp, TrendingDown, AlertCircle } from "lucide-react";
+import { useSearch } from "wouter";
+import { DateField, isoToDisplayDate } from "@/components/form/DateField";
 
 type ContactType = "customer" | "supplier";
 
+const cashTypeLabel = (type: string) => ({
+  receive: "قبض عام",
+  pay: "صرف عام",
+  receive_customer: "تحصيل عميل",
+  pay_customer: "رد للعميل",
+  pay_supplier: "سداد مورد",
+}[type] || type);
+
+const bankTypeLabel = (type: string) => ({
+  deposit: "إيداع",
+  withdraw: "سحب",
+  deposit_customer: "إيداع عميل",
+  withdraw_customer: "رد بنكي للعميل",
+  withdraw_supplier: "سداد مورد",
+}[type] || type);
+
 export default function ContactStatement() {
-  const [contactType, setContactType] = useState<ContactType>("customer");
-  const [contactId, setContactId] = useState<number | null>(null);
+  const searchString = useSearch();
+  const urlParams = new URLSearchParams(searchString);
+  const initialType = (urlParams.get("type") === "supplier" ? "supplier" : "customer") as ContactType;
+  const initialId = urlParams.get("id") ? parseInt(urlParams.get("id")!) : null;
+
+  const [contactType, setContactType] = useState<ContactType>(initialType);
+  const [contactId, setContactId] = useState<number | null>(initialId);
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
-  const [searchQuery, setSearchQuery] = useState("");
-  const [submitted, setSubmitted] = useState(false);
+  const [submitted, setSubmitted] = useState(!!initialId);
   const printRef = useRef<HTMLDivElement>(null);
 
-  const { data: customers } = trpc.customers.list.useQuery({ search: searchQuery, limit: 100 });
-  const { data: suppliers } = trpc.suppliers.list.useQuery({ search: searchQuery, limit: 100 });
+  useEffect(() => {
+    if (initialId) {
+      setContactType(initialType);
+      setContactId(initialId);
+      setSubmitted(true);
+    }
+  }, [initialId, initialType]);
+
+  const { data: customers } = trpc.customers.list.useQuery({ limit: 200 });
+  const { data: suppliers } = trpc.suppliers.list.useQuery({ limit: 200 });
 
   const { data: customerStatement, isLoading: loadingCustomer } = trpc.statement.customer.useQuery(
     { customerId: contactId!, dateFrom: dateFrom || undefined, dateTo: dateTo || undefined },
@@ -86,9 +116,11 @@ export default function ContactStatement() {
   const cashTxns = (statement as any)?.cashTransactions || [];
   const bankTxns = (statement as any)?.bankTransactions || [];
   const returns = (statement as any)?.returns || [];
+  const ledger = (statement as any)?.ledger || [];
 
   return (
-    <div className="p-6 max-w-5xl mx-auto">
+    <ERPLayout title="كشف حساب عميل / مورد">
+    <div className="max-w-5xl mx-auto">
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-xl font-bold text-gray-800 flex items-center gap-2">
           <FileText className="h-5 w-5 text-blue-600" />
@@ -131,11 +163,11 @@ export default function ContactStatement() {
           </div>
           <div>
             <Label className="text-xs text-gray-600 mb-1 block">من تاريخ</Label>
-            <Input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="h-9" />
+            <DateField value={dateFrom} onChange={setDateFrom} className="h-9" />
           </div>
           <div>
             <Label className="text-xs text-gray-600 mb-1 block">إلى تاريخ</Label>
-            <Input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="h-9" />
+            <DateField value={dateTo} onChange={setDateTo} className="h-9" />
           </div>
         </div>
         <div className="mt-4 flex justify-end">
@@ -183,35 +215,101 @@ export default function ContactStatement() {
 
           {/* Summary Cards */}
           {summary && (
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+              <div className="bg-violet-50 border border-violet-200 rounded-lg p-4 text-center">
+                <div className="text-xs text-violet-600 mb-1 font-semibold">رصيد أول المدة</div>
+                <div className="text-lg font-bold text-violet-800">
+                  {Number(summary.openingBalance ?? contact?.openingBalance ?? 0).toLocaleString("en-US", { minimumFractionDigits: 2 })}
+                </div>
+                <div className="text-xs text-violet-500">ج.م</div>
+                {(summary.openingBalanceDate || contact?.openingBalanceDate) && (
+                  <div className="text-[11px] font-semibold text-violet-700 mt-1">
+                    بتاريخ {isoToDisplayDate(String(summary.openingBalanceDate || contact.openingBalanceDate))}
+                  </div>
+                )}
+              </div>
               <div className="bg-blue-50 border border-blue-100 rounded-lg p-4 text-center">
                 <div className="text-xs text-blue-500 mb-1">إجمالي الفواتير</div>
                 <div className="text-lg font-bold text-blue-700">
-                  {summary.totalInvoices.toLocaleString("ar-EG", { minimumFractionDigits: 2 })}
+                  {summary.totalInvoices.toLocaleString("en-US", { minimumFractionDigits: 2 })}
                 </div>
                 <div className="text-xs text-blue-400">ج.م</div>
               </div>
               <div className="bg-green-50 border border-green-100 rounded-lg p-4 text-center">
                 <div className="text-xs text-green-500 mb-1">إجمالي المدفوع</div>
                 <div className="text-lg font-bold text-green-700">
-                  {summary.totalPaid.toLocaleString("ar-EG", { minimumFractionDigits: 2 })}
+                  {summary.totalPaid.toLocaleString("en-US", { minimumFractionDigits: 2 })}
                 </div>
                 <div className="text-xs text-green-400">ج.م</div>
               </div>
               <div className="bg-red-50 border border-red-100 rounded-lg p-4 text-center">
                 <div className="text-xs text-red-500 mb-1">إجمالي المتبقي</div>
                 <div className="text-lg font-bold text-red-700">
-                  {summary.totalRemaining.toLocaleString("ar-EG", { minimumFractionDigits: 2 })}
+                  {summary.totalRemaining.toLocaleString("en-US", { minimumFractionDigits: 2 })}
                 </div>
                 <div className="text-xs text-red-400">ج.م</div>
               </div>
               <div className="bg-orange-50 border border-orange-100 rounded-lg p-4 text-center">
                 <div className="text-xs text-orange-500 mb-1">إجمالي المردودات</div>
                 <div className="text-lg font-bold text-orange-700">
-                  {summary.totalReturns.toLocaleString("ar-EG", { minimumFractionDigits: 2 })}
+                  {summary.totalReturns.toLocaleString("en-US", { minimumFractionDigits: 2 })}
                 </div>
                 <div className="text-xs text-orange-400">ج.م</div>
               </div>
+              <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 text-center">
+                <div className="text-xs text-slate-500 mb-1">الرصيد الختامي</div>
+                <div className={`text-lg font-bold ${(summary.closingBalance ?? 0) > 0 ? "text-red-700" : "text-green-700"}`}>
+                  {(summary.closingBalance ?? 0).toLocaleString("en-US", { minimumFractionDigits: 2 })}
+                </div>
+                <div className="text-xs text-slate-400">ج.م</div>
+              </div>
+            </div>
+          )}
+
+          {ledger.length > 0 && (
+            <div>
+              <h3 className="font-semibold text-slate-700 mb-3 text-sm border-b border-gray-100 pb-2">
+                كشف الحركات الموحد ({ledger.length})
+              </h3>
+              <table className="w-full border-collapse text-sm">
+                <thead>
+                  <tr className="bg-slate-800 text-white">
+                    <th className="p-2 text-right text-xs">التاريخ</th>
+                    <th className="p-2 text-right text-xs">النوع</th>
+                    <th className="p-2 text-right text-xs">الرقم</th>
+                    <th className="p-2 text-right text-xs">البيان</th>
+                    <th className="p-2 text-right text-xs">مدين</th>
+                    <th className="p-2 text-right text-xs">دائن</th>
+                    <th className="p-2 text-right text-xs">الرصيد</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {ledger.map((row: any, idx: number) => (
+                    <tr
+                      key={idx}
+                      className={
+                        row.docType === "رصيد أول المدة"
+                          ? "bg-violet-50"
+                          : idx % 2 === 0 ? "bg-white" : "bg-gray-50"
+                      }
+                    >
+                      <td className="p-2 border-b border-gray-100 text-xs">{
+                        row.docType === "رصيد أول المدة" && (!row.date || String(row.date).startsWith("0000"))
+                          ? "—"
+                          : row.date
+                            ? new Date(row.date).toLocaleDateString("en-GB")
+                            : "—"
+                      }</td>
+                      <td className="p-2 border-b border-gray-100 text-xs font-semibold text-violet-800">{row.docType}</td>
+                      <td className="p-2 border-b border-gray-100 font-medium">{row.docNumber}</td>
+                      <td className="p-2 border-b border-gray-100 text-xs text-gray-500">{row.description}</td>
+                      <td className="p-2 border-b border-gray-100 text-red-600">{row.debit > 0 ? row.debit.toLocaleString("en-US", { minimumFractionDigits: 2 }) : "—"}</td>
+                      <td className="p-2 border-b border-gray-100 text-green-600">{row.credit > 0 ? row.credit.toLocaleString("en-US", { minimumFractionDigits: 2 }) : "—"}</td>
+                      <td className="p-2 border-b border-gray-100 font-semibold">{row.balance.toLocaleString("en-US", { minimumFractionDigits: 2 })}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           )}
 
@@ -238,11 +336,11 @@ export default function ContactStatement() {
                   {invoices.map((inv: any, idx: number) => (
                     <tr key={inv.id} className={idx % 2 === 0 ? "bg-white" : "bg-gray-50"}>
                       <td className="p-2 border-b border-gray-100 font-medium text-blue-600">{inv.number}</td>
-                      <td className="p-2 border-b border-gray-100 text-xs">{inv.date ? new Date(inv.date).toLocaleDateString("ar-EG") : "-"}</td>
+                      <td className="p-2 border-b border-gray-100 text-xs">{inv.date ? new Date(inv.date).toLocaleDateString("en-GB") : "-"}</td>
                       <td className="p-2 border-b border-gray-100 text-xs">{inv.paymentType === "cash" ? "نقدي" : "آجل"}</td>
-                      <td className="p-2 border-b border-gray-100 font-medium">{parseFloat(inv.total || "0").toLocaleString("ar-EG", { minimumFractionDigits: 2 })}</td>
-                      <td className="p-2 border-b border-gray-100 text-green-600">{parseFloat(inv.paid || "0").toLocaleString("ar-EG", { minimumFractionDigits: 2 })}</td>
-                      <td className="p-2 border-b border-gray-100 text-red-600">{parseFloat(inv.remaining || "0").toLocaleString("ar-EG", { minimumFractionDigits: 2 })}</td>
+                      <td className="p-2 border-b border-gray-100 font-medium">{parseFloat(inv.total || "0").toLocaleString("en-US", { minimumFractionDigits: 2 })}</td>
+                      <td className="p-2 border-b border-gray-100 text-green-600">{parseFloat(inv.paid || "0").toLocaleString("en-US", { minimumFractionDigits: 2 })}</td>
+                      <td className="p-2 border-b border-gray-100 text-red-600">{parseFloat(inv.remaining || "0").toLocaleString("en-US", { minimumFractionDigits: 2 })}</td>
                       <td className="p-2 border-b border-gray-100">
                         <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
                           inv.status === "paid" ? "bg-green-100 text-green-700" :
@@ -281,10 +379,10 @@ export default function ContactStatement() {
                 <tbody>
                   {cashTxns.map((tx: any, idx: number) => (
                     <tr key={tx.id} className={idx % 2 === 0 ? "bg-white" : "bg-gray-50"}>
-                      <td className="p-2 border-b border-gray-100 text-xs">{tx.date ? new Date(tx.date).toLocaleDateString("ar-EG") : "-"}</td>
-                      <td className="p-2 border-b border-gray-100 text-xs">{tx.type === "receipt" ? "قبض" : tx.type === "payment" ? "صرف" : tx.type}</td>
-                      <td className="p-2 border-b border-gray-100 font-medium">{parseFloat(tx.amount || "0").toLocaleString("ar-EG", { minimumFractionDigits: 2 })} ج.م</td>
-                      <td className="p-2 border-b border-gray-100 text-xs text-gray-500">{tx.notes || "-"}</td>
+                      <td className="p-2 border-b border-gray-100 text-xs">{tx.date ? new Date(tx.date).toLocaleDateString("en-GB") : "-"}</td>
+                      <td className="p-2 border-b border-gray-100 text-xs">{cashTypeLabel(tx.type)}</td>
+                      <td className="p-2 border-b border-gray-100 font-medium">{parseFloat(tx.amount || "0").toLocaleString("en-US", { minimumFractionDigits: 2 })} ج.م</td>
+                      <td className="p-2 border-b border-gray-100 text-xs text-gray-500">{tx.description || "-"}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -311,10 +409,10 @@ export default function ContactStatement() {
                 <tbody>
                   {bankTxns.map((tx: any, idx: number) => (
                     <tr key={tx.id} className={idx % 2 === 0 ? "bg-white" : "bg-gray-50"}>
-                      <td className="p-2 border-b border-gray-100 text-xs">{tx.date ? new Date(tx.date).toLocaleDateString("ar-EG") : "-"}</td>
-                      <td className="p-2 border-b border-gray-100 text-xs">{tx.type === "deposit" ? "إيداع" : tx.type === "withdrawal" ? "سحب" : tx.type}</td>
-                      <td className="p-2 border-b border-gray-100 font-medium">{parseFloat(tx.amount || "0").toLocaleString("ar-EG", { minimumFractionDigits: 2 })} ج.م</td>
-                      <td className="p-2 border-b border-gray-100 text-xs text-gray-500">{tx.notes || "-"}</td>
+                      <td className="p-2 border-b border-gray-100 text-xs">{tx.date ? new Date(tx.date).toLocaleDateString("en-GB") : "-"}</td>
+                      <td className="p-2 border-b border-gray-100 text-xs">{bankTypeLabel(tx.type)}</td>
+                      <td className="p-2 border-b border-gray-100 font-medium">{parseFloat(tx.amount || "0").toLocaleString("en-US", { minimumFractionDigits: 2 })} ج.م</td>
+                      <td className="p-2 border-b border-gray-100 text-xs text-gray-500">{tx.description || "-"}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -342,8 +440,8 @@ export default function ContactStatement() {
                   {returns.map((ret: any, idx: number) => (
                     <tr key={ret.id} className={idx % 2 === 0 ? "bg-white" : "bg-gray-50"}>
                       <td className="p-2 border-b border-gray-100 font-medium text-orange-600">{ret.number}</td>
-                      <td className="p-2 border-b border-gray-100 text-xs">{ret.date ? new Date(ret.date).toLocaleDateString("ar-EG") : "-"}</td>
-                      <td className="p-2 border-b border-gray-100 font-medium">{parseFloat(ret.total || "0").toLocaleString("ar-EG", { minimumFractionDigits: 2 })} ج.م</td>
+                      <td className="p-2 border-b border-gray-100 text-xs">{ret.date ? new Date(ret.date).toLocaleDateString("en-GB") : "-"}</td>
+                      <td className="p-2 border-b border-gray-100 font-medium">{parseFloat(ret.total || "0").toLocaleString("en-US", { minimumFractionDigits: 2 })} ج.م</td>
                       <td className="p-2 border-b border-gray-100 text-xs text-gray-500">{ret.reason || "-"}</td>
                     </tr>
                   ))}
@@ -354,10 +452,11 @@ export default function ContactStatement() {
 
           {/* Footer */}
           <div className="pt-4 border-t border-gray-200 text-center text-xs text-gray-400">
-            Easy Cash - نظام المحاسبة والإدارة المتكامل | تم إنشاء هذا الكشف بتاريخ {new Date().toLocaleDateString("ar-EG")}
+            Easy Cash - نظام المحاسبة والإدارة المتكامل | تم إنشاء هذا الكشف بتاريخ {new Date().toLocaleDateString("en-GB")}
           </div>
         </div>
       )}
     </div>
+    </ERPLayout>
   );
 }

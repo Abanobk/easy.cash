@@ -1,6 +1,11 @@
-# Deploy to TrueNAS from GitHub Actions.
-# Uses Tailscale so the runner can reach the NAS Tailscale IP (e.g. 100.x.x.x).
-# Same pattern as easy.shope — see README.md for GitHub Secrets setup.
+# نشر تلقائي زي FlutterFlow Publish:
+#   git push origin main  →  GitHub Actions يبني ويرفع على TrueNAS
+#
+# الاتصال (بالترتيب):
+#   1) Cloudflare Access SSH إن وُجدت أسرار CF_ACCESS_* (نفس أسلوب scripts/deploy.sh)
+#   2) وإلا Tailscale + SSH
+#
+# تشغيل يدوي: Actions → Deploy → Run workflow
 name: Deploy
 
 on:
@@ -28,7 +33,11 @@ jobs:
           printf '%s\n' "${SSH_PRIVATE_KEY}" | tr -d '\r' > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
           echo "Verifying key fingerprint (public side only):"
-          ssh-keygen -l -f ~/.ssh/deploy_key || { echo "SSH_PRIVATE_KEY is not a valid OpenSSH private key. Re-copy from: cat ~/.ssh/github_deploy_easyshope"; exit 1; }
+          ssh-keygen -l -f ~/.ssh/deploy_key || {
+            echo "SSH_PRIVATE_KEY is not a valid OpenSSH private key."
+            echo "Re-copy from: cat ~/.ssh/github_deploy_easyshope"
+            exit 1
+          }
 
       - name: Checkout
         uses: actions/checkout@v4
@@ -36,15 +45,48 @@ jobs:
       - name: Validate Docker build
         run: docker build .
 
+      - name: Choose transport (Cloudflare Access or Tailscale)
+        id: transport
+        env:
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+          CF_TUNNEL_HOST: ${{ secrets.CF_TUNNEL_HOST }}
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+        run: |
+          set -euo pipefail
+          if [ -n "${CF_ACCESS_CLIENT_ID:-}" ] && [ -n "${CF_ACCESS_CLIENT_SECRET:-}" ]; then
+            echo "mode=cloudflare" >> "$GITHUB_OUTPUT"
+            echo "Using Cloudflare Access SSH (same path as scripts/deploy.sh)."
+            echo "CF_TUNNEL_HOST=${CF_TUNNEL_HOST:-ssh-deploy.easytecheg.net}" >> "$GITHUB_ENV"
+            # With Access proxy, SSH target hostname is the Access hostname.
+            echo "SSH_HOST=${CF_TUNNEL_HOST:-ssh-deploy.easytecheg.net}" >> "$GITHUB_ENV"
+          else
+            echo "mode=tailscale" >> "$GITHUB_OUTPUT"
+            echo "CF Access secrets not set — falling back to Tailscale."
+            test -n "${SSH_HOST:-}" || { echo "Missing secret SSH_HOST (or set CF_ACCESS_CLIENT_ID/SECRET)"; exit 1; }
+            echo "SSH_HOST=${SSH_HOST}" >> "$GITHUB_ENV"
+          fi
+
+      - name: Install cloudflared
+        if: steps.transport.outputs.mode == 'cloudflare'
+        run: |
+          set -euo pipefail
+          curl -fsSL -o /tmp/cloudflared \
+            https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64
+          sudo install -m 755 /tmp/cloudflared /usr/local/bin/cloudflared
+          cloudflared version
+
       - name: Connect Tailscale
+        if: steps.transport.outputs.mode == 'tailscale'
         uses: tailscale/github-action@v2
         with:
           authkey: ${{ secrets.TAILSCALE_AUTHKEY }}
 
       - name: Wait for TrueNAS on Tailscale
+        if: steps.transport.outputs.mode == 'tailscale'
         timeout-minutes: 35
         env:
-          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_HOST: ${{ env.SSH_HOST }}
           WAIT_ROUNDS: ${{ vars.TRUENAS_WAIT_ROUNDS || '90' }}
           WAIT_SLEEP: ${{ vars.TRUENAS_WAIT_SLEEP || '20' }}
         run: |
@@ -87,18 +129,22 @@ jobs:
         env:
           SSH_KNOWN_HOSTS: ${{ secrets.SSH_KNOWN_HOSTS }}
           SSH_HOST: ${{ env.SSH_HOST }}
+          TRANSPORT_MODE: ${{ steps.transport.outputs.mode }}
         run: |
           set -euo pipefail
-          test -n "${SSH_HOST:-}" || { echo "Missing secret SSH_HOST"; exit 1; }
+          test -n "${SSH_HOST:-}" || { echo "Missing SSH_HOST"; exit 1; }
+          touch ~/.ssh/known_hosts
           if [ -n "${SSH_KNOWN_HOSTS:-}" ]; then
             echo "$SSH_KNOWN_HOSTS" >> ~/.ssh/known_hosts
-          else
+          elif [ "${TRANSPORT_MODE}" = "tailscale" ]; then
             for i in $(seq 1 12); do
               if ssh-keyscan -H -T 15 "$SSH_HOST" >> ~/.ssh/known_hosts 2>/dev/null; then
                 break
               fi
               sleep 5
             done
+          else
+            echo "Cloudflare mode: host key will be accepted on first connect."
           fi
           chmod 644 ~/.ssh/known_hosts
 
@@ -107,17 +153,29 @@ jobs:
           SSH_HOST: ${{ env.SSH_HOST }}
           SSH_USER: ${{ secrets.SSH_USER }}
           DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+          TRANSPORT_MODE: ${{ steps.transport.outputs.mode }}
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+          CF_TUNNEL_HOST: ${{ env.CF_TUNNEL_HOST }}
         run: |
           set -euo pipefail
           test -n "${SSH_USER:-}" || { echo "Missing secret SSH_USER"; exit 1; }
           test -n "${DEPLOY_PATH:-}" || { echo "Missing secret DEPLOY_PATH"; exit 1; }
-          SSH_OPTS="-i ~/.ssh/deploy_key -o BatchMode=yes -o IdentitiesOnly=yes -o ConnectTimeout=20 -o ServerAliveInterval=10 -o ServerAliveCountMax=3"
+
+          SSH_BASE=(-i ~/.ssh/deploy_key -o BatchMode=yes -o IdentitiesOnly=yes -o ConnectTimeout=30 -o ServerAliveInterval=10 -o ServerAliveCountMax=3)
+          if [ ! -s ~/.ssh/known_hosts ]; then
+            SSH_BASE+=(-o StrictHostKeyChecking=accept-new)
+          fi
+          if [ "${TRANSPORT_MODE}" = "cloudflare" ]; then
+            SSH_BASE+=(-o "ProxyCommand=cloudflared access tcp --hostname ${CF_TUNNEL_HOST} --id ${CF_ACCESS_CLIENT_ID} --secret ${CF_ACCESS_CLIENT_SECRET}")
+          fi
+
           retry_ssh() {
             local attempt=1
             local max=8
             while [ "$attempt" -le "$max" ]; do
               echo "SSH attempt ${attempt}/${max}..."
-              if ssh ${SSH_OPTS} "${SSH_USER}@${SSH_HOST}" "$@"; then
+              if ssh "${SSH_BASE[@]}" "${SSH_USER}@${SSH_HOST}" "$@"; then
                 return 0
               fi
               sleep $((attempt * 5))
@@ -125,16 +183,22 @@ jobs:
             done
             return 1
           }
+
           tar -czf /tmp/easy-cash-deploy.tgz \
             --exclude=node_modules \
             --exclude=dist \
             --exclude=.git \
             --exclude=.manus-logs \
+            --exclude=.env \
+            --exclude=.env.local \
+            --exclude=.env.production \
             .
-          retry_ssh "set -euo pipefail; mkdir -p \"${DEPLOY_PATH}\""
+
+          retry_ssh "set -euo pipefail; mkdir -p \"${DEPLOY_PATH}\"; cd \"${DEPLOY_PATH}\"; test -f .env && cp -p .env .env.deploy-backup || true"
           for attempt in $(seq 1 8); do
             echo "Upload attempt ${attempt}/8..."
-            if cat /tmp/easy-cash-deploy.tgz | ssh ${SSH_OPTS} "${SSH_USER}@${SSH_HOST}" "set -euo pipefail; tar -xzf - -C \"${DEPLOY_PATH}\""; then
+            if cat /tmp/easy-cash-deploy.tgz | ssh "${SSH_BASE[@]}" "${SSH_USER}@${SSH_HOST}" \
+              "set -euo pipefail; tar -xzf - -C \"${DEPLOY_PATH}\"; cd \"${DEPLOY_PATH}\"; if test -f .env.deploy-backup; then mv -f .env.deploy-backup .env; elif ! test -f .env; then cp .env.example .env; fi"; then
               exit 0
             fi
             sleep $((attempt * 5))
@@ -147,13 +211,25 @@ jobs:
           SSH_HOST: ${{ env.SSH_HOST }}
           SSH_USER: ${{ secrets.SSH_USER }}
           DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+          TRANSPORT_MODE: ${{ steps.transport.outputs.mode }}
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+          CF_TUNNEL_HOST: ${{ env.CF_TUNNEL_HOST }}
+          GITHUB_SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
-          SSH_OPTS="-i ~/.ssh/deploy_key -o BatchMode=yes -o IdentitiesOnly=yes -o ConnectTimeout=20 -o ServerAliveInterval=10 -o ServerAliveCountMax=3"
+          SSH_BASE=(-i ~/.ssh/deploy_key -o BatchMode=yes -o IdentitiesOnly=yes -o ConnectTimeout=30 -o ServerAliveInterval=10 -o ServerAliveCountMax=3)
+          if [ ! -s ~/.ssh/known_hosts ]; then
+            SSH_BASE+=(-o StrictHostKeyChecking=accept-new)
+          fi
+          if [ "${TRANSPORT_MODE}" = "cloudflare" ]; then
+            SSH_BASE+=(-o "ProxyCommand=cloudflared access tcp --hostname ${CF_TUNNEL_HOST} --id ${CF_ACCESS_CLIENT_ID} --secret ${CF_ACCESS_CLIENT_SECRET}")
+          fi
+
           for attempt in $(seq 1 8); do
             echo "Compose deploy attempt ${attempt}/8..."
-            if ssh ${SSH_OPTS} "${SSH_USER}@${SSH_HOST}" \
-              "set -euo pipefail; cd \"${DEPLOY_PATH}\"; test -f .env || cp .env.example .env; (docker compose version >/dev/null 2>&1 || docker-compose version >/dev/null 2>&1) || { echo 'Docker Compose is not available on TrueNAS shell'; exit 1; }; if docker compose version >/dev/null 2>&1; then docker compose up -d mysql; docker compose up -d --build --remove-orphans --force-recreate app; else docker-compose up -d mysql; docker-compose up -d --build --remove-orphans --force-recreate app; fi; for i in \$(seq 1 60); do curl -fsS http://127.0.0.1:8099/api/health | grep -q 'easy-cash-erp' && break; sleep 3; done; curl -fsS http://127.0.0.1:8099/api/health | grep 'easy-cash-erp'; printf '%s %s\n' \"\$(date -u +\"%Y-%m-%dT%H:%M:%SZ\")\" \"${GITHUB_SHA}\" | tee \"${DEPLOY_PATH}/last_deploy.txt\" >/dev/null"; then
+            if ssh "${SSH_BASE[@]}" "${SSH_USER}@${SSH_HOST}" \
+              "set -euo pipefail; cd \"${DEPLOY_PATH}\"; test -f .env || cp .env.example .env; if docker compose version >/dev/null 2>&1; then docker compose up -d --no-recreate mysql 2>/dev/null || docker compose up -d mysql; docker compose up -d --build --force-recreate --no-deps app; elif command -v docker-compose >/dev/null 2>&1; then docker-compose up -d --no-recreate mysql 2>/dev/null || docker-compose up -d mysql; docker-compose up -d --build --force-recreate --no-deps app; else echo 'Docker Compose is not available on TrueNAS shell'; exit 1; fi; for i in \$(seq 1 60); do curl -fsS http://127.0.0.1:8099/api/health 2>/dev/null | grep -q 'easy-cash-erp' && break; sleep 3; done; curl -fsS http://127.0.0.1:8099/api/health | grep 'easy-cash-erp'; printf '%s %s\n' \"\$(date -u +\"%Y-%m-%dT%H:%M:%SZ\")\" \"${GITHUB_SHA}\" | tee \"${DEPLOY_PATH}/last_deploy.txt\" >/dev/null"; then
               exit 0
             fi
             sleep $((attempt * 5))

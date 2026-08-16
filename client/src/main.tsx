@@ -5,9 +5,22 @@ import { httpBatchLink, TRPCClientError } from "@trpc/client";
 import { createRoot } from "react-dom/client";
 import superjson from "superjson";
 import App from "./App";
-import { getLoginUrl } from "./const";
+import { getDefaultLoginPath } from "./lib/tenant-login";
 import { getTenantSlugFromPath } from "./lib/tenant";
 import "./index.css";
+
+/** سكرول الماوس فوق حقل رقم ما يغيّرش القيمة — يسيّب الفوكس ويكمل سكرول الصفحة */
+if (typeof window !== "undefined") {
+  window.addEventListener(
+    "wheel",
+    (e) => {
+      const t = e.target;
+      if (!(t instanceof HTMLInputElement) || t.type !== "number") return;
+      if (document.activeElement === t) t.blur();
+    },
+    { passive: true, capture: true },
+  );
+}
 
 const queryClient = new QueryClient();
 
@@ -21,8 +34,14 @@ const redirectToLoginIfUnauthorized = (error: unknown) => {
 
   // Redirect to SaaS login page instead of Manus OAuth
   const currentPath = window.location.pathname;
-  if (currentPath !== "/login" && currentPath !== "/register" && currentPath !== "/super-admin") {
-    window.location.href = "/login";
+  const loginPath = getDefaultLoginPath(currentPath);
+  if (
+    currentPath !== "/login" &&
+    currentPath !== "/register" &&
+    currentPath !== "/super-admin" &&
+    !currentPath.endsWith("/login")
+  ) {
+    window.location.href = loginPath;
   }
 };
 
@@ -48,10 +67,7 @@ const trpcClient = trpc.createClient({
       url: "/api/trpc",
       transformer: superjson,
       headers() {
-        // Preview auto-login fallback: when the browser blocks iframe cookies
-        // (Safari ITP / private browsing / WebView), the runtime mirrors the
-        // session into sessionStorage so we can forward it as a Bearer token.
-        // The regular OAuth cookie flow keeps working and takes priority server-side.
+        const extra: Record<string, string> = {};
         try {
           const raw = sessionStorage.getItem("manus-cookie");
           if (raw) {
@@ -59,17 +75,27 @@ const trpcClient = trpc.createClient({
             const pair = raw.split(";").find(s => s.trim().startsWith(prefix));
             const token = pair?.trim().slice(prefix.length);
             if (token) {
-              return { Authorization: `Bearer ${token}` };
+              extra.Authorization = `Bearer ${token}`;
             }
           }
         } catch {
-          // sessionStorage unavailable
+          /* sessionStorage unavailable */
+        }
+        if (!extra.Authorization && typeof document !== "undefined") {
+          const saasMatch = document.cookie.match(/(?:^|;\s*)easy_cash_session=([^;]+)/);
+          if (saasMatch?.[1]) {
+            try {
+              extra.Authorization = `Bearer ${decodeURIComponent(saasMatch[1])}`;
+            } catch {
+              extra.Authorization = `Bearer ${saasMatch[1]}`;
+            }
+          }
         }
         const slug = getTenantSlugFromPath();
         if (slug) {
-          return { "x-tenant-slug": slug };
+          extra["x-tenant-slug"] = slug;
         }
-        return {};
+        return extra;
       },
       fetch(input, init) {
         return globalThis.fetch(input, {

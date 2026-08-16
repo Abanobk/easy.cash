@@ -1,11 +1,11 @@
 import crypto from "crypto";
 import type { Request } from "express";
-import { ENV } from "./_core/env";
+import { resolveEncryptionKey } from "./security-secrets";
+import { intentionIncludesWallet, LIVE_UNIFIED_CARD_INTEGRATION_ID } from "./paymob-methods";
 
 export type PaymobPublicConfig = {
   publicKey: string;
   publicKeyLast8?: string;
-  cardIntegrationId: number;
   currency: string;
 };
 
@@ -15,8 +15,7 @@ export type PaymobSecretConfig = {
 };
 
 function getEncryptionKey() {
-  const secret = ENV.cookieSecret || "easy-cash-secret";
-  return crypto.createHash("sha256").update(secret).digest();
+  return crypto.createHash("sha256").update(resolveEncryptionKey()).digest();
 }
 
 export function encodeSecret(value: unknown): string {
@@ -56,20 +55,238 @@ export function assertPaymobPublicKey(publicKey: unknown) {
   }
 }
 
-export function paymobErrorMessage(payload: unknown): string {
+export function normalizePaymobSecretKey(secretKey: unknown): string {
+  return String(secretKey || "").trim();
+}
+
+export function assertPaymobSecretKey(secretKey: unknown) {
+  const key = normalizePaymobSecretKey(secretKey);
+  if (!key) {
+    throw new Error(
+      "Secret Key غير محفوظ. من السوبر أدمن → Paymob أعد إدخال Secret Key من Developers > API Keys (يبدأ بـ sk_)."
+    );
+  }
+  if (isLikelyPaymobPublicKey(key)) {
+    throw new Error(
+      "أدخلت Public Key مكان Secret Key. انسخ Secret Key (يبدأ بـ sk_) وليس Public Key ولا API Token القديم."
+    );
+  }
+  if (!/(^sk_|^sak_|^egy_sk)/i.test(key) && key.length < 24) {
+    throw new Error(
+      "Secret Key غير صحيح. من Paymob > Developers > API Keys انسخ Secret Key (يبدأ بـ sk_test_ أو sk_live_)."
+    );
+  }
+  return key;
+}
+
+export function loadPaymobSecrets(encryptedSecret: string): PaymobSecretConfig {
+  try {
+    const decoded = decodeSecret<PaymobSecretConfig>(encryptedSecret);
+    return {
+      secretKey: normalizePaymobSecretKey(decoded.secretKey),
+      hmacSecret: String(decoded.hmacSecret || "").trim(),
+    };
+  } catch {
+    throw new Error(
+      "تعذر قراءة مفاتيح Paymob المحفوظة. أعد إدخال Secret Key من السوبر أدمن (قد يكون JWT_SECRET أو ENCRYPTION_KEY تغيّر على السيرفر)."
+    );
+  }
+}
+
+export function paymobPaymentMethods(ids: Array<number | string>): Array<number | string> {
+  return ids.filter((id) => {
+    if (typeof id === "string") return id.trim().length > 0;
+    return Number.isFinite(id) && id > 0;
+  });
+}
+
+export function paymobPaymentMethodLabel(ids: Array<number | string>) {
+  const methods = paymobPaymentMethods(ids);
+  return methods.length > 0 ? methods.join(" + ") : "—";
+}
+
+export function normalizeEgyptPhone(phone: string | null | undefined): string {
+  const digits = String(phone || "").replace(/\D/g, "");
+  if (digits.startsWith("20") && digits.length >= 12) return `+${digits}`;
+  if (digits.startsWith("0") && digits.length >= 11) return `+2${digits}`;
+  if (digits.length >= 10) return `+20${digits.replace(/^0+/, "")}`;
+  return "+201000000000";
+}
+
+async function postPaymobIntentionWithFallbacks(
+  secretKey: string,
+  primaryInputs: Array<number | string>,
+  fallbackInputs: Array<Array<number | string>> | undefined,
+  bodyWithoutMethods: Record<string, unknown>,
+  mode?: "test" | "live",
+  preferWallet?: boolean,
+) {
+  const key = assertPaymobSecretKey(secretKey);
+  const attempts = [
+    paymobPaymentMethods(primaryInputs),
+    ...(fallbackInputs || []).map((entry) => paymobPaymentMethods(entry)),
+  ].filter((entry) => entry.length > 0);
+
+  const uniqueAttempts: Array<Array<number | string>> = [];
+  const seen = new Set<string>();
+  for (const entry of attempts) {
+    const token = JSON.stringify(entry);
+    if (seen.has(token)) continue;
+    seen.add(token);
+    uniqueAttempts.push(entry);
+  }
+
+  if (uniqueAttempts.length === 0) {
+    throw new Error("لا توجد طرق دفع مفعّلة. أدخل رقم تكامل البطاقة (5084536) وفعّل الصف.");
+  }
+
+  let lastError: Error | null = null;
+  let lastPayload: unknown;
+  let lastMethods: Array<number | string> = [];
+  const successes: Array<{
+    data: { id?: string; client_secret: string; intention_order_id?: string };
+    paymentMethods: Array<number | string>;
+  }> = [];
+
+  for (const paymentMethods of uniqueAttempts) {
+    const response = await fetch("https://accept.paymob.com/v1/intention/", {
+      method: "POST",
+      headers: paymobAuthHeaders(key),
+      body: JSON.stringify({ ...bodyWithoutMethods, payment_methods: paymentMethods }),
+    });
+    const data = await response.json().catch(() => ({}));
+    if (response.ok && (data as { client_secret?: string }).client_secret) {
+      successes.push({
+        data: data as { id?: string; client_secret: string; intention_order_id?: string },
+        paymentMethods,
+      });
+      continue;
+    }
+    lastPayload = data;
+    lastMethods = paymentMethods;
+    lastError = new Error(paymobErrorMessage(data, { mode, integrationIds: paymentMethods }));
+  }
+
+  if (successes.length === 0) {
+    throw lastError ?? new Error(paymobErrorMessage(lastPayload, { mode, integrationIds: lastMethods }));
+  }
+
+  const pick = preferWallet
+    ? successes.find((entry) => intentionIncludesWallet(entry.data)) ?? successes[0]
+    : successes[0];
+
+  return {
+    ...pick.data,
+    _paymentMethodsUsed: pick.paymentMethods,
+  };
+}
+
+export async function testPaymobIntention(
+  secretKey: string,
+  paymentMethodInputs: Array<number | string>,
+  currency: string,
+  mode?: "test" | "live",
+  fallbackInputs?: Array<Array<number | string>>,
+  preferWallet?: boolean,
+) {
+  return postPaymobIntentionWithFallbacks(
+    secretKey,
+    paymentMethodInputs,
+    fallbackInputs,
+    {
+      amount: 100,
+      currency: currency || "EGP",
+      items: [{ name: "Easy Cash test", amount: 100, description: "Connection test", quantity: 1 }],
+      billing_data: {
+        first_name: "Easy", last_name: "Cash", phone_number: "+201000000000",
+        email: "test@easycash.app", country: "EG", city: "Cairo",
+        street: "NA", building: "NA", apartment: "NA", floor: "NA",
+      },
+      special_reference: `easy-cash-test-${Date.now()}`,
+      expiration: 600,
+    },
+    mode,
+    preferWallet,
+  );
+}
+
+export async function createPaymobIntention(
+  secretKey: string,
+  paymentMethodInputs: Array<number | string>,
+  bodyWithoutMethods: Record<string, unknown>,
+  mode?: "test" | "live",
+  fallbackInputs?: Array<Array<number | string>>,
+  preferWallet?: boolean,
+) {
+  return postPaymobIntentionWithFallbacks(
+    secretKey,
+    paymentMethodInputs,
+    fallbackInputs,
+    bodyWithoutMethods,
+    mode,
+    preferWallet,
+  );
+}
+
+export function paymobAuthHeaders(secretKey: string) {
+  return {
+    Authorization: `Token ${normalizePaymobSecretKey(secretKey)}`,
+    "Content-Type": "application/json",
+  };
+}
+
+export function paymobErrorMessage(
+  payload: unknown,
+  hint?: { mode?: string; integrationIds?: Array<number | string> },
+): string {
   if (!payload || typeof payload !== "object") return "Paymob رفض طلب الدفع";
   const body = payload as Record<string, unknown>;
-  const direct = body.message || body.detail || body.error;
-  if (typeof direct === "string") return direct;
+  const direct = String(body.message || body.detail || body.error || "");
+  const allText = JSON.stringify(body);
+
+  if (/authentication credentials were not provided/i.test(direct)) {
+    return "مفتاح Paymob السري غير صحيح أو غير محفوظ. أعد إدخال Secret Key من Developers → API Keys.";
+  }
+  if (/integration id/i.test(direct) || /integration id/i.test(allText)) {
+    const modeLabel = hint?.mode === "live" ? "Live (مباشر)" : "Test (تجريبي)";
+    const ids = hint?.integrationIds?.length ? ` (${hint.integrationIds.join(", ")})` : "";
+    const hasLegacyIds = hint?.integrationIds?.some((id) => typeof id === "number" && [4310645, 4310646, 5126391].includes(id));
+    const onlyStringAliases = hint?.integrationIds?.every((id) => typeof id === "string");
+    if (onlyStringAliases && hint?.integrationIds?.includes("card")) {
+      return `رقم بطاقة ائتمان غير صحيح في الإعدادات (مثل 4310645). غيّره إلى ${LIVE_UNIFIED_CARD_INTEGRATION_ID} في جدول طرق الدفع ثم احفظ.`;
+    }
+    if (hasLegacyIds) {
+      return `أرقام${ids} من طرق الدفع القديمة في Paymob — لا تعمل مع Unified Checkout / Intention API. للبطاقة استخدم 5084536 (MIGS-online). للمحفظة فعّل الصف وسيُرسل "wallet" تلقائياً (رقم 4310646 للمرجع فقط).`;
+    }
+    return `رقم التكامل${ids} غير مدعوم لـ Unified Checkout في وضع ${modeLabel}. للبطاقة: 5084536. للمحفظة: فعّل الصف بدون تغيير الرقم — يُستخدم alias "wallet".`;
+  }
+  if (direct) return direct;
+
   const errors = Object.entries(body)
     .map(([key, value]): string => {
       if (Array.isArray(value)) return `${key}: ${value.join(", ")}`;
       if (typeof value === "string") return `${key}: ${value}`;
-      if (value && typeof value === "object") return `${key}: ${paymobErrorMessage(value)}`;
+      if (value && typeof value === "object") return `${key}: ${paymobErrorMessage(value, hint)}`;
       return "";
     })
     .filter(Boolean);
   return errors.join(" | ") || "Paymob رفض طلب الدفع";
+}
+
+export function assertPaymobKeysMatchMode(
+  mode: "test" | "live",
+  publicKey: string,
+  secretKey?: string,
+) {
+  const blob = `${publicKey} ${secretKey || ""}`;
+  const looksLive = /_live_|egy_pk_live|sk_live|egy_sk_live/i.test(blob);
+  const looksTest = /_test_|egy_pk_test|sk_test|egy_sk_test/i.test(blob);
+  if (mode === "live" && looksTest && !looksLive) {
+    throw new Error("الوضع Live لكن المفاتيح تبدو Test. استخدم مفاتيح Live من Paymob أو غيّر الوضع إلى Test.");
+  }
+  if (mode === "test" && looksLive && !looksTest) {
+    throw new Error("الوضع Test لكن المفاتيح Live. طابق الوضع مع نوع المفاتيح من Paymob.");
+  }
 }
 
 function paymobField(obj: Record<string, unknown>, path: string) {
@@ -103,7 +320,15 @@ export function paymobTransactionState(obj: Record<string, unknown>) {
     success: obj.success === true || obj.success === "true",
     pending: obj.pending === true || obj.pending === "true",
     transactionId: String(obj.id || obj.transaction_id || ""),
+    amountCents: extractPaymobPaidAmountCents(obj),
   };
+}
+
+export function extractPaymobPaidAmountCents(obj: Record<string, unknown>): number | null {
+  const raw = obj.amount_cents ?? paymobField(obj, "order.amount_cents");
+  if (raw == null || raw === "") return null;
+  const n = Number(raw);
+  return Number.isFinite(n) ? n : null;
 }
 
 export function splitName(value: string) {

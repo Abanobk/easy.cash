@@ -113,3 +113,10 @@ temp/
 client/public/__manus__/version.json
 .project-config.json
 .manus/
+
+# Mega backup drops (keep sample + docs)
+mega-kam-backup/**
+!mega-kam-backup/README.md
+!mega-kam-backup/MIGRATION.md
+!mega-kam-backup/sample-fixture/
+!mega-kam-backup/sample-fixture/**

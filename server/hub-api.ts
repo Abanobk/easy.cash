@@ -7,29 +7,19 @@ import { appUsers, subscriptionPlans, subscriptions } from "../drizzle/schema";
 import { getDb } from "./db";
 import {
   getAppUserByEmail,
-  SAAS_COOKIE_NAME,
+  requireSuperAdminFromRequest,
   signSaasToken,
   verifyPassword,
-  verifySaasToken,
 } from "./saas-auth";
+import { assertRateLimit, clientIp, RateLimitError } from "./rate-limit";
 
-async function sessionFromRequest(req: Request) {
-  const auth = req.headers.authorization || "";
-  if (auth.startsWith("Bearer ")) {
-    return verifySaasToken(auth.slice(7));
-  }
-  const cookies = req.headers.cookie || "";
-  const match = cookies.match(new RegExp(`${SAAS_COOKIE_NAME}=([^;]+)`));
-  return verifySaasToken(match?.[1]);
-}
-
-async function requireSuperAdmin(req: Request, res: Response) {
-  const session = await sessionFromRequest(req);
-  if (!session || session.role !== "superadmin") {
-    res.status(403).json({ message: "غير مصرح — مطلوب حساب سوبر أدمن" });
+async function requireHubSuperAdmin(req: Request, res: Response) {
+  try {
+    return await requireSuperAdminFromRequest(req);
+  } catch {
+    res.status(403).json({ message: "غير مصرح — مطلوب حساب سوبر أدمن نشط" });
     return null;
   }
-  return session;
 }
 
 function dateOnly(d: Date) {
@@ -45,12 +35,23 @@ function addDays(isoDate: string, days: number) {
 export function registerHubApi(app: Express) {
   app.post("/api/hub/login", async (req, res) => {
     try {
+      const ip = clientIp(req);
+      try {
+        assertRateLimit(`hub-login:ip:${ip}`, { limit: 20, windowMs: 15 * 60 * 1000 });
+      } catch (e) {
+        if (e instanceof RateLimitError) {
+          res.status(429).json({ message: `محاولات كثيرة — أعد المحاولة بعد ${e.retryAfterSec} ثانية` });
+          return;
+        }
+        throw e;
+      }
       const email = String(req.body?.email || "").trim().toLowerCase();
       const password = String(req.body?.password || "");
       if (!email || !password) {
         res.status(400).json({ message: "الإيميل وكلمة المرور مطلوبين" });
         return;
       }
+      assertRateLimit(`hub-login:email:${email}`, { limit: 10, windowMs: 15 * 60 * 1000 });
       const user = await getAppUserByEmail(email);
       if (!user || !user.isActive) {
         res.status(401).json({ message: "البريد الإلكتروني أو كلمة المرور غير صحيحة" });
@@ -71,12 +72,16 @@ export function registerHubApi(app: Express) {
         user: { id: user.id, name: user.name, email: user.email, role: user.role, companyName: user.companyName },
       });
     } catch (e: any) {
+      if (e instanceof RateLimitError) {
+        res.status(429).json({ message: `محاولات كثيرة — أعد المحاولة بعد ${e.retryAfterSec} ثانية` });
+        return;
+      }
       res.status(500).json({ message: e.message || "خطأ في الخادم" });
     }
   });
 
   app.get("/api/hub/stats", async (req, res) => {
-    if (!(await requireSuperAdmin(req, res))) return;
+    if (!(await requireHubSuperAdmin(req, res))) return;
     const db = await getDb();
     if (!db) {
       res.status(500).json({ message: "قاعدة البيانات غير متاحة" });
@@ -98,7 +103,7 @@ export function registerHubApi(app: Express) {
   });
 
   app.get("/api/hub/accounts", async (req, res) => {
-    if (!(await requireSuperAdmin(req, res))) return;
+    if (!(await requireHubSuperAdmin(req, res))) return;
     const db = await getDb();
     if (!db) {
       res.status(500).json({ message: "قاعدة البيانات غير متاحة" });
@@ -147,7 +152,7 @@ export function registerHubApi(app: Express) {
   });
 
   app.patch("/api/hub/users/:id", async (req, res) => {
-    if (!(await requireSuperAdmin(req, res))) return;
+    if (!(await requireHubSuperAdmin(req, res))) return;
     const db = await getDb();
     if (!db) {
       res.status(500).json({ message: "قاعدة البيانات غير متاحة" });
@@ -168,7 +173,7 @@ export function registerHubApi(app: Express) {
   });
 
   app.patch("/api/hub/subscriptions/:id", async (req, res) => {
-    if (!(await requireSuperAdmin(req, res))) return;
+    if (!(await requireHubSuperAdmin(req, res))) return;
     const db = await getDb();
     if (!db) {
       res.status(500).json({ message: "قاعدة البيانات غير متاحة" });

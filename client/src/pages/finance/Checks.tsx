@@ -1,93 +1,292 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useSearch } from "wouter";
 import ERPLayout from "@/components/ERPLayout";
-import { DataTable } from "@/components/DataTable";
+import { DataTable, statusBadge } from "@/components/DataTable";
 import { FormModal } from "@/components/FormModal";
 import { trpc } from "@/lib/trpc";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
+import { CHECK_TYPE_META, getCheckTypeFromSearch, type CheckTxType } from "@/config/finance-routes";
+import { formatBankAccountLabel } from "@/lib/bank-label";
 
-const emptyForm = {
-  type: "incoming" as "incoming" | "outgoing",
-  checkNumber: "", bankName: "", amount: "",
-  date: new Date().toISOString().split("T")[0],
-  issueDate: new Date().toISOString().split("T")[0],
-  dueDate: "", partyName: "", notes: "",
-};
+function buildEmptyForm(type: CheckTxType) {
+  return {
+    type,
+    checkNumber: "",
+    bankAccountId: undefined as number | undefined,
+    customerId: undefined as number | undefined,
+    supplierId: undefined as number | undefined,
+    amount: "",
+    date: new Date().toISOString().split("T")[0],
+    dueDate: "",
+    description: "",
+  };
+}
 
 export default function Checks() {
+  const searchString = useSearch();
+  const lockedType = useMemo(
+    () => getCheckTypeFromSearch(searchString) ?? "incoming",
+    [searchString],
+  );
+  const meta = CHECK_TYPE_META[lockedType];
+
   const [page, setPage] = useState(1);
   const [open, setOpen] = useState(false);
-  const [form, setForm] = useState(emptyForm);
+  const [form, setForm] = useState(() => buildEmptyForm(lockedType));
 
-  const { data, isLoading, refetch } = trpc.bank.checks.list.useQuery({ page, limit: 20 });
+  useEffect(() => {
+    setForm(buildEmptyForm(lockedType));
+    setPage(1);
+  }, [lockedType]);
+
+  const { data, isLoading, refetch } = trpc.bank.checks.list.useQuery({
+    page,
+    limit: 20,
+    type: lockedType,
+  });
+  const { data: bankAccounts } = trpc.bank.accounts.list.useQuery();
+  const { data: customers } = trpc.customers.list.useQuery({ page: 1, limit: 200 });
+  const { data: suppliers } = trpc.suppliers.list.useQuery({ page: 1, limit: 200 });
+  const fiscalCheck = trpc.parity.settings.fiscalYears.checkDate.useQuery(
+    { date: form.date },
+    { enabled: !!form.date },
+  );
+
   const createMut = trpc.bank.checks.create.useMutation({
-    onSuccess: () => { toast.success("تم إضافة الشيك"); refetch(); setOpen(false); setForm(emptyForm); },
+    onSuccess: () => {
+      toast.success("تم تسجيل الشيك وإنشاء القيد المحاسبي");
+      refetch();
+      setOpen(false);
+      setForm(buildEmptyForm(lockedType));
+    },
     onError: (e) => toast.error(e.message),
   });
 
-  const f = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
-    setForm(prev => ({ ...prev, [k]: e.target.value }));
+  const collectMut = trpc.bank.checks.collect.useMutation({
+    onSuccess: (res) => {
+      let msg = "تم تحصيل الشيك";
+      if (res.allocations?.length) {
+        const parts = res.allocations.map(
+          (a) => `${a.invoiceNumber}: ${Number(a.amount).toLocaleString("en-US")} ج.م`,
+        );
+        msg += ` — ${parts.join("، ")}`;
+      }
+      if (res.unallocated && Number(res.unallocated) > 0.001) {
+        msg += ` (متبقي: ${Number(res.unallocated).toLocaleString("en-US")} ج.م)`;
+      }
+      toast.success(msg);
+      refetch();
+    },
+    onError: (e) => toast.error(e.message),
+  });
 
-  const statusBadge = (status: string) => {
-    const map: Record<string, { label: string; color: string }> = {
-      pending: { label: "معلق", color: "text-orange-600 bg-orange-100" },
-      cleared: { label: "محصّل", color: "text-green-600 bg-green-100" },
-      bounced: { label: "مرتجع", color: "text-red-600 bg-red-100" },
-      cancelled: { label: "ملغي", color: "text-slate-600 bg-slate-100" },
-    };
-    const info = map[status] || { label: status, color: "text-slate-600 bg-slate-100" };
-    return <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${info.color}`}>{info.label}</span>;
+  const bounceMut = trpc.bank.checks.bounce.useMutation({
+    onSuccess: () => {
+      toast.success("تم تسجيل إرجاع الشيك");
+      refetch();
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const openCreate = () => {
+    setForm(buildEmptyForm(lockedType));
+    setOpen(true);
+  };
+
+  const handleSubmit = () => {
+    if (!form.checkNumber || !form.amount) {
+      toast.error("رقم الشيك والمبلغ مطلوبان");
+      return;
+    }
+    if (lockedType === "incoming" && !form.customerId) {
+      toast.error("يجب اختيار العميل");
+      return;
+    }
+    if (lockedType === "outgoing" && !form.supplierId) {
+      toast.error("يجب اختيار المورد");
+      return;
+    }
+    const dueDate = form.dueDate || form.date;
+    createMut.mutate({
+      type: lockedType,
+      checkNumber: form.checkNumber,
+      bankAccountId: form.bankAccountId,
+      customerId: form.customerId,
+      supplierId: form.supplierId,
+      amount: form.amount,
+      date: form.date,
+      dueDate,
+      description: form.description || undefined,
+    });
   };
 
   return (
-    <ERPLayout title="الشيكات">
+    <ERPLayout title={meta.title}>
       <DataTable
-        title="الشيكات"
+        title={meta.title}
         data={data?.rows}
         isLoading={isLoading}
         total={data?.total}
         page={page}
         onPageChange={setPage}
-        onAdd={() => { setForm(emptyForm); setOpen(true); }}
-        addLabel="شيك جديد"
+        onAdd={openCreate}
+        addLabel={meta.addLabel}
+        permissionModule="bank"
         columns={[
+          { key: "number", label: "المرجع", className: "w-28 font-mono" },
           { key: "checkNumber", label: "رقم الشيك", className: "w-32" },
-          { key: "type", label: "النوع", render: (row: any) => (
-            <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${row.type === "incoming" ? "text-blue-600 bg-blue-100" : "text-purple-600 bg-purple-100"}`}>
-              {row.type === "incoming" ? "وارد" : "صادر"}
-            </span>
-          )},
-          { key: "bankName", label: "البنك" },
-          { key: "partyName", label: "الجهة" },
-          { key: "amount", label: "المبلغ", render: (row: any) => `${Number(row.amount).toLocaleString("ar-EG")} ج.م` },
-          { key: "issueDate", label: "تاريخ الإصدار", render: (row: any) => row.issueDate ? new Date(row.issueDate).toLocaleDateString("ar-EG") : "-" },
-          { key: "dueDate", label: "تاريخ الاستحقاق", render: (row: any) => row.dueDate ? new Date(row.dueDate).toLocaleDateString("ar-EG") : "-" },
+          { key: "amount", label: "المبلغ", render: (row: any) => `${Number(row.amount).toLocaleString("en-US")} ج.م` },
+          { key: "date", label: "التاريخ", render: (row: any) => row.date ? new Date(row.date).toLocaleDateString("en-GB") : "-" },
+          { key: "dueDate", label: "الاستحقاق", render: (row: any) => row.dueDate ? new Date(row.dueDate).toLocaleDateString("en-GB") : "-" },
           { key: "status", label: "الحالة", render: (row: any) => statusBadge(row.status) },
         ]}
+        extraRowActions={(row: any) =>
+          row.status === "pending" || row.status === "deposited" ? (
+            <div className="flex gap-1">
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 text-xs text-green-700"
+                disabled={collectMut.isPending}
+                onClick={() => collectMut.mutate({ id: row.id })}
+              >
+                تحصيل
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 text-xs text-red-700"
+                disabled={bounceMut.isPending}
+                onClick={() => {
+                  if (confirm("تأكيد إرجاع/رفض هذا الشيك؟")) {
+                    bounceMut.mutate({ id: row.id });
+                  }
+                }}
+              >
+                إرجاع
+              </Button>
+            </div>
+          ) : null
+        }
       />
 
-      <FormModal open={open} onClose={() => { setOpen(false); setForm(emptyForm); }} title="إضافة شيك" onSubmit={() => { if (!form.checkNumber || !form.amount) { toast.error("رقم الشيك والمبلغ مطلوبان"); return; } createMut.mutate({ ...form, date: form.issueDate }); }} isLoading={createMut.isPending}>
+      <FormModal
+        open={open}
+        onClose={() => { setOpen(false); setForm(buildEmptyForm(lockedType)); }}
+        title={meta.formTitle}
+        onSubmit={handleSubmit}
+        isLoading={createMut.isPending}
+      >
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <Label className="text-xs font-medium text-slate-700 mb-1.5 block">نوع الشيك</Label>
-            <Select value={form.type} onValueChange={v => setForm(p => ({ ...p, type: v as any }))}>
-              <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
+            <Label className="text-xs font-medium text-slate-700 mb-1.5 block">رقم الشيك *</Label>
+            <Input
+              value={form.checkNumber}
+              onChange={(e) => setForm((p) => ({ ...p, checkNumber: e.target.value }))}
+              className="h-9 text-sm"
+            />
+          </div>
+          <div>
+            <Label className="text-xs font-medium text-slate-700 mb-1.5 block">المبلغ *</Label>
+            <Input
+              value={form.amount}
+              onChange={(e) => setForm((p) => ({ ...p, amount: e.target.value }))}
+              type="number"
+              placeholder="0.00"
+              className="h-9 text-sm"
+            />
+          </div>
+          <div>
+            <Label className="text-xs font-medium text-slate-700 mb-1.5 block">تاريخ الشيك</Label>
+            <Input
+              type="date"
+              value={form.date}
+              onChange={(e) => setForm((p) => ({ ...p, date: e.target.value }))}
+              className="h-9 text-sm"
+            />
+            {fiscalCheck.data?.closed && (
+              <p className="text-xs text-red-600 mt-1">هذا التاريخ ضمن فترة مالية مغلقة</p>
+            )}
+          </div>
+          <div>
+            <Label className="text-xs font-medium text-slate-700 mb-1.5 block">تاريخ الاستحقاق</Label>
+            <Input
+              type="date"
+              value={form.dueDate}
+              onChange={(e) => setForm((p) => ({ ...p, dueDate: e.target.value }))}
+              className="h-9 text-sm"
+            />
+          </div>
+          <div className="col-span-2">
+            <Label className="text-xs font-medium text-slate-700 mb-1.5 block">الحساب البنكي</Label>
+            <Select
+              value={form.bankAccountId?.toString() || ""}
+              onValueChange={(v) => setForm((p) => ({ ...p, bankAccountId: Number(v) }))}
+            >
+              <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="اختياري" /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="incoming">وارد</SelectItem>
-                <SelectItem value="outgoing">صادر</SelectItem>
+                {bankAccounts?.map((b: any) => (
+                  <SelectItem key={b.id} value={b.id.toString()}>
+                    {formatBankAccountLabel(b)}
+                  </SelectItem>
+                ))}
+                {!bankAccounts?.length && (
+                  <SelectItem value="__empty" disabled>
+                    لا توجد بنوك — أضف حساباً تحت «البنوك» في شجرة الحسابات
+                  </SelectItem>
+                )}
               </SelectContent>
             </Select>
           </div>
-          <div><Label className="text-xs font-medium text-slate-700 mb-1.5 block">رقم الشيك *</Label><Input value={form.checkNumber} onChange={f("checkNumber")} className="h-9 text-sm" /></div>
-          <div><Label className="text-xs font-medium text-slate-700 mb-1.5 block">اسم البنك</Label><Input value={form.bankName} onChange={f("bankName")} className="h-9 text-sm" /></div>
-          <div><Label className="text-xs font-medium text-slate-700 mb-1.5 block">الجهة</Label><Input value={form.partyName} onChange={f("partyName")} className="h-9 text-sm" /></div>
-          <div><Label className="text-xs font-medium text-slate-700 mb-1.5 block">المبلغ *</Label><Input value={form.amount} onChange={f("amount")} type="number" placeholder="0.00" className="h-9 text-sm" /></div>
-          <div><Label className="text-xs font-medium text-slate-700 mb-1.5 block">تاريخ الإصدار</Label><Input type="date" value={form.issueDate} onChange={f("issueDate")} className="h-9 text-sm" /></div>
-          <div><Label className="text-xs font-medium text-slate-700 mb-1.5 block">تاريخ الاستحقاق</Label><Input type="date" value={form.dueDate} onChange={f("dueDate")} className="h-9 text-sm" /></div>
-          <div className="col-span-2"><Label className="text-xs font-medium text-slate-700 mb-1.5 block">ملاحظات</Label><Textarea value={form.notes} onChange={f("notes")} className="text-sm resize-none" rows={2} /></div>
+          {lockedType === "incoming" && (
+            <div className="col-span-2">
+              <Label className="text-xs font-medium text-slate-700 mb-1.5 block">العميل *</Label>
+              <Select
+                value={form.customerId?.toString() || ""}
+                onValueChange={(v) => setForm((p) => ({ ...p, customerId: Number(v) }))}
+              >
+                <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="اختر العميل" /></SelectTrigger>
+                <SelectContent>
+                  {customers?.rows.map((c: any) => (
+                    <SelectItem key={c.id} value={c.id.toString()}>{c.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-slate-500 mt-1">
+                عند التحصيل يُوزَّع المبلغ على أقدم فواتير العميل المفتوحة
+              </p>
+            </div>
+          )}
+          {lockedType === "outgoing" && (
+            <div className="col-span-2">
+              <Label className="text-xs font-medium text-slate-700 mb-1.5 block">المورد *</Label>
+              <Select
+                value={form.supplierId?.toString() || ""}
+                onValueChange={(v) => setForm((p) => ({ ...p, supplierId: Number(v) }))}
+              >
+                <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="اختر المورد" /></SelectTrigger>
+                <SelectContent>
+                  {suppliers?.rows.map((s: any) => (
+                    <SelectItem key={s.id} value={s.id.toString()}>{s.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+          <div className="col-span-2">
+            <Label className="text-xs font-medium text-slate-700 mb-1.5 block">البيان</Label>
+            <Textarea
+              value={form.description}
+              onChange={(e) => setForm((p) => ({ ...p, description: e.target.value }))}
+              className="text-sm resize-none"
+              rows={2}
+            />
+          </div>
         </div>
       </FormModal>
     </ERPLayout>

@@ -1,0 +1,43 @@
+CREATE TABLE IF NOT EXISTS `import_cost_shipments` (
+	`id` int AUTO_INCREMENT NOT NULL,
+	`tenantId` int NOT NULL DEFAULT 1,
+	`number` varchar(40) NOT NULL,
+	`name` varchar(255) NOT NULL,
+	`shipmentDate` date,
+	`notes` text,
+	`preset` varchar(32) DEFAULT 'no_batteries',
+	`currencyCode` varchar(10) DEFAULT 'USD',
+	`costFxRate` decimal(18,6) DEFAULT '0',
+	`customsFxRate` decimal(18,6) DEFAULT '0',
+	`customsAssessableUsd` decimal(18,6) DEFAULT '0',
+	`customsRate` decimal(18,6) DEFAULT '0',
+	`vatRate` decimal(18,6) DEFAULT '0',
+	`withholdingRate` decimal(18,6) DEFAULT '0',
+	`shippingUsd` decimal(18,6) DEFAULT '0',
+	`agentFeeUsd` decimal(18,6) DEFAULT '0',
+	`ocaUsd` decimal(18,6) DEFAULT '0',
+	`yardFeesEgp` decimal(18,6) DEFAULT '0',
+	`brokerFeesEgp` decimal(18,6) DEFAULT '0',
+	`batteriesEgp` decimal(18,6) DEFAULT '0',
+	`ocaAlloc` varchar(20) DEFAULT 'unit_cost',
+	`shippingAlloc` varchar(20) DEFAULT 'unit_cost',
+	`agentAlloc` varchar(20) DEFAULT 'unit_cost',
+	`localAlloc` varchar(20) DEFAULT 'weight',
+	`createdAt` timestamp NOT NULL DEFAULT (now()),
+	`updatedAt` timestamp NOT NULL DEFAULT (now()) ON UPDATE CURRENT_TIMESTAMP,
+	CONSTRAINT `import_cost_shipments_id` PRIMARY KEY(`id`)
+);
+--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS `import_cost_lines` (
+	`id` int AUTO_INCREMENT NOT NULL,
+	`tenantId` int NOT NULL DEFAULT 1,
+	`shipmentId` int NOT NULL,
+	`lineNo` int NOT NULL DEFAULT 1,
+	`category` varchar(120),
+	`barcode` varchar(80),
+	`itemName` varchar(255) NOT NULL,
+	`quantity` decimal(18,4) DEFAULT '0',
+	`unitCostUsd` decimal(18,6) DEFAULT '0',
+	`unitWeight` decimal(18,6) DEFAULT '0',
+	CONSTRAINT `import_cost_lines_id` PRIMARY KEY(`id`)
+);

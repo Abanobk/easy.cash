@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useLocation } from "wouter";
 import ERPLayout from "@/components/ERPLayout";
 import { DataTable } from "@/components/DataTable";
 import { FormModal } from "@/components/FormModal";
@@ -8,37 +9,92 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { ArrowDownCircle, ArrowUpCircle } from "lucide-react";
-import type { ReactElement } from "react";
+import { getCashRouteConfig, type CashTxType } from "@/config/finance-routes";
 
-type TxType = "receive" | "pay" | "receive_customer" | "pay_supplier";
-
-const emptyForm = {
-  type: "receive" as TxType,
-  amount: "",
-  date: new Date().toISOString().split("T")[0],
-  description: "",
-  customerId: undefined as number | undefined,
-  supplierId: undefined as number | undefined,
-};
+function buildEmptyForm(type: CashTxType) {
+  return {
+    type,
+    amount: "",
+    date: new Date().toISOString().split("T")[0],
+    description: "",
+    customerId: undefined as number | undefined,
+    supplierId: undefined as number | undefined,
+  };
+}
 
 export default function CashTransactions() {
+  const [location] = useLocation();
+  const routeConfig = useMemo(() => getCashRouteConfig(location), [location]);
+  const lockedType = routeConfig?.type ?? "receive";
+
   const [page, setPage] = useState(1);
   const [open, setOpen] = useState(false);
-  const [form, setForm] = useState(emptyForm);
+  const [form, setForm] = useState(() => buildEmptyForm(lockedType));
 
-  const { data, isLoading, refetch } = trpc.cash.list.useQuery({ page, limit: 20 });
+  useEffect(() => {
+    setForm(buildEmptyForm(lockedType));
+    setPage(1);
+  }, [lockedType]);
+
+  const pageTitle = routeConfig?.title ?? "المعاملات النقدية";
+  const addLabel = routeConfig?.addLabel ?? "معاملة جديدة";
+  const formTitle = routeConfig?.formTitle ?? "معاملة نقدية جديدة";
+
+  const { data, isLoading, refetch } = trpc.cash.list.useQuery({
+    page,
+    limit: 20,
+    type: lockedType,
+  });
   const { data: customers } = trpc.customers.list.useQuery({ page: 1, limit: 200 });
   const { data: suppliers } = trpc.suppliers.list.useQuery({ page: 1, limit: 200 });
+  const fiscalCheck = trpc.parity.settings.fiscalYears.checkDate.useQuery(
+    { date: form.date },
+    { enabled: !!form.date },
+  );
   const createMut = trpc.cash.create.useMutation({
-    onSuccess: () => { toast.success("تم تسجيل المعاملة"); refetch(); setOpen(false); setForm(emptyForm); },
+    onSuccess: (data) => {
+      let msg = "تم تسجيل المعاملة";
+      if (data.allocations?.length) {
+        const parts = data.allocations.map(
+          (a) => `${a.invoiceNumber}: ${Number(a.amount).toLocaleString("en-US")} ج.م`,
+        );
+        msg += ` — تم التوزيع على: ${parts.join("، ")}`;
+      }
+      if (data.unallocated && Number(data.unallocated) > 0.001) {
+        msg += ` (متبقي غير موزّع: ${Number(data.unallocated).toLocaleString("en-US")} ج.م)`;
+      }
+      toast.success(msg);
+      refetch();
+      setOpen(false);
+      setForm(buildEmptyForm(lockedType));
+    },
     onError: (e) => toast.error(e.message),
   });
 
+  const openCreate = () => {
+    setForm(buildEmptyForm(lockedType));
+    setOpen(true);
+  };
+
   const handleSubmit = () => {
-    if (!form.amount || Number(form.amount) <= 0) { toast.error("يجب إدخال مبلغ صحيح"); return; }
+    if (!form.amount || Number(form.amount) <= 0) {
+      toast.error("يجب إدخال مبلغ صحيح");
+      return;
+    }
+    if (lockedType === "receive_customer" && !form.customerId) {
+      toast.error("يجب اختيار العميل");
+      return;
+    }
+    if (lockedType === "pay_customer" && !form.customerId) {
+      toast.error("يجب اختيار العميل");
+      return;
+    }
+    if (lockedType === "pay_supplier" && !form.supplierId) {
+      toast.error("يجب اختيار المورد");
+      return;
+    }
     createMut.mutate({
-      type: form.type,
+      type: lockedType,
       amount: form.amount,
       date: form.date,
       description: form.description || undefined,
@@ -47,102 +103,117 @@ export default function CashTransactions() {
     });
   };
 
-  const typeLabel = (type: string) => {
-    const map: Record<string, { label: string; icon: ReactElement | null }> = {
-      receive: { label: "قبض عام", icon: <ArrowDownCircle size={14} className="text-green-500" /> },
-      pay: { label: "صرف عام", icon: <ArrowUpCircle size={14} className="text-red-500" /> },
-      receive_customer: { label: "تحصيل عميل", icon: <ArrowDownCircle size={14} className="text-blue-500" /> },
-      pay_supplier: { label: "دفع مورد", icon: <ArrowUpCircle size={14} className="text-orange-500" /> },
-    };
-    const info = map[type] || { label: type, icon: null };
-    return (
-      <div className="flex items-center gap-1.5">
-        {info.icon}
-        <span className="text-xs font-medium">{info.label}</span>
-      </div>
-    );
-  };
-
-  const isIncoming = (type: string) => type === "receive" || type === "receive_customer";
+  const isIncoming = lockedType === "receive" || lockedType === "receive_customer";
 
   return (
-    <ERPLayout title="المعاملات النقدية">
+    <ERPLayout title={pageTitle}>
       <DataTable
-        title="المعاملات النقدية"
+        title={pageTitle}
         data={data?.rows as any[]}
         isLoading={isLoading}
         total={data?.total}
         page={page}
         onPageChange={setPage}
-        onAdd={() => { setForm(emptyForm); setOpen(true); }}
-        addLabel="معاملة جديدة"
+        onAdd={openCreate}
+        addLabel={addLabel}
+        permissionModule="cash"
         columns={[
           { key: "number", label: "الرقم", className: "w-28 font-mono" },
-          { key: "date", label: "التاريخ", render: (row: any) => row.date ? new Date(row.date).toLocaleDateString("ar-EG") : "-" },
-          { key: "type", label: "النوع", render: (row: any) => typeLabel(row.type) },
+          { key: "date", label: "التاريخ", render: (row: any) => row.date ? new Date(row.date).toLocaleDateString("en-GB") : "-" },
           { key: "description", label: "البيان" },
           {
-            key: "amount", label: "المبلغ",
+            key: "amount",
+            label: "المبلغ",
             render: (row: any) => (
-              <span className={isIncoming(row.type) ? "text-green-600 font-semibold" : "text-red-600 font-semibold"}>
-                {isIncoming(row.type) ? "+" : "-"}{Number(row.amount).toLocaleString("ar-EG")} ج.م
+              <span className={isIncoming ? "text-green-600 font-semibold" : "text-red-600 font-semibold"}>
+                {isIncoming ? "+" : "-"}{Number(row.amount).toLocaleString("en-US")} ج.م
               </span>
-            )
+            ),
           },
         ]}
       />
 
       <FormModal
         open={open}
-        onClose={() => { setOpen(false); setForm(emptyForm); }}
-        title="معاملة نقدية جديدة"
+        onClose={() => { setOpen(false); setForm(buildEmptyForm(lockedType)); }}
+        title={formTitle}
         onSubmit={handleSubmit}
         isLoading={createMut.isPending}
       >
         <div className="space-y-4">
-          <div>
-            <Label className="text-xs font-medium text-slate-700 mb-1.5 block">نوع المعاملة</Label>
-            <Select value={form.type} onValueChange={v => setForm(p => ({ ...p, type: v as TxType, customerId: undefined, supplierId: undefined }))}>
-              <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="receive">قبض عام</SelectItem>
-                <SelectItem value="pay">صرف عام</SelectItem>
-                <SelectItem value="receive_customer">تحصيل من عميل</SelectItem>
-                <SelectItem value="pay_supplier">دفع لمورد</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
               <Label className="text-xs font-medium text-slate-700 mb-1.5 block">المبلغ *</Label>
-              <Input value={form.amount} onChange={e => setForm(p => ({ ...p, amount: e.target.value }))} type="number" placeholder="0.00" className="h-9 text-sm" />
+              <Input
+                value={form.amount}
+                onChange={(e) => setForm((p) => ({ ...p, amount: e.target.value }))}
+                type="number"
+                placeholder="0.00"
+                className="h-9 text-sm"
+              />
             </div>
             <div>
               <Label className="text-xs font-medium text-slate-700 mb-1.5 block">التاريخ *</Label>
-              <Input type="date" value={form.date} onChange={e => setForm(p => ({ ...p, date: e.target.value }))} className="h-9 text-sm" />
+              <Input
+                type="date"
+                value={form.date}
+                onChange={(e) => setForm((p) => ({ ...p, date: e.target.value }))}
+                className="h-9 text-sm"
+              />
+              {fiscalCheck.data?.closed && (
+                <p className="text-xs text-red-600 mt-1">هذا التاريخ ضمن فترة مالية مغلقة</p>
+              )}
             </div>
           </div>
-          {form.type === "receive_customer" && (
+          {(lockedType === "receive_customer" || lockedType === "pay_customer") && (
             <div>
-              <Label className="text-xs font-medium text-slate-700 mb-1.5 block">العميل</Label>
-              <Select value={form.customerId?.toString() || ""} onValueChange={v => setForm(p => ({ ...p, customerId: Number(v) }))}>
+              <Label className="text-xs font-medium text-slate-700 mb-1.5 block">العميل *</Label>
+              <Select
+                value={form.customerId?.toString() || ""}
+                onValueChange={(v) => setForm((p) => ({ ...p, customerId: Number(v) }))}
+              >
                 <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="اختر العميل" /></SelectTrigger>
-                <SelectContent>{customers?.rows.map((c: any) => <SelectItem key={c.id} value={c.id.toString()}>{c.name}</SelectItem>)}</SelectContent>
+                <SelectContent>
+                  {customers?.rows.map((c: any) => (
+                    <SelectItem key={c.id} value={c.id.toString()}>{c.name}</SelectItem>
+                  ))}
+                </SelectContent>
               </Select>
+              <p className="text-xs text-slate-500 mt-1">
+                {lockedType === "pay_customer"
+                  ? "يرد المبلغ للعميل ويعكس عمولة المندوبين على هذا الرد"
+                  : "يُطبَّق المبلغ تلقائياً على أقدم الفواتير المفتوحة للعميل"}
+              </p>
             </div>
           )}
-          {form.type === "pay_supplier" && (
+          {lockedType === "pay_supplier" && (
             <div>
-              <Label className="text-xs font-medium text-slate-700 mb-1.5 block">المورد</Label>
-              <Select value={form.supplierId?.toString() || ""} onValueChange={v => setForm(p => ({ ...p, supplierId: Number(v) }))}>
+              <Label className="text-xs font-medium text-slate-700 mb-1.5 block">المورد *</Label>
+              <Select
+                value={form.supplierId?.toString() || ""}
+                onValueChange={(v) => setForm((p) => ({ ...p, supplierId: Number(v) }))}
+              >
                 <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="اختر المورد" /></SelectTrigger>
-                <SelectContent>{suppliers?.rows.map((s: any) => <SelectItem key={s.id} value={s.id.toString()}>{s.name}</SelectItem>)}</SelectContent>
+                <SelectContent>
+                  {suppliers?.rows.map((s: any) => (
+                    <SelectItem key={s.id} value={s.id.toString()}>{s.name}</SelectItem>
+                  ))}
+                </SelectContent>
               </Select>
+              <p className="text-xs text-slate-500 mt-1">
+                يُطبَّق المبلغ تلقائياً على أقدم فواتير الشراء المفتوحة للمورد
+              </p>
             </div>
           )}
           <div>
             <Label className="text-xs font-medium text-slate-700 mb-1.5 block">البيان</Label>
-            <Textarea value={form.description} onChange={e => setForm(p => ({ ...p, description: e.target.value }))} placeholder="وصف المعاملة" className="text-sm resize-none" rows={2} />
+            <Textarea
+              value={form.description}
+              onChange={(e) => setForm((p) => ({ ...p, description: e.target.value }))}
+              placeholder="وصف المعاملة"
+              className="text-sm resize-none"
+              rows={2}
+            />
           </div>
         </div>
       </FormModal>

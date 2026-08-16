@@ -1,7 +1,7 @@
 import type { CreateExpressContextOptions } from "@trpc/server/adapters/express";
 import type { User } from "../../drizzle/schema";
 import { sdk } from "./sdk";
-import { verifySaasToken, getAppUserById, SAAS_COOKIE_NAME, getAccountOwnerId } from "../saas-auth";
+import { verifySaasToken, getAppUserById, SAAS_COOKIE_NAME, getAccountOwnerId, getSaasTokenFromRequest } from "../saas-auth";
 import { getTenantBySlug } from "../tenant";
 
 export type TrpcContext = {
@@ -36,9 +36,7 @@ export async function createContext(
   const requestedSlug = typeof headerSlug === "string" ? headerSlug : null;
 
   try {
-    const cookies = opts.req.headers.cookie || "";
-    const match = cookies.match(new RegExp(`${SAAS_COOKIE_NAME}=([^;]+)`));
-    const token = match?.[1];
+    const token = getSaasTokenFromRequest(opts.req);
     const session = await verifySaasToken(token);
     if (session) {
       impersonatorId = session.impersonatorId;
@@ -47,11 +45,23 @@ export async function createContext(
         tenantId = appUser.tenantId ?? session.tenantId ?? null;
         tenantSlug = session.tenantSlug ?? requestedSlug;
 
+        if (!tenantId && appUser.role !== "superadmin") {
+          const { resolveUserTenant } = await import("../tenant");
+          const resolved = await resolveUserTenant(appUser);
+          if (resolved.tenantId) {
+            tenantId = resolved.tenantId;
+            tenantSlug = resolved.tenantSlug ?? tenantSlug;
+          }
+        }
+
         if (requestedSlug && appUser.role !== "superadmin") {
           const tenant = await getTenantBySlug(requestedSlug);
-          if (!tenant || tenant.id !== appUser.tenantId) {
+          if (!tenant || !tenant.isActive) {
+            tenantId = null;
+          } else if (tenantId != null && tenant.id !== tenantId) {
             tenantId = null;
           } else {
+            tenantId = tenant.id;
             tenantSlug = tenant.slug;
           }
         } else if (requestedSlug && appUser.role === "superadmin" && session.impersonatorId) {
@@ -95,8 +105,11 @@ export async function createContext(
 
   if (!user) {
     try {
-      user = await sdk.authenticateRequest(opts.req);
-      tenantId = 1;
+      // Legacy Manus OAuth — only when explicitly enabled; never assign tenant 1
+      if (process.env.ENABLE_MANUS_OAUTH === "1") {
+        user = await sdk.authenticateRequest(opts.req);
+        tenantId = null;
+      }
     } catch {
       user = null;
     }

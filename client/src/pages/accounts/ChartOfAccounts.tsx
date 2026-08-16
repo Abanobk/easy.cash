@@ -5,11 +5,11 @@ import { trpc } from "@/lib/trpc";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Plus, ChevronDown, ChevronLeft, Folder, FileText } from "lucide-react";
+import { Plus, ChevronDown, ChevronLeft, Folder, FileText, RefreshCw } from "lucide-react";
+import { AddActionButton } from "@/components/AddActionButton";
 
 const typeLabels: Record<string, { label: string; color: string }> = {
   asset: { label: "أصول", color: "bg-blue-100 text-blue-700" },
@@ -29,9 +29,16 @@ export default function ChartOfAccounts() {
   const [form, setForm] = useState(emptyForm);
   const [expanded, setExpanded] = useState<Set<number>>(new Set());
 
-  const { data: accounts, isLoading, refetch } = trpc.accounts.chart.useQuery();
+  const { data: accounts, isLoading, isError, error, refetch } = trpc.accounts.chart.useQuery();
   const createMut = trpc.accounts.create.useMutation({
     onSuccess: () => { toast.success("تم إضافة الحساب"); refetch(); setOpen(false); setForm(emptyForm); },
+    onError: (e) => toast.error(e.message),
+  });
+  const reseedMut = trpc.accounts.reseedFromTemplate.useMutation({
+    onSuccess: (res) => {
+      toast.success(`تمت إضافة ${res.added} حساب من القالب الافتراضي`);
+      refetch();
+    },
     onError: (e) => toast.error(e.message),
   });
 
@@ -76,13 +83,14 @@ export default function ChartOfAccounts() {
             <span className="text-sm text-slate-800 font-medium">{account.name}</span>
           </div>
           <Badge variant="outline" className={`text-xs ${typeInfo.color} border-0`}>{typeInfo.label}</Badge>
-          <Button
+          <AddActionButton
+            module="accounts"
             variant="ghost" size="sm"
             className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 text-blue-600 hover:bg-blue-100"
             onClick={(e) => { e.stopPropagation(); setForm({ ...emptyForm, parentId: account.id, type: account.type }); setOpen(true); }}
           >
             <Plus size={11} />
-          </Button>
+          </AddActionButton>
         </div>
         {isExpanded && hasChildren && (
           <div>
@@ -102,17 +110,39 @@ export default function ChartOfAccounts() {
               <h2 className="text-base font-semibold text-slate-800">شجرة الحسابات</h2>
               <p className="text-xs text-slate-400 mt-0.5">{accounts?.length || 0} حساب</p>
             </div>
-            <Button onClick={() => { setForm(emptyForm); setOpen(true); }} size="sm" className="bg-blue-600 hover:bg-blue-700 text-white h-8 gap-1.5 text-xs">
-              <Plus size={14} />
-              حساب جديد
-            </Button>
+            <div className="flex items-center gap-2">
+              <AddActionButton
+                module="accounts"
+                variant="outline"
+                size="sm"
+                className="h-8 gap-1.5 text-xs"
+                disabled={reseedMut.isPending}
+                onClick={() => reseedMut.mutate()}
+              >
+                <RefreshCw size={14} className={reseedMut.isPending ? "animate-spin" : ""} />
+                تهيئة من قالب Mega
+              </AddActionButton>
+              <AddActionButton module="accounts" onClick={() => { setForm(emptyForm); setOpen(true); }} size="sm" className="bg-blue-600 hover:bg-blue-700 text-white h-8 gap-1.5 text-xs">
+                <Plus size={14} />
+                حساب جديد
+              </AddActionButton>
+            </div>
           </div>
         </CardHeader>
         <CardContent className="p-0">
           {isLoading ? (
             <div className="py-16 text-center text-slate-400 text-sm">جاري التحميل...</div>
+          ) : isError ? (
+            <div className="py-16 text-center text-red-500 text-sm">
+              تعذر تحميل شجرة الحسابات: {error.message}
+            </div>
           ) : roots.length === 0 ? (
-            <div className="py-16 text-center text-slate-400 text-sm">لا توجد حسابات. ابدأ بإضافة حسابات رئيسية.</div>
+            <div className="py-16 text-center text-slate-400 text-sm space-y-3">
+              <p>لا توجد حسابات.</p>
+              <AddActionButton module="accounts" variant="outline" size="sm" onClick={() => reseedMut.mutate()} disabled={reseedMut.isPending}>
+                تهيئة شجرة الحسابات الافتراضية
+              </AddActionButton>
+            </div>
           ) : (
             <div className="group">
               {roots.map(a => renderAccount(a))}
@@ -140,10 +170,10 @@ export default function ChartOfAccounts() {
           </div>
           <div>
             <Label className="text-xs font-medium text-slate-700 mb-1.5 block">الحساب الأب</Label>
-            <Select value={form.parentId?.toString() || ""} onValueChange={v => setForm(p => ({ ...p, parentId: v ? Number(v) : undefined }))}>
+            <Select value={form.parentId?.toString() ?? "none"} onValueChange={v => setForm(p => ({ ...p, parentId: v === "none" ? undefined : Number(v) }))}>
               <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="حساب رئيسي" /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="">بدون (حساب رئيسي)</SelectItem>
+                <SelectItem value="none">بدون (حساب رئيسي)</SelectItem>
                 {accounts?.filter(a => a.isParent).map((a: any) => <SelectItem key={a.id} value={a.id.toString()}>{a.code} - {a.name}</SelectItem>)}
               </SelectContent>
             </Select>

@@ -1,16 +1,17 @@
 import { useState } from "react";
 import ERPLayout from "@/components/ERPLayout";
 import { trpc } from "@/lib/trpc";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Edit, Trash2, Layers } from "lucide-react";
+import { Plus, Layers } from "lucide-react";
 import { toast } from "sonner";
+import { AddActionButton } from "@/components/AddActionButton";
+import { EntityRowActions } from "@/components/EntityRowActions";
+import { FormModal } from "@/components/FormModal";
+import { FieldLabel, FormSection, entryControlClass, entrySelectTriggerClass } from "@/components/form/EntryForm";
 
 export default function ContactCategories() {
   const [open, setOpen] = useState(false);
@@ -47,9 +48,9 @@ export default function ContactCategories() {
             <CardTitle className="text-base font-semibold text-slate-800 flex items-center gap-2">
               <Layers size={18} className="text-blue-600" /> فئات العملاء والموردين
             </CardTitle>
-            <Button size="sm" className="bg-blue-600 hover:bg-blue-700 text-white gap-1" onClick={() => { resetForm(); setOpen(true); }}>
-              <Plus size={14} /> إضافة فئة
-            </Button>
+            <AddActionButton module="contacts" className="bg-blue-600 hover:bg-blue-700 text-white gap-2 h-10 px-4 text-sm font-semibold" onClick={() => { resetForm(); setOpen(true); }}>
+              <Plus size={16} /> إضافة فئة
+            </AddActionButton>
           </div>
         </CardHeader>
         <CardContent className="p-0">
@@ -73,8 +74,11 @@ export default function ContactCategories() {
                   <TableCell><Badge variant={typeBadge(row.type) as any} className="text-xs">{typeLabel(row.type)}</Badge></TableCell>
                   <TableCell>
                     <div className="flex gap-1">
-                      <Button variant="ghost" size="icon" className="h-7 w-7 text-blue-600 hover:bg-blue-50" onClick={() => openEdit(row)}><Edit size={13} /></Button>
-                      <Button variant="ghost" size="icon" className="h-7 w-7 text-red-500 hover:bg-red-50" onClick={() => deleteMut.mutate(row.id)}><Trash2 size={13} /></Button>
+                      <EntityRowActions
+                        module="contacts"
+                        onEdit={() => openEdit(row)}
+                        onDelete={() => deleteMut.mutate(row.id)}
+                      />
                     </div>
                   </TableCell>
                 </TableRow>
@@ -84,34 +88,34 @@ export default function ContactCategories() {
         </CardContent>
       </Card>
 
-      <Dialog open={open} onOpenChange={v => { setOpen(v); if (!v) resetForm(); }}>
-        <DialogContent className="max-w-sm" dir="rtl">
-          <DialogHeader><DialogTitle>{editItem ? "تعديل فئة" : "إضافة فئة جديدة"}</DialogTitle></DialogHeader>
-          <div className="grid gap-4 py-2">
-            <div className="space-y-1">
-              <Label className="text-xs">اسم الفئة *</Label>
-              <Input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="اسم الفئة" className="h-9 text-sm" />
-            </div>
-            <div className="space-y-1">
-              <Label className="text-xs">النوع</Label>
-              <Select value={form.type} onValueChange={v => setForm(f => ({ ...f, type: v as any }))}>
-                <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="customer">عملاء فقط</SelectItem>
-                  <SelectItem value="supplier">موردين فقط</SelectItem>
-                  <SelectItem value="both">عملاء وموردين</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+      <FormModal
+        open={open}
+        onClose={() => { setOpen(false); resetForm(); }}
+        title={editItem ? "تعديل فئة" : "إضافة فئة جديدة"}
+        description="صنّف العملاء والموردين لتسهيل التقارير والفلاتر."
+        onSubmit={handleSubmit}
+        isLoading={createMut.isPending || updateMut.isPending}
+        size="md"
+        submitLabel={editItem ? "تحديث" : "إضافة"}
+      >
+        <FormSection title="بيانات الفئة" accent="emerald">
+          <div className="sm:col-span-2">
+            <FieldLabel required>اسم الفئة</FieldLabel>
+            <Input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="اسم الفئة" className={entryControlClass} />
           </div>
-          <DialogFooter className="gap-2">
-            <Button variant="outline" size="sm" onClick={() => { setOpen(false); resetForm(); }}>إلغاء</Button>
-            <Button size="sm" className="bg-blue-600 hover:bg-blue-700 text-white" onClick={handleSubmit} disabled={createMut.isPending || updateMut.isPending}>
-              {editItem ? "تحديث" : "إضافة"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          <div className="sm:col-span-2">
+            <FieldLabel required>النوع</FieldLabel>
+            <Select value={form.type} onValueChange={v => setForm(f => ({ ...f, type: v as any }))}>
+              <SelectTrigger className={entrySelectTriggerClass}><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="customer">عملاء فقط</SelectItem>
+                <SelectItem value="supplier">موردين فقط</SelectItem>
+                <SelectItem value="both">عملاء وموردين</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </FormSection>
+      </FormModal>
     </ERPLayout>
   );
 }

@@ -15,9 +15,14 @@ if (!DATABASE_URL) {
   process.exit(1);
 }
 
-const SUPER_ADMIN_EMAIL = "admin@easycash.app";
-const SUPER_ADMIN_PASSWORD = "EasyCash@2024";
-const SUPER_ADMIN_NAME = "Super Admin";
+const SUPER_ADMIN_EMAIL = process.env.SEED_SUPERADMIN_EMAIL || "admin@easycash.app";
+const SUPER_ADMIN_PASSWORD = process.env.SEED_SUPERADMIN_PASSWORD || "";
+const SUPER_ADMIN_NAME = process.env.SEED_SUPERADMIN_NAME || "Super Admin";
+
+if (!SUPER_ADMIN_PASSWORD || SUPER_ADMIN_PASSWORD.length < 12) {
+  console.error("عيّن SEED_SUPERADMIN_PASSWORD (≥12 حرف) في البيئة قبل تشغيل البذرة. لا توجد كلمة مرور افتراضية.");
+  process.exit(1);
+}
 
 async function main() {
   const conn = await mysql.createConnection(DATABASE_URL);

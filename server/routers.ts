@@ -13,21 +13,114 @@ import {
   purchaseReturnItems, salesReturnItems, attendance, payroll, salaryAdvances,
   fixedAssets, costCenters, loans, installments, notifications,
   inventoryAdjustments, inventoryAdjustmentItems, stockTransfers, stockTransferItems,
+  productionOrders, productionOrderMaterials, itemBomLines,
   taxes, salesReps, branches, companySettings, users,
   appUsers, subscriptions, subscriptionPlans,
   discountCoupons, companyProfile, supportTickets, userNotifications,
   paymobSettings, subscriptionPayments, tenants
 } from "../drizzle/schema";
+import { listCustomerSalesReps, setCustomerSalesReps, listCustomerSalesRepsForCustomers } from "./customer-sales-reps";
 import {
   signSaasToken, verifySaasToken, hashPassword, verifyPassword,
   getAppUserByEmail, getAppUserById, getUserActiveSubscription, isSubscriptionActive,
   getAccountOwnerId, countAccountUsers, canManageTeamUsers,
+  requireSuperAdminFromRequest, SESSION_MAX_AGE_MS, getSaasTokenFromRequest,
   SAAS_COOKIE_NAME
 } from "./saas-auth";
-import { eq, desc, count, sum, and, like, or, sql, gte, lte, isNull } from "drizzle-orm";
+import { assertRateLimit, clientIp, RateLimitError } from "./rate-limit";
+import { eq, desc, count, sum, and, like, or, sql, gte, lte, lt, isNull, inArray } from "drizzle-orm";
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { tenantWhere, withTenantId } from "./tenant-scope";
+import { getTenantOwnerUserId } from "./tenant";
+import { assertUniqueEntityCode, resolveTypedEntityCode, partySearchCondition, codeSearchCondition } from "./entity-codes";
+import { compactRow, dbErrorMessage } from "./db-utils";
+import {
+  loadUserScope,
+  loadUserScopeFromCtx,
+  userScopeFromRow,
+  scopeBranchFilter,
+  scopeWarehouseFilter,
+  scopeIdsFilter,
+  scopeEitherWarehouseFilter,
+  assertBranchAccess,
+  assertWarehouseAccess,
+  assertEntityBranchAccess,
+  applyScopeToReportFilters,
+  scopeContactTransactionFilter,
+} from "./user-scope";
+import { calculateMonthPayroll, payMonthPayroll } from "./hr-payroll";
+import {
+  postCashTransactionJournal,
+  postBankTransactionJournal,
+  postPayrollJournal,
+  postPurchaseInvoiceJournal,
+  postSalesInvoiceJournal,
+  postSalesReturnJournal,
+  postPurchaseReturnJournal,
+  postSalesCogsJournal,
+  postSalesReturnCogsJournal,
+  postLoanOriginJournal,
+  postLoanInstallmentPayJournal,
+} from "./auto-journal";
+import { getDebtAgingSummary } from "./debt-aging";
+import {
+  buildSubscriptionBanner,
+  effectiveSubscriptionStatus,
+  normalizeSubscriptionStatusForSave,
+  toDateOnly,
+  todayDateOnly,
+} from "./subscription-display";
+import { activateSubscriptionPayment } from "./paymob-subscription";
+import { assistantRouter } from "./assistant-router";
+import { permissionsRouter } from "./permissions-router";
+import { importCostingRouter } from "./import-costing-router";
+import { accountingAuditorRouter } from "./accounting-auditor-router";
+import { documentAttachmentsRouter } from "./document-attachments-router";
+import { opsInboxRouter } from "./ops-inbox-router";
+import { megaReportImportRouter } from "./mega-report-import-router";
+import {
+  collectInventoryMovements,
+  inventoryStocktakeReport,
+  stagnantItemsReport,
+  itemAgingReport,
+  warehouseInOutReport,
+  itemMovementSummaryReport,
+  itemInOutReport,
+  itemCostsReport,
+  itemsListReport,
+} from "./inventory-reports";
+import { runAccountingReport } from "./accounting-reports";
+import { runFinalReport } from "./final-reports";
+import { runHrReport } from "./hr-reports";
+import { runAssetsReport } from "./assets-reports";
+import {
+  settingsExtendedRouter,
+  hrExtendedRouter,
+  inventoryExtendedRouter,
+  assetsExtendedRouter,
+  salesExtendedRouter,
+} from "./parity-routers";
+import { getOperationalAlerts } from "./operational-alerts";
+import { recordPurchaseInvoicePayment, recordSalesInvoicePayment } from "./invoice-payments";
+import { buildCustomerMovements, buildSupplierMovements, finalizeLedger } from "./statement-ledger";
+import { syncOperationalNotifications } from "./sync-operational-notifications";
+import { reconcileAllContactBalances, recalculateCustomerBalance, recalculateSupplierBalance } from "./contact-balances";
+import { sendOperationalAlertDigest } from "./alert-email";
+import { assertDateNotInClosedPeriod } from "./fiscal-period-guard";
+import { allocateCustomerPaymentFifo, allocateSupplierPaymentFifo } from "./payment-allocation";
+import { assertCustomerCreditLimit } from "./credit-limit-guard";
+import { bounceCheck, clearCheck, createCheckWithJournal } from "./check-actions";
+import {
+  assignCustody,
+  collectRoutedCheck,
+  depositRoutedCheck,
+  listCheckRoutings,
+  listRoutingEvents,
+  rejectRoutedCheck,
+  routeCheck,
+  routingSummaryCounts,
+} from "./check-routing";
 
 // ===================== DASHBOARD =====================
 const dashboardRouter = router({
@@ -41,9 +134,9 @@ const dashboardRouter = router({
     const [employeesCount] = await db.select({ count: count() }).from(employees).where(tenantWhere(employees, ctx.tenantId, eq(employees.status, "active")));
 
     const [totalSales] = await db.select({ total: sum(salesInvoices.total) }).from(salesInvoices)
-      .where(tenantWhere(salesInvoices, ctx.tenantId, eq(salesInvoices.status, "confirmed")));
+      .where(tenantWhere(salesInvoices, ctx.tenantId, inArray(salesInvoices.status, ["confirmed", "paid", "partial"])));
     const [totalPurchases] = await db.select({ total: sum(purchaseInvoices.total) }).from(purchaseInvoices)
-      .where(tenantWhere(purchaseInvoices, ctx.tenantId, eq(purchaseInvoices.status, "confirmed")));
+      .where(tenantWhere(purchaseInvoices, ctx.tenantId, inArray(purchaseInvoices.status, ["confirmed", "paid", "partial"])));
 
     const [unpaidInvoices] = await db.select({ count: count() }).from(salesInvoices)
       .where(tenantWhere(salesInvoices, ctx.tenantId, or(eq(salesInvoices.status, "confirmed"), eq(salesInvoices.status, "partial"))));
@@ -146,73 +239,317 @@ const dashboardRouter = router({
       },
     };
   }),
+  alerts: protectedProcedure.query(async ({ ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    return getOperationalAlerts(db, ctx.tenantId);
+  }),
+  debtAging: protectedProcedure.query(async ({ ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    return getDebtAgingSummary(db, ctx.tenantId);
+  }),
 });
 
 // ===================== CUSTOMERS =====================
+/** Shared contact fields synced between linked customer ↔ supplier (Mega Cash dual-role). */
+function contactSharedFields(input: {
+  name: string;
+  categoryId?: number | null;
+  phone?: string | null;
+  phone2?: string | null;
+  fax?: string | null;
+  email?: string | null;
+  address?: string | null;
+  city?: string | null;
+  taxNumber?: string | null;
+  commercialRegister?: string | null;
+  contactPerson?: string | null;
+  paymentTermDays?: number | null;
+  discountPercent?: string | null;
+  mapUrl?: string | null;
+  notes?: string | null;
+  isActive?: boolean;
+}) {
+  return compactRow({
+    name: input.name,
+    categoryId: input.categoryId ?? undefined,
+    phone: input.phone ?? undefined,
+    phone2: input.phone2 ?? undefined,
+    fax: input.fax ?? undefined,
+    email: input.email ?? undefined,
+    address: input.address ?? undefined,
+    city: input.city ?? undefined,
+    taxNumber: input.taxNumber ?? undefined,
+    commercialRegister: input.commercialRegister ?? undefined,
+    contactPerson: input.contactPerson ?? undefined,
+    paymentTermDays: input.paymentTermDays ?? undefined,
+    discountPercent: input.discountPercent ?? undefined,
+    mapUrl: input.mapUrl ?? undefined,
+    notes: input.notes ?? undefined,
+    ...(input.isActive !== undefined ? { isActive: input.isActive } : {}),
+  });
+}
+
+const optionalNum = (v: unknown) => (v === "" || v == null || Number.isNaN(v) ? undefined : v);
+const contactPartyFields = {
+  categoryId: z.preprocess(optionalNum, z.number().optional()),
+  phone: z.string().optional(),
+  phone2: z.string().optional(),
+  fax: z.string().optional(),
+  email: z.string().optional(),
+  address: z.string().optional(),
+  city: z.string().optional(),
+  taxNumber: z.string().optional(),
+  commercialRegister: z.string().optional(),
+  contactPerson: z.string().optional(),
+  paymentTermDays: z.preprocess(optionalNum, z.number().int().optional()),
+  discountPercent: z.string().optional(),
+  openingBalance: z.string().optional(),
+  openingBalanceDate: z.string().optional(),
+  creditLimit: z.string().optional(),
+  mapUrl: z.string().optional(),
+  notes: z.string().optional(),
+  isActive: z.boolean().optional(),
+};
+
 const customersRouter = router({
   list: protectedProcedure.input(z.object({
     search: z.string().optional(),
     page: z.number().default(1),
     limit: z.number().default(20),
+    branchId: z.number().optional(),
   })).query(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    const scope = await loadUserScopeFromCtx(db, ctx.saasUser);
     const offset = (input.page - 1) * input.limit;
-    const where = input.search
-      ? or(like(customers.name, `%${input.search}%`), like(customers.phone, `%${input.search}%`))
-      : undefined;
+    const where = and(
+      input.search
+        ? partySearchCondition(
+          { name: customers.name, phone: customers.phone, phone2: customers.phone2, code: customers.code },
+          input.search,
+        )
+        : undefined,
+      input.branchId != null ? eq(customers.branchId, input.branchId) : scopeBranchFilter(customers, scope),
+    );
     const rows = await db.select().from(customers).where(tenantWhere(customers, ctx.tenantId, where)).orderBy(desc(customers.createdAt)).limit(input.limit).offset(offset);
     const [total] = await db.select({ count: count() }).from(customers).where(tenantWhere(customers, ctx.tenantId, where));
-    return { rows, total: total.count };
+    const repsMap = await listCustomerSalesRepsForCustomers(db, ctx.tenantId!, rows.map((r) => r.id));
+    return {
+      rows: rows.map((r) => ({
+        ...r,
+        salesReps: repsMap.get(r.id) || [],
+        salesRepNames: (repsMap.get(r.id) || []).map((x) => x.repName).filter(Boolean).join("، "),
+      })),
+      total: total.count,
+    };
   }),
   byId: protectedProcedure.input(z.number()).query(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    const scope = await loadUserScopeFromCtx(db, ctx.saasUser);
     const [row] = await db.select().from(customers).where(tenantWhere(customers, ctx.tenantId, eq(customers.id, input)));
-    return row;
+    if (row) assertEntityBranchAccess(scope, row.branchId);
+    if (!row) return row;
+    const salesRepsList = await listCustomerSalesReps(db, ctx.tenantId!, row.id);
+    return { ...row, salesReps: salesRepsList };
   }),
   create: protectedProcedure.input(z.object({
     name: z.string().min(1),
     code: z.string().optional(),
-    categoryId: z.number().optional(),
-    phone: z.string().optional(),
-    phone2: z.string().optional(),
-    email: z.string().optional(),
-    address: z.string().optional(),
-    city: z.string().optional(),
-    taxNumber: z.string().optional(),
-    creditLimit: z.string().optional(),
-    notes: z.string().optional(),
+    ...contactPartyFields,
+    salesRepId: z.preprocess(optionalNum, z.number().optional()),
+    branchId: z.preprocess(optionalNum, z.number().optional()),
+    areaId: z.preprocess(optionalNum, z.number().optional()),
+    salesReps: z.array(z.object({
+      salesRepId: z.number(),
+      commissionRate: z.string().optional().nullable(),
+      isPrimary: z.boolean().optional(),
+    })).optional(),
+    /** Mega Cash: register the same party as a supplier too. */
+    alsoAsSupplier: z.boolean().optional(),
   })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-    await db.insert(customers).values(withTenantId(ctx.tenantId, input) as any);
-    return { success: true };
+    const scope = await loadUserScopeFromCtx(db, ctx.saasUser);
+    assertBranchAccess(scope, input.branchId);
+    if (scope.branchIds?.length && input.branchId == null) {
+      throw new TRPCError({ code: "BAD_REQUEST", message: "يجب اختيار فرع ضمن نطاقك" });
+    }
+    let code: string;
+    try {
+      code = await resolveTypedEntityCode(db, customers, ctx.tenantId!, "customer", input.code);
+    } catch (e: unknown) {
+      throw new TRPCError({ code: "CONFLICT", message: dbErrorMessage(e, "كود موجود مسبقاً") });
+    }
+    const primaryFromList = input.salesReps?.find((r) => r.isPrimary)?.salesRepId
+      ?? input.salesReps?.[0]?.salesRepId
+      ?? input.salesRepId;
+    const row = compactRow({
+      name: input.name,
+      code,
+      categoryId: input.categoryId,
+      phone: input.phone,
+      phone2: input.phone2,
+      fax: input.fax,
+      email: input.email,
+      address: input.address,
+      city: input.city,
+      taxNumber: input.taxNumber,
+      commercialRegister: input.commercialRegister,
+      contactPerson: input.contactPerson,
+      paymentTermDays: input.paymentTermDays,
+      discountPercent: input.discountPercent,
+      openingBalance: input.openingBalance,
+      openingBalanceDate: input.openingBalanceDate,
+      creditLimit: input.creditLimit,
+      salesRepId: primaryFromList,
+      branchId: input.branchId,
+      areaId: input.areaId,
+      mapUrl: input.mapUrl,
+      notes: input.notes,
+      isActive: input.isActive,
+    });
+    let customerId = 0;
+    try {
+      const [inserted] = await db.insert(customers).values(withTenantId(ctx.tenantId, row) as any);
+      customerId = Number((inserted as { insertId?: number }).insertId ?? 0);
+    } catch (e: unknown) {
+      throw new TRPCError({ code: "BAD_REQUEST", message: dbErrorMessage(e, "فشل إضافة العميل") });
+    }
+    if (customerId) {
+      await recalculateCustomerBalance(db, ctx.tenantId!, customerId);
+      const repsPayload = input.salesReps?.length
+        ? input.salesReps
+        : (primaryFromList ? [{ salesRepId: primaryFromList, isPrimary: true }] : []);
+      if (repsPayload.length) {
+        await setCustomerSalesReps(db, ctx.tenantId!, customerId, repsPayload);
+      }
+    }
+    let supplierCode: string | undefined;
+    let linkedSupplierId: number | undefined;
+    if (input.alsoAsSupplier && customerId) {
+      try {
+        supplierCode = await resolveTypedEntityCode(db, suppliers, ctx.tenantId!, "supplier", undefined);
+        const supplierRow = contactSharedFields(input);
+        const [supIns] = await db.insert(suppliers).values(withTenantId(ctx.tenantId, {
+          ...supplierRow,
+          code: supplierCode,
+          linkedCustomerId: customerId,
+        }) as any);
+        linkedSupplierId = Number((supIns as { insertId?: number }).insertId ?? 0);
+        if (linkedSupplierId) {
+          await db.update(customers).set({ linkedSupplierId } as any)
+            .where(tenantWhere(customers, ctx.tenantId, eq(customers.id, customerId)));
+        }
+      } catch (e: unknown) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: dbErrorMessage(e, "تم إنشاء العميل لكن فشل تسجيله كمورد") });
+      }
+    }
+    return { success: true, code, id: customerId, supplierCode, linkedSupplierId };
   }),
   update: protectedProcedure.input(z.object({
     id: z.number(),
     name: z.string().min(1),
     code: z.string().optional(),
-    categoryId: z.number().optional(),
+    categoryId: z.number().optional().nullable(),
     phone: z.string().optional(),
     phone2: z.string().optional(),
+    fax: z.string().optional(),
     email: z.string().optional(),
     address: z.string().optional(),
     city: z.string().optional(),
     taxNumber: z.string().optional(),
+    commercialRegister: z.string().optional(),
+    contactPerson: z.string().optional(),
+    paymentTermDays: z.number().int().optional().nullable(),
+    discountPercent: z.string().optional(),
+    openingBalance: z.string().optional(),
+    openingBalanceDate: z.string().optional(),
     creditLimit: z.string().optional(),
+    salesRepId: z.number().optional().nullable(),
+    branchId: z.number().optional().nullable(),
+    areaId: z.number().optional().nullable(),
+    mapUrl: z.string().optional(),
     notes: z.string().optional(),
     isActive: z.boolean().optional(),
+    salesReps: z.array(z.object({
+      salesRepId: z.number(),
+      commissionRate: z.string().optional().nullable(),
+      isPrimary: z.boolean().optional(),
+    })).optional(),
+    /** If not yet linked, create a supplier twin (Mega Cash dual-role). */
+    alsoAsSupplier: z.boolean().optional(),
   })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-    const { id, ...data } = input;
-    await db.update(customers).set(data as any).where(tenantWhere(customers, ctx.tenantId, eq(customers.id, id)));
-    return { success: true };
+    const scope = await loadUserScopeFromCtx(db, ctx.saasUser);
+    const [existing] = await db.select().from(customers)
+      .where(tenantWhere(customers, ctx.tenantId, eq(customers.id, input.id)));
+    if (existing) assertEntityBranchAccess(scope, existing.branchId);
+    assertBranchAccess(scope, input.branchId ?? undefined);
+    const { id, code: inputCode, alsoAsSupplier, salesReps: repsInput, ...rest } = input;
+    let code = (inputCode || "").trim() || undefined;
+    if (code) {
+      try {
+        await assertUniqueEntityCode(db, customers, ctx.tenantId!, code, id);
+      } catch (e: unknown) {
+        throw new TRPCError({ code: "CONFLICT", message: dbErrorMessage(e, "كود موجود مسبقاً") });
+      }
+    }
+    const primaryFromList = repsInput?.find((r) => r.isPrimary)?.salesRepId
+      ?? repsInput?.[0]?.salesRepId
+      ?? rest.salesRepId;
+    const row = compactRow({
+      ...rest,
+      ...(code != null ? { code } : {}),
+      ...(repsInput !== undefined ? { salesRepId: primaryFromList ?? null } : {}),
+    });
+    try {
+      await db.update(customers).set(row as any)
+        .where(tenantWhere(customers, ctx.tenantId, eq(customers.id, id)));
+    } catch (e: unknown) {
+      throw new TRPCError({ code: "BAD_REQUEST", message: dbErrorMessage(e, "فشل تحديث العميل") });
+    }
+    if (repsInput !== undefined) {
+      await setCustomerSalesReps(db, ctx.tenantId!, id, repsInput);
+    }
+    await recalculateCustomerBalance(db, ctx.tenantId!, id);
+
+    let linkedSupplierId = existing?.linkedSupplierId ?? null;
+    let supplierCode: string | undefined;
+    if (alsoAsSupplier && !linkedSupplierId) {
+      try {
+        supplierCode = await resolveTypedEntityCode(db, suppliers, ctx.tenantId!, "supplier", undefined);
+        const [supIns] = await db.insert(suppliers).values(withTenantId(ctx.tenantId, {
+          ...contactSharedFields(input),
+          code: supplierCode,
+          linkedCustomerId: id,
+        }) as any);
+        linkedSupplierId = Number((supIns as { insertId?: number }).insertId ?? 0) || null;
+        if (linkedSupplierId) {
+          await db.update(customers).set({ linkedSupplierId } as any)
+            .where(tenantWhere(customers, ctx.tenantId, eq(customers.id, id)));
+        }
+      } catch (e: unknown) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: dbErrorMessage(e, "فشل تسجيل العميل كمورد") });
+      }
+    } else if (linkedSupplierId) {
+      await db.update(suppliers).set(contactSharedFields(input) as any)
+        .where(tenantWhere(suppliers, ctx.tenantId, eq(suppliers.id, linkedSupplierId)));
+    }
+    return { success: true, linkedSupplierId: linkedSupplierId ?? undefined, supplierCode };
   }),
   delete: protectedProcedure.input(z.number()).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    const [existing] = await db.select({ linkedSupplierId: customers.linkedSupplierId }).from(customers)
+      .where(tenantWhere(customers, ctx.tenantId, eq(customers.id, input)));
+    if (existing?.linkedSupplierId) {
+      await db.update(suppliers).set({ linkedCustomerId: null } as any)
+        .where(tenantWhere(suppliers, ctx.tenantId, eq(suppliers.id, existing.linkedSupplierId)));
+    }
     await db.delete(customers).where(tenantWhere(customers, ctx.tenantId, eq(customers.id, input)));
     return { success: true };
   }),
@@ -224,13 +561,21 @@ const suppliersRouter = router({
     search: z.string().optional(),
     page: z.number().default(1),
     limit: z.number().default(20),
+    branchId: z.number().optional(),
   })).query(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    const scope = await loadUserScopeFromCtx(db, ctx.saasUser);
     const offset = (input.page - 1) * input.limit;
-    const where = input.search
-      ? or(like(suppliers.name, `%${input.search}%`), like(suppliers.phone, `%${input.search}%`))
-      : undefined;
+    const where = and(
+      input.search
+        ? partySearchCondition(
+          { name: suppliers.name, phone: suppliers.phone, phone2: suppliers.phone2, code: suppliers.code },
+          input.search,
+        )
+        : undefined,
+      input.branchId != null ? eq(suppliers.branchId, input.branchId) : scopeBranchFilter(suppliers, scope),
+    );
     const rows = await db.select().from(suppliers).where(tenantWhere(suppliers, ctx.tenantId, where)).orderBy(desc(suppliers.createdAt)).limit(input.limit).offset(offset);
     const [total] = await db.select({ count: count() }).from(suppliers).where(tenantWhere(suppliers, ctx.tenantId, where));
     return { rows, total: total.count };
@@ -244,41 +589,154 @@ const suppliersRouter = router({
   create: protectedProcedure.input(z.object({
     name: z.string().min(1),
     code: z.string().optional(),
-    categoryId: z.number().optional(),
-    phone: z.string().optional(),
-    phone2: z.string().optional(),
-    email: z.string().optional(),
-    address: z.string().optional(),
-    city: z.string().optional(),
-    taxNumber: z.string().optional(),
-    notes: z.string().optional(),
+    ...contactPartyFields,
+    branchId: z.preprocess(optionalNum, z.number().optional()),
+    /** Mega Cash: register the same party as a customer too. */
+    alsoAsCustomer: z.boolean().optional(),
   })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-    await db.insert(suppliers).values(withTenantId(ctx.tenantId, input) as any);
-    return { success: true };
+    let code: string;
+    try {
+      code = await resolveTypedEntityCode(db, suppliers, ctx.tenantId!, "supplier", input.code);
+    } catch (e: unknown) {
+      throw new TRPCError({ code: "CONFLICT", message: dbErrorMessage(e, "كود موجود مسبقاً") });
+    }
+    const row = compactRow({
+      name: input.name,
+      code,
+      categoryId: input.categoryId,
+      phone: input.phone,
+      phone2: input.phone2,
+      fax: input.fax,
+      email: input.email,
+      address: input.address,
+      city: input.city,
+      taxNumber: input.taxNumber,
+      commercialRegister: input.commercialRegister,
+      contactPerson: input.contactPerson,
+      paymentTermDays: input.paymentTermDays,
+      discountPercent: input.discountPercent,
+      openingBalance: input.openingBalance,
+      openingBalanceDate: input.openingBalanceDate,
+      creditLimit: input.creditLimit,
+      branchId: input.branchId,
+      mapUrl: input.mapUrl,
+      notes: input.notes,
+      isActive: input.isActive,
+    });
+    let supplierId = 0;
+    try {
+      const [inserted] = await db.insert(suppliers).values(withTenantId(ctx.tenantId, row) as any);
+      supplierId = Number((inserted as { insertId?: number }).insertId ?? 0);
+    } catch (e: unknown) {
+      throw new TRPCError({ code: "BAD_REQUEST", message: dbErrorMessage(e, "فشل إضافة المورد") });
+    }
+    if (supplierId) {
+      await recalculateSupplierBalance(db, ctx.tenantId!, supplierId);
+    }
+    let customerCode: string | undefined;
+    let linkedCustomerId: number | undefined;
+    if (input.alsoAsCustomer && supplierId) {
+      try {
+        customerCode = await resolveTypedEntityCode(db, customers, ctx.tenantId!, "customer", undefined);
+        const [custIns] = await db.insert(customers).values(withTenantId(ctx.tenantId, {
+          ...contactSharedFields(input),
+          code: customerCode,
+          linkedSupplierId: supplierId,
+        }) as any);
+        linkedCustomerId = Number((custIns as { insertId?: number }).insertId ?? 0);
+        if (linkedCustomerId) {
+          await db.update(suppliers).set({ linkedCustomerId } as any)
+            .where(tenantWhere(suppliers, ctx.tenantId, eq(suppliers.id, supplierId)));
+        }
+      } catch (e: unknown) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: dbErrorMessage(e, "تم إنشاء المورد لكن فشل تسجيله كعميل") });
+      }
+    }
+    return { success: true, code, id: supplierId, customerCode, linkedCustomerId };
   }),
   update: protectedProcedure.input(z.object({
     id: z.number(),
     name: z.string().min(1),
     code: z.string().optional(),
+    categoryId: z.number().optional().nullable(),
     phone: z.string().optional(),
+    phone2: z.string().optional(),
+    fax: z.string().optional(),
     email: z.string().optional(),
     address: z.string().optional(),
     city: z.string().optional(),
     taxNumber: z.string().optional(),
+    commercialRegister: z.string().optional(),
+    contactPerson: z.string().optional(),
+    paymentTermDays: z.number().int().optional().nullable(),
+    discountPercent: z.string().optional(),
+    openingBalance: z.string().optional(),
+    openingBalanceDate: z.string().optional(),
+    creditLimit: z.string().optional(),
+    branchId: z.number().optional().nullable(),
+    mapUrl: z.string().optional(),
     notes: z.string().optional(),
     isActive: z.boolean().optional(),
+    /** If not yet linked, create a customer twin (Mega Cash dual-role). */
+    alsoAsCustomer: z.boolean().optional(),
   })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-    const { id, ...data } = input;
-    await db.update(suppliers).set(data as any).where(tenantWhere(suppliers, ctx.tenantId, eq(suppliers.id, id)));
-    return { success: true };
+    const [existing] = await db.select().from(suppliers)
+      .where(tenantWhere(suppliers, ctx.tenantId, eq(suppliers.id, input.id)));
+    const { id, code: inputCode, alsoAsCustomer, ...rest } = input;
+    let code = (inputCode || "").trim() || undefined;
+    if (code) {
+      try {
+        await assertUniqueEntityCode(db, suppliers, ctx.tenantId!, code, id);
+      } catch (e: unknown) {
+        throw new TRPCError({ code: "CONFLICT", message: dbErrorMessage(e, "كود موجود مسبقاً") });
+      }
+    }
+    const row = compactRow({ ...rest, ...(code != null ? { code } : {}) });
+    try {
+      await db.update(suppliers).set(row as any)
+        .where(tenantWhere(suppliers, ctx.tenantId, eq(suppliers.id, id)));
+    } catch (e: unknown) {
+      throw new TRPCError({ code: "BAD_REQUEST", message: dbErrorMessage(e, "فشل تحديث المورد") });
+    }
+    await recalculateSupplierBalance(db, ctx.tenantId!, id);
+
+    let linkedCustomerId = existing?.linkedCustomerId ?? null;
+    let customerCode: string | undefined;
+    if (alsoAsCustomer && !linkedCustomerId) {
+      try {
+        customerCode = await resolveTypedEntityCode(db, customers, ctx.tenantId!, "customer", undefined);
+        const [custIns] = await db.insert(customers).values(withTenantId(ctx.tenantId, {
+          ...contactSharedFields(input),
+          code: customerCode,
+          linkedSupplierId: id,
+        }) as any);
+        linkedCustomerId = Number((custIns as { insertId?: number }).insertId ?? 0) || null;
+        if (linkedCustomerId) {
+          await db.update(suppliers).set({ linkedCustomerId } as any)
+            .where(tenantWhere(suppliers, ctx.tenantId, eq(suppliers.id, id)));
+        }
+      } catch (e: unknown) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: dbErrorMessage(e, "فشل تسجيل المورد كعميل") });
+      }
+    } else if (linkedCustomerId) {
+      await db.update(customers).set(contactSharedFields(input) as any)
+        .where(tenantWhere(customers, ctx.tenantId, eq(customers.id, linkedCustomerId)));
+    }
+    return { success: true, linkedCustomerId: linkedCustomerId ?? undefined, customerCode };
   }),
   delete: protectedProcedure.input(z.number()).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    const [existing] = await db.select({ linkedCustomerId: suppliers.linkedCustomerId }).from(suppliers)
+      .where(tenantWhere(suppliers, ctx.tenantId, eq(suppliers.id, input)));
+    if (existing?.linkedCustomerId) {
+      await db.update(customers).set({ linkedSupplierId: null } as any)
+        .where(tenantWhere(customers, ctx.tenantId, eq(customers.id, existing.linkedCustomerId)));
+    }
     await db.delete(suppliers).where(tenantWhere(suppliers, ctx.tenantId, eq(suppliers.id, input)));
     return { success: true };
   }),
@@ -331,17 +789,35 @@ const itemsRouter = router({
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     const offset = (input.page - 1) * input.limit;
     const conditions = [];
-    if (input.search) conditions.push(or(like(items.name, `%${input.search}%`), like(items.code, `%${input.search}%`)));
+    if (input.search) {
+      conditions.push(or(
+        like(items.name, `%${input.search}%`),
+        like(items.barcode, `%${input.search}%`),
+        codeSearchCondition(items.code, input.search),
+      ));
+    }
     if (input.categoryId) conditions.push(eq(items.categoryId, input.categoryId));
     const where = conditions.length > 0 ? and(...conditions) : undefined;
-    const rows = await db.select().from(items).where(tenantWhere(items, ctx.tenantId, where)).orderBy(items.name).limit(input.limit).offset(offset);
+    // ترتيب بالكود (الأصناف بدون كود في الآخر) ثم الاسم — أوضح من ترتيب الاسم العربي المختلط
+    const itemOrder = [
+      sql`(CASE WHEN ${items.code} IS NULL OR TRIM(${items.code}) = '' THEN 1 ELSE 0 END)`,
+      items.code,
+      items.name,
+      items.id,
+    ] as const;
+    const rows = await db.select().from(items).where(tenantWhere(items, ctx.tenantId, where)).orderBy(...itemOrder).limit(input.limit).offset(offset);
     const [total] = await db.select({ count: count() }).from(items).where(tenantWhere(items, ctx.tenantId, where));
     return { rows, total: total.count };
   }),
   all: protectedProcedure.query(async ({ ctx }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-    return db.select().from(items).where(tenantWhere(items, ctx.tenantId, eq(items.isActive, true))).orderBy(items.name);
+    return db.select().from(items).where(tenantWhere(items, ctx.tenantId, eq(items.isActive, true))).orderBy(
+      sql`(CASE WHEN ${items.code} IS NULL OR TRIM(${items.code}) = '' THEN 1 ELSE 0 END)`,
+      items.code,
+      items.name,
+      items.id,
+    );
   }),
   byId: protectedProcedure.input(z.number()).query(async ({ ctx, input }) => {
     const db = await getDb();
@@ -359,12 +835,46 @@ const itemsRouter = router({
     salePrice: z.string().optional(),
     minStock: z.string().optional(),
     taxRate: z.string().optional(),
+    trackSerial: z.boolean().optional(),
     description: z.string().optional(),
   })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-    await db.insert(items).values(withTenantId(ctx.tenantId, input) as any);
-    return { success: true };
+    const { assertActiveMeasureUnit } = await import("./measure-units");
+    const unit = await assertActiveMeasureUnit(db, ctx.tenantId!, input.unit);
+    let code: string;
+    try {
+      code = await resolveTypedEntityCode(db, items, ctx.tenantId!, "item", input.code);
+    } catch (e: unknown) {
+      throw new TRPCError({ code: "CONFLICT", message: dbErrorMessage(e, "كود موجود مسبقاً") });
+    }
+    let itemId = 0;
+    try {
+      const [inserted] = await db.insert(items).values(withTenantId(ctx.tenantId, compactRow({
+        ...input,
+        unit,
+        code,
+      } as Record<string, unknown>)) as any);
+      itemId = Number((inserted as { insertId?: number }).insertId ?? 0);
+    } catch (e: unknown) {
+      throw new TRPCError({ code: "BAD_REQUEST", message: dbErrorMessage(e, "فشل إضافة الصنف") });
+    }
+    if (itemId && ctx.tenantSlug) {
+      const [row] = await db.select().from(items).where(tenantWhere(items, ctx.tenantId, eq(items.id, itemId))).limit(1);
+      if (row) {
+        const { notifyShopeItemSync } = await import("./shope-outbound");
+        void notifyShopeItemSync(ctx.tenantSlug, {
+          code: (row.code || row.barcode || String(row.id)).trim(),
+          name: row.name,
+          salePrice: row.salePrice,
+          currentStock: row.currentStock,
+          barcode: row.barcode,
+          description: row.description,
+          cashItemId: row.id,
+        });
+      }
+    }
+    return { success: true, id: itemId, code };
   }),
   update: protectedProcedure.input(z.object({
     id: z.number(),
@@ -377,13 +887,58 @@ const itemsRouter = router({
     salePrice: z.string().optional(),
     minStock: z.string().optional(),
     taxRate: z.string().optional(),
+    trackSerial: z.boolean().optional(),
     description: z.string().optional(),
     isActive: z.boolean().optional(),
   })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-    const { id, ...data } = input;
-    await db.update(items).set(data as any).where(tenantWhere(items, ctx.tenantId, eq(items.id, id)));
+    const { assertActiveMeasureUnit } = await import("./measure-units");
+    const { id, code: inputCode, ...rest } = input;
+    let code = (inputCode || "").trim() || undefined;
+    if (code) {
+      try {
+        await assertUniqueEntityCode(db, items, ctx.tenantId!, code, id);
+      } catch (e: unknown) {
+        throw new TRPCError({ code: "CONFLICT", message: dbErrorMessage(e, "كود موجود مسبقاً") });
+      }
+    }
+    try {
+      const unit = typeof input.unit === "string"
+        ? await assertActiveMeasureUnit(db, ctx.tenantId!, input.unit)
+        : undefined;
+      const patch = compactRow({
+        ...rest,
+        ...(code != null ? { code } : {}),
+        ...(unit != null ? { unit } : {}),
+      } as Record<string, unknown>) as Record<string, unknown>;
+      // الوحدة لازم تتحدث حتى لو كانت القيمة الافتراضية «قطعة»
+      if (unit != null) {
+        patch.unit = unit;
+      }
+      if (typeof input.trackSerial === "boolean") {
+        patch.trackSerial = input.trackSerial;
+      }
+      await db.update(items).set(patch as any).where(tenantWhere(items, ctx.tenantId, eq(items.id, id)));
+    } catch (e: unknown) {
+      if (e instanceof TRPCError) throw e;
+      throw new TRPCError({ code: "BAD_REQUEST", message: dbErrorMessage(e, "فشل تحديث الصنف") });
+    }
+    if (ctx.tenantSlug) {
+      const [row] = await db.select().from(items).where(tenantWhere(items, ctx.tenantId, eq(items.id, id))).limit(1);
+      if (row) {
+        const { notifyShopeItemSync } = await import("./shope-outbound");
+        void notifyShopeItemSync(ctx.tenantSlug, {
+          code: (row.code || row.barcode || String(row.id)).trim(),
+          name: row.name,
+          salePrice: row.salePrice,
+          currentStock: row.currentStock,
+          barcode: row.barcode,
+          description: row.description,
+          cashItemId: row.id,
+        });
+      }
+    }
     return { success: true };
   }),
   delete: protectedProcedure.input(z.number()).mutation(async ({ ctx, input }) => {
@@ -391,6 +946,16 @@ const itemsRouter = router({
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     await db.delete(items).where(tenantWhere(items, ctx.tenantId, eq(items.id, input)));
     return { success: true };
+  }),
+  /** حذف جماعي مع تصفير رصيد أول المدة والمخازن — لتقارير قيمة الأصناف قبل استيراد نظيف */
+  bulkPurge: protectedProcedure.input(z.object({
+    itemIds: z.array(z.number()).min(1).max(2000),
+    confirm: z.literal("PURGE_ITEMS"),
+  })).mutation(async ({ ctx, input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    const { purgeItemsWithStock } = await import("./inventory-clean-import");
+    return purgeItemsWithStock(db, ctx.tenantId!, input.itemIds);
   }),
   categories: protectedProcedure.query(async ({ ctx }) => {
     const db = await getDb();
@@ -410,30 +975,66 @@ const itemsRouter = router({
 
 // ===================== WAREHOUSES =====================
 const warehousesRouter = router({
-  list: protectedProcedure.query(async ({ ctx }) => {
+  list: protectedProcedure.input(z.object({
+    branchId: z.number().optional(),
+  }).optional()).query(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-    return db.select().from(warehouses).where(tenantWhere(warehouses, ctx.tenantId)).orderBy(warehouses.name);
+    const scope = await loadUserScopeFromCtx(db, ctx.saasUser);
+    const branchFilter = input?.branchId != null
+      ? eq(warehouses.branchId, input.branchId)
+      : scopeBranchFilter(warehouses, scope);
+    const rows = await db.select({
+      id: warehouses.id,
+      tenantId: warehouses.tenantId,
+      name: warehouses.name,
+      address: warehouses.address,
+      branchId: warehouses.branchId,
+      isActive: warehouses.isActive,
+      createdAt: warehouses.createdAt,
+      branchName: branches.name,
+    }).from(warehouses)
+      .leftJoin(branches, eq(warehouses.branchId, branches.id))
+      .where(tenantWhere(warehouses, ctx.tenantId, and(
+        scopeIdsFilter(warehouses.id, scope.warehouseIds),
+        branchFilter,
+      )))
+      .orderBy(warehouses.name);
+    return rows;
   }),
   create: protectedProcedure.input(z.object({
     name: z.string().min(1),
     address: z.string().optional(),
+    branchId: z.number().optional().nullable(),
   })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-    await db.insert(warehouses).values(withTenantId(ctx.tenantId, input) as any);
+    const scope = await loadUserScopeFromCtx(db, ctx.saasUser);
+    assertBranchAccess(scope, input.branchId ?? undefined);
+    if (scope.branchIds?.length && input.branchId == null) {
+      throw new TRPCError({ code: "BAD_REQUEST", message: "يجب اختيار فرع للمخزن ضمن نطاقك" });
+    }
+    await db.insert(warehouses).values(withTenantId(ctx.tenantId, compactRow({
+      name: input.name,
+      address: input.address,
+      branchId: input.branchId ?? null,
+    })) as any);
     return { success: true };
   }),
   update: protectedProcedure.input(z.object({
     id: z.number(),
     name: z.string().min(1),
     address: z.string().optional(),
+    branchId: z.number().optional().nullable(),
     isActive: z.boolean().optional(),
   })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    const scope = await loadUserScopeFromCtx(db, ctx.saasUser);
+    assertBranchAccess(scope, input.branchId ?? undefined);
     const { id, ...data } = input;
-    await db.update(warehouses).set(data).where(tenantWhere(warehouses, ctx.tenantId, eq(warehouses.id, id)));
+    await db.update(warehouses).set(compactRow(data as Record<string, unknown>) as any)
+      .where(tenantWhere(warehouses, ctx.tenantId, eq(warehouses.id, id)));
     return { success: true };
   }),
   delete: protectedProcedure.input(z.number()).mutation(async ({ ctx, input }) => {
@@ -441,6 +1042,12 @@ const warehousesRouter = router({
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     await db.delete(warehouses).where(tenantWhere(warehouses, ctx.tenantId, eq(warehouses.id, input)));
     return { success: true };
+  }),
+  backfillStock: protectedProcedure.mutation(async ({ ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    const { backfillWarehouseStockFromItems } = await import("./inventory-stock");
+    return backfillWarehouseStockFromItems(db, ctx.tenantId);
   }),
 });
 
@@ -456,28 +1063,60 @@ const purchasesRouter = router({
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       const offset = (input.page - 1) * input.limit;
+      const scope = ctx.saasUser ? await loadUserScope(db, ctx.saasUser.id) : { branchIds: null, warehouseIds: null };
+      const scopeFilters = [
+        scopeBranchFilter(purchaseInvoices, scope),
+        scopeWarehouseFilter(purchaseInvoices, scope),
+        input.status ? eq(purchaseInvoices.status, input.status as any) : undefined,
+        input.search
+          ? or(
+            codeSearchCondition(purchaseInvoices.number, input.search),
+            like(suppliers.name, `%${input.search}%`),
+          )
+          : undefined,
+      ].filter(Boolean);
+      const whereClause = tenantWhere(
+        purchaseInvoices,
+        ctx.tenantId,
+        ...(scopeFilters.length ? [and(...scopeFilters)] : []),
+      );
       const rows = await db.select({
         id: purchaseInvoices.id,
         number: purchaseInvoices.number,
         date: purchaseInvoices.date,
         total: purchaseInvoices.total,
+        foreignTotal: purchaseInvoices.foreignTotal,
+        currencyCode: purchaseInvoices.currencyCode,
+        exchangeRate: purchaseInvoices.exchangeRate,
         paid: purchaseInvoices.paid,
         remaining: purchaseInvoices.remaining,
         status: purchaseInvoices.status,
         paymentType: purchaseInvoices.paymentType,
         supplierName: suppliers.name,
+        branchName: branches.name,
       }).from(purchaseInvoices)
-        .where(tenantWhere(purchaseInvoices, ctx.tenantId))
         .leftJoin(suppliers, eq(purchaseInvoices.supplierId, suppliers.id))
+        .leftJoin(branches, eq(purchaseInvoices.branchId, branches.id))
+        .where(whereClause)
         .orderBy(desc(purchaseInvoices.createdAt))
         .limit(input.limit).offset(offset);
-      const [total] = await db.select({ count: count() }).from(purchaseInvoices).where(tenantWhere(purchaseInvoices, ctx.tenantId));
+      const [total] = await db.select({ count: count() }).from(purchaseInvoices)
+        .leftJoin(suppliers, eq(purchaseInvoices.supplierId, suppliers.id))
+        .where(whereClause);
       return { rows, total: total.count };
     }),
     byId: protectedProcedure.input(z.number()).query(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const scope = ctx.saasUser ? await loadUserScope(db, ctx.saasUser.id) : { branchIds: null, warehouseIds: null };
       const [inv] = await db.select().from(purchaseInvoices).where(tenantWhere(purchaseInvoices, ctx.tenantId, eq(purchaseInvoices.id, input)));
+      if (!inv) throw new TRPCError({ code: "NOT_FOUND" });
+      if (scope.branchIds?.length && inv.branchId && !scope.branchIds.includes(inv.branchId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "لا يمكنك عرض فواتير هذا الفرع" });
+      }
+      if (scope.warehouseIds?.length && inv.warehouseId && !scope.warehouseIds.includes(inv.warehouseId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "لا يمكنك عرض فواتير هذا المخزن" });
+      }
       const invItems = await db.select({
         id: purchaseInvoiceItems.id,
         itemId: purchaseInvoiceItems.itemId,
@@ -491,14 +1130,37 @@ const purchasesRouter = router({
       }).from(purchaseInvoiceItems)
         .leftJoin(items, eq(purchaseInvoiceItems.itemId, items.id))
         .where(tenantWhere(purchaseInvoiceItems, ctx.tenantId, eq(purchaseInvoiceItems.invoiceId, input)));
-      return { ...inv, items: invItems };
+      const [supplier] = await db.select({ name: suppliers.name }).from(suppliers)
+        .where(tenantWhere(suppliers, ctx.tenantId, eq(suppliers.id, inv.supplierId)));
+      const [journalEntry] = await db.select({
+        id: journalEntries.id,
+        number: journalEntries.number,
+      }).from(journalEntries)
+        .where(tenantWhere(journalEntries, ctx.tenantId, eq(journalEntries.reference, inv.number)))
+        .limit(1);
+      return { ...inv, supplierName: supplier?.name, items: invItems, journalEntry: journalEntry ?? null };
+    }),
+    recordPayment: protectedProcedure.input(z.object({
+      invoiceId: z.number(),
+      amount: z.string(),
+      date: z.string(),
+      description: z.string().optional(),
+    })).mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      return recordPurchaseInvoicePayment(db, ctx.tenantId, ctx.user.id, input);
     }),
     create: protectedProcedure.input(z.object({
       supplierId: z.number(),
       date: z.string(),
       dueDate: z.string().optional(),
       warehouseId: z.number().optional(),
+      branchId: z.number().optional(),
+      costCenterId: z.number().optional(),
       paymentType: z.enum(["cash", "credit"]).default("cash"),
+      currencyCode: z.string().default("EGP"),
+      exchangeRate: z.string().default("1"),
+      foreignTotal: z.string().optional(),
       subtotal: z.string(),
       discount: z.string().default("0"),
       tax: z.string().default("0"),
@@ -511,34 +1173,106 @@ const purchasesRouter = router({
         discount: z.string().default("0"),
         tax: z.string().default("0"),
         total: z.string(),
+        batchId: z.number().optional(),
+        batchNumber: z.string().optional(),
+        expiryDate: z.string().optional(),
+        serialNumbers: z.string().optional(),
       })),
     })).mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      await assertDateNotInClosedPeriod(db, ctx.tenantId, input.date);
+      const scope = await loadUserScopeFromCtx(db, ctx.saasUser);
+      assertBranchAccess(scope, input.branchId);
+      assertWarehouseAccess(scope, input.warehouseId);
       const [countResult] = await db.select({ count: count() }).from(purchaseInvoices).where(tenantWhere(purchaseInvoices, ctx.tenantId));
       const number = `PI-${String(countResult.count + 1).padStart(5, "0")}`;
+      const isCash = input.paymentType === "cash";
+      const { companyRequiresApproval, userBypassesApproval, queueDocumentApproval } = await import("./document-approval");
+      const needsApproval =
+        !isCash &&
+        (await companyRequiresApproval(db, ctx.tenantId)) &&
+        !userBypassesApproval(ctx.saasUser?.role ?? "user");
+
       const [result] = await db.insert(purchaseInvoices).values(withTenantId(ctx.tenantId, {
         number,
         supplierId: input.supplierId,
         date: input.date as any,
         dueDate: input.dueDate as any,
         warehouseId: input.warehouseId,
+        branchId: input.branchId,
+        costCenterId: input.costCenterId,
         paymentType: input.paymentType,
         subtotal: input.subtotal,
         discount: input.discount,
         tax: input.tax,
         total: input.total,
-        remaining: input.total,
+        paid: isCash ? input.total : "0",
+        remaining: isCash ? "0" : input.total,
+        currencyCode: input.currencyCode,
+        exchangeRate: input.exchangeRate,
+        foreignTotal: input.foreignTotal,
         notes: input.notes,
         createdBy: ctx.user.id,
-        status: "confirmed",
+        status: needsApproval ? "draft" : (isCash ? "paid" : "confirmed"),
       }) as any);
       const invId = (result as any).insertId;
       for (const item of input.items) {
         await db.insert(purchaseInvoiceItems).values(withTenantId(ctx.tenantId, { invoiceId: invId, ...item }) as any);
-        await db.update(items).set({
-          currentStock: sql`currentStock + ${item.quantity}`,
-        }).where(tenantWhere(items, ctx.tenantId, eq(items.id, item.itemId)));
+        if (!needsApproval) {
+          const { applyStockMovement } = await import("./inventory-stock");
+          await applyStockMovement(db, ctx.tenantId, {
+            itemId: item.itemId,
+            quantity: item.quantity,
+            direction: "in",
+            warehouseId: input.warehouseId,
+            batchId: item.batchId,
+            batchNumber: item.batchNumber,
+            expiryDate: item.expiryDate,
+          });
+          const { updateAverageCostAfterPurchase } = await import("./inventory-cost");
+          await updateAverageCostAfterPurchase(
+            db,
+            ctx.tenantId,
+            item.itemId,
+            Number(item.quantity),
+            Number(item.price),
+          );
+          if (item.serialNumbers) {
+            const { registerPurchaseSerials } = await import("./inventory-serials");
+            await registerPurchaseSerials(db, ctx.tenantId, {
+              itemId: item.itemId,
+              warehouseId: input.warehouseId,
+              purchaseInvoiceId: invId,
+              serialNumbers: item.serialNumbers,
+            });
+          }
+        }
+      }
+      if (needsApproval) {
+        await queueDocumentApproval(db, ctx.tenantId, {
+          type: "purchase_invoice",
+          id: invId,
+          number,
+          requestedBy: ctx.user?.id,
+        });
+        return { success: true, id: invId, number, pendingApproval: true };
+      }
+      const [supplier] = await db.select({ name: suppliers.name }).from(suppliers)
+        .where(tenantWhere(suppliers, ctx.tenantId, eq(suppliers.id, input.supplierId)));
+      await postPurchaseInvoiceJournal(db, ctx.tenantId, ctx.user.id, {
+        number,
+        date: input.date,
+        paymentType: input.paymentType,
+        subtotal: input.subtotal,
+        discount: input.discount,
+        tax: input.tax,
+        total: input.total,
+        costCenterId: input.costCenterId,
+        supplierName: supplier?.name,
+      });
+      if (!isCash) {
+        await recalculateSupplierBalance(db, ctx.tenantId, input.supplierId);
       }
       return { success: true, id: invId, number };
     }),
@@ -547,7 +1281,10 @@ const purchasesRouter = router({
     list: protectedProcedure.input(z.object({ page: z.number().default(1), limit: z.number().default(20) })).query(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const scope = await loadUserScopeFromCtx(db, ctx.saasUser);
       const offset = (input.page - 1) * input.limit;
+      const scopeFilters = [scopeWarehouseFilter(purchaseOrders, scope)].filter(Boolean);
+      const whereClause = tenantWhere(purchaseOrders, ctx.tenantId, ...(scopeFilters.length ? [and(...scopeFilters)] : []));
       const rows = await db.select({
         id: purchaseOrders.id,
         number: purchaseOrders.number,
@@ -556,16 +1293,59 @@ const purchasesRouter = router({
         status: purchaseOrders.status,
         supplierName: suppliers.name,
       }).from(purchaseOrders)
-        .where(tenantWhere(purchaseOrders, ctx.tenantId))
+        .where(whereClause)
         .leftJoin(suppliers, eq(purchaseOrders.supplierId, suppliers.id))
         .orderBy(desc(purchaseOrders.createdAt)).limit(input.limit).offset(offset);
-      const [total] = await db.select({ count: count() }).from(purchaseOrders).where(tenantWhere(purchaseOrders, ctx.tenantId));
+      const [total] = await db.select({ count: count() }).from(purchaseOrders).where(whereClause);
       return { rows, total: total.count };
+    }),
+    byId: protectedProcedure.input(z.number()).query(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const scope = await loadUserScopeFromCtx(db, ctx.saasUser);
+      const [order] = await db.select().from(purchaseOrders).where(tenantWhere(purchaseOrders, ctx.tenantId, eq(purchaseOrders.id, input)));
+      if (!order) throw new TRPCError({ code: "NOT_FOUND" });
+      assertWarehouseAccess(scope, order.warehouseId);
+      const orderItems = await db.select({
+        id: purchaseOrderItems.id,
+        itemId: purchaseOrderItems.itemId,
+        quantity: purchaseOrderItems.quantity,
+        price: purchaseOrderItems.price,
+        discount: purchaseOrderItems.discount,
+        tax: purchaseOrderItems.tax,
+        total: purchaseOrderItems.total,
+        itemName: items.name,
+        itemCode: items.code,
+        itemUnit: items.unit,
+      }).from(purchaseOrderItems)
+        .leftJoin(items, eq(purchaseOrderItems.itemId, items.id))
+        .where(tenantWhere(purchaseOrderItems, ctx.tenantId, eq(purchaseOrderItems.orderId, input)));
+      const [supplier] = await db.select({ name: suppliers.name, phone: suppliers.phone }).from(suppliers)
+        .where(tenantWhere(suppliers, ctx.tenantId, eq(suppliers.id, order.supplierId)));
+      const [warehouse] = order.warehouseId
+        ? await db.select({ name: warehouses.name }).from(warehouses)
+          .where(tenantWhere(warehouses, ctx.tenantId, eq(warehouses.id, order.warehouseId)))
+        : [null];
+      let convertedInvoice: { id: number; number: string } | null = null;
+      if (order.convertedInvoiceId) {
+        const [inv] = await db.select({ id: purchaseInvoices.id, number: purchaseInvoices.number }).from(purchaseInvoices)
+          .where(tenantWhere(purchaseInvoices, ctx.tenantId, eq(purchaseInvoices.id, order.convertedInvoiceId)));
+        convertedInvoice = inv ?? null;
+      }
+      return {
+        ...order,
+        supplierName: supplier?.name || "",
+        supplierPhone: supplier?.phone || "",
+        warehouseName: warehouse?.name || "",
+        items: orderItems,
+        convertedInvoice,
+      };
     }),
     create: protectedProcedure.input(z.object({
       supplierId: z.number(),
       date: z.string(),
       expectedDate: z.string().optional(),
+      warehouseId: z.number().optional(),
       notes: z.string().optional(),
       items: z.array(z.object({
         itemId: z.number(),
@@ -576,6 +1356,12 @@ const purchasesRouter = router({
     })).mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      await assertDateNotInClosedPeriod(db, ctx.tenantId, input.date);
+      const scope = await loadUserScopeFromCtx(db, ctx.saasUser);
+      assertWarehouseAccess(scope, input.warehouseId);
+      if (scope.warehouseIds?.length && input.warehouseId == null) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "يجب اختيار مخزن ضمن نطاقك" });
+      }
       const [countResult] = await db.select({ count: count() }).from(purchaseOrders).where(tenantWhere(purchaseOrders, ctx.tenantId));
       const number = `PO-${String(countResult.count + 1).padStart(5, "0")}`;
       const total = input.items.reduce((s, it) => s + (Number(it.quantity) * Number(it.unitPrice)), 0);
@@ -583,20 +1369,62 @@ const purchasesRouter = router({
         number, supplierId: input.supplierId,
         date: input.date as any,
         expectedDate: input.expectedDate as any,
+        warehouseId: input.warehouseId,
         total: String(total),
         notes: input.notes,
         status: "draft",
       }) as any);
       const orderId = (result as any).insertId;
       for (const item of input.items) {
-        await db.insert(purchaseOrderItems).values(withTenantId(ctx.tenantId, { orderId, ...item }) as any);
+        await db.insert(purchaseOrderItems).values(withTenantId(ctx.tenantId, {
+          orderId,
+          itemId: item.itemId,
+          quantity: item.quantity,
+          price: item.unitPrice,
+          discount: "0",
+          tax: "0",
+          total: String(Number(item.quantity) * Number(item.unitPrice)),
+        }) as any);
       }
       return { success: true, id: orderId, number };
     }),
     approve: protectedProcedure.input(z.number()).mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      await db.update(purchaseOrders).set({ status: "approved" } as any).where(tenantWhere(purchaseOrders, ctx.tenantId, eq(purchaseOrders.id, input)));
+      const scope = await loadUserScopeFromCtx(db, ctx.saasUser);
+      const [order] = await db.select().from(purchaseOrders).where(tenantWhere(purchaseOrders, ctx.tenantId, eq(purchaseOrders.id, input)));
+      if (!order) throw new TRPCError({ code: "NOT_FOUND" });
+      assertWarehouseAccess(scope, order.warehouseId);
+      await db.update(purchaseOrders).set({ status: "confirmed" } as any).where(tenantWhere(purchaseOrders, ctx.tenantId, eq(purchaseOrders.id, input)));
+      return { success: true };
+    }),
+    convertToInvoice: protectedProcedure.input(z.object({
+      orderId: z.number(),
+      paymentType: z.enum(["cash", "credit"]).optional(),
+      date: z.string().optional(),
+    })).mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const scope = await loadUserScopeFromCtx(db, ctx.saasUser);
+      const [order] = await db.select().from(purchaseOrders).where(tenantWhere(purchaseOrders, ctx.tenantId, eq(purchaseOrders.id, input.orderId)));
+      if (!order) throw new TRPCError({ code: "NOT_FOUND" });
+      assertWarehouseAccess(scope, order.warehouseId);
+      const { convertPurchaseOrderToInvoice } = await import("./order-conversion");
+      return convertPurchaseOrderToInvoice(db, ctx.tenantId, ctx.user?.id, input.orderId, {
+        paymentType: input.paymentType,
+        date: input.date,
+      });
+    }),
+    cancel: protectedProcedure.input(z.number()).mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const scope = await loadUserScopeFromCtx(db, ctx.saasUser);
+      const [order] = await db.select().from(purchaseOrders).where(tenantWhere(purchaseOrders, ctx.tenantId, eq(purchaseOrders.id, input)));
+      if (!order) throw new TRPCError({ code: "NOT_FOUND" });
+      assertWarehouseAccess(scope, order.warehouseId);
+      if (order.convertedInvoiceId) throw new TRPCError({ code: "BAD_REQUEST", message: "لا يمكن إلغاء أمر تم تحويله لفاتورة" });
+      if (order.status === "cancelled") throw new TRPCError({ code: "BAD_REQUEST", message: "الأمر ملغي مسبقاً" });
+      await db.update(purchaseOrders).set({ status: "cancelled" } as any).where(tenantWhere(purchaseOrders, ctx.tenantId, eq(purchaseOrders.id, input)));
       return { success: true };
     }),
   }),
@@ -633,6 +1461,7 @@ const purchasesRouter = router({
     })).mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      await assertDateNotInClosedPeriod(db, ctx.tenantId, input.date);
       const [countResult] = await db.select({ count: count() }).from(purchaseReturns).where(tenantWhere(purchaseReturns, ctx.tenantId));
       const number = `PR-${String(countResult.count + 1).padStart(5, "0")}`;
       const total = input.items.reduce((s, it) => s + (Number(it.quantity) * Number(it.unitPrice)), 0);
@@ -647,9 +1476,32 @@ const purchasesRouter = router({
       }) as any);
       const retId = (result as any).insertId;
       for (const item of input.items) {
-        await db.insert(purchaseOrderItems).values(withTenantId(ctx.tenantId, { orderId: retId, ...item }) as any);
-        await db.update(items).set({ currentStock: sql`currentStock - ${item.quantity}` }).where(tenantWhere(items, ctx.tenantId, eq(items.id, item.itemId)));
+        const lineTotal = Number(item.quantity) * Number(item.unitPrice);
+        await db.insert(purchaseReturnItems).values(withTenantId(ctx.tenantId, {
+          returnId: retId,
+          itemId: item.itemId,
+          quantity: item.quantity,
+          price: item.unitPrice,
+          total: String(lineTotal),
+        }) as any);
+        const { applyStockMovement } = await import("./inventory-stock");
+        await applyStockMovement(db, ctx.tenantId, {
+          itemId: item.itemId,
+          quantity: item.quantity,
+          direction: "out",
+          warehouseId: input.warehouseId,
+        });
       }
+      const [supplier] = await db.select({ name: suppliers.name }).from(suppliers)
+        .where(tenantWhere(suppliers, ctx.tenantId, eq(suppliers.id, input.supplierId)));
+      await postPurchaseReturnJournal(db, ctx.tenantId, ctx.user.id, {
+        number,
+        date: input.date,
+        total: String(total),
+        supplierName: supplier?.name,
+        items: input.items.map((it) => ({ itemId: it.itemId, quantity: it.quantity })),
+      });
+      await recalculateSupplierBalance(db, ctx.tenantId, input.supplierId);
       return { success: true, id: retId, number };
     }),
   }),
@@ -661,34 +1513,68 @@ const salesRouter = router({
     list: protectedProcedure.input(z.object({
       search: z.string().optional(),
       status: z.string().optional(),
+      paymentType: z.enum(["cash", "credit"]).optional(),
       page: z.number().default(1),
       limit: z.number().default(20),
     })).query(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       const offset = (input.page - 1) * input.limit;
+      const scope = ctx.saasUser ? await loadUserScope(db, ctx.saasUser.id) : { branchIds: null, warehouseIds: null };
+      const filters = [
+        input.paymentType ? eq(salesInvoices.paymentType, input.paymentType) : undefined,
+        input.status ? eq(salesInvoices.status, input.status as any) : undefined,
+        scopeBranchFilter(salesInvoices, scope),
+        scopeWarehouseFilter(salesInvoices, scope),
+        input.search
+          ? or(
+            codeSearchCondition(salesInvoices.number, input.search),
+            like(customers.name, `%${input.search}%`),
+          )
+          : undefined,
+      ].filter(Boolean);
+      const whereClause = tenantWhere(
+        salesInvoices,
+        ctx.tenantId,
+        ...(filters.length ? [and(...filters)] : []),
+      );
       const rows = await db.select({
         id: salesInvoices.id,
         number: salesInvoices.number,
         date: salesInvoices.date,
         total: salesInvoices.total,
+        foreignTotal: salesInvoices.foreignTotal,
+        currencyCode: salesInvoices.currencyCode,
+        exchangeRate: salesInvoices.exchangeRate,
         paid: salesInvoices.paid,
         remaining: salesInvoices.remaining,
         status: salesInvoices.status,
         paymentType: salesInvoices.paymentType,
         customerName: customers.name,
+        branchName: branches.name,
       }).from(salesInvoices)
-        .where(tenantWhere(salesInvoices, ctx.tenantId))
         .leftJoin(customers, eq(salesInvoices.customerId, customers.id))
+        .leftJoin(branches, eq(salesInvoices.branchId, branches.id))
+        .where(whereClause)
         .orderBy(desc(salesInvoices.createdAt))
         .limit(input.limit).offset(offset);
-      const [total] = await db.select({ count: count() }).from(salesInvoices).where(tenantWhere(salesInvoices, ctx.tenantId));
+      const [total] = await db.select({ count: count() }).from(salesInvoices)
+        .leftJoin(customers, eq(salesInvoices.customerId, customers.id))
+        .where(whereClause);
       return { rows, total: total.count };
     }),
     byId: protectedProcedure.input(z.number()).query(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const scope = ctx.saasUser ? await loadUserScope(db, ctx.saasUser.id) : { branchIds: null, warehouseIds: null };
       const [inv] = await db.select().from(salesInvoices).where(tenantWhere(salesInvoices, ctx.tenantId, eq(salesInvoices.id, input)));
+      if (!inv) throw new TRPCError({ code: "NOT_FOUND" });
+      if (scope.branchIds?.length && inv.branchId && !scope.branchIds.includes(inv.branchId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "لا يمكنك عرض فواتير هذا الفرع" });
+      }
+      if (scope.warehouseIds?.length && inv.warehouseId && !scope.warehouseIds.includes(inv.warehouseId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "لا يمكنك عرض فواتير هذا المخزن" });
+      }
       const invItems = await db.select({
         id: salesInvoiceItems.id,
         itemId: salesInvoiceItems.itemId,
@@ -702,14 +1588,63 @@ const salesRouter = router({
       }).from(salesInvoiceItems)
         .leftJoin(items, eq(salesInvoiceItems.itemId, items.id))
         .where(tenantWhere(salesInvoiceItems, ctx.tenantId, eq(salesInvoiceItems.invoiceId, input)));
-      return { ...inv, items: invItems };
+      const [customer] = await db.select({ name: customers.name }).from(customers)
+        .where(tenantWhere(customers, ctx.tenantId, eq(customers.id, inv.customerId)));
+      const [journalEntry] = await db.select({
+        id: journalEntries.id,
+        number: journalEntries.number,
+      }).from(journalEntries)
+        .where(tenantWhere(journalEntries, ctx.tenantId, eq(journalEntries.reference, inv.number)))
+        .limit(1);
+      return { ...inv, customerName: customer?.name, items: invItems, journalEntry: journalEntry ?? null };
+    }),
+    recordPayment: protectedProcedure.input(z.object({
+      invoiceId: z.number(),
+      amount: z.string(),
+      date: z.string(),
+      description: z.string().optional(),
+    })).mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      return recordSalesInvoicePayment(db, ctx.tenantId, ctx.user.id, input);
+    }),
+    submitToEta: protectedProcedure.input(z.number()).mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const { submitSalesInvoiceToEta } = await import("./eta-service");
+      try {
+        return await submitSalesInvoiceToEta(db, ctx.tenantId, input);
+      } catch (err) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: err instanceof Error ? err.message : "فشل الإرسال لـ ETA",
+        });
+      }
+    }),
+    checkEtaStatus: protectedProcedure.input(z.number()).mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const { checkEtaInvoiceStatus } = await import("./eta-service");
+      try {
+        return await checkEtaInvoiceStatus(db, ctx.tenantId, input);
+      } catch (err) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: err instanceof Error ? err.message : "فشل الاستعلام عن حالة ETA",
+        });
+      }
     }),
     create: protectedProcedure.input(z.object({
       customerId: z.number(),
       date: z.string(),
       dueDate: z.string().optional(),
       warehouseId: z.number().optional(),
+      branchId: z.number().optional(),
+      costCenterId: z.number().optional(),
       paymentType: z.enum(["cash", "credit"]).default("cash"),
+      currencyCode: z.string().default("EGP"),
+      exchangeRate: z.string().default("1"),
+      foreignTotal: z.string().optional(),
       subtotal: z.string(),
       discount: z.string().default("0"),
       tax: z.string().default("0"),
@@ -722,12 +1657,36 @@ const salesRouter = router({
         discount: z.string().default("0"),
         tax: z.string().default("0"),
         total: z.string(),
+        batchId: z.number().optional(),
+        batchNumber: z.string().optional(),
+        serialNumbers: z.string().optional(),
       })),
     })).mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      await assertDateNotInClosedPeriod(db, ctx.tenantId, input.date);
+      const scope = await loadUserScopeFromCtx(db, ctx.saasUser);
       const [countResult] = await db.select({ count: count() }).from(salesInvoices).where(tenantWhere(salesInvoices, ctx.tenantId));
       const number = `SI-${String(countResult.count + 1).padStart(5, "0")}`;
+      const [customer] = await db.select({
+        salesRepId: customers.salesRepId,
+        branchId: customers.branchId,
+        name: customers.name,
+      }).from(customers).where(tenantWhere(customers, ctx.tenantId, eq(customers.id, input.customerId)));
+      if (customer) assertEntityBranchAccess(scope, customer.branchId);
+      const resolvedBranchId = input.branchId ?? customer?.branchId ?? undefined;
+      assertBranchAccess(scope, resolvedBranchId);
+      assertWarehouseAccess(scope, input.warehouseId);
+      const isCash = input.paymentType === "cash";
+      if (!isCash) {
+        await assertCustomerCreditLimit(db, ctx.tenantId, input.customerId, input.total);
+      }
+      const { companyRequiresApproval, userBypassesApproval, queueDocumentApproval } = await import("./document-approval");
+      const needsApproval =
+        !isCash &&
+        (await companyRequiresApproval(db, ctx.tenantId)) &&
+        !userBypassesApproval(ctx.saasUser?.role ?? "user");
+
       const [result] = await db.insert(salesInvoices).values(withTenantId(ctx.tenantId, {
         number,
         customerId: input.customerId,
@@ -739,17 +1698,69 @@ const salesRouter = router({
         discount: input.discount,
         tax: input.tax,
         total: input.total,
-        remaining: input.total,
+        paid: isCash ? input.total : "0",
+        remaining: isCash ? "0" : input.total,
+        salesRepId: customer?.salesRepId ?? undefined,
+        branchId: resolvedBranchId,
+        costCenterId: input.costCenterId,
+        currencyCode: input.currencyCode,
+        exchangeRate: input.exchangeRate,
+        foreignTotal: input.foreignTotal,
         notes: input.notes,
         createdBy: ctx.user.id,
-        status: "confirmed",
+        status: needsApproval ? "draft" : (isCash ? "paid" : "confirmed"),
       }) as any);
       const invId = (result as any).insertId;
       for (const item of input.items) {
         await db.insert(salesInvoiceItems).values(withTenantId(ctx.tenantId, { invoiceId: invId, ...item }) as any);
-        await db.update(items).set({
-          currentStock: sql`currentStock - ${item.quantity}`,
-        }).where(tenantWhere(items, ctx.tenantId, eq(items.id, item.itemId)));
+        if (!needsApproval) {
+          const { applyStockMovement } = await import("./inventory-stock");
+          await applyStockMovement(db, ctx.tenantId, {
+            itemId: item.itemId,
+            quantity: item.quantity,
+            direction: "out",
+            warehouseId: input.warehouseId,
+            batchId: item.batchId,
+          });
+          if (item.serialNumbers) {
+            const { assignSalesSerials } = await import("./inventory-serials");
+            await assignSalesSerials(db, ctx.tenantId, {
+              itemId: item.itemId,
+              warehouseId: input.warehouseId,
+              salesInvoiceId: invId,
+              serialNumbers: item.serialNumbers,
+            });
+          }
+        }
+      }
+      if (needsApproval) {
+        await queueDocumentApproval(db, ctx.tenantId, {
+          type: "sales_invoice",
+          id: invId,
+          number,
+          requestedBy: ctx.user?.id,
+        });
+        return { success: true, id: invId, number, pendingApproval: true };
+      }
+      await postSalesInvoiceJournal(db, ctx.tenantId, ctx.user.id, {
+        number,
+        date: input.date,
+        paymentType: input.paymentType,
+        subtotal: input.subtotal,
+        discount: input.discount,
+        tax: input.tax,
+        total: input.total,
+        costCenterId: input.costCenterId,
+        customerName: customer?.name,
+      });
+      await postSalesCogsJournal(db, ctx.tenantId, ctx.user.id, {
+        number,
+        date: input.date,
+        costCenterId: input.costCenterId,
+        items: input.items.map((it) => ({ itemId: it.itemId, quantity: it.quantity })),
+      });
+      if (!isCash) {
+        await recalculateCustomerBalance(db, ctx.tenantId, input.customerId);
       }
       return { success: true, id: invId, number };
     }),
@@ -758,7 +1769,13 @@ const salesRouter = router({
     list: protectedProcedure.input(z.object({ page: z.number().default(1), limit: z.number().default(20) })).query(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const scope = await loadUserScopeFromCtx(db, ctx.saasUser);
       const offset = (input.page - 1) * input.limit;
+      const scopeFilters = [
+        scopeWarehouseFilter(salesOrders, scope),
+        scopeBranchFilter(customers, scope),
+      ].filter(Boolean);
+      const whereClause = tenantWhere(salesOrders, ctx.tenantId, ...(scopeFilters.length ? [and(...scopeFilters)] : []));
       const rows = await db.select({
         id: salesOrders.id,
         number: salesOrders.number,
@@ -767,16 +1784,60 @@ const salesRouter = router({
         status: salesOrders.status,
         customerName: customers.name,
       }).from(salesOrders)
-        .where(tenantWhere(salesOrders, ctx.tenantId))
+        .where(whereClause)
         .leftJoin(customers, eq(salesOrders.customerId, customers.id))
         .orderBy(desc(salesOrders.createdAt)).limit(input.limit).offset(offset);
-      const [total] = await db.select({ count: count() }).from(salesOrders).where(tenantWhere(salesOrders, ctx.tenantId));
+      const [total] = await db.select({ count: count() }).from(salesOrders).where(whereClause);
       return { rows, total: total.count };
+    }),
+    byId: protectedProcedure.input(z.number()).query(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const scope = await loadUserScopeFromCtx(db, ctx.saasUser);
+      const [order] = await db.select().from(salesOrders).where(tenantWhere(salesOrders, ctx.tenantId, eq(salesOrders.id, input)));
+      if (!order) throw new TRPCError({ code: "NOT_FOUND" });
+      assertWarehouseAccess(scope, order.warehouseId);
+      const [customer] = await db.select({ name: customers.name, phone: customers.phone, branchId: customers.branchId }).from(customers)
+        .where(tenantWhere(customers, ctx.tenantId, eq(customers.id, order.customerId)));
+      assertEntityBranchAccess(scope, customer?.branchId);
+      const orderItems = await db.select({
+        id: salesOrderItems.id,
+        itemId: salesOrderItems.itemId,
+        quantity: salesOrderItems.quantity,
+        price: salesOrderItems.price,
+        discount: salesOrderItems.discount,
+        tax: salesOrderItems.tax,
+        total: salesOrderItems.total,
+        itemName: items.name,
+        itemCode: items.code,
+        itemUnit: items.unit,
+      }).from(salesOrderItems)
+        .leftJoin(items, eq(salesOrderItems.itemId, items.id))
+        .where(tenantWhere(salesOrderItems, ctx.tenantId, eq(salesOrderItems.orderId, input)));
+      const [warehouse] = order.warehouseId
+        ? await db.select({ name: warehouses.name }).from(warehouses)
+          .where(tenantWhere(warehouses, ctx.tenantId, eq(warehouses.id, order.warehouseId)))
+        : [null];
+      let convertedInvoice: { id: number; number: string } | null = null;
+      if (order.convertedInvoiceId) {
+        const [inv] = await db.select({ id: salesInvoices.id, number: salesInvoices.number }).from(salesInvoices)
+          .where(tenantWhere(salesInvoices, ctx.tenantId, eq(salesInvoices.id, order.convertedInvoiceId)));
+        convertedInvoice = inv ?? null;
+      }
+      return {
+        ...order,
+        customerName: customer?.name || "",
+        customerPhone: customer?.phone || "",
+        warehouseName: warehouse?.name || "",
+        items: orderItems,
+        convertedInvoice,
+      };
     }),
     create: protectedProcedure.input(z.object({
       customerId: z.number(),
       date: z.string(),
       expectedDate: z.string().optional(),
+      warehouseId: z.number().optional(),
       notes: z.string().optional(),
       items: z.array(z.object({
         itemId: z.number(),
@@ -787,6 +1848,15 @@ const salesRouter = router({
     })).mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      await assertDateNotInClosedPeriod(db, ctx.tenantId, input.date);
+      const scope = await loadUserScopeFromCtx(db, ctx.saasUser);
+      const [customer] = await db.select({ branchId: customers.branchId }).from(customers)
+        .where(tenantWhere(customers, ctx.tenantId, eq(customers.id, input.customerId)));
+      if (customer) assertEntityBranchAccess(scope, customer.branchId);
+      assertWarehouseAccess(scope, input.warehouseId);
+      if (scope.warehouseIds?.length && input.warehouseId == null) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "يجب اختيار مخزن ضمن نطاقك" });
+      }
       const [countResult] = await db.select({ count: count() }).from(salesOrders).where(tenantWhere(salesOrders, ctx.tenantId));
       const number = `SO-${String(countResult.count + 1).padStart(5, "0")}`;
       const total = input.items.reduce((s, it) => s + (Number(it.quantity) * Number(it.unitPrice)), 0);
@@ -794,20 +1864,71 @@ const salesRouter = router({
         number, customerId: input.customerId,
         date: input.date as any,
         expectedDate: input.expectedDate as any,
+        warehouseId: input.warehouseId,
         total: String(total),
         notes: input.notes,
         status: "draft",
       }) as any);
       const orderId = (result as any).insertId;
       for (const item of input.items) {
-        await db.insert(salesOrderItems).values(withTenantId(ctx.tenantId, { orderId, ...item }) as any);
+        await db.insert(salesOrderItems).values(withTenantId(ctx.tenantId, {
+          orderId,
+          itemId: item.itemId,
+          quantity: item.quantity,
+          price: item.unitPrice,
+          discount: "0",
+          tax: "0",
+          total: String(Number(item.quantity) * Number(item.unitPrice)),
+        }) as any);
       }
       return { success: true, id: orderId, number };
     }),
     approve: protectedProcedure.input(z.number()).mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      await db.update(salesOrders).set({ status: "approved" } as any).where(tenantWhere(salesOrders, ctx.tenantId, eq(salesOrders.id, input)));
+      const scope = await loadUserScopeFromCtx(db, ctx.saasUser);
+      const [order] = await db.select().from(salesOrders).where(tenantWhere(salesOrders, ctx.tenantId, eq(salesOrders.id, input)));
+      if (!order) throw new TRPCError({ code: "NOT_FOUND" });
+      assertWarehouseAccess(scope, order.warehouseId);
+      const [customer] = await db.select({ branchId: customers.branchId }).from(customers)
+        .where(tenantWhere(customers, ctx.tenantId, eq(customers.id, order.customerId)));
+      assertEntityBranchAccess(scope, customer?.branchId);
+      await db.update(salesOrders).set({ status: "confirmed" } as any).where(tenantWhere(salesOrders, ctx.tenantId, eq(salesOrders.id, input)));
+      return { success: true };
+    }),
+    convertToInvoice: protectedProcedure.input(z.object({
+      orderId: z.number(),
+      paymentType: z.enum(["cash", "credit"]).optional(),
+      date: z.string().optional(),
+    })).mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const scope = await loadUserScopeFromCtx(db, ctx.saasUser);
+      const [order] = await db.select().from(salesOrders).where(tenantWhere(salesOrders, ctx.tenantId, eq(salesOrders.id, input.orderId)));
+      if (!order) throw new TRPCError({ code: "NOT_FOUND" });
+      assertWarehouseAccess(scope, order.warehouseId);
+      const [customer] = await db.select({ branchId: customers.branchId }).from(customers)
+        .where(tenantWhere(customers, ctx.tenantId, eq(customers.id, order.customerId)));
+      assertEntityBranchAccess(scope, customer?.branchId);
+      const { convertSalesOrderToInvoice } = await import("./order-conversion");
+      return convertSalesOrderToInvoice(db, ctx.tenantId, ctx.user?.id, input.orderId, {
+        paymentType: input.paymentType,
+        date: input.date,
+      });
+    }),
+    cancel: protectedProcedure.input(z.number()).mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const scope = await loadUserScopeFromCtx(db, ctx.saasUser);
+      const [order] = await db.select().from(salesOrders).where(tenantWhere(salesOrders, ctx.tenantId, eq(salesOrders.id, input)));
+      if (!order) throw new TRPCError({ code: "NOT_FOUND" });
+      assertWarehouseAccess(scope, order.warehouseId);
+      const [customer] = await db.select({ branchId: customers.branchId }).from(customers)
+        .where(tenantWhere(customers, ctx.tenantId, eq(customers.id, order.customerId)));
+      assertEntityBranchAccess(scope, customer?.branchId);
+      if (order.convertedInvoiceId) throw new TRPCError({ code: "BAD_REQUEST", message: "لا يمكن إلغاء طلب تم تحويله لفاتورة" });
+      if (order.status === "cancelled") throw new TRPCError({ code: "BAD_REQUEST", message: "الطلب ملغي مسبقاً" });
+      await db.update(salesOrders).set({ status: "cancelled" } as any).where(tenantWhere(salesOrders, ctx.tenantId, eq(salesOrders.id, input)));
       return { success: true };
     }),
   }),
@@ -844,6 +1965,7 @@ const salesRouter = router({
     })).mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      await assertDateNotInClosedPeriod(db, ctx.tenantId, input.date);
       const [countResult] = await db.select({ count: count() }).from(salesReturns).where(tenantWhere(salesReturns, ctx.tenantId));
       const number = `SR-${String(countResult.count + 1).padStart(5, "0")}`;
       const total = input.items.reduce((s, it) => s + (Number(it.quantity) * Number(it.unitPrice)), 0);
@@ -858,9 +1980,36 @@ const salesRouter = router({
       }) as any);
       const retId = (result as any).insertId;
       for (const item of input.items) {
-        await db.insert(salesOrderItems).values(withTenantId(ctx.tenantId, { orderId: retId, ...item }) as any);
-        await db.update(items).set({ currentStock: sql`currentStock + ${item.quantity}` }).where(tenantWhere(items, ctx.tenantId, eq(items.id, item.itemId)));
+        const lineTotal = Number(item.quantity) * Number(item.unitPrice);
+        await db.insert(salesReturnItems).values(withTenantId(ctx.tenantId, {
+          returnId: retId,
+          itemId: item.itemId,
+          quantity: item.quantity,
+          price: item.unitPrice,
+          total: String(lineTotal),
+        }) as any);
+        const { applyStockMovement } = await import("./inventory-stock");
+        await applyStockMovement(db, ctx.tenantId, {
+          itemId: item.itemId,
+          quantity: item.quantity,
+          direction: "in",
+          warehouseId: input.warehouseId,
+        });
       }
+      const [customer] = await db.select({ name: customers.name }).from(customers)
+        .where(tenantWhere(customers, ctx.tenantId, eq(customers.id, input.customerId)));
+      await postSalesReturnJournal(db, ctx.tenantId, ctx.user.id, {
+        number,
+        date: input.date,
+        total: String(total),
+        customerName: customer?.name,
+      });
+      await postSalesReturnCogsJournal(db, ctx.tenantId, ctx.user.id, {
+        number,
+        date: input.date,
+        items: input.items.map((it) => ({ itemId: it.itemId, quantity: it.quantity })),
+      });
+      await recalculateCustomerBalance(db, ctx.tenantId, input.customerId);
       return { success: true, id: retId, number };
     }),
   }),
@@ -919,7 +2068,11 @@ const hrRouter = router({
     })).mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      await db.insert(employees).values(withTenantId(ctx.tenantId, input) as any);
+      try {
+        await db.insert(employees).values(withTenantId(ctx.tenantId, compactRow(input as Record<string, unknown>)) as any);
+      } catch (e: unknown) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: dbErrorMessage(e, "فشل إضافة الموظف") });
+      }
       return { success: true };
     }),
     update: protectedProcedure.input(z.object({
@@ -1089,17 +2242,42 @@ const hrRouter = router({
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       return db.select({
         id: payroll.id,
+        employeeId: payroll.employeeId,
         month: payroll.month,
         year: payroll.year,
         basicSalary: payroll.basicSalary,
         allowances: payroll.allowances,
         deductions: payroll.deductions,
+        advances: payroll.advances,
         netSalary: payroll.netSalary,
         status: payroll.status,
+        paidDate: payroll.paidDate,
+        notes: payroll.notes,
         employeeName: employees.name,
+        jobTitle: jobTitles.name,
       }).from(payroll)
         .leftJoin(employees, eq(payroll.employeeId, employees.id))
+        .leftJoin(jobTitles, eq(employees.jobTitleId, jobTitles.id))
         .where(tenantWhere(payroll, ctx.tenantId, and(eq(payroll.month, input.month), eq(payroll.year, input.year))));
+    }),
+    calculate: protectedProcedure.input(z.object({ month: z.number().min(1).max(12), year: z.number() })).mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      return calculateMonthPayroll(db, ctx.tenantId, input.month, input.year);
+    }),
+    payMonth: protectedProcedure.input(z.object({ month: z.number().min(1).max(12), year: z.number() })).mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const result = await payMonthPayroll(db, ctx.tenantId, input.month, input.year);
+      if (result.totalNet > 0) {
+        await postPayrollJournal(db, ctx.tenantId, ctx.user.id, {
+          month: input.month,
+          year: input.year,
+          totalNet: result.totalNet,
+          payDate: result.payDate,
+        });
+      }
+      return result;
     }),
     create: protectedProcedure.input(z.object({
       employeeId: z.number(),
@@ -1160,6 +2338,8 @@ const accountsRouter = router({
   chart: protectedProcedure.query(async ({ ctx }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    const { ensureDefaultAccounts } = await import("./auto-journal");
+    await ensureDefaultAccounts(db, ctx.tenantId);
     return db.select().from(accounts).where(tenantWhere(accounts, ctx.tenantId, eq(accounts.isActive, true))).orderBy(accounts.code);
   }),
   create: protectedProcedure.input(z.object({
@@ -1172,17 +2352,89 @@ const accountsRouter = router({
   })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-    await db.insert(accounts).values(withTenantId(ctx.tenantId, input) as any);
-    return { success: true };
+    const [inserted] = await db.insert(accounts).values(withTenantId(ctx.tenantId, compactRow(input as Record<string, unknown>)) as any);
+    const accountId = Number((inserted as { insertId?: number }).insertId ?? 0);
+    // أي حساب فرعي تحت «البنوك» يظهر تلقائياً في التوجيه والمعاملات البنكية
+    if (accountId && input.parentId && !input.isParent) {
+      const { findBanksParentAccount, ensureBankAccountForGlAccount } = await import("./bank-accounts-sync");
+      const banksParent = await findBanksParentAccount(db, ctx.tenantId);
+      if (banksParent) {
+        const all = await db
+          .select({ id: accounts.id, parentId: accounts.parentId })
+          .from(accounts)
+          .where(tenantWhere(accounts, ctx.tenantId));
+        let pid: number | null | undefined = input.parentId;
+        let underBanks = false;
+        const seen = new Set<number>();
+        while (pid != null && !seen.has(pid)) {
+          seen.add(pid);
+          if (pid === banksParent.id) {
+            underBanks = true;
+            break;
+          }
+          pid = all.find((a) => a.id === pid)?.parentId ?? null;
+        }
+        if (underBanks) {
+          await ensureBankAccountForGlAccount(db, ctx.tenantId, {
+            id: accountId,
+            name: input.name,
+            code: input.code,
+          });
+        }
+      }
+    }
+    return { success: true, id: accountId };
+  }),
+  reseedFromTemplate: protectedProcedure.mutation(async ({ ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    const { reseedChartFromTemplate } = await import("./auto-journal");
+    return reseedChartFromTemplate(db, ctx.tenantId);
   }),
   journal: router({
-    list: protectedProcedure.input(z.object({ page: z.number().default(1), limit: z.number().default(20) })).query(async ({ ctx, input }) => {
+    list: protectedProcedure.input(z.object({ page: z.number().default(1), limit: z.number().default(20), reference: z.string().optional() })).query(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       const offset = (input.page - 1) * input.limit;
-      const rows = await db.select().from(journalEntries).where(tenantWhere(journalEntries, ctx.tenantId)).orderBy(desc(journalEntries.createdAt)).limit(input.limit).offset(offset);
-      const [total] = await db.select({ count: count() }).from(journalEntries).where(tenantWhere(journalEntries, ctx.tenantId));
+      const refFilter = input.reference ? eq(journalEntries.reference, input.reference) : undefined;
+      const rows = await db.select({
+        id: journalEntries.id,
+        number: journalEntries.number,
+        date: journalEntries.date,
+        description: journalEntries.description,
+        reference: journalEntries.reference,
+        status: journalEntries.status,
+        createdAt: journalEntries.createdAt,
+        totalDebit: sql<string>`COALESCE((SELECT SUM(${journalEntryLines.debit}) FROM ${journalEntryLines} WHERE ${journalEntryLines.entryId} = ${journalEntries.id}), 0)`,
+        totalCredit: sql<string>`COALESCE((SELECT SUM(${journalEntryLines.credit}) FROM ${journalEntryLines} WHERE ${journalEntryLines.entryId} = ${journalEntries.id}), 0)`,
+      }).from(journalEntries)
+        .where(tenantWhere(journalEntries, ctx.tenantId, refFilter))
+        .orderBy(desc(journalEntries.createdAt))
+        .limit(input.limit)
+        .offset(offset);
+      const [total] = await db.select({ count: count() }).from(journalEntries).where(tenantWhere(journalEntries, ctx.tenantId, refFilter));
       return { rows, total: total.count };
+    }),
+    byId: protectedProcedure.input(z.number()).query(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const [entry] = await db.select().from(journalEntries).where(tenantWhere(journalEntries, ctx.tenantId, eq(journalEntries.id, input)));
+      if (!entry) throw new TRPCError({ code: "NOT_FOUND" });
+      const lines = await db.select({
+        id: journalEntryLines.id,
+        accountId: journalEntryLines.accountId,
+        accountCode: accounts.code,
+        accountName: accounts.name,
+        debit: journalEntryLines.debit,
+        credit: journalEntryLines.credit,
+        description: journalEntryLines.description,
+        costCenterId: journalEntryLines.costCenterId,
+        costCenterName: costCenters.name,
+      }).from(journalEntryLines)
+        .innerJoin(accounts, eq(journalEntryLines.accountId, accounts.id))
+        .leftJoin(costCenters, eq(journalEntryLines.costCenterId, costCenters.id))
+        .where(eq(journalEntryLines.entryId, input));
+      return { entry, lines };
     }),
     create: protectedProcedure.input(z.object({
       date: z.string(),
@@ -1193,23 +2445,46 @@ const accountsRouter = router({
         debit: z.string().default("0"),
         credit: z.string().default("0"),
         description: z.string().optional(),
+        costCenterId: z.number().optional(),
       })),
     })).mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      await assertDateNotInClosedPeriod(db, ctx.tenantId, input.date);
       const [countResult] = await db.select({ count: count() }).from(journalEntries).where(tenantWhere(journalEntries, ctx.tenantId));
       const number = `JE-${String(countResult.count + 1).padStart(5, "0")}`;
+      const { companyRequiresApproval, userBypassesApproval, queueDocumentApproval } = await import("./document-approval");
+      const needsApproval =
+        (await companyRequiresApproval(db, ctx.tenantId)) &&
+        !userBypassesApproval(ctx.saasUser?.role ?? "user");
+
       const [result] = await db.insert(journalEntries).values(withTenantId(ctx.tenantId, {
         number,
         date: input.date as any,
         description: input.description,
         reference: input.reference,
         createdBy: ctx.user.id,
-        status: "posted",
+        status: needsApproval ? "draft" : "posted",
       }) as any);
       const entryId = (result as any).insertId;
       for (const line of input.lines) {
-        await db.insert(journalEntryLines).values(withTenantId(ctx.tenantId, { entryId, ...line }) as any);
+        await db.insert(journalEntryLines).values(withTenantId(ctx.tenantId, {
+          entryId,
+          accountId: line.accountId,
+          debit: line.debit,
+          credit: line.credit,
+          description: line.description,
+          costCenterId: line.costCenterId,
+        }) as any);
+      }
+      if (needsApproval) {
+        await queueDocumentApproval(db, ctx.tenantId, {
+          type: "journal_entry",
+          id: entryId,
+          number,
+          requestedBy: ctx.user?.id,
+        });
+        return { success: true, id: entryId, number, pendingApproval: true };
       }
       return { success: true, id: entryId, number };
     }),
@@ -1238,13 +2513,40 @@ const cashRouter = router({
   })).query(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    const scope = await loadUserScopeFromCtx(db, ctx.saasUser);
     const offset = (input.page - 1) * input.limit;
-    const rows = await db.select().from(cashTransactions).where(tenantWhere(cashTransactions, ctx.tenantId)).orderBy(desc(cashTransactions.createdAt)).limit(input.limit).offset(offset);
-    const [total] = await db.select({ count: count() }).from(cashTransactions).where(tenantWhere(cashTransactions, ctx.tenantId));
+    const typeFilter = input.type ? eq(cashTransactions.type, input.type as any) : undefined;
+    const scopeFilter = scopeContactTransactionFilter(scope, cashTransactions.customerId, customers.branchId);
+    const where = tenantWhere(
+      cashTransactions,
+      ctx.tenantId,
+      typeFilter,
+      scopeFilter,
+    );
+    const rows = await db.select({
+      id: cashTransactions.id,
+      number: cashTransactions.number,
+      type: cashTransactions.type,
+      date: cashTransactions.date,
+      amount: cashTransactions.amount,
+      description: cashTransactions.description,
+      reference: cashTransactions.reference,
+      customerId: cashTransactions.customerId,
+      supplierId: cashTransactions.supplierId,
+      createdAt: cashTransactions.createdAt,
+    }).from(cashTransactions)
+      .leftJoin(customers, eq(cashTransactions.customerId, customers.id))
+      .where(where)
+      .orderBy(desc(cashTransactions.createdAt))
+      .limit(input.limit)
+      .offset(offset);
+    const [total] = await db.select({ count: count() }).from(cashTransactions)
+      .leftJoin(customers, eq(cashTransactions.customerId, customers.id))
+      .where(where);
     return { rows, total: total.count };
   }),
   create: protectedProcedure.input(z.object({
-    type: z.enum(["receive", "pay", "receive_customer", "pay_supplier"]),
+    type: z.enum(["receive", "pay", "receive_customer", "pay_supplier", "pay_customer"]),
     date: z.string(),
     customerId: z.number().optional(),
     supplierId: z.number().optional(),
@@ -1254,10 +2556,61 @@ const cashRouter = router({
   })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    if ((input.type === "receive_customer" || input.type === "pay_customer") && !input.customerId) {
+      throw new TRPCError({ code: "BAD_REQUEST", message: "يجب اختيار العميل" });
+    }
+    if (input.type === "pay_supplier" && !input.supplierId) {
+      throw new TRPCError({ code: "BAD_REQUEST", message: "يجب اختيار المورد" });
+    }
+    await assertDateNotInClosedPeriod(db, ctx.tenantId, input.date);
+    const scope = await loadUserScopeFromCtx(db, ctx.saasUser);
+    if (input.customerId) {
+      const [customer] = await db.select({ name: customers.name, branchId: customers.branchId }).from(customers)
+        .where(tenantWhere(customers, ctx.tenantId, eq(customers.id, input.customerId)));
+      assertEntityBranchAccess(scope, customer?.branchId);
+    }
     const [countResult] = await db.select({ count: count() }).from(cashTransactions).where(tenantWhere(cashTransactions, ctx.tenantId));
     const number = `CT-${String(countResult.count + 1).padStart(5, "0")}`;
     await db.insert(cashTransactions).values(withTenantId(ctx.tenantId, { number, ...input, createdBy: ctx.user.id }) as any);
-    return { success: true };
+    let customerName: string | undefined;
+    let supplierName: string | undefined;
+    if (input.customerId) {
+      const [c] = await db.select({ name: customers.name }).from(customers)
+        .where(tenantWhere(customers, ctx.tenantId, eq(customers.id, input.customerId)));
+      customerName = c?.name;
+    }
+    if (input.supplierId) {
+      const [s] = await db.select({ name: suppliers.name }).from(suppliers)
+        .where(tenantWhere(suppliers, ctx.tenantId, eq(suppliers.id, input.supplierId)));
+      supplierName = s?.name;
+    }
+    await postCashTransactionJournal(db, ctx.tenantId, ctx.user.id, {
+      number,
+      type: input.type,
+      date: input.date,
+      amount: input.amount,
+      description: input.description,
+      customerName,
+      supplierName,
+    });
+
+    let allocations: { invoiceNumber: string; amount: string }[] | undefined;
+    let unallocated: string | undefined;
+    if (input.type === "receive_customer" && input.customerId) {
+      const result = await allocateCustomerPaymentFifo(db, ctx.tenantId, input.customerId, input.amount, {
+        referenceInvoiceNumber: input.reference,
+      });
+      allocations = result.allocations;
+      unallocated = result.unallocated;
+    } else if (input.type === "pay_supplier" && input.supplierId) {
+      const result = await allocateSupplierPaymentFifo(db, ctx.tenantId, input.supplierId, input.amount, {
+        referenceInvoiceNumber: input.reference,
+      });
+      allocations = result.allocations;
+      unallocated = result.unallocated;
+    }
+
+    return { success: true, number, allocations, unallocated };
   }),
 });
 
@@ -1267,7 +2620,13 @@ const bankRouter = router({
     list: protectedProcedure.query(async ({ ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      return db.select().from(bankAccounts).where(tenantWhere(bankAccounts, ctx.tenantId, eq(bankAccounts.isActive, true)));
+      const { syncBankAccountsFromChart } = await import("./bank-accounts-sync");
+      await syncBankAccountsFromChart(db, ctx.tenantId);
+      return db
+        .select()
+        .from(bankAccounts)
+        .where(tenantWhere(bankAccounts, ctx.tenantId, eq(bankAccounts.isActive, true)))
+        .orderBy(bankAccounts.name);
     }),
     create: protectedProcedure.input(z.object({
       name: z.string().min(1),
@@ -1276,21 +2635,58 @@ const bankRouter = router({
     })).mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      await db.insert(bankAccounts).values(withTenantId(ctx.tenantId, input) as any);
-      return { success: true };
+      const row = compactRow(input as Record<string, unknown>);
+      const [inserted] = await db.insert(bankAccounts).values(withTenantId(ctx.tenantId, row) as any);
+      const bankId = Number((inserted as { insertId?: number }).insertId ?? 0);
+      if (bankId) {
+        const { ensureGlAccountForBankAccount } = await import("./bank-accounts-sync");
+        await ensureGlAccountForBankAccount(db, ctx.tenantId, {
+          id: bankId,
+          name: input.name,
+          accountNumber: input.accountNumber,
+        });
+      }
+      return { success: true, id: bankId };
     }),
   }),
   transactions: router({
-    list: protectedProcedure.input(z.object({ page: z.number().default(1), limit: z.number().default(20) })).query(async ({ ctx, input }) => {
+    list: protectedProcedure.input(z.object({
+      type: z.enum(["deposit", "withdraw", "deposit_customer", "withdraw_supplier", "withdraw_customer"]).optional(),
+      page: z.number().default(1),
+      limit: z.number().default(20),
+    })).query(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const scope = await loadUserScopeFromCtx(db, ctx.saasUser);
       const offset = (input.page - 1) * input.limit;
-      const rows = await db.select().from(bankTransactions).where(tenantWhere(bankTransactions, ctx.tenantId)).orderBy(desc(bankTransactions.createdAt)).limit(input.limit).offset(offset);
-      const [total] = await db.select({ count: count() }).from(bankTransactions).where(tenantWhere(bankTransactions, ctx.tenantId));
+      const typeFilter = input.type ? eq(bankTransactions.type, input.type as any) : undefined;
+      const scopeFilter = scopeContactTransactionFilter(scope, bankTransactions.customerId, customers.branchId);
+      const where = tenantWhere(bankTransactions, ctx.tenantId, typeFilter, scopeFilter);
+      const rows = await db.select({
+        id: bankTransactions.id,
+        number: bankTransactions.number,
+        type: bankTransactions.type,
+        date: bankTransactions.date,
+        amount: bankTransactions.amount,
+        description: bankTransactions.description,
+        reference: bankTransactions.reference,
+        bankAccountId: bankTransactions.bankAccountId,
+        customerId: bankTransactions.customerId,
+        supplierId: bankTransactions.supplierId,
+        createdAt: bankTransactions.createdAt,
+      }).from(bankTransactions)
+        .leftJoin(customers, eq(bankTransactions.customerId, customers.id))
+        .where(where)
+        .orderBy(desc(bankTransactions.createdAt))
+        .limit(input.limit)
+        .offset(offset);
+      const [total] = await db.select({ count: count() }).from(bankTransactions)
+        .leftJoin(customers, eq(bankTransactions.customerId, customers.id))
+        .where(where);
       return { rows, total: total.count };
     }),
     create: protectedProcedure.input(z.object({
-      type: z.enum(["deposit", "withdraw", "deposit_customer", "withdraw_supplier"]),
+      type: z.enum(["deposit", "withdraw", "deposit_customer", "withdraw_supplier", "withdraw_customer"]),
       bankAccountId: z.number(),
       date: z.string(),
       customerId: z.number().optional(),
@@ -1301,10 +2697,62 @@ const bankRouter = router({
     })).mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      if ((input.type === "deposit_customer" || input.type === "withdraw_customer") && !input.customerId) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "يجب اختيار العميل" });
+      }
+      if (input.type === "withdraw_supplier" && !input.supplierId) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "يجب اختيار المورد" });
+      }
+      await assertDateNotInClosedPeriod(db, ctx.tenantId, input.date);
+      const scope = await loadUserScopeFromCtx(db, ctx.saasUser);
+      if (input.customerId) {
+        const [customer] = await db.select({ name: customers.name, branchId: customers.branchId }).from(customers)
+          .where(tenantWhere(customers, ctx.tenantId, eq(customers.id, input.customerId)));
+        assertEntityBranchAccess(scope, customer?.branchId);
+      }
       const [countResult] = await db.select({ count: count() }).from(bankTransactions).where(tenantWhere(bankTransactions, ctx.tenantId));
       const number = `BT-${String(countResult.count + 1).padStart(5, "0")}`;
       await db.insert(bankTransactions).values(withTenantId(ctx.tenantId, { number, ...input, createdBy: ctx.user.id }) as any);
-      return { success: true };
+      let customerName: string | undefined;
+      let supplierName: string | undefined;
+      if (input.customerId) {
+        const [c] = await db.select({ name: customers.name }).from(customers)
+          .where(tenantWhere(customers, ctx.tenantId, eq(customers.id, input.customerId)));
+        customerName = c?.name;
+      }
+      if (input.supplierId) {
+        const [s] = await db.select({ name: suppliers.name }).from(suppliers)
+          .where(tenantWhere(suppliers, ctx.tenantId, eq(suppliers.id, input.supplierId)));
+        supplierName = s?.name;
+      }
+      await postBankTransactionJournal(db, ctx.tenantId, ctx.user.id, {
+        number,
+        type: input.type,
+        date: input.date,
+        amount: input.amount,
+        description: input.description,
+        customerName,
+        supplierName,
+        bankAccountId: input.bankAccountId,
+      });
+
+      let allocations: { invoiceNumber: string; amount: string }[] | undefined;
+      let unallocated: string | undefined;
+      if (input.type === "deposit_customer" && input.customerId) {
+        const result = await allocateCustomerPaymentFifo(db, ctx.tenantId, input.customerId, input.amount, {
+          referenceInvoiceNumber: input.reference,
+        });
+        allocations = result.allocations;
+        unallocated = result.unallocated;
+      } else if (input.type === "withdraw_supplier" && input.supplierId) {
+        const result = await allocateSupplierPaymentFifo(db, ctx.tenantId, input.supplierId, input.amount, {
+          referenceInvoiceNumber: input.reference,
+        });
+        allocations = result.allocations;
+        unallocated = result.unallocated;
+      }
+
+      return { success: true, number, allocations, unallocated };
     }),
   }),
   checks: router({
@@ -1336,8 +2784,119 @@ const bankRouter = router({
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       const [countResult] = await db.select({ count: count() }).from(checks).where(tenantWhere(checks, ctx.tenantId));
       const number = `CHK-${String(countResult.count + 1).padStart(5, "0")}`;
-      await db.insert(checks).values(withTenantId(ctx.tenantId, { number, ...input, createdBy: ctx.user.id }) as any);
-      return { success: true };
+      return createCheckWithJournal(db, ctx.tenantId, ctx.user.id, { ...input, number });
+    }),
+    collect: protectedProcedure.input(z.object({
+      id: z.number(),
+      date: z.string().optional(),
+    })).mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      return clearCheck(db, ctx.tenantId, ctx.user.id, input.id, { date: input.date });
+    }),
+    bounce: protectedProcedure.input(z.object({
+      id: z.number(),
+      date: z.string().optional(),
+    })).mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      return bounceCheck(db, ctx.tenantId, ctx.user.id, input.id, { date: input.date });
+    }),
+  }),
+
+  checkRouting: router({
+    summary: protectedProcedure.query(async ({ ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      return routingSummaryCounts(db, ctx.tenantId);
+    }),
+    custodians: protectedProcedure.query(async ({ ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      return db
+        .select({
+          id: appUsers.id,
+          name: appUsers.name,
+          email: appUsers.email,
+          role: appUsers.role,
+          isActive: appUsers.isActive,
+        })
+        .from(appUsers)
+        .where(and(eq(appUsers.tenantId, ctx.tenantId!), eq(appUsers.isActive, true)))
+        .orderBy(appUsers.name);
+    }),
+    list: protectedProcedure.input(z.object({
+      filter: z.enum([
+        "unrouted",
+        "in_custody",
+        "scheduled",
+        "overdue_deposit",
+        "at_bank",
+        "completed",
+        "all",
+      ]).optional(),
+      search: z.string().optional(),
+      custodianUserId: z.number().optional(),
+      bankAccountId: z.number().optional(),
+      page: z.number().default(1),
+      limit: z.number().default(50),
+    })).query(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      return listCheckRoutings(db, ctx.tenantId, input);
+    }),
+    events: protectedProcedure.input(z.object({
+      routingId: z.number(),
+    })).query(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      return listRoutingEvents(db, ctx.tenantId, input.routingId);
+    }),
+    assignCustody: protectedProcedure.input(z.object({
+      routingId: z.number(),
+      custodianUserId: z.number(),
+      notes: z.string().optional(),
+    })).mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      return assignCustody(db, ctx.tenantId, ctx.user.id, input);
+    }),
+    route: protectedProcedure.input(z.object({
+      routingId: z.number(),
+      bankAccountId: z.number(),
+      plannedDepositDate: z.string().min(1),
+      custodianUserId: z.number().optional(),
+      notes: z.string().optional(),
+    })).mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      return routeCheck(db, ctx.tenantId, ctx.user.id, input);
+    }),
+    deposit: protectedProcedure.input(z.object({
+      routingId: z.number(),
+      depositDate: z.string().optional(),
+      bankAccountId: z.number().optional(),
+      notes: z.string().optional(),
+    })).mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      return depositRoutedCheck(db, ctx.tenantId, ctx.user.id, input);
+    }),
+    collect: protectedProcedure.input(z.object({
+      routingId: z.number(),
+      date: z.string().optional(),
+    })).mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      return collectRoutedCheck(db, ctx.tenantId, ctx.user.id, input);
+    }),
+    reject: protectedProcedure.input(z.object({
+      routingId: z.number(),
+      date: z.string().optional(),
+    })).mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      return rejectRoutedCheck(db, ctx.tenantId, ctx.user.id, input);
     }),
   }),
 });
@@ -1360,7 +2919,12 @@ const reportsRouter = router({
     }).from(items)
       .where(tenantWhere(items, ctx.tenantId))
       .leftJoin(itemCategories, eq(items.categoryId, itemCategories.id))
-      .orderBy(items.name);
+      .orderBy(
+        sql`(CASE WHEN ${items.code} IS NULL OR TRIM(${items.code}) = '' THEN 1 ELSE 0 END)`,
+        items.code,
+        items.name,
+        items.id,
+      );
   }),
   balanceSheet: protectedProcedure.query(async ({ ctx }) => {
     const db = await getDb();
@@ -1527,6 +3091,237 @@ const reportsRouter = router({
       }
     };
   }),
+
+  // ===================== INVENTORY REPORTS (Mega Cash parity) =====================
+  inventoryStocktake: protectedProcedure.input(z.object({
+    branchId: z.number().optional(),
+    warehouseId: z.number().optional(),
+    categoryId: z.number().optional(),
+    itemId: z.number().optional(),
+    search: z.string().optional(),
+    batchNumber: z.string().optional(),
+    expiryFrom: z.string().optional(),
+    expiryTo: z.string().optional(),
+  })).query(async ({ ctx, input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    const scope = await loadUserScopeFromCtx(db, ctx.saasUser);
+    const filters = applyScopeToReportFilters({ tenantId: ctx.tenantId, ...input }, scope);
+    return inventoryStocktakeReport(db, filters);
+  }),
+
+  inventoryItemMovements: protectedProcedure.input(z.object({
+    dateFrom: z.string().optional(),
+    dateTo: z.string().optional(),
+    branchId: z.number().optional(),
+    warehouseId: z.number().optional(),
+    categoryId: z.number().optional(),
+    itemId: z.number().optional(),
+    search: z.string().optional(),
+  })).query(async ({ ctx, input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    const scope = await loadUserScopeFromCtx(db, ctx.saasUser);
+    const filters = applyScopeToReportFilters({ tenantId: ctx.tenantId, ...input }, scope);
+    return collectInventoryMovements(db, filters);
+  }),
+
+  inventoryWarehouseInOut: protectedProcedure.input(z.object({
+    dateFrom: z.string().optional(),
+    dateTo: z.string().optional(),
+    branchId: z.number().optional(),
+    warehouseId: z.number().optional(),
+    categoryId: z.number().optional(),
+    itemId: z.number().optional(),
+    search: z.string().optional(),
+  })).query(async ({ ctx, input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    const scope = await loadUserScopeFromCtx(db, ctx.saasUser);
+    const filters = applyScopeToReportFilters({ tenantId: ctx.tenantId, ...input }, scope);
+    const movements = await collectInventoryMovements(db, filters);
+    return warehouseInOutReport(movements);
+  }),
+
+  inventoryWarehouseMovements: protectedProcedure.input(z.object({
+    dateFrom: z.string().optional(),
+    dateTo: z.string().optional(),
+    branchId: z.number().optional(),
+    warehouseId: z.number().optional(),
+    categoryId: z.number().optional(),
+    itemId: z.number().optional(),
+    search: z.string().optional(),
+  })).query(async ({ ctx, input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    const scope = await loadUserScopeFromCtx(db, ctx.saasUser);
+    const filters = applyScopeToReportFilters({ tenantId: ctx.tenantId, ...input }, scope);
+    const movements = await collectInventoryMovements(db, filters);
+    if (filters.warehouseId) return movements.filter((m) => m.warehouseId === filters.warehouseId);
+    if (filters.warehouseIds?.length) {
+      return movements.filter((m) => m.warehouseId != null && filters.warehouseIds!.includes(m.warehouseId));
+    }
+    return movements;
+  }),
+
+  inventoryItemCosts: protectedProcedure.input(z.object({
+    dateTo: z.string().optional(),
+    branchId: z.number().optional(),
+    warehouseId: z.number().optional(),
+    categoryId: z.number().optional(),
+    itemId: z.number().optional(),
+    search: z.string().optional(),
+  })).query(async ({ ctx, input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    const scope = await loadUserScopeFromCtx(db, ctx.saasUser);
+    const filters = applyScopeToReportFilters({ tenantId: ctx.tenantId, ...input }, scope);
+    return itemCostsReport(db, filters);
+  }),
+
+  inventoryItemsList: protectedProcedure.input(z.object({
+    categoryId: z.number().optional(),
+    itemId: z.number().optional(),
+    search: z.string().optional(),
+  })).query(async ({ ctx, input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    return itemsListReport(db, { tenantId: ctx.tenantId, ...input });
+  }),
+
+  inventoryItemSummary: protectedProcedure.input(z.object({
+    dateFrom: z.string().optional(),
+    dateTo: z.string().optional(),
+    branchId: z.number().optional(),
+    warehouseId: z.number().optional(),
+    categoryId: z.number().optional(),
+    itemId: z.number().optional(),
+    search: z.string().optional(),
+  })).query(async ({ ctx, input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    const scope = await loadUserScopeFromCtx(db, ctx.saasUser);
+    const filters = applyScopeToReportFilters({ tenantId: ctx.tenantId, ...input }, scope);
+    const movements = await collectInventoryMovements(db, filters);
+    return itemMovementSummaryReport(movements);
+  }),
+
+  inventoryItemInOut: protectedProcedure.input(z.object({
+    dateFrom: z.string().optional(),
+    dateTo: z.string().optional(),
+    branchId: z.number().optional(),
+    warehouseId: z.number().optional(),
+    categoryId: z.number().optional(),
+    itemId: z.number().optional(),
+    search: z.string().optional(),
+  })).query(async ({ ctx, input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    const scope = await loadUserScopeFromCtx(db, ctx.saasUser);
+    const filters = applyScopeToReportFilters({ tenantId: ctx.tenantId, ...input }, scope);
+    const movements = await collectInventoryMovements(db, filters);
+    return itemInOutReport(movements);
+  }),
+
+  inventoryStagnantItems: protectedProcedure.input(z.object({
+    branchId: z.number().optional(),
+    warehouseId: z.number().optional(),
+    categoryId: z.number().optional(),
+    itemId: z.number().optional(),
+    search: z.string().optional(),
+    staleDays: z.number().default(90),
+  })).query(async ({ ctx, input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    const scope = await loadUserScopeFromCtx(db, ctx.saasUser);
+    const filters = applyScopeToReportFilters({ tenantId: ctx.tenantId, ...input }, scope);
+    return stagnantItemsReport(db, filters);
+  }),
+
+  inventoryItemAging: protectedProcedure.input(z.object({
+    branchId: z.number().optional(),
+    warehouseId: z.number().optional(),
+    categoryId: z.number().optional(),
+    itemId: z.number().optional(),
+    search: z.string().optional(),
+    dateTo: z.string().optional(),
+  })).query(async ({ ctx, input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    const scope = await loadUserScopeFromCtx(db, ctx.saasUser);
+    const filters = applyScopeToReportFilters({ tenantId: ctx.tenantId, ...input }, scope);
+    return itemAgingReport(db, filters);
+  }),
+
+  accountingBySlug: protectedProcedure.input(z.object({
+    slug: z.string(),
+    dateFrom: z.string().optional(),
+    dateTo: z.string().optional(),
+    accountId: z.number().optional(),
+    customerId: z.number().optional(),
+    supplierId: z.number().optional(),
+    warehouseId: z.number().optional(),
+    branchId: z.number().optional(),
+    costCenterId: z.number().optional(),
+    repId: z.number().optional(),
+    itemId: z.number().optional(),
+    categoryId: z.number().optional(),
+    areaId: z.number().optional(),
+    paymentType: z.enum(["cash", "credit"]).optional(),
+    search: z.string().optional(),
+  })).query(async ({ ctx, input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    const scope = await loadUserScopeFromCtx(db, ctx.saasUser);
+    const { slug, ...filters } = input;
+    return runAccountingReport(db, slug, applyScopeToReportFilters({ tenantId: ctx.tenantId, ...filters }, scope));
+  }),
+
+  finalBySlug: protectedProcedure.input(z.object({
+    slug: z.string(),
+    dateFrom: z.string().optional(),
+    dateTo: z.string().optional(),
+    accountId: z.number().optional(),
+    customerId: z.number().optional(),
+    supplierId: z.number().optional(),
+    warehouseId: z.number().optional(),
+    costCenterId: z.number().optional(),
+    branchId: z.number().optional(),
+    repId: z.number().optional(),
+    categoryId: z.number().optional(),
+    areaId: z.number().optional(),
+    paymentType: z.enum(["cash", "credit"]).optional(),
+    search: z.string().optional(),
+  })).query(async ({ ctx, input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    const scope = await loadUserScopeFromCtx(db, ctx.saasUser);
+    const { slug, ...filters } = input;
+    return runFinalReport(db, slug, applyScopeToReportFilters({ tenantId: ctx.tenantId, ...filters }, scope));
+  }),
+
+  hrBySlug: protectedProcedure.input(z.object({
+    slug: z.string(),
+    dateFrom: z.string().optional(),
+    dateTo: z.string().optional(),
+    search: z.string().optional(),
+  })).query(async ({ ctx, input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    const { slug, ...filters } = input;
+    return runHrReport(db, slug, { tenantId: ctx.tenantId, ...filters });
+  }),
+
+  assetsBySlug: protectedProcedure.input(z.object({
+    slug: z.string(),
+    dateFrom: z.string().optional(),
+    dateTo: z.string().optional(),
+  })).query(async ({ ctx, input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    const { slug, ...filters } = input;
+    return runAssetsReport(db, slug, { tenantId: ctx.tenantId, ...filters });
+  }),
 });
 
 // ===================== NOTIFICATIONS =====================
@@ -1541,9 +3336,23 @@ const notificationsRouter = router({
   list: protectedProcedure.query(async ({ ctx }) => {
     const db = await getDb();
     if (!db) return [];
-    return db.select().from(notifications)
+    return db.select({
+      id: notifications.id,
+      title: notifications.title,
+      message: notifications.message,
+      type: notifications.type,
+      isRead: notifications.isRead,
+      href: notifications.href,
+      referenceKey: notifications.referenceKey,
+      createdAt: notifications.createdAt,
+    }).from(notifications)
       .where(tenantWhere(notifications, ctx.tenantId, eq(notifications.userId, ctx.user.id)))
-      .orderBy(desc(notifications.createdAt)).limit(20);
+      .orderBy(desc(notifications.createdAt)).limit(50);
+  }),
+  syncOperational: protectedProcedure.mutation(async ({ ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    return syncOperationalNotifications(db, ctx.tenantId, ctx.user.id);
   }),
   markRead: protectedProcedure.input(z.number()).mutation(async ({ ctx, input }) => {
     const db = await getDb();
@@ -1551,16 +3360,35 @@ const notificationsRouter = router({
     await db.update(notifications).set({ isRead: true }).where(tenantWhere(notifications, ctx.tenantId, eq(notifications.id, input)));
     return { success: true };
   }),
+  markAllRead: protectedProcedure.mutation(async ({ ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    await db.update(notifications).set({ isRead: true }).where(
+      tenantWhere(notifications, ctx.tenantId, and(eq(notifications.userId, ctx.user.id), eq(notifications.isRead, false))),
+    );
+    return { success: true };
+  }),
+  sendAlertDigest: protectedProcedure.input(z.object({ force: z.boolean().optional() }).optional()).mutation(async ({ ctx, input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    return sendOperationalAlertDigest(db, ctx.tenantId, { force: input?.force });
+  }),
 });
 
 // ===================== FIXED ASSETS =====================
 const assetsRouter = router({
-  list: protectedProcedure.input(z.object({ page: z.number().default(1), limit: z.number().default(20) })).query(async ({ ctx, input }) => {
+  list: protectedProcedure.input(z.object({
+    page: z.number().default(1),
+    limit: z.number().default(20),
+    status: z.enum(["active", "disposed", "under_maintenance"]).optional(),
+  })).query(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     const offset = (input.page - 1) * input.limit;
-    const rows = await db.select().from(fixedAssets).where(tenantWhere(fixedAssets, ctx.tenantId)).orderBy(fixedAssets.name).limit(input.limit).offset(offset);
-    const [total] = await db.select({ count: count() }).from(fixedAssets).where(tenantWhere(fixedAssets, ctx.tenantId));
+    const conds = input.status ? [eq(fixedAssets.status, input.status)] : [];
+    const where = tenantWhere(fixedAssets, ctx.tenantId, ...(conds.length ? [and(...conds)] : []));
+    const rows = await db.select().from(fixedAssets).where(where).orderBy(fixedAssets.name).limit(input.limit).offset(offset);
+    const [total] = await db.select({ count: count() }).from(fixedAssets).where(where);
     return { rows, total: total.count };
   }),
   create: protectedProcedure.input(z.object({
@@ -1581,14 +3409,74 @@ const assetsRouter = router({
 });
 
 // ===================== LOANS =====================
+function buildLoanInstallments(opts: {
+  principal: number;
+  interestRate: number;
+  startDate: string;
+  count: number;
+}) {
+  const count = Math.max(1, Math.min(360, Math.floor(opts.count || 1)));
+  const principal = Number(opts.principal) || 0;
+  const rate = Number(opts.interestRate) || 0;
+  const total = principal * (1 + rate / 100);
+  const each = Math.round((total / count) * 100) / 100;
+  const rows: { dueDate: string; amount: string }[] = [];
+  let allocated = 0;
+  const start = new Date(opts.startDate);
+  for (let i = 0; i < count; i++) {
+    const d = new Date(start);
+    d.setMonth(d.getMonth() + (i + 1));
+    const amount = i === count - 1
+      ? Math.round((total - allocated) * 100) / 100
+      : each;
+    allocated += amount;
+    rows.push({
+      dueDate: d.toISOString().slice(0, 10),
+      amount: amount.toFixed(2),
+    });
+  }
+  return rows;
+}
+
 const loansRouter = router({
-  list: protectedProcedure.input(z.object({ page: z.number().default(1), limit: z.number().default(20) })).query(async ({ ctx, input }) => {
+  list: protectedProcedure.input(z.object({
+    page: z.number().default(1),
+    limit: z.number().default(20),
+    search: z.string().optional(),
+    type: z.enum(["given", "received"]).optional(),
+    status: z.enum(["active", "paid", "cancelled"]).optional(),
+  })).query(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     const offset = (input.page - 1) * input.limit;
-    const rows = await db.select().from(loans).where(tenantWhere(loans, ctx.tenantId)).orderBy(desc(loans.createdAt)).limit(input.limit).offset(offset);
-    const [total] = await db.select({ count: count() }).from(loans).where(tenantWhere(loans, ctx.tenantId));
+    const conds = [];
+    if (input.type) conds.push(eq(loans.type, input.type));
+    if (input.status) conds.push(eq(loans.status, input.status));
+    if (input.search?.trim()) {
+      const q = `%${input.search.trim()}%`;
+      conds.push(or(like(loans.number, q), like(loans.partyName, q), like(loans.notes, q)));
+    }
+    const where = tenantWhere(loans, ctx.tenantId, ...(conds.length ? [and(...conds)] : []));
+    const rows = await db.select().from(loans).where(where).orderBy(desc(loans.createdAt)).limit(input.limit).offset(offset);
+    const [total] = await db.select({ count: count() }).from(loans).where(where);
     return { rows, total: total.count };
+  }),
+  get: protectedProcedure.input(z.number()).query(async ({ ctx, input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    const [loan] = await db.select().from(loans).where(tenantWhere(loans, ctx.tenantId, eq(loans.id, input))).limit(1);
+    if (!loan) throw new TRPCError({ code: "NOT_FOUND", message: "القرض غير موجود" });
+    const sched = await db.select().from(installments)
+      .where(tenantWhere(installments, ctx.tenantId, eq(installments.loanId, input)))
+      .orderBy(installments.dueDate);
+    const today = new Date().toISOString().slice(0, 10);
+    const enriched = sched.map((r) => ({
+      ...r,
+      status: r.status === "pending" && String(r.dueDate).slice(0, 10) < today ? "overdue" : r.status,
+    }));
+    const paid = enriched.filter((r) => r.status === "paid").reduce((s, r) => s + Number(r.amount || 0), 0);
+    const remaining = enriched.filter((r) => r.status !== "paid").reduce((s, r) => s + Number(r.amount || 0), 0);
+    return { ...loan, installments: enriched, paidTotal: paid, remainingTotal: remaining };
   }),
   create: protectedProcedure.input(z.object({
     type: z.enum(["given", "received"]),
@@ -1598,29 +3486,212 @@ const loansRouter = router({
     startDate: z.string(),
     endDate: z.string().optional(),
     notes: z.string().optional(),
+    installmentCount: z.number().int().min(1).max(360).default(12),
+    settlementMethod: z.enum(["cash", "bank"]).default("cash"),
+    bankAccountId: z.number().optional(),
+    postJournal: z.boolean().default(true),
   })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    if (input.settlementMethod === "bank" && !input.bankAccountId) {
+      throw new TRPCError({ code: "BAD_REQUEST", message: "اختر الحساب البنكي للتسوية" });
+    }
     const [countResult] = await db.select({ count: count() }).from(loans).where(tenantWhere(loans, ctx.tenantId));
     const number = `LN-${String(countResult.count + 1).padStart(5, "0")}`;
-    await db.insert(loans).values(withTenantId(ctx.tenantId, { number, ...input }) as any);
+    const { installmentCount, settlementMethod, bankAccountId, postJournal, ...loanData } = input;
+    const [result] = await db.insert(loans).values(withTenantId(ctx.tenantId, { number, ...loanData, status: "active" }) as any);
+    const loanId = (result as any).insertId as number;
+    const schedule = buildLoanInstallments({
+      principal: Number(input.amount),
+      interestRate: Number(input.interestRate || 0),
+      startDate: input.startDate,
+      count: installmentCount,
+    });
+    for (const row of schedule) {
+      await db.insert(installments).values(withTenantId(ctx.tenantId, {
+        loanId,
+        dueDate: row.dueDate as any,
+        amount: row.amount,
+        status: "pending",
+      }) as any);
+    }
+    if (!input.endDate && schedule.length) {
+      await db.update(loans).set({ endDate: schedule[schedule.length - 1].dueDate as any })
+        .where(tenantWhere(loans, ctx.tenantId, eq(loans.id, loanId)));
+    }
+    if (postJournal) {
+      try {
+        await postLoanOriginJournal(db, ctx.tenantId, ctx.user?.id, {
+          number,
+          type: input.type,
+          partyName: input.partyName,
+          date: input.startDate,
+          amount: input.amount,
+          settlementMethod,
+          bankAccountId,
+        });
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : "فشل إنشاء القيد";
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: `تم حفظ القرض (${number}) لكن فشل القيد المحاسبي: ${msg}`,
+        });
+      }
+    }
+    return { success: true, id: loanId, number, installmentCount: schedule.length };
+  }),
+  generateSchedule: protectedProcedure.input(z.object({
+    loanId: z.number(),
+    installmentCount: z.number().int().min(1).max(360).default(12),
+    replaceExisting: z.boolean().default(true),
+  })).mutation(async ({ ctx, input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    const [loan] = await db.select().from(loans).where(tenantWhere(loans, ctx.tenantId, eq(loans.id, input.loanId))).limit(1);
+    if (!loan) throw new TRPCError({ code: "NOT_FOUND" });
+    const existing = await db.select().from(installments)
+      .where(tenantWhere(installments, ctx.tenantId, eq(installments.loanId, input.loanId)));
+    if (existing.some((r) => r.status === "paid") && input.replaceExisting) {
+      throw new TRPCError({ code: "BAD_REQUEST", message: "يوجد أقساط مدفوعة — لا يمكن إعادة توليد الجدول" });
+    }
+    if (input.replaceExisting) {
+      await db.delete(installments).where(tenantWhere(installments, ctx.tenantId, eq(installments.loanId, input.loanId)));
+    } else if (existing.length) {
+      throw new TRPCError({ code: "BAD_REQUEST", message: "القرض لديه أقساط بالفعل" });
+    }
+    const schedule = buildLoanInstallments({
+      principal: Number(loan.amount),
+      interestRate: Number(loan.interestRate || 0),
+      startDate: String(loan.startDate).slice(0, 10),
+      count: input.installmentCount,
+    });
+    for (const row of schedule) {
+      await db.insert(installments).values(withTenantId(ctx.tenantId, {
+        loanId: input.loanId,
+        dueDate: row.dueDate as any,
+        amount: row.amount,
+        status: "pending",
+      }) as any);
+    }
+    return { success: true, count: schedule.length };
+  }),
+  updateStatus: protectedProcedure.input(z.object({
+    id: z.number(),
+    status: z.enum(["active", "paid", "cancelled"]),
+  })).mutation(async ({ ctx, input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    await db.update(loans).set({ status: input.status })
+      .where(tenantWhere(loans, ctx.tenantId, eq(loans.id, input.id)));
     return { success: true };
   }),
   installments: router({
     list: protectedProcedure.input(z.number()).query(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      return db.select().from(installments).where(tenantWhere(installments, ctx.tenantId, eq(installments.loanId, input))).orderBy(installments.dueDate);
+      const today = new Date().toISOString().slice(0, 10);
+      const rows = await db.select().from(installments).where(tenantWhere(installments, ctx.tenantId, eq(installments.loanId, input))).orderBy(installments.dueDate);
+      return rows.map((r) => ({
+        ...r,
+        status: r.status === "pending" && String(r.dueDate).slice(0, 10) < today ? "overdue" : r.status,
+      }));
     }),
-    listAll: protectedProcedure.query(async ({ ctx }) => {
+    listAll: protectedProcedure.input(z.object({
+      search: z.string().optional(),
+      status: z.enum(["pending", "paid", "overdue"]).optional(),
+      loanId: z.number().optional(),
+    }).optional()).query(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      return db.select().from(installments).where(tenantWhere(installments, ctx.tenantId)).orderBy(installments.dueDate);
+      const today = new Date().toISOString().slice(0, 10);
+      const conds = [];
+      if (input?.loanId) conds.push(eq(installments.loanId, input.loanId));
+      if (input?.search?.trim()) {
+        const q = `%${input.search.trim()}%`;
+        conds.push(or(like(loans.partyName, q), like(loans.number, q)));
+      }
+      const rows = await db.select({
+        id: installments.id,
+        loanId: installments.loanId,
+        dueDate: installments.dueDate,
+        amount: installments.amount,
+        paidAmount: installments.paidAmount,
+        status: installments.status,
+        paidDate: installments.paidDate,
+        notes: installments.notes,
+        loanNumber: loans.number,
+        loanPartyName: loans.partyName,
+        loanType: loans.type,
+      }).from(installments)
+        .innerJoin(loans, and(eq(loans.id, installments.loanId), eq(loans.tenantId, ctx.tenantId)))
+        .where(tenantWhere(installments, ctx.tenantId, ...(conds.length ? [and(...conds)] : [])))
+        .orderBy(installments.dueDate);
+      return rows
+        .map((r) => ({
+          ...r,
+          status: r.status === "pending" && String(r.dueDate).slice(0, 10) < today ? "overdue" as const : r.status,
+        }))
+        .filter((r) => !input?.status || r.status === input.status);
     }),
-    pay: protectedProcedure.input(z.object({ installmentId: z.number() })).mutation(async ({ ctx, input }) => {
+    pay: protectedProcedure.input(z.object({
+      installmentId: z.number(),
+      paidAmount: z.string().optional(),
+      paidDate: z.string().optional(),
+      notes: z.string().optional(),
+      settlementMethod: z.enum(["cash", "bank"]).default("cash"),
+      bankAccountId: z.number().optional(),
+      postJournal: z.boolean().default(true),
+    })).mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      await db.update(installments).set({ status: 'paid', paidDate: new Date() }).where(tenantWhere(installments, ctx.tenantId, eq(installments.id, input.installmentId)));
+      if (input.settlementMethod === "bank" && !input.bankAccountId) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "اختر الحساب البنكي للتسوية" });
+      }
+      const [row] = await db.select().from(installments)
+        .where(tenantWhere(installments, ctx.tenantId, eq(installments.id, input.installmentId))).limit(1);
+      if (!row) throw new TRPCError({ code: "NOT_FOUND" });
+      if (row.status === "paid") throw new TRPCError({ code: "BAD_REQUEST", message: "القسط مدفوع مسبقاً" });
+      const [loan] = await db.select().from(loans)
+        .where(tenantWhere(loans, ctx.tenantId, eq(loans.id, row.loanId))).limit(1);
+      if (!loan) throw new TRPCError({ code: "NOT_FOUND", message: "القرض غير موجود" });
+      const paidAmount = input.paidAmount || row.amount;
+      const paidDate = (input.paidDate || new Date().toISOString().slice(0, 10)) as any;
+      await db.update(installments).set({
+        status: "paid",
+        paidAmount,
+        paidDate,
+        notes: input.notes ?? row.notes,
+      }).where(tenantWhere(installments, ctx.tenantId, eq(installments.id, input.installmentId)));
+      const remaining = await db.select({ id: installments.id }).from(installments)
+        .where(tenantWhere(installments, ctx.tenantId, and(
+          eq(installments.loanId, row.loanId),
+          sql`${installments.status} <> 'paid'`,
+          sql`${installments.id} <> ${input.installmentId}`,
+        )));
+      if (!remaining.length) {
+        await db.update(loans).set({ status: "paid" })
+          .where(tenantWhere(loans, ctx.tenantId, eq(loans.id, row.loanId)));
+      }
+      if (input.postJournal) {
+        try {
+          await postLoanInstallmentPayJournal(db, ctx.tenantId, ctx.user?.id, {
+            loanNumber: loan.number,
+            loanType: loan.type as "given" | "received",
+            partyName: loan.partyName,
+            installmentId: input.installmentId,
+            date: String(paidDate).slice(0, 10),
+            amount: String(paidAmount),
+            settlementMethod: input.settlementMethod,
+            bankAccountId: input.bankAccountId,
+          });
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : "فشل إنشاء القيد";
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: `تم تسجيل الدفع لكن فشل القيد المحاسبي: ${msg}`,
+          });
+        }
+      }
       return { success: true };
     }),
   }),
@@ -1662,7 +3733,11 @@ const salesRepsRouter = router({
   })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-    await db.insert(salesReps).values(withTenantId(ctx.tenantId, input) as any);
+    try {
+      await db.insert(salesReps).values(withTenantId(ctx.tenantId, compactRow(input as Record<string, unknown>)) as any);
+    } catch (e: unknown) {
+      throw new TRPCError({ code: "BAD_REQUEST", message: dbErrorMessage(e, "فشل إضافة المندوب") });
+    }
     return { success: true };
   }),
   update: protectedProcedure.input(z.object({
@@ -1695,7 +3770,7 @@ const settingsRouter = router({
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       // جلب جميع البيانات للنسخة الاحتياطية
-      const [customersData, suppliersData, itemsData, salesData, purchasesData, cashData, bankData, checksData, employeesData, journalData] = await Promise.all([
+      const [customersData, suppliersData, itemsData, salesData, purchasesData, cashData, bankData, checksData, employeesData, journalData, accountsData, journalLinesData, companyData] = await Promise.all([
         db.select().from(customers).where(tenantWhere(customers, ctx.tenantId)).limit(5000),
         db.select().from(suppliers).where(tenantWhere(suppliers, ctx.tenantId)).limit(5000),
         db.select().from(items).where(tenantWhere(items, ctx.tenantId)).limit(5000),
@@ -1706,10 +3781,14 @@ const settingsRouter = router({
         db.select().from(checks).where(tenantWhere(checks, ctx.tenantId)).limit(5000),
         db.select().from(employees).where(tenantWhere(employees, ctx.tenantId)).limit(5000),
         db.select().from(journalEntries).where(tenantWhere(journalEntries, ctx.tenantId)).limit(5000),
+        db.select().from(accounts).where(tenantWhere(accounts, ctx.tenantId)).limit(5000),
+        db.select().from(journalEntryLines).where(tenantWhere(journalEntryLines, ctx.tenantId)).limit(20000),
+        db.select().from(companySettings).where(tenantWhere(companySettings, ctx.tenantId)).limit(1),
       ]);
       return {
         exportedAt: new Date().toISOString(),
-        version: "1.0",
+        version: "1.1",
+        tenantId: ctx.tenantId,
         data: {
           customers: customersData,
           suppliers: suppliersData,
@@ -1721,6 +3800,9 @@ const settingsRouter = router({
           checks: checksData,
           employees: employeesData,
           journalEntries: journalData,
+          journalEntryLines: journalLinesData,
+          accounts: accountsData,
+          companySettings: companyData,
         },
         summary: {
           customers: customersData.length,
@@ -1733,8 +3815,95 @@ const settingsRouter = router({
           checks: checksData.length,
           employees: employeesData.length,
           journalEntries: journalData.length,
+          journalEntryLines: journalLinesData.length,
+          accounts: accountsData.length,
         }
       };
+    }),
+    import: protectedProcedure.input(z.object({
+      payload: z.object({
+        version: z.string().optional(),
+        data: z.record(z.string(), z.array(z.record(z.unknown()))),
+      }),
+      upsertByCode: z.boolean().optional(),
+    })).mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const d = input.payload.data;
+      const { importBulkPayload } = await import("./import-service");
+      const res = await importBulkPayload(db, ctx.tenantId, {
+        departments: d.departments as Record<string, unknown>[] | undefined,
+        itemCategories: d.itemCategories as Record<string, unknown>[] | undefined,
+        warehouses: d.warehouses as Record<string, unknown>[] | undefined,
+        accounts: d.accounts as Record<string, unknown>[] | undefined,
+        customers: d.customers as Record<string, unknown>[] | undefined,
+        suppliers: d.suppliers as Record<string, unknown>[] | undefined,
+        items: d.items as Record<string, unknown>[] | undefined,
+        employees: d.employees as Record<string, unknown>[] | undefined,
+      }, { upsertByCode: input.upsertByCode });
+      return { success: true, imported: res.totalImported, updated: res.totalUpdated, summary: res.summary };
+    }),
+    /** استعادة كاملة (فواتير/قيود/حركات) من حمولة JSON — لمستأجر الجلسة فقط */
+    importFull: protectedProcedure.input(z.object({
+      payload: z.object({
+        version: z.string().optional(),
+        data: z.record(z.string(), z.array(z.record(z.unknown()))),
+      }),
+      wipeFirst: z.boolean().optional(),
+      wipeConfirm: z.string().optional(),
+    })).mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      if (!ctx.saasUser || !canManageTeamUsers(ctx.saasUser.role)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "للمديرين فقط" });
+      }
+      const { getTenantById } = await import("./tenant");
+      const tenant = await getTenantById(ctx.tenantId!);
+      if (!tenant || tenant.slug !== "kam") {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "الاستيراد الكامل مفعّل حالياً لمستأجر kam فقط كإجراء أمان",
+        });
+      }
+      if (input.wipeFirst) {
+        if (input.wipeConfirm !== "WIPE_KAM") {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "للتأكيد اكتب WIPE_KAM" });
+        }
+        const { wipeTenantBusinessData } = await import("./tenant-wipe");
+        await wipeTenantBusinessData(db, "kam", { allowedSlugs: ["kam"] });
+      }
+      const { fullRestoreToTenant } = await import("./full-restore");
+      const report = await fullRestoreToTenant(db, ctx.tenantId!, input.payload);
+      try {
+        const { syncBankAccountsFromChart } = await import("./bank-accounts-sync");
+        await syncBankAccountsFromChart(db, ctx.tenantId!);
+      } catch { /* optional */ }
+      return {
+        success: true,
+        imported: report.imported,
+        errors: report.errors.slice(0, 50),
+        errorCount: report.errors.length,
+      };
+    }),
+    wipeTenant: protectedProcedure.input(z.object({
+      confirm: z.string(),
+      dryRun: z.boolean().optional(),
+    })).mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      if (!ctx.saasUser || !canManageTeamUsers(ctx.saasUser.role)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "للمديرين فقط" });
+      }
+      const { getTenantById } = await import("./tenant");
+      const tenant = await getTenantById(ctx.tenantId!);
+      if (!tenant || tenant.slug !== "kam") {
+        throw new TRPCError({ code: "FORBIDDEN", message: "التفريغ مفعّل لمستأجر kam فقط" });
+      }
+      if (!input.dryRun && input.confirm !== "WIPE_KAM") {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "للتأكيد اكتب WIPE_KAM" });
+      }
+      const { wipeTenantBusinessData } = await import("./tenant-wipe");
+      return wipeTenantBusinessData(db, "kam", { allowedSlugs: ["kam"], dryRun: input.dryRun });
     }),
   }),
   company: router({
@@ -1751,6 +3920,9 @@ const settingsRouter = router({
       email: z.string().optional(),
       taxNumber: z.string().optional(),
       currency: z.string().optional(),
+      alertEmailsEnabled: z.boolean().optional(),
+      alertEmailRecipients: z.string().optional(),
+      requireDocumentApproval: z.boolean().optional(),
     })).mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
@@ -1763,11 +3935,67 @@ const settingsRouter = router({
       return { success: true };
     }),
   }),
+  approvals: router({
+    list: protectedProcedure.query(async ({ ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const { listPendingApprovals } = await import("./document-approval");
+      return listPendingApprovals(db, ctx.tenantId);
+    }),
+    approve: protectedProcedure.input(z.number()).mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const { resolveDocumentApproval } = await import("./document-approval");
+      const { finalizeSalesInvoice, finalizePurchaseInvoice, finalizeJournalEntry } = await import("./invoice-approval");
+      const row = await resolveDocumentApproval(db, ctx.tenantId, input, ctx.user?.id, "approved");
+      if (row.documentType === "sales_invoice") {
+        await finalizeSalesInvoice(db, ctx.tenantId, ctx.user?.id, row.documentId);
+      } else if (row.documentType === "purchase_invoice") {
+        await finalizePurchaseInvoice(db, ctx.tenantId, ctx.user?.id, row.documentId);
+      } else if (row.documentType === "journal_entry") {
+        await finalizeJournalEntry(db, ctx.tenantId, row.documentId);
+      }
+      return { success: true };
+    }),
+    reject: protectedProcedure.input(z.object({ id: z.number(), notes: z.string().optional() })).mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const { resolveDocumentApproval } = await import("./document-approval");
+      const row = await resolveDocumentApproval(db, ctx.tenantId, input.id, ctx.user?.id, "rejected", input.notes);
+      if (row.documentType === "sales_invoice") {
+        await db.update(salesInvoices).set({ status: "cancelled" } as any)
+          .where(tenantWhere(salesInvoices, ctx.tenantId, eq(salesInvoices.id, row.documentId)));
+      } else if (row.documentType === "purchase_invoice") {
+        await db.update(purchaseInvoices).set({ status: "cancelled" } as any)
+          .where(tenantWhere(purchaseInvoices, ctx.tenantId, eq(purchaseInvoices.id, row.documentId)));
+      } else if (row.documentType === "journal_entry") {
+        await db.update(journalEntries).set({ status: "cancelled" } as any)
+          .where(tenantWhere(journalEntries, ctx.tenantId, eq(journalEntries.id, row.documentId)));
+      }
+      return { success: true };
+    }),
+    runDepreciation: protectedProcedure.input(z.object({ period: z.string().regex(/^\d{4}-\d{2}$/) })).mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const { postMonthlyDepreciation } = await import("./asset-depreciation");
+      return postMonthlyDepreciation(db, ctx.tenantId, ctx.user?.id, input.period);
+    }),
+  }),
+  contacts: router({
+    reconcileBalances: protectedProcedure.mutation(async ({ ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      return reconcileAllContactBalances(db, ctx.tenantId);
+    }),
+  }),
   branches: router({
     list: protectedProcedure.query(async ({ ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      return db.select().from(branches).where(tenantWhere(branches, ctx.tenantId)).orderBy(branches.name);
+      const scope = await loadUserScopeFromCtx(db, ctx.saasUser);
+      return db.select().from(branches)
+        .where(tenantWhere(branches, ctx.tenantId, scopeIdsFilter(branches.id, scope.branchIds)))
+        .orderBy(branches.name);
     }),
     create: protectedProcedure.input(z.object({
       name: z.string().min(1),
@@ -1805,7 +4033,11 @@ const settingsRouter = router({
     listWithSearch: protectedProcedure.input(z.object({ search: z.string().optional() })).query(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      const where = input.search ? like(branches.name, `%${input.search}%`) : undefined;
+      const scope = await loadUserScopeFromCtx(db, ctx.saasUser);
+      const where = and(
+        input.search ? like(branches.name, `%${input.search}%`) : undefined,
+        scopeIdsFilter(branches.id, scope.branchIds),
+      );
       const rows = await db.select().from(branches).where(tenantWhere(branches, ctx.tenantId, where)).orderBy(branches.name);
       return { rows };
     }),
@@ -1820,7 +4052,7 @@ const settingsRouter = router({
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       const tenantId = ctx.tenantId!;
-      return db
+      const rows = await db
         .select({
           id: appUsers.id,
           name: appUsers.name,
@@ -1830,10 +4062,17 @@ const settingsRouter = router({
           isActive: appUsers.isActive,
           createdAt: appUsers.createdAt,
           ownerUserId: appUsers.ownerUserId,
+          scopeBranchIds: appUsers.scopeBranchIds,
+          scopeWarehouseIds: appUsers.scopeWarehouseIds,
         })
         .from(appUsers)
         .where(eq(appUsers.tenantId, tenantId))
         .orderBy(appUsers.createdAt);
+      const tenantOwnerId = await getTenantOwnerUserId(tenantId);
+      return rows.map((row) => ({
+        ...row,
+        isTenantOwner: tenantOwnerId != null && row.id === tenantOwnerId,
+      }));
     }),
     updateRole: protectedProcedure.use(({ ctx, next }) => {
       if (!ctx.saasUser || !canManageTeamUsers(ctx.saasUser.role)) {
@@ -1842,18 +4081,28 @@ const settingsRouter = router({
       return next({ ctx });
     }).input(z.object({
       userId: z.number(),
-      role: z.enum(["admin", "user", "accountant", "sales_rep", "warehouse_manager"]),
+      role: z.string().min(1).max(64),
     })).mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       const tenantId = ctx.tenantId!;
+      const { assertRoleExists } = await import("./permissions-service");
+      if (input.role === "superadmin") {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "دور غير صالح" });
+      }
+      try {
+        await assertRoleExists(tenantId, input.role);
+      } catch (e: any) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: e?.message || "الدور غير موجود" });
+      }
       const ownerId = ctx.saasUser!.accountOwnerId;
+      const tenantOwnerId = await getTenantOwnerUserId(tenantId);
+      if (tenantOwnerId != null && input.userId === tenantOwnerId && input.role !== "admin") {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "لا يمكن تغيير دور مالك الحساب" });
+      }
       const [target] = await db.select().from(appUsers).where(and(eq(appUsers.id, input.userId), eq(appUsers.tenantId, tenantId))).limit(1);
       if (!target || getAccountOwnerId(target) !== ownerId) {
         throw new TRPCError({ code: "NOT_FOUND", message: "المستخدم غير موجود" });
-      }
-      if (!target.ownerUserId && target.id === ownerId && input.role !== "admin") {
-        throw new TRPCError({ code: "BAD_REQUEST", message: "لا يمكن تغيير دور مالك الحساب" });
       }
       await db.update(appUsers).set({ role: input.role }).where(eq(appUsers.id, input.userId));
       return { success: true };
@@ -1867,13 +4116,22 @@ const settingsRouter = router({
       name: z.string().min(1),
       email: z.string().email(),
       password: z.string().min(6),
-      role: z.enum(["admin", "user", "accountant", "sales_rep", "warehouse_manager"]).default("user"),
+      role: z.string().min(1).max(64).default("user"),
       jobTitle: z.string().optional(),
     })).mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       const tenantId = ctx.tenantId!;
       const ownerId = ctx.saasUser!.accountOwnerId;
+      const { assertRoleExists } = await import("./permissions-service");
+      if (input.role === "superadmin") {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "دور غير صالح" });
+      }
+      try {
+        await assertRoleExists(tenantId, input.role);
+      } catch (e: any) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: e?.message || "الدور غير موجود" });
+      }
 
       const sub = await getUserActiveSubscription(ownerId);
       const maxUsers = sub?.maxUsers ?? 1;
@@ -1912,8 +4170,9 @@ const settingsRouter = router({
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       const tenantId = ctx.tenantId!;
       const ownerId = ctx.saasUser!.accountOwnerId;
-      if (input === ownerId) {
-        throw new TRPCError({ code: "FORBIDDEN", message: "لا يمكنك حذف مالك الحساب" });
+      const tenantOwnerId = await getTenantOwnerUserId(tenantId);
+      if (tenantOwnerId != null && input === tenantOwnerId) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "لا يمكن حذف مالك الشركة (حساب المستأجر)" });
       }
       const [target] = await db.select().from(appUsers).where(and(eq(appUsers.id, input), eq(appUsers.tenantId, tenantId))).limit(1);
       if (!target || target.ownerUserId !== ownerId) {
@@ -1943,23 +4202,514 @@ const settingsRouter = router({
       await db.update(appUsers).set({ passwordHash: hashedPassword }).where(eq(appUsers.id, input.userId));
       return { success: true };
     }),
+    getScopes: protectedProcedure.use(({ ctx, next }) => {
+      if (!ctx.saasUser || !canManageTeamUsers(ctx.saasUser.role)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "هذه العملية للمديرين فقط" });
+      }
+      return next({ ctx });
+    }).input(z.number()).query(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const tenantId = ctx.tenantId!;
+      const ownerId = ctx.saasUser!.accountOwnerId;
+      const [target] = await db
+        .select({
+          scopeBranchIds: appUsers.scopeBranchIds,
+          scopeWarehouseIds: appUsers.scopeWarehouseIds,
+        })
+        .from(appUsers)
+        .where(and(eq(appUsers.id, input), eq(appUsers.tenantId, tenantId)))
+        .limit(1);
+      if (!target) throw new TRPCError({ code: "NOT_FOUND" });
+      const [ownerRow] = await db.select({ id: appUsers.id, ownerUserId: appUsers.ownerUserId }).from(appUsers).where(eq(appUsers.id, input));
+      if (!ownerRow || getAccountOwnerId(ownerRow) !== ownerId) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "المستخدم غير موجود" });
+      }
+      return {
+        branchIds: (target.scopeBranchIds as number[] | null) ?? null,
+        warehouseIds: (target.scopeWarehouseIds as number[] | null) ?? null,
+      };
+    }),
+    updateScopes: protectedProcedure.use(({ ctx, next }) => {
+      if (!ctx.saasUser || !canManageTeamUsers(ctx.saasUser.role)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "هذه العملية للمديرين فقط" });
+      }
+      return next({ ctx });
+    }).input(z.object({
+      userId: z.number(),
+      branchIds: z.array(z.number()).nullable(),
+      warehouseIds: z.array(z.number()).nullable(),
+    })).mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const tenantId = ctx.tenantId!;
+      const ownerId = ctx.saasUser!.accountOwnerId;
+      const [target] = await db.select().from(appUsers).where(and(eq(appUsers.id, input.userId), eq(appUsers.tenantId, tenantId))).limit(1);
+      if (!target || getAccountOwnerId(target) !== ownerId) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "المستخدم غير موجود" });
+      }
+      await db.update(appUsers).set({
+        scopeBranchIds: input.branchIds,
+        scopeWarehouseIds: input.warehouseIds,
+      }).where(eq(appUsers.id, input.userId));
+      return { success: true };
+    }),
   }),
 });
 
 // ===================== PRODUCTION =====================
 const productionRouter = router({
-  list: protectedProcedure.input(z.object({ page: z.number().default(1), limit: z.number().default(20) })).query(async ({ ctx }) => {
-    return { rows: [], total: 0 };
+  list: protectedProcedure.input(z.object({
+    page: z.number().default(1),
+    limit: z.number().default(20),
+    search: z.string().optional(),
+    status: z.enum(["draft", "in_progress", "completed", "cancelled"]).optional(),
+    warehouseId: z.number().optional(),
+    productId: z.number().optional(),
+    dateFrom: z.string().optional(),
+    dateTo: z.string().optional(),
+  })).query(async ({ ctx, input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    const scope = await loadUserScopeFromCtx(db, ctx.saasUser);
+    const offset = (input.page - 1) * input.limit;
+    const conds: any[] = [scopeWarehouseFilter(productionOrders, scope)].filter(Boolean);
+    if (input.status) conds.push(eq(productionOrders.status, input.status));
+    if (input.warehouseId) conds.push(eq(productionOrders.warehouseId, input.warehouseId));
+    if (input.productId) conds.push(eq(productionOrders.productId, input.productId));
+    if (input.dateFrom) conds.push(gte(productionOrders.date, input.dateFrom as any));
+    if (input.dateTo) conds.push(lte(productionOrders.date, input.dateTo as any));
+    if (input.search?.trim()) {
+      const q = `%${input.search.trim()}%`;
+      conds.push(or(
+        like(productionOrders.number, q),
+        like(productionOrders.notes, q),
+        like(productionOrders.referenceNumber, q),
+        like(productionOrders.batchNumber, q),
+        sql`p.name LIKE ${q}`,
+        sql`p.code LIKE ${q}`,
+      ));
+    }
+    const whereClause = tenantWhere(productionOrders, ctx.tenantId, ...(conds.length ? [and(...conds)] : []));
+    const rows = await db.select({
+      id: productionOrders.id,
+      number: productionOrders.number,
+      quantity: productionOrders.quantity,
+      date: productionOrders.date,
+      status: productionOrders.status,
+      notes: productionOrders.notes,
+      referenceNumber: productionOrders.referenceNumber,
+      batchNumber: productionOrders.batchNumber,
+      wipCostAmount: productionOrders.wipCostAmount,
+      productId: productionOrders.productId,
+      warehouseId: productionOrders.warehouseId,
+      productName: items.name,
+      productCode: items.code,
+      warehouseName: warehouses.name,
+    }).from(productionOrders)
+      .leftJoin(items, and(eq(items.id, productionOrders.productId), eq(items.tenantId, ctx.tenantId)))
+      .leftJoin(warehouses, and(eq(warehouses.id, productionOrders.warehouseId), eq(warehouses.tenantId, ctx.tenantId)))
+      .where(whereClause)
+      .orderBy(desc(productionOrders.createdAt))
+      .limit(input.limit)
+      .offset(offset);
+    const [total] = await db.select({ count: count() }).from(productionOrders)
+      .leftJoin(items, and(eq(items.id, productionOrders.productId), eq(items.tenantId, ctx.tenantId)))
+      .where(whereClause);
+    return { rows, total: total.count };
   }),
+
+  get: protectedProcedure.input(z.number()).query(async ({ ctx, input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    const [order] = await db.select({
+      id: productionOrders.id,
+      number: productionOrders.number,
+      quantity: productionOrders.quantity,
+      date: productionOrders.date,
+      status: productionOrders.status,
+      notes: productionOrders.notes,
+      referenceNumber: productionOrders.referenceNumber,
+      batchNumber: productionOrders.batchNumber,
+      branchId: productionOrders.branchId,
+      wipCostAmount: productionOrders.wipCostAmount,
+      wipJournalId: productionOrders.wipJournalId,
+      completionJournalId: productionOrders.completionJournalId,
+      productId: productionOrders.productId,
+      warehouseId: productionOrders.warehouseId,
+      approvedBy: productionOrders.approvedBy,
+      approvedAt: productionOrders.approvedAt,
+      createdBy: productionOrders.createdBy,
+      productName: items.name,
+      productCode: items.code,
+      warehouseName: warehouses.name,
+    }).from(productionOrders)
+      .leftJoin(items, and(eq(items.id, productionOrders.productId), eq(items.tenantId, ctx.tenantId)))
+      .leftJoin(warehouses, and(eq(warehouses.id, productionOrders.warehouseId), eq(warehouses.tenantId, ctx.tenantId)))
+      .where(tenantWhere(productionOrders, ctx.tenantId, eq(productionOrders.id, input)))
+      .limit(1);
+    if (!order) throw new TRPCError({ code: "NOT_FOUND", message: "أمر الإنتاج غير موجود" });
+
+    const materials = await db.select().from(productionOrderMaterials)
+      .where(tenantWhere(productionOrderMaterials, ctx.tenantId, eq(productionOrderMaterials.orderId, input)));
+    const matItemIds = materials.map((m) => m.itemId);
+    const matItems = matItemIds.length
+      ? await db.select({
+          id: items.id,
+          name: items.name,
+          code: items.code,
+          unit: items.unit,
+          averageCost: items.averageCost,
+          purchasePrice: items.purchasePrice,
+          currentStock: items.currentStock,
+        }).from(items).where(tenantWhere(items, ctx.tenantId, inArray(items.id, matItemIds)))
+      : [];
+    const matMap = new Map(matItems.map((i) => [i.id, i]));
+
+    const lines = materials.map((m) => {
+      const it = matMap.get(m.itemId);
+      const absQty = Number(m.quantity || 0);
+      const scrap = Number(m.scrapPercent || 0);
+      const totalQty = absQty * (1 + scrap / 100);
+      const scrapQty = absQty * (scrap / 100);
+      const unitCost = Number(it?.averageCost || 0) || Number(it?.purchasePrice || 0);
+      const available = Number(it?.currentStock || 0);
+      return {
+        id: m.id,
+        itemId: m.itemId,
+        quantity: m.quantity,
+        scrapPercent: m.scrapPercent,
+        notes: m.notes,
+        warehouseId: m.warehouseId,
+        itemName: it?.name,
+        itemCode: it?.code,
+        unit: it?.unit,
+        averageCost: it?.averageCost,
+        purchasePrice: it?.purchasePrice,
+        currentStock: it?.currentStock,
+        baseQty: absQty,
+        scrapQty,
+        totalQty,
+        unitCost,
+        lineCost: totalQty * unitCost,
+        available,
+      };
+    });
+    const estimatedCost = lines.reduce((s, l) => s + l.lineCost, 0);
+    const totalRawQty = lines.reduce((s, l) => s + l.totalQty, 0);
+    const orderQty = Number(order.quantity || 0) || 1;
+    let maxProducible = Number.POSITIVE_INFINITY;
+    for (const l of lines) {
+      if (l.totalQty <= 0) continue;
+      const perFinished = l.totalQty / orderQty;
+      if (perFinished > 0) maxProducible = Math.min(maxProducible, l.available / perFinished);
+    }
+    if (!Number.isFinite(maxProducible)) maxProducible = 0;
+    return {
+      ...order,
+      materials: lines,
+      estimatedCost,
+      totalRawQty,
+      maxProducible: Math.max(0, Math.floor(maxProducible * 1000) / 1000),
+    };
+  }),
+
   create: protectedProcedure.input(z.object({
     productId: z.number(),
     quantity: z.string(),
     warehouseId: z.number(),
     date: z.string(),
     notes: z.string().optional(),
-    materials: z.array(z.object({ itemId: z.number(), quantity: z.string() })).optional(),
+    branchId: z.number().optional(),
+    referenceNumber: z.string().optional(),
+    batchNumber: z.string().optional(),
+    materials: z.array(z.object({
+      itemId: z.number(),
+      quantity: z.string(),
+      scrapPercent: z.string().optional(),
+      notes: z.string().optional(),
+      warehouseId: z.number().optional(),
+    })).optional(),
   })).mutation(async ({ ctx, input }) => {
-    return { success: true, id: 1, number: `PO-00001` };
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    await assertDateNotInClosedPeriod(db, ctx.tenantId, input.date);
+    const scope = await loadUserScopeFromCtx(db, ctx.saasUser);
+    assertWarehouseAccess(scope, input.warehouseId);
+    if (input.productId && (input.materials || []).some((m) => m.itemId === input.productId)) {
+      throw new TRPCError({ code: "BAD_REQUEST", message: "لا يمكن أن يكون المنتج النهائي مادة خام في نفس الأمر" });
+    }
+    const [countResult] = await db.select({ count: count() }).from(productionOrders).where(tenantWhere(productionOrders, ctx.tenantId));
+    const number = `PO-${String(countResult.count + 1).padStart(5, "0")}`;
+    const [result] = await db.insert(productionOrders).values(withTenantId(ctx.tenantId, {
+      number,
+      productId: input.productId,
+      warehouseId: input.warehouseId,
+      branchId: input.branchId,
+      quantity: input.quantity,
+      date: input.date as any,
+      notes: input.notes,
+      referenceNumber: input.referenceNumber,
+      batchNumber: input.batchNumber,
+      status: "draft",
+      createdBy: ctx.user?.id,
+    }) as any);
+    const orderId = (result as any).insertId;
+    for (const m of input.materials || []) {
+      await db.insert(productionOrderMaterials).values(withTenantId(ctx.tenantId, {
+        orderId,
+        itemId: m.itemId,
+        quantity: m.quantity,
+        scrapPercent: m.scrapPercent ?? "0",
+        notes: m.notes,
+        warehouseId: m.warehouseId,
+      }) as any);
+    }
+    return { success: true, id: orderId, number };
+  }),
+
+  update: protectedProcedure.input(z.object({
+    id: z.number(),
+    productId: z.number(),
+    quantity: z.string(),
+    warehouseId: z.number(),
+    date: z.string(),
+    notes: z.string().optional(),
+    branchId: z.number().optional(),
+    referenceNumber: z.string().optional(),
+    batchNumber: z.string().optional(),
+    materials: z.array(z.object({
+      itemId: z.number(),
+      quantity: z.string(),
+      scrapPercent: z.string().optional(),
+      notes: z.string().optional(),
+      warehouseId: z.number().optional(),
+    })),
+  })).mutation(async ({ ctx, input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    const [existing] = await db.select().from(productionOrders)
+      .where(tenantWhere(productionOrders, ctx.tenantId, eq(productionOrders.id, input.id))).limit(1);
+    if (!existing) throw new TRPCError({ code: "NOT_FOUND", message: "أمر الإنتاج غير موجود" });
+    if (existing.status !== "draft") {
+      throw new TRPCError({ code: "BAD_REQUEST", message: "يمكن تعديل الأوامر المعلّقة فقط (زي Mega)" });
+    }
+    await assertDateNotInClosedPeriod(db, ctx.tenantId, input.date);
+    const scope = await loadUserScopeFromCtx(db, ctx.saasUser);
+    assertWarehouseAccess(scope, input.warehouseId);
+    await db.update(productionOrders).set({
+      productId: input.productId,
+      warehouseId: input.warehouseId,
+      branchId: input.branchId,
+      quantity: input.quantity,
+      date: input.date as any,
+      notes: input.notes,
+      referenceNumber: input.referenceNumber,
+      batchNumber: input.batchNumber,
+    }).where(tenantWhere(productionOrders, ctx.tenantId, eq(productionOrders.id, input.id)));
+    await db.delete(productionOrderMaterials).where(
+      tenantWhere(productionOrderMaterials, ctx.tenantId, eq(productionOrderMaterials.orderId, input.id)),
+    );
+    for (const m of input.materials) {
+      await db.insert(productionOrderMaterials).values(withTenantId(ctx.tenantId, {
+        orderId: input.id,
+        itemId: m.itemId,
+        quantity: m.quantity,
+        scrapPercent: m.scrapPercent ?? "0",
+        notes: m.notes,
+        warehouseId: m.warehouseId,
+      }) as any);
+    }
+    return { success: true };
+  }),
+
+  delete: protectedProcedure.input(z.number()).mutation(async ({ ctx, input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    const [existing] = await db.select().from(productionOrders)
+      .where(tenantWhere(productionOrders, ctx.tenantId, eq(productionOrders.id, input))).limit(1);
+    if (!existing) throw new TRPCError({ code: "NOT_FOUND" });
+    if (existing.status !== "draft" && existing.status !== "cancelled") {
+      throw new TRPCError({ code: "BAD_REQUEST", message: "يمكن حذف المسودات أو الملغاة فقط" });
+    }
+    await db.delete(productionOrderMaterials).where(
+      tenantWhere(productionOrderMaterials, ctx.tenantId, eq(productionOrderMaterials.orderId, input)),
+    );
+    await db.delete(productionOrders).where(
+      tenantWhere(productionOrders, ctx.tenantId, eq(productionOrders.id, input)),
+    );
+    return { success: true };
+  }),
+
+  bom: router({
+    get: protectedProcedure.input(z.object({ productId: z.number() })).query(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      return db.select({
+        id: itemBomLines.id,
+        productId: itemBomLines.productId,
+        materialItemId: itemBomLines.materialItemId,
+        materialName: items.name,
+        materialCode: items.code,
+        materialBarcode: items.barcode,
+        materialUnit: items.unit,
+        quantityPerUnit: itemBomLines.quantityPerUnit,
+        scrapPercent: itemBomLines.scrapPercent,
+        notes: itemBomLines.notes,
+      }).from(itemBomLines)
+        .leftJoin(items, and(eq(items.id, itemBomLines.materialItemId), eq(items.tenantId, ctx.tenantId)))
+        .where(tenantWhere(itemBomLines, ctx.tenantId, eq(itemBomLines.productId, input.productId)))
+        .orderBy(itemBomLines.id);
+    }),
+    listProducts: protectedProcedure.input(z.object({
+      search: z.string().optional(),
+    }).optional()).query(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const q = input?.search?.trim();
+      const searchCond = q
+        ? or(like(items.name, `%${q}%`), like(items.code, `%${q}%`), codeSearchCondition(items.code, q))
+        : undefined;
+      return db.select({
+        productId: itemBomLines.productId,
+        productName: items.name,
+        productCode: items.code,
+        lineCount: sql<number>`COUNT(${itemBomLines.id})`,
+      }).from(itemBomLines)
+        .innerJoin(items, and(eq(items.id, itemBomLines.productId), eq(items.tenantId, ctx.tenantId)))
+        .where(tenantWhere(itemBomLines, ctx.tenantId, ...(searchCond ? [searchCond] : [])))
+        .groupBy(itemBomLines.productId, items.name, items.code)
+        .orderBy(items.code, items.name)
+        .limit(200);
+    }),
+    save: protectedProcedure.input(z.object({
+      productId: z.number(),
+      lines: z.array(z.object({
+        materialItemId: z.number(),
+        quantityPerUnit: z.string(),
+        scrapPercent: z.string().optional(),
+        notes: z.string().optional(),
+      })),
+    })).mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      if (input.lines.some((l) => l.materialItemId === input.productId)) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "لا يمكن أن يكون المنتج مادة في خلطته" });
+      }
+
+      // دمج المواد المكررة (القيد الفريد يمنع التكرار في الجدول)
+      const merged = new Map<number, { materialItemId: number; quantityPerUnit: string; scrapPercent: string; notes?: string }>();
+      for (const line of input.lines) {
+        const qty = Number(line.quantityPerUnit);
+        if (!Number.isFinite(qty) || qty <= 0) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "كمية المادة يجب أن تكون أكبر من صفر" });
+        }
+        const prev = merged.get(line.materialItemId);
+        if (prev) {
+          const nextQty = Number(prev.quantityPerUnit) + qty;
+          merged.set(line.materialItemId, {
+            ...prev,
+            quantityPerUnit: String(nextQty),
+          });
+        } else {
+          merged.set(line.materialItemId, {
+            materialItemId: line.materialItemId,
+            quantityPerUnit: String(qty),
+            scrapPercent: line.scrapPercent ?? "0",
+            notes: line.notes,
+          });
+        }
+      }
+
+      const [product] = await db.select({ id: items.id }).from(items)
+        .where(tenantWhere(items, ctx.tenantId, eq(items.id, input.productId))).limit(1);
+      if (!product) throw new TRPCError({ code: "NOT_FOUND", message: "المنتج غير موجود" });
+
+      try {
+        await db.delete(itemBomLines).where(
+          tenantWhere(itemBomLines, ctx.tenantId, eq(itemBomLines.productId, input.productId)),
+        );
+        for (const line of merged.values()) {
+          await db.insert(itemBomLines).values(withTenantId(ctx.tenantId, {
+            productId: input.productId,
+            materialItemId: line.materialItemId,
+            quantityPerUnit: line.quantityPerUnit,
+            scrapPercent: line.scrapPercent ?? "0",
+            notes: line.notes,
+          }) as any);
+        }
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        if (msg.includes("item_bom_lines") || msg.includes("doesn't exist") || msg.includes("Unknown table")) {
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: "جدول الخلطات غير موجود — نفّذ ترحيل قاعدة البيانات (migration 0025)",
+          });
+        }
+        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: `فشل حفظ الخلطة: ${msg}` });
+      }
+      return { success: true, lineCount: merged.size };
+    }),
+    copy: protectedProcedure.input(z.object({
+      fromProductId: z.number(),
+      toProductId: z.number(),
+    })).mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      if (input.fromProductId === input.toProductId) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "اختر منتجاً مختلفاً للنسخ إليه" });
+      }
+      const lines = await db.select().from(itemBomLines)
+        .where(tenantWhere(itemBomLines, ctx.tenantId, eq(itemBomLines.productId, input.fromProductId)));
+      if (!lines.length) throw new TRPCError({ code: "NOT_FOUND", message: "لا توجد خلطة للمنتج المصدر" });
+      await db.delete(itemBomLines).where(
+        tenantWhere(itemBomLines, ctx.tenantId, eq(itemBomLines.productId, input.toProductId)),
+      );
+      let copied = 0;
+      for (const line of lines) {
+        if (line.materialItemId === input.toProductId) continue;
+        await db.insert(itemBomLines).values(withTenantId(ctx.tenantId, {
+          productId: input.toProductId,
+          materialItemId: line.materialItemId,
+          quantityPerUnit: line.quantityPerUnit,
+          scrapPercent: line.scrapPercent ?? "0",
+          notes: line.notes,
+        }) as any);
+        copied += 1;
+      }
+      return { success: true, copied };
+    }),
+  }),
+
+  updateStatus: protectedProcedure.input(z.object({
+    id: z.number(),
+    status: z.enum(["draft", "in_progress", "completed", "cancelled"]),
+  })).mutation(async ({ ctx, input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    try {
+      if (input.status === "in_progress") {
+        const { startProductionOrder } = await import("./production-service");
+        await startProductionOrder(db, ctx.tenantId, input.id, ctx.user?.id);
+        return { success: true };
+      }
+      if (input.status === "completed") {
+        const { completeProductionOrder } = await import("./production-service");
+        await completeProductionOrder(db, ctx.tenantId, input.id, ctx.user?.id);
+        return { success: true };
+      }
+      if (input.status === "cancelled") {
+        const { cancelProductionOrder } = await import("./production-service");
+        const r = await cancelProductionOrder(db, ctx.tenantId, input.id);
+        return { success: true, note: r.note };
+      }
+      await db.update(productionOrders).set({ status: input.status }).where(
+        tenantWhere(productionOrders, ctx.tenantId, eq(productionOrders.id, input.id)),
+      );
+      return { success: true };
+    } catch (e: any) {
+      throw new TRPCError({ code: "BAD_REQUEST", message: e?.message || "فشل تحديث الحالة" });
+    }
   }),
 });
 
@@ -1969,7 +4719,10 @@ const inventoryRouter = router({
     list: protectedProcedure.input(z.object({ page: z.number().default(1), limit: z.number().default(20) })).query(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const scope = await loadUserScopeFromCtx(db, ctx.saasUser);
       const offset = (input.page - 1) * input.limit;
+      const scopeFilter = scopeEitherWarehouseFilter(stockTransfers.fromWarehouseId, stockTransfers.toWarehouseId, scope);
+      const whereClause = tenantWhere(stockTransfers, ctx.tenantId, scopeFilter);
       const rows = await db.select({
         id: stockTransfers.id,
         number: stockTransfers.number,
@@ -1978,11 +4731,11 @@ const inventoryRouter = router({
         fromWarehouseName: sql<string>`fw.name`,
         toWarehouseName: sql<string>`tw.name`,
       }).from(stockTransfers)
-        .where(tenantWhere(stockTransfers, ctx.tenantId))
+        .where(whereClause)
         .leftJoin(sql`warehouses fw`, sql`fw.id = ${stockTransfers.fromWarehouseId}`)
         .leftJoin(sql`warehouses tw`, sql`tw.id = ${stockTransfers.toWarehouseId}`)
         .orderBy(desc(stockTransfers.createdAt)).limit(input.limit).offset(offset);
-      const [total] = await db.select({ count: count() }).from(stockTransfers).where(tenantWhere(stockTransfers, ctx.tenantId));
+      const [total] = await db.select({ count: count() }).from(stockTransfers).where(whereClause);
       return { rows, total: total.count };
     }),
     create: protectedProcedure.input(z.object({
@@ -1990,10 +4743,14 @@ const inventoryRouter = router({
       toWarehouseId: z.number(),
       date: z.string(),
       notes: z.string().optional(),
-      items: z.array(z.object({ itemId: z.number(), quantity: z.string() })),
+      items: z.array(z.object({ itemId: z.number(), quantity: z.string(), batchId: z.number().optional() })),
     })).mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      await assertDateNotInClosedPeriod(db, ctx.tenantId, input.date);
+      const scope = await loadUserScopeFromCtx(db, ctx.saasUser);
+      assertWarehouseAccess(scope, input.fromWarehouseId);
+      assertWarehouseAccess(scope, input.toWarehouseId);
       const [countResult] = await db.select({ count: count() }).from(stockTransfers).where(tenantWhere(stockTransfers, ctx.tenantId));
       const number = `ST-${String(countResult.count + 1).padStart(5, "0")}`;
       const [result] = await db.insert(stockTransfers).values(withTenantId(ctx.tenantId, {
@@ -2001,8 +4758,16 @@ const inventoryRouter = router({
         date: input.date as any, notes: input.notes, status: "confirmed",
       }) as any);
       const transferId = (result as any).insertId;
+      const { transferStockBetweenWarehouses } = await import("./inventory-stock");
       for (const item of input.items) {
         await db.insert(stockTransferItems).values(withTenantId(ctx.tenantId, { transferId, ...item }) as any);
+        await transferStockBetweenWarehouses(db, ctx.tenantId, {
+          itemId: item.itemId,
+          quantity: item.quantity,
+          fromWarehouseId: input.fromWarehouseId,
+          toWarehouseId: input.toWarehouseId,
+          batchId: item.batchId,
+        });
       }
       return { success: true, id: transferId, number };
     }),
@@ -2011,7 +4776,9 @@ const inventoryRouter = router({
     list: protectedProcedure.input(z.object({ page: z.number().default(1), limit: z.number().default(20) })).query(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const scope = await loadUserScopeFromCtx(db, ctx.saasUser);
       const offset = (input.page - 1) * input.limit;
+      const whereClause = tenantWhere(inventoryAdjustments, ctx.tenantId, scopeWarehouseFilter(inventoryAdjustments, scope));
       const rows = await db.select({
         id: inventoryAdjustments.id,
         number: inventoryAdjustments.number,
@@ -2020,10 +4787,10 @@ const inventoryRouter = router({
         status: inventoryAdjustments.status,
         warehouseName: warehouses.name,
       }).from(inventoryAdjustments)
-        .where(tenantWhere(inventoryAdjustments, ctx.tenantId))
+        .where(whereClause)
         .leftJoin(warehouses, eq(inventoryAdjustments.warehouseId, warehouses.id))
         .orderBy(desc(inventoryAdjustments.createdAt)).limit(input.limit).offset(offset);
-      const [total] = await db.select({ count: count() }).from(inventoryAdjustments).where(tenantWhere(inventoryAdjustments, ctx.tenantId));
+      const [total] = await db.select({ count: count() }).from(inventoryAdjustments).where(whereClause);
       return { rows, total: total.count };
     }),
     create: protectedProcedure.input(z.object({
@@ -2035,6 +4802,9 @@ const inventoryRouter = router({
     })).mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      await assertDateNotInClosedPeriod(db, ctx.tenantId, input.date);
+      const scope = await loadUserScopeFromCtx(db, ctx.saasUser);
+      assertWarehouseAccess(scope, input.warehouseId);
       const [countResult] = await db.select({ count: count() }).from(inventoryAdjustments).where(tenantWhere(inventoryAdjustments, ctx.tenantId));
       const number = `IA-${String(countResult.count + 1).padStart(5, "0")}`;
       const [result] = await db.insert(inventoryAdjustments).values(withTenantId(ctx.tenantId, {
@@ -2042,10 +4812,25 @@ const inventoryRouter = router({
         reason: input.notes, status: "confirmed",
       }) as any);
       const adjId = (result as any).insertId;
+      const { applyStockMovement, getWarehouseItemQty } = await import("./inventory-stock");
       for (const item of input.items) {
-        await db.insert(inventoryAdjustmentItems).values(withTenantId(ctx.tenantId, { adjustmentId: adjId, ...item }) as any);
-        const delta = input.adjustmentType === "addition" ? `currentStock + ${item.quantity}` : `currentStock - ${item.quantity}`;
-        await db.update(items).set({ currentStock: sql.raw(delta) } as any).where(tenantWhere(items, ctx.tenantId, eq(items.id, item.itemId)));
+        const qty = Number(item.quantity);
+        const currentQty = await getWarehouseItemQty(db, ctx.tenantId, item.itemId, input.warehouseId);
+        const newQty = input.adjustmentType === "addition" ? currentQty + qty : Math.max(0, currentQty - qty);
+        const difference = newQty - currentQty;
+        await db.insert(inventoryAdjustmentItems).values(withTenantId(ctx.tenantId, {
+          adjustmentId: adjId,
+          itemId: item.itemId,
+          currentQty: String(currentQty),
+          newQty: String(newQty),
+          difference: String(difference),
+        }) as any);
+        await applyStockMovement(db, ctx.tenantId, {
+          itemId: item.itemId,
+          quantity: Math.abs(difference),
+          direction: difference >= 0 ? "in" : "out",
+          warehouseId: input.warehouseId,
+        });
       }
       return { success: true, id: adjId, number };
     }),
@@ -2062,35 +4847,64 @@ const statementRouter = router({
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     const [customer] = await db.select().from(customers).where(tenantWhere(customers, ctx.tenantId, eq(customers.id, input.customerId)));
-    // Sales invoices
-    let siConds: any[] = [tenantWhere(salesInvoices, ctx.tenantId, eq(salesInvoices.customerId, input.customerId))];
-    if (input.dateFrom) siConds.push(gte(salesInvoices.date, input.dateFrom as any));
-    if (input.dateTo) siConds.push(lte(salesInvoices.date, input.dateTo as any));
-    const siRows = await db.select({
+    // نجلب كل الحركات ثم نفلتر للعرض — الرصيد الافتتاحي يحتاج ما قبل الفترة أيضاً
+    const siAll = await db.select({
       id: salesInvoices.id, number: salesInvoices.number, date: salesInvoices.date,
       total: salesInvoices.total, paid: salesInvoices.paid, remaining: salesInvoices.remaining,
       status: salesInvoices.status, paymentType: salesInvoices.paymentType,
-    }).from(salesInvoices).where(tenantWhere(salesInvoices, ctx.tenantId, and(...siConds))).orderBy(salesInvoices.date);
-    // Cash transactions for this customer
-    let ctConds: any[] = [tenantWhere(cashTransactions, ctx.tenantId, eq(cashTransactions.customerId, input.customerId))];
-    if (input.dateFrom) ctConds.push(gte(cashTransactions.date, input.dateFrom as any));
-    if (input.dateTo) ctConds.push(lte(cashTransactions.date, input.dateTo as any));
-    const ctRows = await db.select().from(cashTransactions).where(tenantWhere(cashTransactions, ctx.tenantId, and(...ctConds))).orderBy(cashTransactions.date);
-    // Bank transactions for this customer
-    let btConds: any[] = [tenantWhere(bankTransactions, ctx.tenantId, eq(bankTransactions.customerId, input.customerId))];
-    if (input.dateFrom) btConds.push(gte(bankTransactions.date, input.dateFrom as any));
-    if (input.dateTo) btConds.push(lte(bankTransactions.date, input.dateTo as any));
-    const btRows = await db.select().from(bankTransactions).where(tenantWhere(bankTransactions, ctx.tenantId, and(...btConds))).orderBy(bankTransactions.date);
-    // Sales returns
-    let srConds: any[] = [tenantWhere(salesReturns, ctx.tenantId, eq(salesReturns.customerId, input.customerId))];
-    if (input.dateFrom) srConds.push(gte(salesReturns.date, input.dateFrom as any));
-    if (input.dateTo) srConds.push(lte(salesReturns.date, input.dateTo as any));
-    const srRows = await db.select().from(salesReturns).where(tenantWhere(salesReturns, ctx.tenantId, and(...srConds))).orderBy(salesReturns.date);
+    }).from(salesInvoices).where(tenantWhere(salesInvoices, ctx.tenantId, eq(salesInvoices.customerId, input.customerId))).orderBy(salesInvoices.date);
+    const ctAll = await db.select().from(cashTransactions).where(tenantWhere(cashTransactions, ctx.tenantId, eq(cashTransactions.customerId, input.customerId))).orderBy(cashTransactions.date);
+    const btAll = await db.select().from(bankTransactions).where(tenantWhere(bankTransactions, ctx.tenantId, eq(bankTransactions.customerId, input.customerId))).orderBy(bankTransactions.date);
+    const srAll = await db.select().from(salesReturns).where(tenantWhere(salesReturns, ctx.tenantId, eq(salesReturns.customerId, input.customerId))).orderBy(salesReturns.date);
+
+    const inRange = (d: unknown) => {
+      const day = String(d || "").slice(0, 10);
+      if (!day) return false;
+      if (input.dateFrom && day < input.dateFrom) return false;
+      if (input.dateTo && day > input.dateTo) return false;
+      return true;
+    };
+    const siRows = siAll.filter((r) => inRange(r.date));
+    const ctRows = ctAll.filter((r) => inRange(r.date));
+    const btRows = btAll.filter((r) => inRange(r.date));
+    const srRows = srAll.filter((r) => inRange(r.date));
+
     const totalInvoices = siRows.reduce((s, r) => s + parseFloat(r.total || "0"), 0);
     const totalPaid = siRows.reduce((s, r) => s + parseFloat(r.paid || "0"), 0);
     const totalRemaining = siRows.reduce((s, r) => s + parseFloat(r.remaining || "0"), 0);
     const totalReturns = srRows.reduce((s, r) => s + parseFloat(r.total || "0"), 0);
-    return { customer, invoices: siRows, cashTransactions: ctRows, bankTransactions: btRows, returns: srRows, summary: { totalInvoices, totalPaid, totalRemaining, totalReturns } };
+    const { ledger, openingBalance, closingBalance, openingBalanceDate } = finalizeLedger(
+      buildCustomerMovements({
+        invoices: siAll,
+        cashTransactions: ctAll,
+        bankTransactions: btAll,
+        returns: srAll,
+      }),
+      {
+        openingBalance: customer?.openingBalance,
+        openingBalanceDate: customer?.openingBalanceDate,
+        dateFrom: input.dateFrom,
+        dateTo: input.dateTo,
+        mode: "ar",
+      },
+    );
+    return {
+      customer,
+      invoices: siRows,
+      cashTransactions: ctRows,
+      bankTransactions: btRows,
+      returns: srRows,
+      ledger,
+      summary: {
+        totalInvoices,
+        totalPaid,
+        totalRemaining,
+        totalReturns,
+        openingBalance,
+        openingBalanceDate,
+        closingBalance,
+      },
+    };
   }),
   supplier: protectedProcedure.input(z.object({
     supplierId: z.number(),
@@ -2100,32 +4914,63 @@ const statementRouter = router({
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     const [supplier] = await db.select().from(suppliers).where(tenantWhere(suppliers, ctx.tenantId, eq(suppliers.id, input.supplierId)));
-    let piConds: any[] = [tenantWhere(purchaseInvoices, ctx.tenantId, eq(purchaseInvoices.supplierId, input.supplierId))];
-    if (input.dateFrom) piConds.push(gte(purchaseInvoices.date, input.dateFrom as any));
-    if (input.dateTo) piConds.push(lte(purchaseInvoices.date, input.dateTo as any));
-    const piRows = await db.select({
+    const piAll = await db.select({
       id: purchaseInvoices.id, number: purchaseInvoices.number, date: purchaseInvoices.date,
       total: purchaseInvoices.total, paid: purchaseInvoices.paid, remaining: purchaseInvoices.remaining,
       status: purchaseInvoices.status, paymentType: purchaseInvoices.paymentType,
-    }).from(purchaseInvoices).where(tenantWhere(purchaseInvoices, ctx.tenantId, and(...piConds))).orderBy(purchaseInvoices.date);
-    let ctConds: any[] = [tenantWhere(cashTransactions, ctx.tenantId, eq(cashTransactions.supplierId, input.supplierId))];
-    if (input.dateFrom) ctConds.push(gte(cashTransactions.date, input.dateFrom as any));
-    if (input.dateTo) ctConds.push(lte(cashTransactions.date, input.dateTo as any));
-    const ctRows = await db.select().from(cashTransactions).where(tenantWhere(cashTransactions, ctx.tenantId, and(...ctConds))).orderBy(cashTransactions.date);
-    // Bank transactions for this supplier
-    let btConds: any[] = [tenantWhere(bankTransactions, ctx.tenantId, eq(bankTransactions.supplierId, input.supplierId))];
-    if (input.dateFrom) btConds.push(gte(bankTransactions.date, input.dateFrom as any));
-    if (input.dateTo) btConds.push(lte(bankTransactions.date, input.dateTo as any));
-    const btRows = await db.select().from(bankTransactions).where(tenantWhere(bankTransactions, ctx.tenantId, and(...btConds))).orderBy(bankTransactions.date);
-    let prConds: any[] = [tenantWhere(purchaseReturns, ctx.tenantId, eq(purchaseReturns.supplierId, input.supplierId))];
-    if (input.dateFrom) prConds.push(gte(purchaseReturns.date, input.dateFrom as any));
-    if (input.dateTo) prConds.push(lte(purchaseReturns.date, input.dateTo as any));
-    const prRows = await db.select().from(purchaseReturns).where(tenantWhere(purchaseReturns, ctx.tenantId, and(...prConds))).orderBy(purchaseReturns.date);
+    }).from(purchaseInvoices).where(tenantWhere(purchaseInvoices, ctx.tenantId, eq(purchaseInvoices.supplierId, input.supplierId))).orderBy(purchaseInvoices.date);
+    const ctAll = await db.select().from(cashTransactions).where(tenantWhere(cashTransactions, ctx.tenantId, eq(cashTransactions.supplierId, input.supplierId))).orderBy(cashTransactions.date);
+    const btAll = await db.select().from(bankTransactions).where(tenantWhere(bankTransactions, ctx.tenantId, eq(bankTransactions.supplierId, input.supplierId))).orderBy(bankTransactions.date);
+    const prAll = await db.select().from(purchaseReturns).where(tenantWhere(purchaseReturns, ctx.tenantId, eq(purchaseReturns.supplierId, input.supplierId))).orderBy(purchaseReturns.date);
+
+    const inRange = (d: unknown) => {
+      const day = String(d || "").slice(0, 10);
+      if (!day) return false;
+      if (input.dateFrom && day < input.dateFrom) return false;
+      if (input.dateTo && day > input.dateTo) return false;
+      return true;
+    };
+    const piRows = piAll.filter((r) => inRange(r.date));
+    const ctRows = ctAll.filter((r) => inRange(r.date));
+    const btRows = btAll.filter((r) => inRange(r.date));
+    const prRows = prAll.filter((r) => inRange(r.date));
+
     const totalInvoices = piRows.reduce((s, r) => s + parseFloat(r.total || "0"), 0);
     const totalPaid = piRows.reduce((s, r) => s + parseFloat(r.paid || "0"), 0);
     const totalRemaining = piRows.reduce((s, r) => s + parseFloat(r.remaining || "0"), 0);
     const totalReturns = prRows.reduce((s, r) => s + parseFloat(r.total || "0"), 0);
-    return { supplier, invoices: piRows, cashTransactions: ctRows, bankTransactions: btRows, returns: prRows, summary: { totalInvoices, totalPaid, totalRemaining, totalReturns } };
+    const { ledger, openingBalance, closingBalance, openingBalanceDate } = finalizeLedger(
+      buildSupplierMovements({
+        invoices: piAll,
+        cashTransactions: ctAll,
+        bankTransactions: btAll,
+        returns: prAll,
+      }),
+      {
+        openingBalance: supplier?.openingBalance,
+        openingBalanceDate: supplier?.openingBalanceDate,
+        dateFrom: input.dateFrom,
+        dateTo: input.dateTo,
+        mode: "ap",
+      },
+    );
+    return {
+      supplier,
+      invoices: piRows,
+      cashTransactions: ctRows,
+      bankTransactions: btRows,
+      returns: prRows,
+      ledger,
+      summary: {
+        totalInvoices,
+        totalPaid,
+        totalRemaining,
+        totalReturns,
+        openingBalance,
+        openingBalanceDate,
+        closingBalance,
+      },
+    };
   }),
 });
 
@@ -2137,6 +4982,21 @@ const saasRouter = router({
     password: z.string().min(6),
     tenantSlug: z.string().optional(),
   })).mutation(async ({ input, ctx }) => {
+    const ip = clientIp(ctx.req);
+    const emailKey = input.email.toLowerCase().trim();
+    try {
+      assertRateLimit(`login:ip:${ip}`, { limit: 30, windowMs: 15 * 60 * 1000 });
+      assertRateLimit(`login:email:${emailKey}`, { limit: 10, windowMs: 15 * 60 * 1000 });
+    } catch (e) {
+      if (e instanceof RateLimitError) {
+        throw new TRPCError({
+          code: "TOO_MANY_REQUESTS",
+          message: `محاولات كثيرة — أعد المحاولة بعد ${e.retryAfterSec} ثانية`,
+        });
+      }
+      throw e;
+    }
+
     const user = await getAppUserByEmail(input.email);
     if (!user) throw new TRPCError({ code: "UNAUTHORIZED", message: "البريد الإلكتروني أو كلمة المرور غير صحيحة" });
     if (!user.isActive) throw new TRPCError({ code: "FORBIDDEN", message: "الحساب موقوف، تواصل مع الإدارة" });
@@ -2146,8 +5006,19 @@ const saasRouter = router({
     if (input.tenantSlug && user.role !== "superadmin") {
       const { getTenantBySlug } = await import("./tenant");
       const tenant = await getTenantBySlug(input.tenantSlug);
-      if (!tenant || tenant.id !== user.tenantId) {
+      if (!tenant || !tenant.isActive) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "رابط الشركة غير صالح أو موقوف" });
+      }
+      if (tenant.id !== user.tenantId) {
         throw new TRPCError({ code: "FORBIDDEN", message: "هذا الحساب غير مرتبط بهذه الشركة" });
+      }
+    }
+
+    if (input.tenantSlug && user.role === "superadmin") {
+      const { getTenantBySlug } = await import("./tenant");
+      const tenant = await getTenantBySlug(input.tenantSlug);
+      if (!tenant || !tenant.isActive) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "رابط الشركة غير صالح أو موقوف" });
       }
     }
 
@@ -2171,9 +5042,21 @@ const saasRouter = router({
       tenantSlug,
     });
     const cookieOptions = getSessionCookieOptions(ctx.req);
-    ctx.res.cookie(SAAS_COOKIE_NAME, token, { ...cookieOptions, maxAge: 365 * 24 * 60 * 60 * 1000 });
+    ctx.res.cookie(SAAS_COOKIE_NAME, token, { ...cookieOptions, maxAge: SESSION_MAX_AGE_MS });
     const db = await getDb();
     if (db) await db.update(appUsers).set({ lastLoginAt: new Date() }).where(eq(appUsers.id, user.id));
+    try {
+      if (user.tenantId) {
+        const { logUserActivity } = await import("./user-activity");
+        await logUserActivity(db, {
+          tenantId: user.tenantId,
+          saasUser: { id: user.id, name: user.name, email: user.email },
+        }, {
+          action: "تسجيل دخول",
+          details: `الدخول · ${user.email}${tenantSlug ? ` · ${tenantSlug}` : ""}`,
+        });
+      }
+    } catch { /* ignore */ }
     return {
       success: true,
       user: { id: user.id, name: user.name, email: user.email, role: user.role, companyName: user.companyName },
@@ -2181,8 +5064,33 @@ const saasRouter = router({
     };
   }),
 
+  // معلومات الشركة من الرابط العام (صفحة الدخول الخاصة)
+  resolveTenant: publicProcedure.input(z.object({
+    slug: z.string().min(1),
+  })).query(async ({ input }) => {
+    const { getTenantBySlug } = await import("./tenant");
+    const tenant = await getTenantBySlug(input.slug);
+    if (!tenant || !tenant.isActive) return null;
+    return { slug: tenant.slug, name: tenant.name };
+  }),
+
   // تسجيل الخروج
-  logout: publicProcedure.mutation(({ ctx }) => {
+  logout: publicProcedure.mutation(async ({ ctx }) => {
+    try {
+      const tenantId = ctx.tenantId ?? ctx.saasUser?.tenantId ?? null;
+      if (tenantId) {
+        const { logUserActivity } = await import("./user-activity");
+        const db = await getDb();
+        await logUserActivity(db, {
+          tenantId,
+          saasUser: ctx.saasUser,
+          user: ctx.user,
+        }, {
+          action: "تسجيل خروج",
+          details: ctx.saasUser?.email ? `الخروج · ${ctx.saasUser.email}` : "الخروج",
+        });
+      }
+    } catch { /* ignore */ }
     const cookieOptions = getSessionCookieOptions(ctx.req);
     ctx.res.clearCookie(SAAS_COOKIE_NAME, { ...cookieOptions, maxAge: -1 });
     return { success: true };
@@ -2218,12 +5126,21 @@ const saasRouter = router({
         .limit(1);
       latestSub = expired || null;
     }
-    // Calculate days remaining
+    // Calculate days remaining + banner display
     let daysRemaining: number | null = null;
+    let subscriptionBanner = null;
     if (sub?.endDate) {
       const end = new Date(sub.endDate);
       const now = new Date();
+      end.setHours(0, 0, 0, 0);
+      now.setHours(0, 0, 0, 0);
       daysRemaining = Math.ceil((end.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+      subscriptionBanner = buildSubscriptionBanner({
+        status: sub.status,
+        endDate: String(sub.endDate),
+        durationDays: sub.planDurationDays ?? null,
+        planName: sub.planName,
+      });
     }
     let tenantSlug = ctx.tenantSlug;
     if (!tenantSlug && user.tenantId) {
@@ -2231,6 +5148,14 @@ const saasRouter = router({
       const tenant = await getTenantById(user.tenantId);
       tenantSlug = tenant?.slug ?? null;
     }
+    const scope = db
+      ? userScopeFromRow({
+          role: user.role,
+          scopeBranchIds: user.scopeBranchIds,
+          scopeWarehouseIds: user.scopeWarehouseIds,
+        })
+      : { branchIds: null, warehouseIds: null };
+
     return {
       id: user.id,
       name: user.name,
@@ -2238,22 +5163,40 @@ const saasRouter = router({
       role: user.role,
       companyName: user.companyName,
       phone: user.phone,
+      jobTitle: user.jobTitle,
       subscription: latestSub,
       hasActiveSubscription: Boolean(sub),
       daysRemaining,
+      subscriptionBanner,
       tenantSlug,
       tenantId: user.tenantId,
+      scopeBranchIds: scope.branchIds,
+      scopeWarehouseIds: scope.warehouseIds,
     };
+  }),
+
+  updateProfile: publicProcedure.input(z.object({
+    name: z.string().min(1),
+    phone: z.string().optional(),
+    jobTitle: z.string().optional(),
+  })).mutation(async ({ ctx, input }) => {
+    const cookies = ctx.req.headers.cookie || "";
+    const match = cookies.match(new RegExp(`${SAAS_COOKIE_NAME}=([^;]+)`));
+    const session = await verifySaasToken(match?.[1]);
+    if (!session) throw new TRPCError({ code: "UNAUTHORIZED", message: "يجب تسجيل الدخول" });
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    await db.update(appUsers).set({
+      name: input.name,
+      phone: input.phone ?? null,
+      jobTitle: input.jobTitle ?? null,
+    }).where(eq(appUsers.id, session.userId));
+    return { success: true };
   }),
 
   // فتح برنامج مشترك (سوبر أدمن)
   impersonateTenant: publicProcedure.input(z.object({ userId: z.number() })).mutation(async ({ ctx, input }) => {
-    const cookies = ctx.req.headers.cookie || "";
-    const match = cookies.match(new RegExp(`${SAAS_COOKIE_NAME}=([^;]+)`));
-    const session = await verifySaasToken(match?.[1]);
-    if (!session || session.role !== "superadmin") {
-      throw new TRPCError({ code: "FORBIDDEN", message: "غير مصرح" });
-    }
+    const { session } = await requireSuperAdminFromRequest(ctx.req);
     const target = await getAppUserById(input.userId);
     if (!target?.tenantId) {
       throw new TRPCError({ code: "NOT_FOUND", message: "الشركة غير موجودة" });
@@ -2271,19 +5214,69 @@ const saasRouter = router({
       impersonatorId: session.userId,
     });
     const cookieOptions = getSessionCookieOptions(ctx.req);
-    ctx.res.cookie(SAAS_COOKIE_NAME, token, { ...cookieOptions, maxAge: 365 * 24 * 60 * 60 * 1000 });
+    ctx.res.cookie(SAAS_COOKIE_NAME, token, { ...cookieOptions, maxAge: SESSION_MAX_AGE_MS });
     return { redirectUrl: `/${tenant.slug}/`, tenantSlug: tenant.slug, companyName: tenant.name };
+  }),
+
+  // إعدادات حماية التسجيل (Turnstile اختياري — التسجيل يبقى مفتوحاً للعملاء)
+  captchaConfig: publicProcedure.query(async () => {
+    const { turnstileSiteKey, turnstileRequired } = await import("./turnstile");
+    const siteKey = turnstileSiteKey();
+    return {
+      provider: siteKey ? ("turnstile" as const) : ("none" as const),
+      siteKey,
+      required: turnstileRequired(),
+    };
   }),
 
   // إنشاء حساب جديد
   register: publicProcedure.input(z.object({
     name: z.string().min(2),
     email: z.string().email(),
-    password: z.string().min(6),
+    password: z.string().min(8, "كلمة المرور 8 أحرف على الأقل"),
     companyName: z.string().min(2, "اسم الشركة مطلوب"),
     phone: z.string().optional(),
     couponCode: z.string().optional(),
-  })).mutation(async ({ input }) => {
+    /** Cloudflare Turnstile token */
+    captchaToken: z.string().optional(),
+    /** Honeypot — يجب أن يبقى فارغاً */
+    website: z.string().optional(),
+    /** Checkbox «لست روبوتاً» عند غياب Turnstile */
+    humanConfirmed: z.boolean().optional(),
+  })).mutation(async ({ input, ctx }) => {
+    const ip = clientIp(ctx.req);
+
+    // Honeypot: البوتات غالباً تملأ الحقل المخفي
+    if (String(input.website || "").trim()) {
+      throw new TRPCError({ code: "BAD_REQUEST", message: "تعذر إتمام التسجيل" });
+    }
+
+    try {
+      assertRateLimit(`register:ip:${ip}`, { limit: 8, windowMs: 60 * 60 * 1000 });
+      assertRateLimit(`register:email:${input.email.toLowerCase().trim()}`, { limit: 3, windowMs: 60 * 60 * 1000 });
+    } catch (e) {
+      if (e instanceof RateLimitError) {
+        throw new TRPCError({
+          code: "TOO_MANY_REQUESTS",
+          message: `محاولات تسجيل كثيرة — أعد المحاولة بعد ${e.retryAfterSec} ثانية`,
+        });
+      }
+      throw e;
+    }
+
+    const { verifyTurnstileToken, turnstileSecretKey, turnstileRequired } = await import("./turnstile");
+    if (turnstileSecretKey() || turnstileRequired()) {
+      const captcha = await verifyTurnstileToken({ token: input.captchaToken, ip });
+      if (!captcha.ok) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: captcha.message });
+      }
+    } else if (!input.humanConfirmed) {
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: "أكّد أنك لست روبوتاً قبل إنشاء الحساب",
+      });
+    }
+
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     const existing = await getAppUserByEmail(input.email);
@@ -2355,10 +5348,7 @@ const saasRouter = router({
     search: z.string().optional(),
   })).query(async ({ ctx, input }) => {
     // Verify superadmin
-    const cookies = ctx.req.headers.cookie || "";
-    const match = cookies.match(new RegExp(`${SAAS_COOKIE_NAME}=([^;]+)`));
-    const session = await verifySaasToken(match?.[1]);
-    if (!session || session.role !== "superadmin") throw new TRPCError({ code: "FORBIDDEN", message: "غير مصرح" });
+    const { session } = await requireSuperAdminFromRequest(ctx.req);
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     const offset = (input.page - 1) * input.limit;
@@ -2398,10 +5388,7 @@ const saasRouter = router({
     phone: z.string().optional(),
     newPassword: z.string().min(6).optional(),
   })).mutation(async ({ ctx, input }) => {
-    const cookies = ctx.req.headers.cookie || "";
-    const match = cookies.match(new RegExp(`${SAAS_COOKIE_NAME}=([^;]+)`));
-    const session = await verifySaasToken(match?.[1]);
-    if (!session || session.role !== "superadmin") throw new TRPCError({ code: "FORBIDDEN", message: "غير مصرح" });
+    const { session } = await requireSuperAdminFromRequest(ctx.req);
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     if (input.email) {
@@ -2424,10 +5411,7 @@ const saasRouter = router({
 
   // حذف مستخدم
   deleteUser: publicProcedure.input(z.object({ id: z.number() })).mutation(async ({ ctx, input }) => {
-    const cookies = ctx.req.headers.cookie || "";
-    const match = cookies.match(new RegExp(`${SAAS_COOKIE_NAME}=([^;]+)`));
-    const session = await verifySaasToken(match?.[1]);
-    if (!session || session.role !== "superadmin") throw new TRPCError({ code: "FORBIDDEN", message: "غير مصرح" });
+    const { session } = await requireSuperAdminFromRequest(ctx.req);
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     const user = await getAppUserById(input.id);
@@ -2441,15 +5425,54 @@ const saasRouter = router({
   listSubscriptions: publicProcedure.input(z.object({
     page: z.number().default(1),
     limit: z.number().default(20),
+    status: z.enum(["all", "active", "trial", "expired", "expired_trial", "cancelled", "suspended"]).default("all"),
+    search: z.string().optional(),
   })).query(async ({ ctx, input }) => {
-    const cookies = ctx.req.headers.cookie || "";
-    const match = cookies.match(new RegExp(`${SAAS_COOKIE_NAME}=([^;]+)`));
-    const session = await verifySaasToken(match?.[1]);
-    if (!session || session.role !== "superadmin") throw new TRPCError({ code: "FORBIDDEN", message: "غير مصرح" });
+    const { session } = await requireSuperAdminFromRequest(ctx.req);
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    const today = todayDateOnly();
     const offset = (input.page - 1) * input.limit;
-    const rows = await db.select({
+
+    const statusFilter = (() => {
+      switch (input.status) {
+        case "active":
+          return and(gte(subscriptions.endDate, today as any), eq(subscriptions.status, "active"));
+        case "trial":
+          return and(
+            gte(subscriptions.endDate, today as any),
+            or(eq(subscriptions.status, "trial"), eq(subscriptions.status, "expired")),
+          );
+        case "expired":
+          return and(
+            lt(subscriptions.endDate, today as any),
+            inArray(subscriptions.status, ["trial", "active", "expired"]),
+          );
+        case "expired_trial":
+          return and(lt(subscriptions.endDate, today as any), eq(subscriptions.status, "trial"));
+        case "cancelled":
+          return eq(subscriptions.status, "cancelled");
+        case "suspended":
+          return eq(subscriptions.status, "suspended");
+        default:
+          return undefined;
+      }
+    })();
+
+    const searchFilter = input.search?.trim()
+      ? or(
+          like(appUsers.name, `%${input.search.trim()}%`),
+          like(appUsers.email, `%${input.search.trim()}%`),
+          like(subscriptionPlans.nameAr, `%${input.search.trim()}%`),
+        )
+      : undefined;
+
+    const whereClause = and(
+      ...(statusFilter ? [statusFilter] : []),
+      ...(searchFilter ? [searchFilter] : []),
+    );
+
+    const baseQuery = db.select({
       id: subscriptions.id,
       status: subscriptions.status,
       startDate: subscriptions.startDate,
@@ -2463,19 +5486,36 @@ const saasRouter = router({
       planName: subscriptionPlans.nameAr,
       planPrice: subscriptionPlans.price,
     })
-    .from(subscriptions)
-    .leftJoin(appUsers, eq(subscriptions.userId, appUsers.id))
-    .leftJoin(subscriptionPlans, eq(subscriptions.planId, subscriptionPlans.id))
-    .orderBy(desc(subscriptions.createdAt))
-    .limit(input.limit).offset(offset);
-    const [total] = await db.select({ count: count() }).from(subscriptions);
-    return {
-      rows: rows.map((r) => ({
+      .from(subscriptions)
+      .leftJoin(appUsers, eq(subscriptions.userId, appUsers.id))
+      .leftJoin(subscriptionPlans, eq(subscriptions.planId, subscriptionPlans.id));
+
+    const rows = await (whereClause ? baseQuery.where(whereClause) : baseQuery)
+      .orderBy(desc(subscriptions.endDate))
+      .limit(input.limit)
+      .offset(offset);
+
+    const countQuery = db.select({ count: count() }).from(subscriptions)
+      .leftJoin(appUsers, eq(subscriptions.userId, appUsers.id))
+      .leftJoin(subscriptionPlans, eq(subscriptions.planId, subscriptionPlans.id));
+    const [totalRow] = await (whereClause ? countQuery.where(whereClause) : countQuery);
+
+    const mapRow = (r: typeof rows[number]) => {
+      const endDate = toDateOnly(r.endDate);
+      const startDate = toDateOnly(r.startDate);
+      const effectiveStatus = effectiveSubscriptionStatus(String(r.status), endDate, today);
+      return {
         ...r,
-        startDate: r.startDate ? String(r.startDate).split("T")[0] : "",
-        endDate: r.endDate ? String(r.endDate).split("T")[0] : "",
-      })),
-      total: total.count,
+        startDate,
+        endDate,
+        effectiveStatus,
+        isExpired: endDate < today && r.status !== "cancelled" && r.status !== "suspended",
+      };
+    };
+
+    return {
+      rows: rows.map(mapRow),
+      total: totalRow.count,
     };
   }),
 
@@ -2489,16 +5529,17 @@ const saasRouter = router({
     endDate: z.string(),
     notes: z.string().optional(),
   })).mutation(async ({ ctx, input }) => {
-    const cookies = ctx.req.headers.cookie || "";
-    const match = cookies.match(new RegExp(`${SAAS_COOKIE_NAME}=([^;]+)`));
-    const session = await verifySaasToken(match?.[1]);
-    if (!session || session.role !== "superadmin") throw new TRPCError({ code: "FORBIDDEN", message: "غير مصرح" });
+    const { session } = await requireSuperAdminFromRequest(ctx.req);
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    const today = todayDateOnly();
+    const status = normalizeSubscriptionStatusForSave(input.status, input.endDate, today);
+    const [user] = await db.select({ tenantId: appUsers.tenantId }).from(appUsers).where(eq(appUsers.id, input.userId)).limit(1);
     const data = {
       userId: input.userId,
+      tenantId: user?.tenantId ?? null,
       planId: input.planId,
-      status: input.status,
+      status,
       startDate: input.startDate as any,
       endDate: input.endDate as any,
       notes: input.notes || null,
@@ -2509,6 +5550,38 @@ const saasRouter = router({
       await db.insert(subscriptions).values(data);
     }
     return { success: true };
+  }),
+
+  // تجديد فترة تجريبية لاشتراك منتهٍ
+  renewTrial: publicProcedure.input(z.object({
+    subscriptionId: z.number(),
+    days: z.number().min(1).max(365).default(14),
+    notes: z.string().optional(),
+  })).mutation(async ({ ctx, input }) => {
+    const { session } = await requireSuperAdminFromRequest(ctx.req);
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+    const [sub] = await db.select().from(subscriptions).where(eq(subscriptions.id, input.subscriptionId)).limit(1);
+    if (!sub) throw new TRPCError({ code: "NOT_FOUND", message: "الاشتراك غير موجود" });
+
+    const [user] = await db.select({ tenantId: appUsers.tenantId }).from(appUsers).where(eq(appUsers.id, sub.userId)).limit(1);
+    const [trialPlan] = await db.select().from(subscriptionPlans).where(eq(subscriptionPlans.name, "trial")).limit(1);
+    const startDate = todayDateOnly();
+    const endDate = toDateOnly(new Date(Date.now() + input.days * 24 * 60 * 60 * 1000));
+    const noteSuffix = `تجديد تجربة ${input.days} يوم (${startDate})`;
+    const notes = sub.notes ? `${sub.notes}\n${noteSuffix}` : noteSuffix;
+
+    await db.update(subscriptions).set({
+      status: "trial",
+      tenantId: sub.tenantId ?? user?.tenantId ?? null,
+      planId: trialPlan?.id ?? sub.planId,
+      startDate: startDate as any,
+      endDate: endDate as any,
+      notes: input.notes?.trim() || notes,
+    }).where(eq(subscriptions.id, input.subscriptionId));
+
+    return { success: true, startDate, endDate, message: `تم تجديد التجربة حتى ${endDate}` };
   }),
 
   // قائمة الخطط
@@ -2531,10 +5604,7 @@ const saasRouter = router({
     features: z.string().optional(),
     isActive: z.boolean().default(true),
   })).mutation(async ({ ctx, input }) => {
-    const cookies = ctx.req.headers.cookie || "";
-    const match = cookies.match(new RegExp(`${SAAS_COOKIE_NAME}=([^;]+)`));
-    const session = await verifySaasToken(match?.[1]);
-    if (!session || session.role !== "superadmin") throw new TRPCError({ code: "FORBIDDEN", message: "غير مصرح" });
+    const { session } = await requireSuperAdminFromRequest(ctx.req);
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     const data = {
@@ -2553,10 +5623,7 @@ const saasRouter = router({
 
   // حذف اشتراك
   deleteSubscription: publicProcedure.input(z.object({ id: z.number() })).mutation(async ({ ctx, input }) => {
-    const cookies = ctx.req.headers.cookie || "";
-    const match = cookies.match(new RegExp(`${SAAS_COOKIE_NAME}=([^;]+)`));
-    const session = await verifySaasToken(match?.[1]);
-    if (!session || session.role !== "superadmin") throw new TRPCError({ code: "FORBIDDEN", message: "غير مصرح" });
+    const { session } = await requireSuperAdminFromRequest(ctx.req);
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     await db.delete(subscriptions).where(eq(subscriptions.id, input.id));
@@ -2565,10 +5632,7 @@ const saasRouter = router({
 
   // حذف خطة
   deletePlan: publicProcedure.input(z.object({ id: z.number() })).mutation(async ({ ctx, input }) => {
-    const cookies = ctx.req.headers.cookie || "";
-    const match = cookies.match(new RegExp(`${SAAS_COOKIE_NAME}=([^;]+)`));
-    const session = await verifySaasToken(match?.[1]);
-    if (!session || session.role !== "superadmin") throw new TRPCError({ code: "FORBIDDEN", message: "غير مصرح" });
+    const { session } = await requireSuperAdminFromRequest(ctx.req);
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     // Check no active subscriptions use this plan
@@ -2580,10 +5644,7 @@ const saasRouter = router({
 
   // ===================== COUPON APIs =====================
   listCoupons: publicProcedure.query(async ({ ctx }) => {
-    const cookies = ctx.req.headers.cookie || "";
-    const match = cookies.match(new RegExp(`${SAAS_COOKIE_NAME}=([^;]+)`));
-    const session = await verifySaasToken(match?.[1]);
-    if (!session || session.role !== "superadmin") throw new TRPCError({ code: "FORBIDDEN" });
+    const { session } = await requireSuperAdminFromRequest(ctx.req);
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     return db.select().from(discountCoupons).orderBy(desc(discountCoupons.createdAt));
@@ -2597,10 +5658,7 @@ const saasRouter = router({
     maxUses: z.number().positive().optional(),
     expiresAt: z.string().optional(),
   })).mutation(async ({ ctx, input }) => {
-    const cookies = ctx.req.headers.cookie || "";
-    const match = cookies.match(new RegExp(`${SAAS_COOKIE_NAME}=([^;]+)`));
-    const session = await verifySaasToken(match?.[1]);
-    if (!session || session.role !== "superadmin") throw new TRPCError({ code: "FORBIDDEN" });
+    const { session } = await requireSuperAdminFromRequest(ctx.req);
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     await db.insert(discountCoupons).values({
@@ -2621,10 +5679,7 @@ const saasRouter = router({
     expiresAt: z.string().optional().nullable(),
     description: z.string().optional(),
   })).mutation(async ({ ctx, input }) => {
-    const cookies = ctx.req.headers.cookie || "";
-    const match = cookies.match(new RegExp(`${SAAS_COOKIE_NAME}=([^;]+)`));
-    const session = await verifySaasToken(match?.[1]);
-    if (!session || session.role !== "superadmin") throw new TRPCError({ code: "FORBIDDEN" });
+    const { session } = await requireSuperAdminFromRequest(ctx.req);
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     const upd: any = {};
@@ -2637,10 +5692,7 @@ const saasRouter = router({
   }),
 
   deleteCoupon: publicProcedure.input(z.object({ id: z.number() })).mutation(async ({ ctx, input }) => {
-    const cookies = ctx.req.headers.cookie || "";
-    const match = cookies.match(new RegExp(`${SAAS_COOKIE_NAME}=([^;]+)`));
-    const session = await verifySaasToken(match?.[1]);
-    if (!session || session.role !== "superadmin") throw new TRPCError({ code: "FORBIDDEN" });
+    const { session } = await requireSuperAdminFromRequest(ctx.req);
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     await db.delete(discountCoupons).where(eq(discountCoupons.id, input.id));
@@ -2671,14 +5723,19 @@ const saasRouter = router({
 
   // ===================== COMPANY PROFILE APIs =====================
   getCompanyProfile: publicProcedure.query(async ({ ctx }) => {
-    // Require valid SaaS session
-    const cookies = ctx.req.headers.cookie || "";
-    const match = cookies.match(new RegExp(`${SAAS_COOKIE_NAME}=([^;]+)`));
-    const session = await verifySaasToken(match?.[1]);
+    const session = await verifySaasToken(getSaasTokenFromRequest(ctx.req));
     if (!session) throw new TRPCError({ code: "UNAUTHORIZED", message: "غير مصرح" });
+    const appUser = await getAppUserById(session.userId);
+    if (!appUser?.isActive) throw new TRPCError({ code: "UNAUTHORIZED", message: "غير مصرح" });
+    const tenantId = appUser.tenantId ?? session.tenantId;
+    if (!tenantId) throw new TRPCError({ code: "FORBIDDEN", message: "الحساب غير مرتبط بشركة" });
     const db = await getDb();
     if (!db) return null;
-    const [profile] = await db.select().from(companyProfile).limit(1);
+    const [profile] = await db
+      .select()
+      .from(companyProfile)
+      .where(eq(companyProfile.tenantId, tenantId))
+      .limit(1);
     return profile || null;
   }),
 
@@ -2697,29 +5754,39 @@ const saasRouter = router({
     commercialRegister: z.string().optional(),
     currency: z.string().optional(),
     invoiceFooter: z.string().optional(),
+    defaultPrintTemplate: z.enum([
+      "standard-a4",
+      "professional-a4",
+      "bilingual-a4",
+      "compact-a5",
+      "thermal",
+      "thermal-58",
+    ]).optional(),
   })).mutation(async ({ ctx, input }) => {
-    // Require valid SaaS session
-    const cookies = ctx.req.headers.cookie || "";
-    const match = cookies.match(new RegExp(`${SAAS_COOKIE_NAME}=([^;]+)`));
-    const session = await verifySaasToken(match?.[1]);
+    const session = await verifySaasToken(getSaasTokenFromRequest(ctx.req));
     if (!session) throw new TRPCError({ code: "UNAUTHORIZED", message: "غير مصرح" });
+    const appUser = await getAppUserById(session.userId);
+    if (!appUser?.isActive) throw new TRPCError({ code: "UNAUTHORIZED", message: "غير مصرح" });
+    const tenantId = appUser.tenantId ?? session.tenantId;
+    if (!tenantId) throw new TRPCError({ code: "FORBIDDEN", message: "الحساب غير مرتبط بشركة" });
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-    const [existing] = await db.select({ id: companyProfile.id }).from(companyProfile).limit(1);
+    const [existing] = await db
+      .select({ id: companyProfile.id })
+      .from(companyProfile)
+      .where(eq(companyProfile.tenantId, tenantId))
+      .limit(1);
     if (existing) {
-      await db.update(companyProfile).set(input).where(eq(companyProfile.id, existing.id));
+      await db.update(companyProfile).set(input).where(and(eq(companyProfile.id, existing.id), eq(companyProfile.tenantId, tenantId)));
     } else {
-      await db.insert(companyProfile).values(input);
+      await db.insert(companyProfile).values({ ...input, tenantId });
     }
     return { success: true };
   }),
 
   // ===================== SUBSCRIPTION REPORT =====================
   subscriptionReport: publicProcedure.query(async ({ ctx }) => {
-    const cookies = ctx.req.headers.cookie || "";
-    const match = cookies.match(new RegExp(`${SAAS_COOKIE_NAME}=([^;]+)`));
-    const session = await verifySaasToken(match?.[1]);
-    if (!session || session.role !== "superadmin") throw new TRPCError({ code: "FORBIDDEN" });
+    const { session } = await requireSuperAdminFromRequest(ctx.req);
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     // Monthly new subscriptions (last 6 months)
@@ -2769,10 +5836,7 @@ const saasRouter = router({
 
   // إحصائيات السوبر أدمن
   adminStats: publicProcedure.query(async ({ ctx }) => {
-    const cookies = ctx.req.headers.cookie || "";
-    const match = cookies.match(new RegExp(`${SAAS_COOKIE_NAME}=([^;]+)`));
-    const session = await verifySaasToken(match?.[1]);
-    if (!session || session.role !== "superadmin") throw new TRPCError({ code: "FORBIDDEN", message: "غير مصرح" });
+    const { session } = await requireSuperAdminFromRequest(ctx.req);
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     const [totalUsers] = await db.select({ count: count() }).from(appUsers);
@@ -2782,6 +5846,13 @@ const saasRouter = router({
       .where(and(gte(subscriptions.endDate, today as any), eq(subscriptions.status, "active")));
     const [trialSubs] = await db.select({ count: count() }).from(subscriptions)
       .where(and(gte(subscriptions.endDate, today as any), eq(subscriptions.status, "trial")));
+    const [expiredSubs] = await db.select({ count: count() }).from(subscriptions)
+      .where(and(
+        lt(subscriptions.endDate, today as any),
+        inArray(subscriptions.status, ["trial", "active", "expired"]),
+      ));
+    const [expiredTrialSubs] = await db.select({ count: count() }).from(subscriptions)
+      .where(and(lt(subscriptions.endDate, today as any), eq(subscriptions.status, "trial")));
     const [totalPlans] = await db.select({ count: count() }).from(subscriptionPlans);
     const [openTickets] = await db.select({ count: count() }).from(supportTickets).where(eq(supportTickets.status, "open"));
     return {
@@ -2789,6 +5860,8 @@ const saasRouter = router({
       activeUsers: activeUsers.count,
       activeSubscriptions: activeSubs.count,
       trialSubscriptions: trialSubs.count,
+      expiredSubscriptions: expiredSubs.count,
+      expiredTrialSubscriptions: expiredTrialSubs.count,
       totalPlans: totalPlans.count,
       openTickets: openTickets.count,
     };
@@ -2840,10 +5913,7 @@ const saasRouter = router({
     page: z.number().default(1),
     limit: z.number().default(20),
   })).query(async ({ ctx, input }) => {
-    const cookies = ctx.req.headers.cookie || "";
-    const match = cookies.match(new RegExp(`${SAAS_COOKIE_NAME}=([^;]+)`));
-    const session = await verifySaasToken(match?.[1]);
-    if (!session || session.role !== "superadmin") throw new TRPCError({ code: "FORBIDDEN" });
+    const { session } = await requireSuperAdminFromRequest(ctx.req);
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     const offset = (input.page - 1) * input.limit;
@@ -2858,10 +5928,7 @@ const saasRouter = router({
 
   // تصدير جميع الاشتراكات (بدون pagination)
   exportAllSubscriptions: publicProcedure.query(async ({ ctx }) => {
-    const cookies = ctx.req.headers.cookie || "";
-    const match = cookies.match(new RegExp(`${SAAS_COOKIE_NAME}=([^;]+)`));
-    const session = await verifySaasToken(match?.[1]);
-    if (!session || session.role !== "superadmin") throw new TRPCError({ code: "FORBIDDEN", message: "غير مصرح" });
+    const { session } = await requireSuperAdminFromRequest(ctx.req);
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     const rows = await db.select({
@@ -2895,10 +5962,7 @@ const saasRouter = router({
     adminReply: z.string().min(1),
     status: z.enum(["open", "in_progress", "resolved", "closed"]),
   })).mutation(async ({ ctx, input }) => {
-    const cookies = ctx.req.headers.cookie || "";
-    const match = cookies.match(new RegExp(`${SAAS_COOKIE_NAME}=([^;]+)`));
-    const session = await verifySaasToken(match?.[1]);
-    if (!session || session.role !== "superadmin") throw new TRPCError({ code: "FORBIDDEN" });
+    const { session } = await requireSuperAdminFromRequest(ctx.req);
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     await db.update(supportTickets).set({
@@ -2970,10 +6034,8 @@ const saasRouter = router({
 
   // ===================== PAYMOB SETTINGS (SUPER ADMIN) =====================
   getPaymobSettings: publicProcedure.query(async ({ ctx }) => {
-    const cookies = ctx.req.headers.cookie || "";
-    const match = cookies.match(new RegExp(`${SAAS_COOKIE_NAME}=([^;]+)`));
-    const session = await verifySaasToken(match?.[1]);
-    if (!session || session.role !== "superadmin") throw new TRPCError({ code: "FORBIDDEN", message: "غير مصرح" });
+    const { requireSaasSuperAdmin } = await import("./saas-auth");
+    requireSaasSuperAdmin(ctx);
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 
@@ -2992,10 +6054,10 @@ const saasRouter = router({
           isEnabled: false,
           publicKey: "",
           publicKeyLast8: "",
-          cardIntegrationId: null as number | null,
           currency: "EGP",
           hasSecretKey: false,
           hasHmacSecret: false,
+          paymentMethods: [] as Array<{ id: number; methodType: "card" | "wallet"; integrationId: number; isEnabled: boolean; labelAr: string }>,
           ...defaultUrls,
         };
       }
@@ -3003,19 +6065,51 @@ const saasRouter = router({
       try {
         publicConfig = row.publicConfig ? JSON.parse(row.publicConfig) : {};
       } catch { /* ignore */ }
-      const secret = row.encryptedSecret
-        ? (await import("./paymob")).decodeSecret<{ secretKey?: string; hmacSecret?: string }>(row.encryptedSecret)
-        : null;
+      const {
+        listPaymobPaymentMethods,
+        hasEnabledCardMethod,
+        enabledPaymobIntegrationIds,
+      } = await import("./paymob-methods");
+      const paymentMethods = await listPaymobPaymentMethods(db, publicConfig);
+      let hasSecretKey = false;
+      let hasHmacSecret = false;
+      let needsSecretResave = false;
+      if (row.encryptedSecret) {
+        try {
+          const { loadPaymobSecrets } = await import("./paymob");
+          const secret = loadPaymobSecrets(row.encryptedSecret);
+          hasSecretKey = Boolean(secret.secretKey);
+          hasHmacSecret = Boolean(secret.hmacSecret);
+        } catch {
+          needsSecretResave = true;
+        }
+      }
+      const publicKeyLast8 = String(publicConfig.publicKeyLast8 || "");
+      const readyForPayments = Boolean(
+        row.isEnabled &&
+        hasSecretKey &&
+        publicKeyLast8 &&
+        hasEnabledCardMethod(paymentMethods) &&
+        !needsSecretResave,
+      );
+      const cardRow = paymentMethods.find((m) => m.methodType === "card");
+      const walletRow = paymentMethods.find((m) => m.methodType === "wallet");
       return {
         configured: true,
         mode: row.mode,
         isEnabled: row.isEnabled,
         publicKey: String(publicConfig.publicKey || ""),
-        publicKeyLast8: String(publicConfig.publicKeyLast8 || ""),
-        cardIntegrationId: publicConfig.cardIntegrationId ? Number(publicConfig.cardIntegrationId) : null,
+        publicKeyLast8,
         currency: String(publicConfig.currency || "EGP"),
-        hasSecretKey: Boolean(secret?.secretKey),
-        hasHmacSecret: Boolean(secret?.hmacSecret),
+        hasSecretKey,
+        hasHmacSecret,
+        needsSecretResave,
+        readyForPayments,
+        paymentMethods,
+        cardIntegrationId: cardRow?.integrationId && cardRow.integrationId > 0 ? cardRow.integrationId : null,
+        walletIntegrationId: walletRow?.integrationId && walletRow.integrationId > 0 ? walletRow.integrationId : null,
+        enabledIntegrationIds: enabledPaymobIntegrationIds(paymentMethods),
+        updatedAt: row.updatedAt,
         ...defaultUrls,
       };
     } catch (error) {
@@ -3026,10 +6120,10 @@ const saasRouter = router({
         isEnabled: false,
         publicKey: "",
         publicKeyLast8: "",
-        cardIntegrationId: null as number | null,
         currency: "EGP",
         hasSecretKey: false,
         hasHmacSecret: false,
+        paymentMethods: [] as Array<{ id: number; methodType: "card" | "wallet"; integrationId: number; isEnabled: boolean; labelAr: string }>,
         ...defaultUrls,
       };
     }
@@ -3040,118 +6134,211 @@ const saasRouter = router({
     publicKey: z.string().min(8).optional(),
     secretKey: z.string().min(8).optional(),
     hmacSecret: z.string().optional(),
-    cardIntegrationId: z.coerce.number().int().positive().optional(),
     currency: z.string().min(3).max(3).default("EGP"),
     isEnabled: z.boolean().default(false),
+    paymentMethods: z.array(z.object({
+      methodType: z.enum(["card", "wallet"]),
+      integrationId: z.coerce.number().int().nonnegative(),
+      isEnabled: z.boolean(),
+    })).optional(),
   })).mutation(async ({ ctx, input }) => {
-    const cookies = ctx.req.headers.cookie || "";
-    const match = cookies.match(new RegExp(`${SAAS_COOKIE_NAME}=([^;]+)`));
-    const session = await verifySaasToken(match?.[1]);
-    if (!session || session.role !== "superadmin") throw new TRPCError({ code: "FORBIDDEN", message: "غير مصرح" });
+    const { requireSaasSuperAdmin } = await import("./saas-auth");
+    requireSaasSuperAdmin(ctx);
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 
     const {
-      encodeSecret, decodeSecret, assertPaymobPublicKey,
+      encodeSecret, assertPaymobPublicKey, assertPaymobSecretKey,
+      normalizePaymobSecretKey, loadPaymobSecrets, testPaymobIntention,
+      assertPaymobKeysMatchMode,
     } = await import("./paymob");
+    const {
+      listPaymobPaymentMethods,
+      savePaymobPaymentMethods,
+      hasEnabledCardMethod,
+      enabledPaymobIntegrationIds,
+      buildPaymobIntentionPaymentMethods,
+      buildPaymobIntentionFallbacks,
+      intentionIncludesWallet,
+      walletEnabled,
+      validatePaymobPaymentMethodsForIntention,
+    } = await import("./paymob-methods");
 
     const [existing] = await db.select().from(paymobSettings).limit(1);
-    if ((!input.publicKey || !input.secretKey || !input.cardIntegrationId) && !existing) {
+    if ((!input.publicKey || !input.secretKey) && !existing) {
       throw new TRPCError({
         code: "BAD_REQUEST",
-        message: "Public Key و Secret Key و Card Integration ID مطلوبة في أول حفظ",
+        message: "Public Key و Secret Key مطلوبة في أول حفظ",
       });
     }
 
     let existingConfig: Record<string, unknown> = {};
-    let existingSecret: { secretKey?: string; hmacSecret?: string } | null = null;
-    if (existing) {
+    let existingSecret: { secretKey: string; hmacSecret?: string } | null = null;
+    if (existing?.encryptedSecret) {
       try {
         existingConfig = existing.publicConfig ? JSON.parse(existing.publicConfig) : {};
       } catch { /* ignore */ }
-      if (existing.encryptedSecret) {
-        existingSecret = decodeSecret(existing.encryptedSecret);
+      try {
+        existingSecret = loadPaymobSecrets(existing.encryptedSecret);
+      } catch (e) {
+        if (!input.secretKey) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: e instanceof Error ? e.message : "أعد إدخال Secret Key",
+          });
+        }
       }
     }
 
     const publicKey = input.publicKey ?? String(existingConfig.publicKey ?? "");
-    const cardIntegrationId = input.cardIntegrationId ?? Number(existingConfig.cardIntegrationId ?? 0);
     assertPaymobPublicKey(publicKey);
+    assertPaymobKeysMatchMode(input.mode, publicKey, input.secretKey ?? existingSecret?.secretKey);
+
+    const resolvedSecretKey = input.secretKey
+      ? assertPaymobSecretKey(input.secretKey)
+      : normalizePaymobSecretKey(existingSecret?.secretKey ?? "");
+
+    if (input.isEnabled && !resolvedSecretKey) {
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: "Secret Key مطلوب لتفعيل Paymob — أدخله واحفظ",
+      });
+    }
 
     const publicConfig = {
       publicKey,
       publicKeyLast8: publicKey.slice(-8),
-      cardIntegrationId,
       currency: input.currency.toUpperCase(),
     };
 
+    let paymentMethods = await listPaymobPaymentMethods(db, existingConfig);
+    if (input.paymentMethods?.length) {
+      try {
+        paymentMethods = await savePaymobPaymentMethods(db, input.paymentMethods);
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : String(error);
+        if (/paymob_payment_methods|doesn't exist|ER_NO_SUCH_TABLE/i.test(msg)) {
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: "جدول طرق الدفع غير موجود على السيرفر. انشر آخر تحديث (deploy) وانتظر دقيقة ثم أعد المحاولة.",
+          });
+        }
+        throw error;
+      }
+    }
+
+    if (input.isEnabled && !hasEnabledCardMethod(paymentMethods)) {
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: "فعّل صف بطاقة ائتمان وأدخل رقم التكامل (مثل 5084536) في جدول طرق الدفع",
+      });
+    }
+
+    if (input.isEnabled) {
+      const methodCheck = validatePaymobPaymentMethodsForIntention(paymentMethods, input.mode);
+      if (!methodCheck.ok) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: methodCheck.message });
+      }
+    }
+
+    const integrationIds = enabledPaymobIntegrationIds(paymentMethods);
+    const paymentMethodInputs = buildPaymobIntentionPaymentMethods(paymentMethods);
+    const intentionFallbacks = buildPaymobIntentionFallbacks(paymentMethods);
+    const [, ...fallbackOnly] = intentionFallbacks;
+
     const encryptedSecret = encodeSecret({
-      secretKey: input.secretKey ?? existingSecret?.secretKey ?? "",
-      hmacSecret: input.hmacSecret ?? existingSecret?.hmacSecret ?? "",
+      secretKey: resolvedSecretKey,
+      hmacSecret: String(input.hmacSecret ?? existingSecret?.hmacSecret ?? "").trim(),
     });
 
+    let enabled = input.isEnabled;
+    let settingsId = existing?.id;
     if (existing) {
       await db.update(paymobSettings).set({
         mode: input.mode,
         publicConfig: JSON.stringify(publicConfig),
         encryptedSecret,
-        isEnabled: input.isEnabled,
+        isEnabled: enabled,
       }).where(eq(paymobSettings.id, existing.id));
     } else {
-      await db.insert(paymobSettings).values({
+      const [inserted] = await db.insert(paymobSettings).values({
         mode: input.mode,
         publicConfig: JSON.stringify(publicConfig),
         encryptedSecret,
-        isEnabled: input.isEnabled,
+        isEnabled: enabled,
       });
+      settingsId = (inserted as { insertId: number }).insertId;
     }
 
-    return { success: true };
+    if (input.isEnabled) {
+      try {
+        await testPaymobIntention(
+          resolvedSecretKey,
+          paymentMethodInputs,
+          publicConfig.currency,
+          input.mode,
+          fallbackOnly,
+          walletEnabled(paymentMethods),
+        );
+      } catch (error) {
+        enabled = false;
+        if (settingsId) {
+          await db.update(paymobSettings).set({ isEnabled: false }).where(eq(paymobSettings.id, settingsId));
+        }
+        const msg = error instanceof Error ? error.message : "فشل اختبار Paymob";
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: `تم حفظ المفاتيح. لم يُفعَّل الدفع: ${msg}`,
+        });
+      }
+    }
+
+    return { success: true, isEnabled: enabled };
   }),
 
   testPaymobConnection: publicProcedure.mutation(async ({ ctx }) => {
-    const cookies = ctx.req.headers.cookie || "";
-    const match = cookies.match(new RegExp(`${SAAS_COOKIE_NAME}=([^;]+)`));
-    const session = await verifySaasToken(match?.[1]);
-    if (!session || session.role !== "superadmin") throw new TRPCError({ code: "FORBIDDEN", message: "غير مصرح" });
+    const { requireSaasSuperAdmin } = await import("./saas-auth");
+    requireSaasSuperAdmin(ctx);
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 
-    const { decodeSecret, assertPaymobPublicKey, paymobErrorMessage } = await import("./paymob");
+    const { assertPaymobPublicKey, testPaymobIntention, loadPaymobSecrets } = await import("./paymob");
+    const { listPaymobPaymentMethods, buildPaymobIntentionPaymentMethods, buildPaymobIntentionFallbacks, intentionIncludesWallet, walletEnabled } = await import("./paymob-methods");
     const [row] = await db.select().from(paymobSettings).limit(1);
     if (!row?.encryptedSecret) {
       throw new TRPCError({ code: "NOT_FOUND", message: "إعدادات Paymob غير موجودة" });
     }
 
-    const publicConfig = JSON.parse(row.publicConfig || "{}") as { publicKey: string; cardIntegrationId: number; currency?: string };
-    const secret = decodeSecret<{ secretKey: string }>(row.encryptedSecret);
+    const publicConfig = JSON.parse(row.publicConfig || "{}") as { publicKey: string; currency?: string };
+    const paymentMethodRows = await listPaymobPaymentMethods(db, publicConfig);
+    const paymentMethodInputs = buildPaymobIntentionPaymentMethods(paymentMethodRows);
+    const intentionFallbacks = buildPaymobIntentionFallbacks(paymentMethodRows);
+    const [, ...fallbackOnly] = intentionFallbacks;
+    const walletRow = paymentMethodRows.find((m) => m.methodType === "wallet" && m.isEnabled);
+    const { secretKey } = loadPaymobSecrets(row.encryptedSecret);
     assertPaymobPublicKey(publicConfig.publicKey);
 
-    const response = await fetch("https://accept.paymob.com/v1/intention/", {
-      method: "POST",
-      headers: { Authorization: `Token ${secret.secretKey}`, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        amount: 100,
-        currency: publicConfig.currency || "EGP",
-        payment_methods: [Number(publicConfig.cardIntegrationId)],
-        items: [{ name: "Easy Cash test", amount: 100, description: "Connection test", quantity: 1 }],
-        billing_data: {
-          first_name: "Easy", last_name: "Cash", phone_number: "01000000000",
-          email: "test@easycash.app", country: "EG", city: "Cairo",
-          street: "NA", building: "NA", apartment: "NA", floor: "NA",
-        },
-        special_reference: `easy-cash-test-${Date.now()}`,
-        expiration: 600,
-      }),
-    });
-    const data = await response.json().catch(() => ({}));
-    if (!response.ok) {
-      throw new TRPCError({
-        code: "BAD_REQUEST",
-        message: (data as { message?: string }).message || paymobErrorMessage(data),
-      });
-    }
-    return { ok: true, intentionId: (data as { id?: string }).id, hasClientSecret: Boolean((data as { client_secret?: string }).client_secret) };
+    const data = await testPaymobIntention(
+      secretKey,
+      paymentMethodInputs,
+      publicConfig.currency || "EGP",
+      row.mode as "test" | "live",
+      fallbackOnly,
+      Boolean(walletRow),
+    );
+    const walletInCheckout = walletRow ? intentionIncludesWallet(data) : true;
+    const methodsUsed = (data as { _paymentMethodsUsed?: Array<number | string> })._paymentMethodsUsed || paymentMethodInputs;
+    const walletId = walletRow?.integrationId;
+    return {
+      ok: true,
+      intentionId: (data as { id?: string }).id,
+      hasClientSecret: Boolean((data as { client_secret?: string }).client_secret),
+      paymentMethodsSent: methodsUsed,
+      walletInCheckout,
+      walletWarning: walletRow && !walletInCheckout
+        ? `المحفظة مفعّلة في Easy Cash لكن Paymob لم يضفها لصفحة الدفع. تكامل البطاقة 5084536 (Shopify/MIGS) غالباً يدعم الكارت فقط. تواصل مع دعم Paymob (MID 804662) واطلب تفعيل Mobile Wallets على Intention API / Unified Checkout — وقد تحتاج رقم تكامل محفظة جديد غير ${walletId || "4310646"}.`
+        : undefined,
+    };
   }),
 
   // ===================== PLAN CHECKOUT =====================
@@ -3189,12 +6376,24 @@ const saasRouter = router({
     if (!user) throw new TRPCError({ code: "NOT_FOUND", message: "المستخدم غير موجود" });
 
     const {
-      decodeSecret, assertPaymobPublicKey, paymobCheckoutUrl, paymobErrorMessage,
-      splitName, absoluteUrl, amountToCents,
+      assertPaymobPublicKey, paymobCheckoutUrl, paymobErrorMessage,
+      splitName, absoluteUrl, amountToCents, loadPaymobSecrets,
+      normalizeEgyptPhone, createPaymobIntention,
     } = await import("./paymob");
+    const { listPaymobPaymentMethods, buildPaymobIntentionPaymentMethods, buildPaymobIntentionFallbacks, walletEnabled } = await import("./paymob-methods");
 
-    const publicConfig = JSON.parse(gateway.publicConfig || "{}") as { publicKey: string; cardIntegrationId: number; currency?: string };
-    const secret = decodeSecret<{ secretKey: string }>(gateway.encryptedSecret);
+    const publicConfig = JSON.parse(gateway.publicConfig || "{}") as {
+      publicKey: string;
+      currency?: string;
+    };
+    const paymentMethodRows = await listPaymobPaymentMethods(db, publicConfig);
+    const paymentMethodInputs = buildPaymobIntentionPaymentMethods(paymentMethodRows);
+    const intentionFallbacks = buildPaymobIntentionFallbacks(paymentMethodRows);
+    const [, ...fallbackOnly] = intentionFallbacks;
+    if (paymentMethodInputs.length === 0) {
+      throw new TRPCError({ code: "BAD_REQUEST", message: "لا توجد طرق دفع مفعّلة في إعدادات Paymob" });
+    }
+    const { secretKey } = loadPaymobSecrets(gateway.encryptedSecret);
     assertPaymobPublicKey(publicConfig.publicKey);
 
     const amountCents = amountToCents(plan.price);
@@ -3206,47 +6405,72 @@ const saasRouter = router({
       status: "pending",
     });
     const paymentId = (paymentResult as { insertId: number }).insertId;
+
+    let returnPath = `/pricing?payment=return&paymentId=${paymentId}`;
+    if (user.tenantId) {
+      const { getTenantById } = await import("./tenant");
+      const tenant = await getTenantById(user.tenantId);
+      if (tenant?.slug) {
+        returnPath = `/${tenant.slug}/dashboard?payment=return&paymentId=${paymentId}`;
+      }
+    }
+
     const paymentReference = `easy_cash_payment:${paymentId}`;
     const customerName = splitName(user.name || "Customer");
 
-    const intentionResponse = await fetch("https://accept.paymob.com/v1/intention/", {
-      method: "POST",
-      headers: { Authorization: `Token ${secret.secretKey}`, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        amount: amountCents,
-        currency: publicConfig.currency || "EGP",
-        payment_methods: [Number(publicConfig.cardIntegrationId)],
-        items: [{
-          name: `Easy Cash ${plan.nameAr}`.slice(0, 50),
+    let intention: { id?: string; client_secret?: string; intention_order_id?: string };
+    try {
+      intention = await createPaymobIntention(
+        secretKey,
+        paymentMethodInputs,
+        {
           amount: amountCents,
-          description: `اشتراك ${plan.nameAr}`,
-          quantity: 1,
-        }],
-        billing_data: {
-          first_name: customerName.firstName,
-          last_name: customerName.lastName,
-          phone_number: user.phone || "01000000000",
-          email: user.email,
-          country: "EG",
-          city: "Cairo",
-          street: "NA",
-          building: "NA",
-          apartment: "NA",
-          floor: "NA",
+          currency: publicConfig.currency || "EGP",
+          items: [{
+            name: `Easy Cash ${plan.nameAr}`.slice(0, 50),
+            amount: amountCents,
+            description: `اشتراك ${plan.nameAr}`,
+            quantity: 1,
+          }],
+          billing_data: {
+            first_name: customerName.firstName,
+            last_name: customerName.lastName,
+            phone_number: normalizeEgyptPhone(user.phone),
+            email: user.email,
+            country: "EG",
+            city: "Cairo",
+            street: "NA",
+            building: "NA",
+            apartment: "NA",
+            floor: "NA",
+          },
+          special_reference: paymentReference,
+          notification_url: absoluteUrl(ctx.req, "/api/webhooks/paymob"),
+          redirection_url: absoluteUrl(ctx.req, returnPath),
+          expiration: 3600,
         },
-        special_reference: paymentReference,
-        notification_url: absoluteUrl(ctx.req, "/api/webhooks/paymob"),
-        redirection_url: absoluteUrl(ctx.req, `/pricing?payment=return&paymentId=${paymentId}`),
-        expiration: 3600,
-      }),
-    });
-
-    const intention = await intentionResponse.json().catch(() => ({}));
-    if (!intentionResponse.ok || !(intention as { client_secret?: string }).client_secret) {
+        gateway.mode as "test" | "live",
+        fallbackOnly,
+        walletEnabled(paymentMethodRows),
+      );
+    } catch (error) {
       await db.update(subscriptionPayments).set({ status: "failed" }).where(eq(subscriptionPayments.id, paymentId));
       throw new TRPCError({
         code: "BAD_REQUEST",
-        message: paymobErrorMessage(intention),
+        message: error instanceof Error ? error.message : paymobErrorMessage(null, {
+          mode: gateway.mode as "test" | "live",
+          integrationIds: paymentMethodInputs,
+        }),
+      });
+    }
+
+    if (!(intention as { client_secret?: string }).client_secret) {
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: paymobErrorMessage(intention, {
+          mode: gateway.mode as "test" | "live",
+          integrationIds: paymentMethodInputs,
+        }),
       });
     }
 
@@ -3257,6 +6481,155 @@ const saasRouter = router({
     return { checkoutUrl, paymentId, planName: plan.nameAr, amount: plan.price };
   }),
 
+  confirmPlanPayment: publicProcedure.input(z.object({
+    paymentId: z.number(),
+    paymobSuccess: z.boolean().optional(),
+    amountCents: z.number().optional(),
+  })).mutation(async ({ ctx, input }) => {
+    const cookies = ctx.req.headers.cookie || "";
+    const match = cookies.match(new RegExp(`${SAAS_COOKIE_NAME}=([^;]+)`));
+    const session = await verifySaasToken(match?.[1]);
+    if (!session) throw new TRPCError({ code: "UNAUTHORIZED" });
+
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+    const [payment] = await db
+      .select()
+      .from(subscriptionPayments)
+      .where(and(eq(subscriptionPayments.id, input.paymentId), eq(subscriptionPayments.userId, session.userId)))
+      .limit(1);
+    if (!payment) throw new TRPCError({ code: "NOT_FOUND", message: "عملية الدفع غير موجودة" });
+
+    if (payment.status === "paid") {
+      return { ok: true, status: "paid" as const, message: "الاشتراك مفعّل بالفعل" };
+    }
+
+    if (input.paymobSuccess === false) {
+      await db.update(subscriptionPayments).set({ status: "failed" }).where(eq(subscriptionPayments.id, input.paymentId));
+      return { ok: false, status: "failed" as const, message: "فشل الدفع" };
+    }
+
+    if (input.paymobSuccess !== true) {
+      return { ok: false, status: payment.status, message: "بانتظار تأكيد الدفع" };
+    }
+
+    const result = await activateSubscriptionPayment(input.paymentId, {
+      paidAmountCents: input.amountCents ?? null,
+    });
+    if (!result.ok) {
+      return { ok: false, status: "failed" as const, message: result.reason };
+    }
+    return { ok: true, status: "paid" as const, message: "تم تفعيل الاشتراك بنجاح" };
+  }),
+
+  listSubscriptionPayments: publicProcedure.input(z.object({
+    page: z.number().default(1),
+    limit: z.number().default(25),
+    status: z.enum(["pending", "paid", "failed", "all"]).default("all"),
+  })).query(async ({ ctx, input }) => {
+    const { session } = await requireSuperAdminFromRequest(ctx.req);
+
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+    const offset = (input.page - 1) * input.limit;
+    const where = input.status === "all" ? undefined : eq(subscriptionPayments.status, input.status);
+
+    const rows = await db
+      .select({
+        id: subscriptionPayments.id,
+        status: subscriptionPayments.status,
+        amount: subscriptionPayments.amount,
+        currency: subscriptionPayments.currency,
+        providerReference: subscriptionPayments.providerReference,
+        createdAt: subscriptionPayments.createdAt,
+        userId: subscriptionPayments.userId,
+        userName: appUsers.name,
+        userEmail: appUsers.email,
+        planId: subscriptionPayments.planId,
+        planName: subscriptionPlans.nameAr,
+        planPrice: subscriptionPlans.price,
+      })
+      .from(subscriptionPayments)
+      .leftJoin(appUsers, eq(subscriptionPayments.userId, appUsers.id))
+      .leftJoin(subscriptionPlans, eq(subscriptionPayments.planId, subscriptionPlans.id))
+      .where(where)
+      .orderBy(desc(subscriptionPayments.createdAt))
+      .limit(input.limit)
+      .offset(offset);
+
+    const [total] = await db
+      .select({ count: count() })
+      .from(subscriptionPayments)
+      .where(where);
+
+    const { amountToCents } = await import("./paymob");
+
+    return {
+      rows: rows.map((r) => {
+        const expected = amountToCents(r.planPrice || r.amount);
+        const actual = amountToCents(r.amount);
+        const amountMatches = expected === actual;
+        return {
+          ...r,
+          amountMatches,
+          canAutoActivate: r.status === "pending" && amountMatches,
+        };
+      }),
+      total: total.count,
+    };
+  }),
+
+  smartActivateSubscriptionPayment: publicProcedure.input(z.object({
+    paymentId: z.number(),
+    force: z.boolean().optional(),
+  })).mutation(async ({ ctx, input }) => {
+    const { session } = await requireSuperAdminFromRequest(ctx.req);
+
+    const result = await activateSubscriptionPayment(input.paymentId, {
+      force: input.force ?? true,
+    });
+    if (!result.ok) throw new TRPCError({ code: "BAD_REQUEST", message: result.reason });
+    return { success: true, message: "تم تفعيل الاشتراك تلقائياً" };
+  }),
+
+  reconcilePendingPayments: publicProcedure.mutation(async ({ ctx }) => {
+    const { session } = await requireSuperAdminFromRequest(ctx.req);
+
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+    const { amountToCents } = await import("./paymob");
+    const pending = await db
+      .select({
+        id: subscriptionPayments.id,
+        amount: subscriptionPayments.amount,
+        planPrice: subscriptionPlans.price,
+        providerReference: subscriptionPayments.providerReference,
+      })
+      .from(subscriptionPayments)
+      .leftJoin(subscriptionPlans, eq(subscriptionPayments.planId, subscriptionPlans.id))
+      .where(eq(subscriptionPayments.status, "pending"))
+      .orderBy(desc(subscriptionPayments.createdAt))
+      .limit(50);
+
+    let activated = 0;
+    const skipped: string[] = [];
+    for (const row of pending) {
+      const amountMatches = amountToCents(row.amount) === amountToCents(row.planPrice || row.amount);
+      if (!amountMatches || !row.providerReference) {
+        skipped.push(`#${row.id}: المبلغ غير مطابق أو لم يُرسل لـ Paymob`);
+        continue;
+      }
+      const result = await activateSubscriptionPayment(row.id, { force: true });
+      if (result.ok) activated++;
+      else skipped.push(`#${row.id}: ${result.reason}`);
+    }
+
+    return { activated, skipped, checked: pending.length };
+  }),
+
   getPaymentStatus: publicProcedure.input(z.object({ paymentId: z.number() })).query(async ({ ctx, input }) => {
     const cookies = ctx.req.headers.cookie || "";
     const match = cookies.match(new RegExp(`${SAAS_COOKIE_NAME}=([^;]+)`));
@@ -3264,11 +6637,24 @@ const saasRouter = router({
     if (!session) throw new TRPCError({ code: "UNAUTHORIZED" });
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-    const [payment] = await db.select().from(subscriptionPayments)
+    const [row] = await db
+      .select({
+        payment: subscriptionPayments,
+        planName: subscriptionPlans.nameAr,
+        planPrice: subscriptionPlans.price,
+      })
+      .from(subscriptionPayments)
+      .leftJoin(subscriptionPlans, eq(subscriptionPayments.planId, subscriptionPlans.id))
       .where(and(eq(subscriptionPayments.id, input.paymentId), eq(subscriptionPayments.userId, session.userId)))
       .limit(1);
-    if (!payment) throw new TRPCError({ code: "NOT_FOUND" });
-    return { status: payment.status, paymentId: payment.id };
+    if (!row?.payment) throw new TRPCError({ code: "NOT_FOUND" });
+    return {
+      status: row.payment.status,
+      paymentId: row.payment.id,
+      amount: row.payment.amount,
+      planName: row.planName,
+      planPrice: row.planPrice,
+    };
   }),
 });
 
@@ -3305,7 +6691,21 @@ export const appRouter = router({
   inventory: inventoryRouter,
   production: productionRouter,
   statement: statementRouter,
+  parity: router({
+    settings: settingsExtendedRouter,
+    hr: hrExtendedRouter,
+    inventory: inventoryExtendedRouter,
+    assets: assetsExtendedRouter,
+    sales: salesExtendedRouter,
+  }),
   saas: saasRouter,
+  assistant: assistantRouter,
+  permissions: permissionsRouter,
+  importCosting: importCostingRouter,
+  accountingAuditor: accountingAuditorRouter,
+  documentAttachments: documentAttachmentsRouter,
+  opsInbox: opsInboxRouter,
+  megaReportImport: megaReportImportRouter,
 });
 
 export type AppRouter = typeof appRouter;

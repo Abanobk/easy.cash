@@ -23,7 +23,7 @@ export default function TaxReport() {
   const data = taxQuery.data;
 
   const fmt = (n: number | string | null | undefined) =>
-    Number(n ?? 0).toLocaleString("ar-EG", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    Number(n ?? 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
   const handleSearch = () => setQueryDates({ startDate, endDate });
 
@@ -33,14 +33,14 @@ export default function TaxReport() {
     if (!data) return;
     const salesRows = data.salesInvoices.map(r => ({
       "رقم الفاتورة": r.number,
-      "التاريخ": r.date ? new Date(r.date).toLocaleDateString("ar-EG") : "",
+      "التاريخ": r.date ? new Date(r.date).toLocaleDateString("en-GB") : "",
       "المبلغ قبل الضريبة": Number(r.subtotal ?? 0).toFixed(2),
       "قيمة الضريبة": Number(r.tax ?? 0).toFixed(2),
       "الإجمالي": Number(r.total ?? 0).toFixed(2),
     }));
     const purchaseRows = data.purchaseInvoices.map(r => ({
       "رقم الفاتورة": r.number,
-      "التاريخ": r.date ? new Date(r.date).toLocaleDateString("ar-EG") : "",
+      "التاريخ": r.date ? new Date(r.date).toLocaleDateString("en-GB") : "",
       "المبلغ قبل الضريبة": Number(r.subtotal ?? 0).toFixed(2),
       "قيمة الضريبة": Number(r.tax ?? 0).toFixed(2),
       "الإجمالي": Number(r.total ?? 0).toFixed(2),
@@ -178,7 +178,7 @@ export default function TaxReport() {
                           <tr key={inv.id} className="hover:bg-slate-50 transition-colors">
                             <td className="px-4 py-2.5 font-mono text-blue-600">{inv.number}</td>
                             <td className="px-4 py-2.5 text-slate-600">
-                              {inv.date ? new Date(inv.date).toLocaleDateString("ar-EG") : "—"}
+                              {inv.date ? new Date(inv.date).toLocaleDateString("en-GB") : "—"}
                             </td>
                             <td className="px-4 py-2.5 text-left">{fmt(inv.subtotal)}</td>
                             <td className="px-4 py-2.5 text-left font-semibold text-green-700">{fmt(inv.tax)}</td>
@@ -230,7 +230,7 @@ export default function TaxReport() {
                           <tr key={inv.id} className="hover:bg-slate-50 transition-colors">
                             <td className="px-4 py-2.5 font-mono text-blue-600">{inv.number}</td>
                             <td className="px-4 py-2.5 text-slate-600">
-                              {inv.date ? new Date(inv.date).toLocaleDateString("ar-EG") : "—"}
+                              {inv.date ? new Date(inv.date).toLocaleDateString("en-GB") : "—"}
                             </td>
                             <td className="px-4 py-2.5 text-left">{fmt(inv.subtotal)}</td>
                             <td className="px-4 py-2.5 text-left font-semibold text-red-700">{fmt(inv.tax)}</td>

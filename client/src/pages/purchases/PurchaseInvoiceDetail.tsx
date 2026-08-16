@@ -1,8 +1,13 @@
-import { useParams, useLocation } from "wouter";
+import { useParams, useLocation, Link } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
-import { ArrowRight, Printer, FileText } from "lucide-react";
-import { useRef } from "react";
+import { ArrowRight, Printer, FileText, Banknote, BookOpen } from "lucide-react";
+import { useRef, useState } from "react";
+import ERPLayout from "@/components/ERPLayout";
+import PermissionGate from "@/components/PermissionGate";
+import { InvoicePaymentDialog } from "@/components/InvoicePaymentDialog";
+import { DocumentAttachmentsPanel } from "@/components/DocumentAttachmentsPanel";
+import { toast } from "sonner";
 
 const statusMap: Record<string, { label: string; color: string }> = {
   draft: { label: "مسودة", color: "bg-gray-100 text-gray-700" },
@@ -22,9 +27,16 @@ export default function PurchaseInvoiceDetail() {
   const [, navigate] = useLocation();
   const printRef = useRef<HTMLDivElement>(null);
   const id = parseInt(params.id || "0");
+  const [showPayment, setShowPayment] = useState(false);
 
-  const { data: invoice, isLoading } = trpc.purchases.invoices.byId.useQuery(id, { enabled: !!id });
+  const { data: invoice, isLoading, refetch } = trpc.purchases.invoices.byId.useQuery(id, { enabled: !!id });
   const { data: company } = trpc.saas.getCompanyProfile.useQuery();
+  const payMut = trpc.purchases.invoices.recordPayment.useMutation({
+    onError: (e) => toast.error(e.message),
+  });
+  const attachMut = trpc.documentAttachments.upload.useMutation({
+    onError: (e) => toast.error(e.message),
+  });
 
   const handlePrint = () => {
     const printContent = printRef.current;
@@ -91,11 +103,13 @@ export default function PurchaseInvoiceDetail() {
 
   const inv = invoice as any;
   const statusInfo = statusMap[inv.status] || { label: inv.status, color: "bg-gray-100 text-gray-700" };
+  const remaining = parseFloat(inv.remaining || "0");
 
   return (
-    <div className="p-6 max-w-4xl mx-auto">
+    <ERPLayout title={`فاتورة شراء - ${inv.number}`}>
+    <div className="max-w-4xl mx-auto">
       {/* Toolbar */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
         <div className="flex items-center gap-3">
           <Button variant="outline" size="sm" onClick={() => navigate("/purchases/invoices")}>
             <ArrowRight className="h-4 w-4 ml-1" /> رجوع
@@ -105,9 +119,25 @@ export default function PurchaseInvoiceDetail() {
             {statusInfo.label}
           </span>
         </div>
-        <Button onClick={handlePrint} className="bg-blue-600 hover:bg-blue-700 text-white gap-2">
-          <Printer className="h-4 w-4" /> طباعة الفاتورة
-        </Button>
+        <div className="flex items-center gap-2">
+          {remaining > 0 && (
+            <PermissionGate module="cash" action="create">
+              <Button onClick={() => setShowPayment(true)} className="bg-green-600 hover:bg-green-700 text-white gap-2">
+                <Banknote className="h-4 w-4" /> سداد ({remaining.toLocaleString("en-US")} ج.م)
+              </Button>
+            </PermissionGate>
+          )}
+          {inv.journalEntry?.id && (
+            <Link href={`/accounts/journal/${inv.journalEntry.id}`}>
+              <Button variant="outline" className="gap-2">
+                <BookOpen className="h-4 w-4" /> قيد {inv.journalEntry.number}
+              </Button>
+            </Link>
+          )}
+          <Button onClick={handlePrint} className="bg-blue-600 hover:bg-blue-700 text-white gap-2">
+            <Printer className="h-4 w-4" /> طباعة الفاتورة
+          </Button>
+        </div>
       </div>
 
       {/* Printable Content */}
@@ -127,9 +157,9 @@ export default function PurchaseInvoiceDetail() {
           <div className="text-left">
             <div className="text-xl font-bold text-blue-700">فاتورة مشتريات</div>
             <div className="text-sm text-gray-600 mt-1">رقم: {inv.number}</div>
-            <div className="text-sm text-gray-600">التاريخ: {inv.date ? new Date(inv.date).toLocaleDateString("ar-EG") : "-"}</div>
+            <div className="text-sm text-gray-600">التاريخ: {inv.date ? new Date(inv.date).toLocaleDateString("en-GB") : "-"}</div>
             {inv.dueDate && (
-              <div className="text-sm text-gray-600">تاريخ الاستحقاق: {new Date(inv.dueDate).toLocaleDateString("ar-EG")}</div>
+              <div className="text-sm text-gray-600">تاريخ الاستحقاق: {new Date(inv.dueDate).toLocaleDateString("en-GB")}</div>
             )}
           </div>
         </div>
@@ -146,12 +176,12 @@ export default function PurchaseInvoiceDetail() {
           </div>
           <div className="bg-gray-50 p-4 rounded-lg border border-gray-100">
             <div className="text-xs text-gray-500 mb-1">المبلغ المدفوع</div>
-            <div className="font-semibold text-green-700">{parseFloat(inv.paid || "0").toLocaleString("ar-EG", { minimumFractionDigits: 2 })} ج.م</div>
+            <div className="font-semibold text-green-700">{parseFloat(inv.paid || "0").toLocaleString("en-US", { minimumFractionDigits: 2 })} ج.م</div>
           </div>
           <div className="bg-gray-50 p-4 rounded-lg border border-gray-100">
             <div className="text-xs text-gray-500 mb-1">المبلغ المتبقي</div>
             <div className={`font-semibold ${parseFloat(inv.remaining || "0") > 0 ? "text-red-600" : "text-green-600"}`}>
-              {parseFloat(inv.remaining || "0").toLocaleString("ar-EG", { minimumFractionDigits: 2 })} ج.م
+              {parseFloat(inv.remaining || "0").toLocaleString("en-US", { minimumFractionDigits: 2 })} ج.م
             </div>
           </div>
         </div>
@@ -178,12 +208,12 @@ export default function PurchaseInvoiceDetail() {
                   <td className="p-3 text-xs text-gray-500 border-b border-gray-100">{idx + 1}</td>
                   <td className="p-3 text-sm font-medium border-b border-gray-100">{item.itemName || `صنف #${item.itemId}`}</td>
                   <td className="p-3 text-xs text-gray-600 border-b border-gray-100">{item.itemUnit || "-"}</td>
-                  <td className="p-3 text-sm border-b border-gray-100">{parseFloat(item.quantity).toLocaleString("ar-EG")}</td>
-                  <td className="p-3 text-sm border-b border-gray-100">{parseFloat(item.price).toLocaleString("ar-EG", { minimumFractionDigits: 2 })}</td>
+                  <td className="p-3 text-sm border-b border-gray-100">{parseFloat(item.quantity).toLocaleString("en-US")}</td>
+                  <td className="p-3 text-sm border-b border-gray-100">{parseFloat(item.price).toLocaleString("en-US", { minimumFractionDigits: 2 })}</td>
                   <td className="p-3 text-sm border-b border-gray-100">{parseFloat(item.discount || "0")}%</td>
                   <td className="p-3 text-sm border-b border-gray-100">{parseFloat(item.tax || "0")}%</td>
                   <td className="p-3 text-sm font-semibold text-blue-700 border-b border-gray-100">
-                    {parseFloat(item.total).toLocaleString("ar-EG", { minimumFractionDigits: 2 })}
+                    {parseFloat(item.total).toLocaleString("en-US", { minimumFractionDigits: 2 })}
                   </td>
                 </tr>
               ))}
@@ -201,23 +231,23 @@ export default function PurchaseInvoiceDetail() {
           <div className="w-72 space-y-2">
             <div className="flex justify-between text-sm py-1 border-b border-gray-100">
               <span className="text-gray-600">المجموع الفرعي</span>
-              <span className="font-medium">{parseFloat(inv.subtotal || "0").toLocaleString("ar-EG", { minimumFractionDigits: 2 })} ج.م</span>
+              <span className="font-medium">{parseFloat(inv.subtotal || "0").toLocaleString("en-US", { minimumFractionDigits: 2 })} ج.م</span>
             </div>
             {parseFloat(inv.discount || "0") > 0 && (
               <div className="flex justify-between text-sm py-1 border-b border-gray-100">
                 <span className="text-gray-600">الخصم</span>
-                <span className="font-medium text-red-600">- {parseFloat(inv.discount).toLocaleString("ar-EG", { minimumFractionDigits: 2 })} ج.م</span>
+                <span className="font-medium text-red-600">- {parseFloat(inv.discount).toLocaleString("en-US", { minimumFractionDigits: 2 })} ج.م</span>
               </div>
             )}
             {parseFloat(inv.tax || "0") > 0 && (
               <div className="flex justify-between text-sm py-1 border-b border-gray-100">
                 <span className="text-gray-600">الضريبة</span>
-                <span className="font-medium text-orange-600">+ {parseFloat(inv.tax).toLocaleString("ar-EG", { minimumFractionDigits: 2 })} ج.م</span>
+                <span className="font-medium text-orange-600">+ {parseFloat(inv.tax).toLocaleString("en-US", { minimumFractionDigits: 2 })} ج.م</span>
               </div>
             )}
             <div className="flex justify-between py-2 border-t-2 border-blue-600">
               <span className="font-bold text-blue-700 text-base">الإجمالي</span>
-              <span className="font-bold text-blue-700 text-base">{parseFloat(inv.total || "0").toLocaleString("ar-EG", { minimumFractionDigits: 2 })} ج.م</span>
+              <span className="font-bold text-blue-700 text-base">{parseFloat(inv.total || "0").toLocaleString("en-US", { minimumFractionDigits: 2 })} ج.م</span>
             </div>
           </div>
         </div>
@@ -232,9 +262,45 @@ export default function PurchaseInvoiceDetail() {
 
         {/* Footer */}
         <div className="mt-8 pt-4 border-t border-gray-200 text-center text-xs text-gray-400">
-          {company?.invoiceFooter || (company?.name || "Easy Cash") + " - نظام المحاسبة والإدارة المتكامل"} | تم إنشاء هذه الفاتورة بتاريخ {new Date().toLocaleDateString("ar-EG")}
+          {company?.invoiceFooter || (company?.name || "Easy Cash") + " - نظام المحاسبة والإدارة المتكامل"} | تم إنشاء هذه الفاتورة بتاريخ {new Date().toLocaleDateString("en-GB")}
         </div>
       </div>
+
+      <DocumentAttachmentsPanel entityType="purchase_invoice" entityId={id} />
+
+      <InvoicePaymentDialog
+        open={showPayment}
+        onClose={() => setShowPayment(false)}
+        title="سداد لمورد"
+        partyLabel="المورد"
+        partyName={inv.supplierName}
+        invoiceNumber={inv.number}
+        remaining={remaining}
+        isLoading={payMut.isPending || attachMut.isPending}
+        onSubmit={(amount, date, receipt) => {
+          void (async () => {
+            try {
+              const res = await payMut.mutateAsync({ invoiceId: id, amount, date });
+              if (receipt) {
+                await attachMut.mutateAsync({
+                  entityType: "purchase_invoice",
+                  entityId: id,
+                  kind: "payment_receipt",
+                  fileName: receipt.fileName,
+                  mimeType: receipt.mimeType,
+                  contentBase64: receipt.contentBase64,
+                });
+              }
+              toast.success(`تم السداد — إيصال ${res.cashNumber}`);
+              setShowPayment(false);
+              refetch();
+            } catch {
+              /* toasts from mutations */
+            }
+          })();
+        }}
+      />
     </div>
+    </ERPLayout>
   );
 }

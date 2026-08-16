@@ -1,15 +1,16 @@
 import { useState } from "react";
 import ERPLayout from "@/components/ERPLayout";
 import { trpc } from "@/lib/trpc";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Edit, Trash2, Search, Building2 } from "lucide-react";
+import { Plus, Search, Building2 } from "lucide-react";
 import { toast } from "sonner";
+import { AddActionButton } from "@/components/AddActionButton";
+import { EntityRowActions } from "@/components/EntityRowActions";
+import { FormModal } from "@/components/FormModal";
+import { FieldLabel, FormSection, entryControlClass } from "@/components/form/EntryForm";
 
 export default function Branches() {
   const [search, setSearch] = useState("");
@@ -47,11 +48,11 @@ export default function Branches() {
             <div className="flex gap-2">
               <div className="relative">
                 <Search size={14} className="absolute right-3 top-2.5 text-slate-400" />
-                <Input placeholder="بحث..." value={search} onChange={e => setSearch(e.target.value)} className="pr-8 h-9 w-48 text-sm" />
+                <Input placeholder="بحث..." value={search} onChange={e => setSearch(e.target.value)} className="pr-8 h-10 w-56 text-sm" />
               </div>
-              <Button size="sm" className="bg-blue-600 hover:bg-blue-700 text-white gap-1" onClick={() => { resetForm(); setOpen(true); }}>
-                <Plus size={14} /> إضافة فرع
-              </Button>
+              <AddActionButton module="settings" className="bg-blue-600 hover:bg-blue-700 text-white gap-2 h-10 px-4 text-sm font-semibold" onClick={() => { resetForm(); setOpen(true); }}>
+                <Plus size={16} /> إضافة فرع
+              </AddActionButton>
             </div>
           </div>
         </CardHeader>
@@ -82,8 +83,11 @@ export default function Branches() {
                   <TableCell><Badge variant={row.isActive ? "default" : "secondary"} className="text-xs">{row.isActive ? "نشط" : "غير نشط"}</Badge></TableCell>
                   <TableCell>
                     <div className="flex gap-1">
-                      <Button variant="ghost" size="icon" className="h-7 w-7 text-blue-600 hover:bg-blue-50" onClick={() => openEdit(row)}><Edit size={13} /></Button>
-                      <Button variant="ghost" size="icon" className="h-7 w-7 text-red-500 hover:bg-red-50" onClick={() => deleteMut.mutate(row.id)}><Trash2 size={13} /></Button>
+                      <EntityRowActions
+                        module="settings"
+                        onEdit={() => openEdit(row)}
+                        onDelete={() => deleteMut.mutate(row.id)}
+                      />
                     </div>
                   </TableCell>
                 </TableRow>
@@ -93,43 +97,39 @@ export default function Branches() {
         </CardContent>
       </Card>
 
-      <Dialog open={open} onOpenChange={v => { setOpen(v); if (!v) resetForm(); }}>
-        <DialogContent className="max-w-md" dir="rtl">
-          <DialogHeader><DialogTitle>{editItem ? "تعديل فرع" : "إضافة فرع جديد"}</DialogTitle></DialogHeader>
-          <div className="grid gap-4 py-2">
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <Label className="text-xs">اسم الفرع *</Label>
-                <Input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="اسم الفرع" className="h-9 text-sm" />
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs">الكود</Label>
-                <Input value={form.code} onChange={e => setForm(f => ({ ...f, code: e.target.value }))} placeholder="كود الفرع" className="h-9 text-sm" />
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <Label className="text-xs">اسم المدير</Label>
-                <Input value={form.managerName} onChange={e => setForm(f => ({ ...f, managerName: e.target.value }))} placeholder="اسم المدير" className="h-9 text-sm" />
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs">الهاتف</Label>
-                <Input value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} placeholder="رقم الهاتف" className="h-9 text-sm" />
-              </div>
-            </div>
-            <div className="space-y-1">
-              <Label className="text-xs">العنوان</Label>
-              <Input value={form.address} onChange={e => setForm(f => ({ ...f, address: e.target.value }))} placeholder="عنوان الفرع" className="h-9 text-sm" />
-            </div>
+      <FormModal
+        open={open}
+        onClose={() => { setOpen(false); resetForm(); }}
+        title={editItem ? "تعديل فرع" : "إضافة فرع جديد"}
+        description="الفروع تُستخدم في العملاء والموردين والمستندات."
+        onSubmit={handleSubmit}
+        isLoading={createMut.isPending || updateMut.isPending}
+        size="lg"
+        submitLabel={editItem ? "تحديث" : "إضافة"}
+      >
+        <FormSection title="بيانات الفرع" accent="slate">
+          <div>
+            <FieldLabel required>اسم الفرع</FieldLabel>
+            <Input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="اسم الفرع" className={entryControlClass} />
           </div>
-          <DialogFooter className="gap-2">
-            <Button variant="outline" size="sm" onClick={() => { setOpen(false); resetForm(); }}>إلغاء</Button>
-            <Button size="sm" className="bg-blue-600 hover:bg-blue-700 text-white" onClick={handleSubmit} disabled={createMut.isPending || updateMut.isPending}>
-              {editItem ? "تحديث" : "إضافة"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          <div>
+            <FieldLabel>الكود</FieldLabel>
+            <Input value={form.code} onChange={e => setForm(f => ({ ...f, code: e.target.value }))} placeholder="كود الفرع" className={entryControlClass} />
+          </div>
+          <div>
+            <FieldLabel>اسم المدير</FieldLabel>
+            <Input value={form.managerName} onChange={e => setForm(f => ({ ...f, managerName: e.target.value }))} placeholder="اسم المدير" className={entryControlClass} />
+          </div>
+          <div>
+            <FieldLabel>الهاتف</FieldLabel>
+            <Input value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} placeholder="رقم الهاتف" className={entryControlClass} />
+          </div>
+          <div className="sm:col-span-2">
+            <FieldLabel>العنوان</FieldLabel>
+            <Input value={form.address} onChange={e => setForm(f => ({ ...f, address: e.target.value }))} placeholder="عنوان الفرع" className={entryControlClass} />
+          </div>
+        </FormSection>
+      </FormModal>
     </ERPLayout>
   );
 }

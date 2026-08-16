@@ -2,59 +2,76 @@ import { useState } from "react";
 import ERPLayout from "@/components/ERPLayout";
 import { DataTable, statusBadge } from "@/components/DataTable";
 import { FormModal } from "@/components/FormModal";
+import {
+  ContactPartyFormFields,
+  buildPartyPayload,
+  emptyContactPartyForm,
+  partyFormFromRow,
+} from "@/components/ContactPartyForm";
 import { trpc } from "@/lib/trpc";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
-import { Edit, Trash2, Eye } from "lucide-react";
-
-const emptyForm = {
-  name: "", code: "", phone: "", phone2: "", email: "",
-  address: "", city: "", taxNumber: "", creditLimit: "", notes: "",
-};
+import { Link } from "wouter";
+import { FileText } from "lucide-react";
+import { isoToDisplayDate } from "@/components/form/DateField";
 
 export default function Customers() {
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
   const [open, setOpen] = useState(false);
   const [editId, setEditId] = useState<number | null>(null);
-  const [form, setForm] = useState(emptyForm);
+  const [linkedSupplierId, setLinkedSupplierId] = useState<number | null>(null);
+  const [form, setForm] = useState(emptyContactPartyForm());
 
   const { data, isLoading, refetch } = trpc.customers.list.useQuery({ page, limit: 20, search });
-  const createMut = trpc.customers.create.useMutation({ onSuccess: () => { toast.success("تم إضافة العميل"); refetch(); setOpen(false); setForm(emptyForm); } });
-  const updateMut = trpc.customers.update.useMutation({ onSuccess: () => { toast.success("تم تحديث العميل"); refetch(); setOpen(false); setEditId(null); setForm(emptyForm); } });
+  const { data: categories } = trpc.contactCategories.list.useQuery();
+  const { data: reps } = trpc.salesReps.list.useQuery();
+  const { data: branchList } = trpc.settings.branches.list.useQuery();
+  const { data: areas } = trpc.parity.sales.areas.list.useQuery();
+
+  const createMut = trpc.customers.create.useMutation({
+    onSuccess: (res) => {
+      const base = res?.code ? `تم إضافة العميل — الكود: ${res.code}` : "تم إضافة العميل";
+      toast.success(res?.supplierCode ? `${base} · وسُجّل كمورد (${res.supplierCode})` : base);
+      refetch();
+      closeModal();
+    },
+    onError: (err) => toast.error(err.message || "فشل إضافة العميل"),
+  });
+  const updateMut = trpc.customers.update.useMutation({
+    onSuccess: (res) => {
+      toast.success(res?.supplierCode ? `تم التحديث · وسُجّل كمورد (${res.supplierCode})` : "تم تحديث العميل");
+      refetch();
+      closeModal();
+    },
+    onError: (err) => toast.error(err.message || "فشل تحديث العميل"),
+  });
   const deleteMut = trpc.customers.delete.useMutation({ onSuccess: () => { toast.success("تم حذف العميل"); refetch(); } });
+
+  const closeModal = () => {
+    setOpen(false);
+    setEditId(null);
+    setForm(emptyContactPartyForm());
+    setLinkedSupplierId(null);
+  };
 
   const handleSubmit = () => {
     if (!form.name.trim()) { toast.error("اسم العميل مطلوب"); return; }
-    if (editId) {
-      updateMut.mutate({ id: editId, ...form });
-    } else {
-      createMut.mutate(form);
+    if (form.openingBalance.trim() && Number(form.openingBalance) !== 0 && !form.openingBalanceDate.trim()) {
+      toast.error("حدد تاريخ الرصيد الافتتاحي");
+      return;
     }
+    const payload = buildPartyPayload(form, { mode: "customer", linkedTwinId: linkedSupplierId });
+    if (editId) updateMut.mutate({ id: editId, ...payload } as any);
+    else createMut.mutate(payload as any);
   };
 
   const handleEdit = (row: any) => {
     setEditId(row.id);
-    setForm({
-      name: row.name || "", code: row.code || "", phone: row.phone || "",
-      phone2: row.phone2 || "", email: row.email || "", address: row.address || "",
-      city: row.city || "", taxNumber: row.taxNumber || "",
-      creditLimit: row.creditLimit || "", notes: row.notes || "",
-    });
+    setLinkedSupplierId(row.linkedSupplierId ?? null);
+    setForm(partyFormFromRow(row, "linkedSupplierId"));
     setOpen(true);
   };
-
-  const handleDelete = (id: number) => {
-    if (confirm("هل أنت متأكد من حذف هذا العميل؟")) {
-      deleteMut.mutate(id);
-    }
-  };
-
-  const f = (k: keyof typeof emptyForm) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
-    setForm(prev => ({ ...prev, [k]: e.target.value }));
 
   return (
     <ERPLayout title="قائمة العملاء">
@@ -67,77 +84,86 @@ export default function Customers() {
         onPageChange={setPage}
         search={search}
         onSearch={setSearch}
-        onAdd={() => { setEditId(null); setForm(emptyForm); setOpen(true); }}
+        onAdd={() => { setEditId(null); setLinkedSupplierId(null); setForm(emptyContactPartyForm()); setOpen(true); }}
         addLabel="عميل جديد"
+        permissionModule="contacts"
+        onEdit={handleEdit}
+        onDelete={(row) => { if (confirm("هل أنت متأكد من حذف هذا العميل؟")) deleteMut.mutate(row.id!); }}
+        deleteConfirm="هل أنت متأكد من حذف هذا العميل؟"
         columns={[
           { key: "code", label: "الكود", className: "w-24" },
           { key: "name", label: "اسم العميل" },
+          {
+            key: "branchId",
+            label: "الفرع",
+            render: (row) => branchList?.find((b) => b.id === row.branchId)?.name || "—",
+          },
           { key: "phone", label: "الهاتف" },
           { key: "city", label: "المدينة" },
-          { key: "balance", label: "الرصيد", render: row => <span className={Number(row.balance) < 0 ? "text-red-600 font-semibold" : "text-slate-700"}>{Number(row.balance).toLocaleString("ar-EG")} ج.م</span> },
+          {
+            key: "reps",
+            label: "المندوبون",
+            render: (row) => (
+              <span className="text-xs text-slate-600">
+                {row.salesRepNames || "—"}
+              </span>
+            ),
+          },
+          {
+            key: "role",
+            label: "النوع",
+            render: (row) => row.linkedSupplierId
+              ? <span className="text-[11px] font-medium text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded">عميل ومورد</span>
+              : <span className="text-[11px] text-slate-500">عميل</span>,
+          },
+          { key: "balance", label: "الرصيد", render: row => <span className={Number(row.balance) < 0 ? "text-red-600 font-semibold" : "text-slate-700"}>{Number(row.balance).toLocaleString("en-US")} ج.م</span> },
+          {
+            key: "openingBalance",
+            label: "افتتاحي",
+            render: (row) => Number(row.openingBalance || 0)
+              ? (
+                <span className="text-violet-700 font-medium">
+                  {Number(row.openingBalance).toLocaleString("en-US")}
+                  {row.openingBalanceDate ? (
+                    <span className="block text-[11px] text-violet-500 font-semibold">
+                      {isoToDisplayDate(String(row.openingBalanceDate))}
+                    </span>
+                  ) : null}
+                </span>
+              )
+              : <span className="text-slate-300">—</span>,
+          },
+          { key: "statement", label: "كشف", render: row => (
+            <Link href={`/contacts/statement?type=customer&id=${row.id}`}>
+              <Button variant="ghost" size="sm" className="h-7 gap-1 text-blue-600 hover:bg-blue-50">
+                <FileText size={13} /> كشف
+              </Button>
+            </Link>
+          ) },
           { key: "isActive", label: "الحالة", render: row => statusBadge(row.isActive ? "active" : "inactive") },
         ]}
-        actions={row => (
-          <>
-            <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-blue-600 hover:bg-blue-50" onClick={() => handleEdit(row)}>
-              <Edit size={13} />
-            </Button>
-            <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-red-500 hover:bg-red-50" onClick={() => handleDelete(row.id!)}>
-              <Trash2 size={13} />
-            </Button>
-          </>
-        )}
       />
 
       <FormModal
         open={open}
-        onClose={() => { setOpen(false); setEditId(null); setForm(emptyForm); }}
+        onClose={closeModal}
         title={editId ? "تعديل عميل" : "إضافة عميل جديد"}
+        description="أدخل بيانات العميل بوضوح — الحقول المطلوبة مميزة بالأحمر."
         onSubmit={handleSubmit}
         isLoading={createMut.isPending || updateMut.isPending}
+        size="2xl"
       >
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <Label className="text-xs font-medium text-slate-700 mb-1.5 block">اسم العميل *</Label>
-            <Input value={form.name} onChange={f("name")} placeholder="اسم العميل" className="h-9 text-sm" />
-          </div>
-          <div>
-            <Label className="text-xs font-medium text-slate-700 mb-1.5 block">الكود</Label>
-            <Input value={form.code} onChange={f("code")} placeholder="كود العميل" className="h-9 text-sm" />
-          </div>
-          <div>
-            <Label className="text-xs font-medium text-slate-700 mb-1.5 block">الهاتف</Label>
-            <Input value={form.phone} onChange={f("phone")} placeholder="رقم الهاتف" className="h-9 text-sm" />
-          </div>
-          <div>
-            <Label className="text-xs font-medium text-slate-700 mb-1.5 block">هاتف 2</Label>
-            <Input value={form.phone2} onChange={f("phone2")} placeholder="رقم هاتف إضافي" className="h-9 text-sm" />
-          </div>
-          <div>
-            <Label className="text-xs font-medium text-slate-700 mb-1.5 block">البريد الإلكتروني</Label>
-            <Input value={form.email} onChange={f("email")} placeholder="البريد الإلكتروني" className="h-9 text-sm" />
-          </div>
-          <div>
-            <Label className="text-xs font-medium text-slate-700 mb-1.5 block">المدينة</Label>
-            <Input value={form.city} onChange={f("city")} placeholder="المدينة" className="h-9 text-sm" />
-          </div>
-          <div>
-            <Label className="text-xs font-medium text-slate-700 mb-1.5 block">الرقم الضريبي</Label>
-            <Input value={form.taxNumber} onChange={f("taxNumber")} placeholder="الرقم الضريبي" className="h-9 text-sm" />
-          </div>
-          <div>
-            <Label className="text-xs font-medium text-slate-700 mb-1.5 block">حد الائتمان</Label>
-            <Input value={form.creditLimit} onChange={f("creditLimit")} placeholder="0" type="number" className="h-9 text-sm" />
-          </div>
-          <div className="col-span-2">
-            <Label className="text-xs font-medium text-slate-700 mb-1.5 block">العنوان</Label>
-            <Input value={form.address} onChange={f("address")} placeholder="العنوان" className="h-9 text-sm" />
-          </div>
-          <div className="col-span-2">
-            <Label className="text-xs font-medium text-slate-700 mb-1.5 block">ملاحظات</Label>
-            <Textarea value={form.notes} onChange={f("notes")} placeholder="ملاحظات" className="text-sm resize-none" rows={2} />
-          </div>
-        </div>
+        <ContactPartyFormFields
+          mode="customer"
+          form={form}
+          setForm={setForm}
+          editId={editId}
+          linkedTwinId={linkedSupplierId}
+          categories={(categories || []) as any}
+          branches={(branchList || []) as any}
+          reps={(reps || []) as any}
+          areas={(areas || []) as any}
+        />
       </FormModal>
     </ERPLayout>
   );

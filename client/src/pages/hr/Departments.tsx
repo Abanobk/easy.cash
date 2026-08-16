@@ -1,14 +1,15 @@
 import { useState } from "react";
 import ERPLayout from "@/components/ERPLayout";
 import { trpc } from "@/lib/trpc";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Plus, Edit, Trash2, Building2 } from "lucide-react";
+import { Building2 } from "lucide-react";
+import { AddActionButton } from "@/components/AddActionButton";
+import { EntityRowActions } from "@/components/EntityRowActions";
 import { toast } from "sonner";
+import { FormModal } from "@/components/FormModal";
+import { FieldLabel, FormSection, entryControlClass } from "@/components/form/EntryForm";
 
 export default function Departments() {
   const [open, setOpen] = useState(false);
@@ -42,9 +43,9 @@ export default function Departments() {
             <CardTitle className="text-base font-semibold text-slate-800 flex items-center gap-2">
               <Building2 size={18} className="text-blue-600" /> قائمة الإدارات
             </CardTitle>
-            <Button size="sm" className="bg-blue-600 hover:bg-blue-700 text-white gap-1" onClick={() => { resetForm(); setOpen(true); }}>
-              <Plus size={14} /> إضافة إدارة
-            </Button>
+            <AddActionButton module="hr" className="bg-blue-600 hover:bg-blue-700 text-white gap-2 h-10 px-4 text-sm font-semibold" onClick={() => { resetForm(); setOpen(true); }}>
+              إضافة إدارة
+            </AddActionButton>
           </div>
         </CardHeader>
         <CardContent className="p-0">
@@ -67,10 +68,11 @@ export default function Departments() {
                   <TableCell className="text-sm font-medium text-slate-800">{row.name}</TableCell>
                   <TableCell className="text-xs text-slate-500">{row.description || "-"}</TableCell>
                   <TableCell>
-                    <div className="flex gap-1">
-                      <Button variant="ghost" size="icon" className="h-7 w-7 text-blue-600 hover:bg-blue-50" onClick={() => openEdit(row)}><Edit size={13} /></Button>
-                      <Button variant="ghost" size="icon" className="h-7 w-7 text-red-500 hover:bg-red-50" onClick={() => deleteMut.mutate(row.id)}><Trash2 size={13} /></Button>
-                    </div>
+                    <EntityRowActions
+                      module="hr"
+                      onEdit={() => openEdit(row)}
+                      onDelete={() => deleteMut.mutate(row.id)}
+                    />
                   </TableCell>
                 </TableRow>
               ))}
@@ -79,27 +81,27 @@ export default function Departments() {
         </CardContent>
       </Card>
 
-      <Dialog open={open} onOpenChange={v => { setOpen(v); if (!v) resetForm(); }}>
-        <DialogContent className="max-w-sm" dir="rtl">
-          <DialogHeader><DialogTitle>{editItem ? "تعديل إدارة" : "إضافة إدارة جديدة"}</DialogTitle></DialogHeader>
-          <div className="grid gap-4 py-2">
-            <div className="space-y-1">
-              <Label className="text-xs">اسم الإدارة *</Label>
-              <Input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="اسم الإدارة" className="h-9 text-sm" />
-            </div>
-            <div className="space-y-1">
-              <Label className="text-xs">الوصف</Label>
-              <Input value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} placeholder="وصف الإدارة" className="h-9 text-sm" />
-            </div>
+      <FormModal
+        open={open}
+        onClose={() => { setOpen(false); resetForm(); }}
+        title={editItem ? "تعديل إدارة" : "إضافة إدارة جديدة"}
+        description="الإدارات لتنظيم الموظفين والتقارير."
+        onSubmit={handleSubmit}
+        isLoading={createMut.isPending || updateMut.isPending}
+        size="md"
+        submitLabel={editItem ? "تحديث" : "إضافة"}
+      >
+        <FormSection title="بيانات الإدارة" accent="blue">
+          <div className="sm:col-span-2">
+            <FieldLabel required>اسم الإدارة</FieldLabel>
+            <Input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="اسم الإدارة" className={entryControlClass} />
           </div>
-          <DialogFooter className="gap-2">
-            <Button variant="outline" size="sm" onClick={() => { setOpen(false); resetForm(); }}>إلغاء</Button>
-            <Button size="sm" className="bg-blue-600 hover:bg-blue-700 text-white" onClick={handleSubmit} disabled={createMut.isPending || updateMut.isPending}>
-              {editItem ? "تحديث" : "إضافة"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          <div className="sm:col-span-2">
+            <FieldLabel>الوصف</FieldLabel>
+            <Input value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} placeholder="وصف الإدارة" className={entryControlClass} />
+          </div>
+        </FormSection>
+      </FormModal>
     </ERPLayout>
   );
 }

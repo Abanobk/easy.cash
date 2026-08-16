@@ -9,8 +9,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
 import { Building2, Phone, Mail, Globe, FileText, MapPin,
-  Save, Upload, X, Hash, CreditCard, Download, Database
+  Save, Upload, X, Hash, CreditCard, Download, Database, Printer, Receipt
 } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { PRINT_TEMPLATES, type PrintTemplateId } from "@/config/print-templates";
 
 
 function BackupButton() {
@@ -72,6 +74,31 @@ export default function CompanyProfile() {
     commercialRegister: "",
     currency: "EGP",
     invoiceFooter: "",
+    defaultPrintTemplate: "standard-a4" as PrintTemplateId,
+  });
+
+  const [etaForm, setEtaForm] = useState({
+    enabled: false,
+    mode: "preprod" as "preprod" | "production",
+    clientId: "",
+    clientSecret: "",
+    activityCode: "",
+    branchCode: "0",
+  });
+  const [etaInitialized, setEtaInitialized] = useState(false);
+
+  const etaQuery = trpc.parity.settings.eta.get.useQuery();
+  const etaSaveMut = trpc.parity.settings.eta.save.useMutation({
+    onSuccess: () => {
+      toast.success("تم حفظ إعدادات فاتورة ETA");
+      etaQuery.refetch();
+      setEtaForm((f) => ({ ...f, clientSecret: "" }));
+    },
+    onError: (e) => toast.error(e.message),
+  });
+  const etaTestMut = trpc.parity.settings.eta.testConnection.useMutation({
+    onSuccess: (r) => toast.success(r.message),
+    onError: (e) => toast.error(e.message),
   });
 
   const [initialized, setInitialized] = useState(false);
@@ -96,10 +123,25 @@ export default function CompanyProfile() {
         commercialRegister: p.commercialRegister || "",
         currency: p.currency || "EGP",
         invoiceFooter: p.invoiceFooter || "",
+        defaultPrintTemplate: (p.defaultPrintTemplate as PrintTemplateId) || "standard-a4",
       });
       setInitialized(true);
     }
   }, [profileQuery.data, initialized]);
+
+  useEffect(() => {
+    if (etaQuery.data && !etaInitialized) {
+      setEtaForm({
+        enabled: etaQuery.data.enabled,
+        mode: etaQuery.data.mode,
+        clientId: etaQuery.data.clientId || "",
+        clientSecret: "",
+        activityCode: etaQuery.data.activityCode || "",
+        branchCode: etaQuery.data.branchCode || "0",
+      });
+      setEtaInitialized(true);
+    }
+  }, [etaQuery.data, etaInitialized]);
 
   const saveMutation = trpc.saas.saveCompanyProfile.useMutation({
     onSuccess: () => {
@@ -394,6 +436,124 @@ export default function CompanyProfile() {
                   <option value="KWD">دينار كويتي (KWD)</option>
                 </select>
               </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Print template */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm font-semibold text-slate-700 flex items-center gap-2">
+              <Printer size={15} className="text-blue-500" />
+              قالب الطباعة الافتراضي
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Label className="text-xs text-slate-600 mb-1.5 block">يُستخدم عند طباعة فواتير البيع والشراء</Label>
+            <Select
+              value={form.defaultPrintTemplate}
+              onValueChange={(v) => setForm((f) => ({ ...f, defaultPrintTemplate: v as PrintTemplateId }))}
+            >
+              <SelectTrigger className="max-w-md"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {Object.entries(PRINT_TEMPLATES).map(([id, t]) => (
+                  <SelectItem key={id} value={id}>{t.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </CardContent>
+        </Card>
+
+        {/* ETA e-invoice */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm font-semibold text-slate-700 flex items-center gap-2">
+              <Receipt size={15} className="text-blue-500" />
+              الفاتورة الإلكترونية (ETA)
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={etaForm.enabled}
+                onChange={(e) => setEtaForm((f) => ({ ...f, enabled: e.target.checked }))}
+                className="w-4 h-4"
+              />
+              تفعيل الإرسال لمنظومة الضرائب المصرية
+            </label>
+            {etaForm.mode === "production" && (
+              <div className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                بيئة <strong>الإنتاج</strong> ترسل فواتير حقيقية لمصلحة الضرائب. تأكد من بيانات الاعتماد والرقم الضريبي قبل التفعيل.
+              </div>
+            )}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <Label className="text-xs text-slate-600 mb-1.5 block">البيئة</Label>
+                <Select value={etaForm.mode} onValueChange={(v) => setEtaForm((f) => ({ ...f, mode: v as "preprod" | "production" }))}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="preprod">تجريبي (Preprod)</SelectItem>
+                    <SelectItem value="production">إنتاج (Production)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label className="text-xs text-slate-600 mb-1.5 block">كود النشاط الضريبي</Label>
+                <Input value={etaForm.activityCode} onChange={(e) => setEtaForm((f) => ({ ...f, activityCode: e.target.value }))} dir="ltr" />
+              </div>
+              <div>
+                <Label className="text-xs text-slate-600 mb-1.5 block">Client ID</Label>
+                <Input value={etaForm.clientId} onChange={(e) => setEtaForm((f) => ({ ...f, clientId: e.target.value }))} dir="ltr" />
+              </div>
+              <div>
+                <Label className="text-xs text-slate-600 mb-1.5 block">Client Secret</Label>
+                <Input
+                  type="password"
+                  value={etaForm.clientSecret}
+                  onChange={(e) => setEtaForm((f) => ({ ...f, clientSecret: e.target.value }))}
+                  placeholder={etaQuery.data?.hasClientSecret ? "محفوظ — اتركه فارغاً للإبقاء" : ""}
+                  dir="ltr"
+                />
+              </div>
+              <div>
+                <Label className="text-xs text-slate-600 mb-1.5 block">كود الفرع</Label>
+                <Input value={etaForm.branchCode} onChange={(e) => setEtaForm((f) => ({ ...f, branchCode: e.target.value }))} dir="ltr" />
+              </div>
+            </div>
+            {etaQuery.data?.portalUrl && (
+              <p className="text-xs text-slate-500">
+                بوابة المنظومة:{" "}
+                <a href={etaQuery.data.portalUrl} target="_blank" rel="noreferrer" className="text-blue-600 underline" dir="ltr">
+                  {etaQuery.data.portalUrl}
+                </a>
+              </p>
+            )}
+            <div className="flex flex-wrap gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={etaSaveMut.isPending}
+                onClick={() => etaSaveMut.mutate({
+                  enabled: etaForm.enabled,
+                  mode: etaForm.mode,
+                  clientId: etaForm.clientId,
+                  clientSecret: etaForm.clientSecret || undefined,
+                  activityCode: etaForm.activityCode,
+                  branchCode: etaForm.branchCode,
+                })}
+              >
+                {etaSaveMut.isPending ? "جاري الحفظ..." : "حفظ إعدادات ETA"}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="border-emerald-300 text-emerald-700"
+                disabled={etaTestMut.isPending}
+                onClick={() => etaTestMut.mutate()}
+              >
+                {etaTestMut.isPending ? "جاري الاختبار..." : "اختبار الاتصال"}
+              </Button>
             </div>
           </CardContent>
         </Card>

@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { Plus, RotateCcw, Trash2 } from "lucide-react";
 import { toast } from "sonner";
+import { AddActionButton } from "@/components/AddActionButton";
 
 export default function SalesReturns() {
   const [open, setOpen] = useState(false);
@@ -55,9 +56,9 @@ export default function SalesReturns() {
             <CardTitle className="text-base font-semibold text-slate-800 flex items-center gap-2">
               <RotateCcw size={18} className="text-red-600" /> مردودات البيع
             </CardTitle>
-            <Button size="sm" className="bg-red-600 hover:bg-red-700 text-white gap-1" onClick={() => { resetForm(); setOpen(true); }}>
+            <AddActionButton module="sales" size="sm" className="bg-red-600 hover:bg-red-700 text-white gap-1" onClick={() => { resetForm(); setOpen(true); }}>
               <Plus size={14} /> مردود بيع جديد
-            </Button>
+            </AddActionButton>
           </div>
         </CardHeader>
         <CardContent className="p-0">
@@ -79,8 +80,8 @@ export default function SalesReturns() {
                 <TableRow key={row.id} className="hover:bg-slate-50">
                   <TableCell className="text-sm font-medium text-red-700">#{row.number}</TableCell>
                   <TableCell className="text-sm text-slate-700">{row.customerName}</TableCell>
-                  <TableCell className="text-xs text-slate-500">{row.date ? new Date(row.date).toLocaleDateString("ar-EG") : "-"}</TableCell>
-                  <TableCell className="text-sm font-semibold text-slate-800">{Number(row.total || 0).toLocaleString("ar-EG")} ج.م</TableCell>
+                  <TableCell className="text-xs text-slate-500">{row.date ? new Date(row.date).toLocaleDateString("en-GB") : "-"}</TableCell>
+                  <TableCell className="text-sm font-semibold text-slate-800">{Number(row.total || 0).toLocaleString("en-US")} ج.م</TableCell>
                   <TableCell><Badge variant="secondary" className="text-xs">مؤكد</Badge></TableCell>
                 </TableRow>
               ))}
@@ -141,7 +142,7 @@ export default function SalesReturns() {
                         </TableCell>
                         <TableCell className="p-1"><Input type="number" value={it.quantity} onChange={e => updateItem(i, "quantity", e.target.value)} className="h-8 text-xs w-20" /></TableCell>
                         <TableCell className="p-1"><Input type="number" value={it.unitPrice} onChange={e => updateItem(i, "unitPrice", e.target.value)} className="h-8 text-xs w-24" /></TableCell>
-                        <TableCell className="p-1 text-xs font-medium">{(Number(it.quantity) * Number(it.unitPrice)).toLocaleString("ar-EG")}</TableCell>
+                        <TableCell className="p-1 text-xs font-medium">{(Number(it.quantity) * Number(it.unitPrice)).toLocaleString("en-US")}</TableCell>
                         <TableCell className="p-1">
                           {items.length > 1 && <Button variant="ghost" size="icon" className="h-7 w-7 text-red-500" onClick={() => removeItem(i)}><Trash2 size={12} /></Button>}
                         </TableCell>
@@ -150,7 +151,7 @@ export default function SalesReturns() {
                   </TableBody>
                 </Table>
               </div>
-              <div className="text-left text-sm font-semibold text-red-700">الإجمالي: {total.toLocaleString("ar-EG")} ج.م</div>
+              <div className="text-left text-sm font-semibold text-red-700">الإجمالي: {total.toLocaleString("en-US")} ج.م</div>
             </div>
             <div className="space-y-1">
               <Label className="text-xs">ملاحظات</Label>

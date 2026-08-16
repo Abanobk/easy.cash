@@ -12,6 +12,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { Plus, DollarSign, CheckCircle } from "lucide-react";
 import { toast } from "sonner";
+import { AddActionButton } from "@/components/AddActionButton";
+import PermissionGate from "@/components/PermissionGate";
 
 export default function Advances() {
   const [open, setOpen] = useState(false);
@@ -41,9 +43,9 @@ export default function Advances() {
             <CardTitle className="text-base font-semibold text-slate-800 flex items-center gap-2">
               <DollarSign size={18} className="text-blue-600" /> سلف الموظفين
             </CardTitle>
-            <Button size="sm" className="bg-blue-600 hover:bg-blue-700 text-white gap-1" onClick={() => { resetForm(); setOpen(true); }}>
+            <AddActionButton module="hr" size="sm" className="bg-blue-600 hover:bg-blue-700 text-white gap-1" onClick={() => { resetForm(); setOpen(true); }}>
               <Plus size={14} /> سلفة جديدة
-            </Button>
+            </AddActionButton>
           </div>
         </CardHeader>
         <CardContent className="p-0">
@@ -67,15 +69,17 @@ export default function Advances() {
                 <TableRow key={row.id} className="hover:bg-slate-50">
                   <TableCell className="text-xs text-slate-500">{i + 1}</TableCell>
                   <TableCell className="text-sm font-medium text-slate-800">{row.employeeName}</TableCell>
-                  <TableCell className="text-sm font-semibold text-blue-700">{Number(row.amount).toLocaleString("ar-EG")} ج.م</TableCell>
-                  <TableCell className="text-xs text-slate-500">{row.date ? new Date(row.date).toLocaleDateString("ar-EG") : "-"}</TableCell>
+                  <TableCell className="text-sm font-semibold text-blue-700">{Number(row.amount).toLocaleString("en-US")} ج.م</TableCell>
+                  <TableCell className="text-xs text-slate-500">{row.date ? new Date(row.date).toLocaleDateString("en-GB") : "-"}</TableCell>
                   <TableCell className="text-xs text-slate-500">{row.reason || "-"}</TableCell>
                   <TableCell><Badge variant={statusBadge(row.status) as any} className="text-xs">{statusLabel(row.status)}</Badge></TableCell>
                   <TableCell>
                     {row.status === "pending" && (
-                      <Button variant="ghost" size="sm" className="h-7 text-xs text-green-600 hover:bg-green-50 gap-1" onClick={() => approveMut.mutate(row.id)}>
-                        <CheckCircle size={12} /> اعتماد
-                      </Button>
+                      <PermissionGate module="hr" action="edit">
+                        <Button variant="ghost" size="sm" className="h-7 text-xs text-green-600 hover:bg-green-50 gap-1" onClick={() => approveMut.mutate(row.id)}>
+                          <CheckCircle size={12} /> اعتماد
+                        </Button>
+                      </PermissionGate>
                     )}
                   </TableCell>
                 </TableRow>

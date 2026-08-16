@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "wouter";
 import ERPLayout from "@/components/ERPLayout";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
@@ -10,12 +11,15 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { Plus, ShoppingCart, CheckCircle, Trash2 } from "lucide-react";
+import { Plus, ShoppingCart, CheckCircle, Trash2, FileText } from "lucide-react";
 import { toast } from "sonner";
+import { AddActionButton } from "@/components/AddActionButton";
+import PermissionGate from "@/components/PermissionGate";
+import { useWarehouseOptions } from "@/hooks/useEntityOptions";
 
 export default function PurchaseOrders() {
   const [open, setOpen] = useState(false);
-  const [form, setForm] = useState({ supplierId: "", date: new Date().toISOString().split("T")[0], notes: "", expectedDate: "" });
+  const [form, setForm] = useState({ supplierId: "", warehouseId: "", date: new Date().toISOString().split("T")[0], notes: "", expectedDate: "" });
   const [items, setItems] = useState<{ itemId: string; quantity: string; unitPrice: string; notes: string }[]>([
     { itemId: "", quantity: "1", unitPrice: "0", notes: "" }
   ]);
@@ -23,11 +27,16 @@ export default function PurchaseOrders() {
   const { data, refetch } = trpc.purchases.orders.list.useQuery({ page: 1, limit: 50 });
   const { data: suppliers } = trpc.suppliers.list.useQuery({ page: 1, limit: 200 });
   const { data: itemsList } = trpc.items.list.useQuery({ page: 1, limit: 200 });
+  const warehouses = useWarehouseOptions();
   const createMut = trpc.purchases.orders.create.useMutation({ onSuccess: () => { toast.success("تم إنشاء طلب الشراء"); refetch(); setOpen(false); resetForm(); } });
   const approveMut = trpc.purchases.orders.approve.useMutation({ onSuccess: () => { toast.success("تم اعتماد الطلب"); refetch(); } });
+  const convertMut = trpc.purchases.orders.convertToInvoice.useMutation({
+    onSuccess: (res) => { toast.success(`تم إنشاء الفاتورة ${res.number}`); refetch(); },
+    onError: (e) => toast.error(e.message),
+  });
 
   const resetForm = () => {
-    setForm({ supplierId: "", date: new Date().toISOString().split("T")[0], notes: "", expectedDate: "" });
+    setForm({ supplierId: "", warehouseId: "", date: new Date().toISOString().split("T")[0], notes: "", expectedDate: "" });
     setItems([{ itemId: "", quantity: "1", unitPrice: "0", notes: "" }]);
   };
 
@@ -42,6 +51,7 @@ export default function PurchaseOrders() {
     if (items.some(it => !it.itemId)) return toast.error("يجب اختيار الصنف في كل بند");
     createMut.mutate({
       supplierId: Number(form.supplierId),
+      warehouseId: form.warehouseId ? Number(form.warehouseId) : undefined,
       date: form.date,
       expectedDate: form.expectedDate || undefined,
       notes: form.notes,
@@ -49,8 +59,8 @@ export default function PurchaseOrders() {
     });
   };
 
-  const statusLabel = (s: string) => ({ draft: "مسودة", approved: "معتمد", received: "مستلم", cancelled: "ملغي" }[s] || s);
-  const statusColor = (s: string) => ({ draft: "outline", approved: "default", received: "secondary", cancelled: "destructive" }[s] || "outline") as any;
+  const statusLabel = (s: string) => ({ draft: "مسودة", confirmed: "معتمد", received: "مُحوَّل لفاتورة", cancelled: "ملغي" }[s] || s);
+  const statusColor = (s: string) => ({ draft: "outline", confirmed: "default", received: "secondary", cancelled: "destructive" }[s] || "outline") as any;
 
   return (
     <ERPLayout title="طلبات الشراء">
@@ -60,9 +70,9 @@ export default function PurchaseOrders() {
             <CardTitle className="text-base font-semibold text-slate-800 flex items-center gap-2">
               <ShoppingCart size={18} className="text-blue-600" /> طلبات الشراء
             </CardTitle>
-            <Button size="sm" className="bg-blue-600 hover:bg-blue-700 text-white gap-1" onClick={() => { resetForm(); setOpen(true); }}>
+            <AddActionButton module="purchases" size="sm" className="bg-blue-600 hover:bg-blue-700 text-white gap-1" onClick={() => { resetForm(); setOpen(true); }}>
               <Plus size={14} /> طلب شراء جديد
-            </Button>
+            </AddActionButton>
           </div>
         </CardHeader>
         <CardContent className="p-0">
@@ -83,16 +93,27 @@ export default function PurchaseOrders() {
               )}
               {data?.rows?.map((row: any) => (
                 <TableRow key={row.id} className="hover:bg-slate-50">
-                  <TableCell className="text-sm font-medium text-blue-700">#{row.id}</TableCell>
+                  <TableCell className="text-sm font-medium text-blue-700">
+                    <Link href={`/purchases/orders/${row.id}`} className="hover:underline">#{row.number}</Link>
+                  </TableCell>
                   <TableCell className="text-sm text-slate-700">{row.supplierName}</TableCell>
-                  <TableCell className="text-xs text-slate-500">{row.date ? new Date(row.date).toLocaleDateString("ar-EG") : "-"}</TableCell>
-                  <TableCell className="text-sm font-semibold text-slate-800">{Number(row.total || 0).toLocaleString("ar-EG")} ج.م</TableCell>
+                  <TableCell className="text-xs text-slate-500">{row.date ? new Date(row.date).toLocaleDateString("en-GB") : "-"}</TableCell>
+                  <TableCell className="text-sm font-semibold text-slate-800">{Number(row.total || 0).toLocaleString("en-US")} ج.م</TableCell>
                   <TableCell><Badge variant={statusColor(row.status)} className="text-xs">{statusLabel(row.status)}</Badge></TableCell>
                   <TableCell>
                     {row.status === "draft" && (
-                      <Button variant="ghost" size="sm" className="h-7 text-xs text-green-600 hover:bg-green-50 gap-1" onClick={() => approveMut.mutate(row.id)}>
-                        <CheckCircle size={12} /> اعتماد
-                      </Button>
+                      <PermissionGate module="purchases" action="edit">
+                        <Button variant="ghost" size="sm" className="h-7 text-xs text-green-600 hover:bg-green-50 gap-1" onClick={() => approveMut.mutate(row.id)}>
+                          <CheckCircle size={12} /> اعتماد
+                        </Button>
+                      </PermissionGate>
+                    )}
+                    {row.status !== "received" && row.status !== "cancelled" && (
+                      <PermissionGate module="purchases" action="create">
+                        <Button variant="ghost" size="sm" className="h-7 text-xs text-blue-600 hover:bg-blue-50 gap-1" onClick={() => convertMut.mutate({ orderId: row.id })} disabled={convertMut.isPending}>
+                          <FileText size={12} /> تحويل لفاتورة
+                        </Button>
+                      </PermissionGate>
                     )}
                   </TableCell>
                 </TableRow>
@@ -125,6 +146,15 @@ export default function PurchaseOrders() {
               <Label className="text-xs">تاريخ الاستلام المتوقع</Label>
               <Input type="date" value={form.expectedDate} onChange={e => setForm(f => ({ ...f, expectedDate: e.target.value }))} className="h-9 text-sm" />
             </div>
+            <div className="space-y-1">
+              <Label className="text-xs">المخزن</Label>
+              <Select value={form.warehouseId} onValueChange={v => setForm(f => ({ ...f, warehouseId: v }))}>
+                <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="اختر المخزن" /></SelectTrigger>
+                <SelectContent>
+                  {warehouses.map((w) => <SelectItem key={w.value} value={w.value}>{w.label}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
 
             {/* Items */}
             <div className="space-y-2">
@@ -156,7 +186,7 @@ export default function PurchaseOrders() {
                         </TableCell>
                         <TableCell className="p-1"><Input type="number" value={it.quantity} onChange={e => updateItem(i, "quantity", e.target.value)} className="h-8 text-xs w-20" /></TableCell>
                         <TableCell className="p-1"><Input type="number" value={it.unitPrice} onChange={e => updateItem(i, "unitPrice", e.target.value)} className="h-8 text-xs w-24" /></TableCell>
-                        <TableCell className="p-1 text-xs font-medium">{(Number(it.quantity) * Number(it.unitPrice)).toLocaleString("ar-EG")}</TableCell>
+                        <TableCell className="p-1 text-xs font-medium">{(Number(it.quantity) * Number(it.unitPrice)).toLocaleString("en-US")}</TableCell>
                         <TableCell className="p-1">
                           {items.length > 1 && <Button variant="ghost" size="icon" className="h-7 w-7 text-red-500" onClick={() => removeItem(i)}><Trash2 size={12} /></Button>}
                         </TableCell>
@@ -165,7 +195,7 @@ export default function PurchaseOrders() {
                   </TableBody>
                 </Table>
               </div>
-              <div className="text-left text-sm font-semibold text-blue-700">الإجمالي: {total.toLocaleString("ar-EG")} ج.م</div>
+              <div className="text-left text-sm font-semibold text-blue-700">الإجمالي: {total.toLocaleString("en-US")} ج.م</div>
             </div>
 
             <div className="space-y-1">

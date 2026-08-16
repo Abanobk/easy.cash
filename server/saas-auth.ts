@@ -6,20 +6,23 @@
 
 import bcrypt from "bcryptjs";
 import { SignJWT, jwtVerify } from "jose";
-import { ENV } from "./_core/env";
+import { TRPCError } from "@trpc/server";
+import type { Request } from "express";
 import { getDb } from "./db";
 import { appUsers, subscriptions, subscriptionPlans } from "../drizzle/schema";
-import { eq, and, gte, or, count } from "drizzle-orm";
+import { eq, and, gte, or, count, desc, inArray } from "drizzle-orm";
+import { normalizeSubscriptionStatusForSave, toDateOnly, todayDateOnly } from "./subscription-display";
+import { resolveJwtSecret } from "./security-secrets";
 
 const SAAS_COOKIE_NAME = "easy_cash_session";
-const ONE_YEAR_MS = 1000 * 60 * 60 * 24 * 365;
+/** Session lifetime — was 1 year; shortened to reduce stolen-cookie window */
+export const SESSION_MAX_AGE_MS = 1000 * 60 * 60 * 24 * 7; // 7 days
 const SALT_ROUNDS = 10;
 
 // ===================== JWT Helpers =====================
 
 function getSecret() {
-  const secret = ENV.cookieSecret || "easy-cash-secret-key-2024";
-  return new TextEncoder().encode(secret);
+  return new TextEncoder().encode(resolveJwtSecret());
 }
 
 export async function signSaasToken(payload: {
@@ -31,7 +34,7 @@ export async function signSaasToken(payload: {
   impersonatorId?: number | null;
 }): Promise<string> {
   const issuedAt = Date.now();
-  const expiresInMs = ONE_YEAR_MS;
+  const expiresInMs = SESSION_MAX_AGE_MS;
   const expirationSeconds = Math.floor((issuedAt + expiresInMs) / 1000);
 
   return new SignJWT({
@@ -127,8 +130,8 @@ export async function getUserActiveSubscription(userId: number) {
   if (!db) return null;
   const user = await getAppUserById(userId);
   if (!user?.tenantId) return null;
-  const today = new Date().toISOString().split("T")[0];
-  const [sub] = await db
+  const today = todayDateOnly();
+  const rows = await db
     .select({
       id: subscriptions.id,
       status: subscriptions.status,
@@ -136,6 +139,7 @@ export async function getUserActiveSubscription(userId: number) {
       endDate: subscriptions.endDate,
       planId: subscriptions.planId,
       planName: subscriptionPlans.nameAr,
+      planDurationDays: subscriptionPlans.durationDays,
       maxUsers: subscriptionPlans.maxUsers,
       maxInvoices: subscriptionPlans.maxInvoices,
     })
@@ -143,13 +147,25 @@ export async function getUserActiveSubscription(userId: number) {
     .leftJoin(subscriptionPlans, eq(subscriptions.planId, subscriptionPlans.id))
     .where(
       and(
-        eq(subscriptions.tenantId, user.tenantId),
-        gte(subscriptions.endDate, today as any)
+        or(
+          eq(subscriptions.userId, userId),
+          user.tenantId ? eq(subscriptions.tenantId, user.tenantId) : eq(subscriptions.userId, userId),
+        ),
+        gte(subscriptions.endDate, today as any),
+        inArray(subscriptions.status, ["active", "trial", "expired"]),
       )
     )
-    .orderBy(subscriptions.endDate)
-    .limit(1);
-  return sub || null;
+    .orderBy(desc(subscriptions.endDate))
+    .limit(5);
+
+  for (const row of rows) {
+    const endDate = toDateOnly(row.endDate);
+    const status = normalizeSubscriptionStatusForSave(String(row.status), endDate, today);
+    if (endDate >= today && (status === "active" || status === "trial")) {
+      return { ...row, status };
+    }
+  }
+  return null;
 }
 
 export async function isSubscriptionActive(userId: number): Promise<boolean> {
@@ -160,3 +176,56 @@ export async function isSubscriptionActive(userId: number): Promise<boolean> {
 
 // ===================== Cookie Name Export =====================
 export { SAAS_COOKIE_NAME };
+
+export function getSaasTokenFromRequest(req: { headers: { cookie?: string; authorization?: string | string[] } }) {
+  const cookies = req.headers.cookie || "";
+  const match = cookies.match(new RegExp(`${SAAS_COOKIE_NAME}=([^;]+)`));
+  if (match?.[1]) {
+    try {
+      return decodeURIComponent(match[1].trim());
+    } catch {
+      return match[1].trim();
+    }
+  }
+  const auth = req.headers.authorization;
+  const header = Array.isArray(auth) ? auth[0] : auth;
+  if (typeof header === "string" && header.startsWith("Bearer ")) {
+    return header.slice(7).trim();
+  }
+  return null;
+}
+
+export async function getSaasSessionFromRequest(req: { headers: { cookie?: string; authorization?: string | string[] } }) {
+  return verifySaasToken(getSaasTokenFromRequest(req));
+}
+
+/**
+ * Superadmin gate: JWT must be valid AND live DB role must still be superadmin + active.
+ * Prefer this over trusting session.role alone.
+ */
+export async function requireSuperAdminFromRequest(req: Request) {
+  const session = await getSaasSessionFromRequest(req);
+  if (!session) {
+    throw new TRPCError({ code: "UNAUTHORIZED", message: "غير مصرح" });
+  }
+  const user = await getAppUserById(session.userId);
+  if (!user || !user.isActive || user.role !== "superadmin") {
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message: "غير مصرح — مطلوب حساب سوبر أدمن نشط",
+    });
+  }
+  return { session, user };
+}
+
+export function requireSaasSuperAdmin(ctx: {
+  saasUser: { role: string } | null;
+}) {
+  if (ctx.saasUser?.role === "superadmin") {
+    return ctx.saasUser;
+  }
+  throw new TRPCError({
+    code: "FORBIDDEN",
+    message: "انتهت جلسة السوبر أدمن أو الحساب الحالي ليس سوبر أدمن. سجّل خروج من «فتح برنامج مشترك» إن وُجد، ثم ادخل من /login بحساب السوبر أدمن.",
+  });
+}

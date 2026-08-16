@@ -8,11 +8,17 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
-import { Building2, Users, GitBranch, Save } from "lucide-react";
+import { Building2, GitBranch, Save, Bell, RefreshCw } from "lucide-react";
+import PermissionGate from "@/components/PermissionGate";
+import { AddActionButton } from "@/components/AddActionButton";
+import { Switch } from "@/components/ui/switch";
 
 export default function CompanySettings() {
   const [form, setForm] = useState({
     name: "", address: "", phone: "", email: "", taxNumber: "", currency: "EGP",
+    alertEmailsEnabled: false,
+    alertEmailRecipients: "",
+    requireDocumentApproval: false,
   });
   const [branchForm, setBranchForm] = useState({ name: "", address: "", phone: "" });
 
@@ -26,6 +32,17 @@ export default function CompanySettings() {
     onSuccess: () => { toast.success("تم إضافة الفرع"); refetchBranches(); setBranchForm({ name: "", address: "", phone: "" }); },
     onError: (e) => toast.error(e.message),
   });
+  const sendDigestMut = trpc.notifications.sendAlertDigest.useMutation({
+    onSuccess: (res) => {
+      if (res.sent) toast.success(`تم إرسال الملخص إلى ${res.recipients} بريد`);
+      else toast.info(res.reason === "RESEND_API_KEY not configured" ? "البريد غير مُعد — أضف RESEND_API_KEY على السيرفر" : `لم يُرسل: ${res.reason}`);
+    },
+    onError: (e) => toast.error(e.message),
+  });
+  const reconcileMut = trpc.settings.contacts.reconcileBalances.useMutation({
+    onSuccess: (res) => toast.success(`تم تحديث أرصدة ${res.customers} عميل و ${res.suppliers} مورد`),
+    onError: (e) => toast.error(e.message),
+  });
 
   useEffect(() => {
     if (company) {
@@ -36,6 +53,9 @@ export default function CompanySettings() {
         email: company.email || "",
         taxNumber: company.taxNumber || "",
         currency: company.currency || "EGP",
+        alertEmailsEnabled: !!company.alertEmailsEnabled,
+        alertEmailRecipients: company.alertEmailRecipients || "",
+        requireDocumentApproval: !!(company as any).requireDocumentApproval,
       });
     }
   }, [company]);
@@ -52,6 +72,9 @@ export default function CompanySettings() {
           </TabsTrigger>
           <TabsTrigger value="branches" className="text-xs data-[state=active]:bg-white gap-1.5">
             <GitBranch size={13} /> الفروع
+          </TabsTrigger>
+          <TabsTrigger value="alerts" className="text-xs data-[state=active]:bg-white gap-1.5">
+            <Bell size={13} /> التنبيهات والأرصدة
           </TabsTrigger>
         </TabsList>
 
@@ -88,14 +111,16 @@ export default function CompanySettings() {
                   <Textarea value={form.address} onChange={f("address")} className="text-sm resize-none" rows={2} />
                 </div>
                 <div className="col-span-2">
-                  <Button
-                    onClick={() => { if (!form.name.trim()) { toast.error("اسم الشركة مطلوب"); return; } saveMut.mutate(form); }}
-                    disabled={saveMut.isPending}
-                    className="bg-blue-600 hover:bg-blue-700 text-white h-9 gap-1.5 text-sm"
-                  >
-                    <Save size={14} />
-                    {saveMut.isPending ? "جاري الحفظ..." : "حفظ البيانات"}
-                  </Button>
+                  <PermissionGate module="settings" action="edit">
+                    <Button
+                      onClick={() => { if (!form.name.trim()) { toast.error("اسم الشركة مطلوب"); return; } saveMut.mutate(form); }}
+                      disabled={saveMut.isPending}
+                      className="bg-blue-600 hover:bg-blue-700 text-white h-9 gap-1.5 text-sm"
+                    >
+                      <Save size={14} />
+                      {saveMut.isPending ? "جاري الحفظ..." : "حفظ البيانات"}
+                    </Button>
+                  </PermissionGate>
                 </div>
               </div>
             </CardContent>
@@ -124,13 +149,14 @@ export default function CompanySettings() {
                     <Input value={branchForm.address} onChange={e => setBranchForm(p => ({ ...p, address: e.target.value }))} className="h-9 text-sm" />
                   </div>
                   <div>
-                    <Button
+                    <AddActionButton
+                      module="settings"
                       onClick={() => { if (!branchForm.name.trim()) { toast.error("اسم الفرع مطلوب"); return; } createBranchMut.mutate(branchForm); }}
                       disabled={createBranchMut.isPending}
                       className="bg-blue-600 hover:bg-blue-700 text-white h-9 gap-1.5 text-sm"
                     >
                       <GitBranch size={14} /> إضافة فرع
-                    </Button>
+                    </AddActionButton>
                   </div>
                 </div>
               </CardContent>
@@ -161,6 +187,97 @@ export default function CompanySettings() {
                     </tbody>
                   </table>
                 )}
+              </CardContent>
+            </Card>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="alerts">
+          <div className="grid lg:grid-cols-2 gap-4">
+            <Card className="border-0 shadow-sm">
+              <CardHeader className="pb-3 border-b border-slate-100">
+                <CardTitle className="text-sm font-semibold text-slate-800">تنبيهات البريد الإلكتروني</CardTitle>
+              </CardHeader>
+              <CardContent className="pt-5 space-y-4 max-w-xl">
+                <div className="flex items-center justify-between gap-3 pb-4 border-b border-slate-100">
+                  <div>
+                    <p className="text-sm font-medium text-slate-700">اعتماد المستندات قبل الترحيل</p>
+                    <p className="text-xs text-slate-500">فواتير الآجل تحتاج موافقة المدير قبل القيود والمخزون</p>
+                  </div>
+                  <Switch
+                    checked={form.requireDocumentApproval}
+                    onCheckedChange={(v) => setForm((p) => ({ ...p, requireDocumentApproval: v }))}
+                  />
+                </div>
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-medium text-slate-700">إرسال ملخص يومي</p>
+                    <p className="text-xs text-slate-500">يُرسل تلقائياً عند وجود تنبيهات (مرة كل ٢٠ ساعة)</p>
+                  </div>
+                  <Switch
+                    checked={form.alertEmailsEnabled}
+                    onCheckedChange={(v) => setForm((p) => ({ ...p, alertEmailsEnabled: v }))}
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs font-medium text-slate-700 mb-1.5 block">مستلمو البريد</Label>
+                  <Textarea
+                    value={form.alertEmailRecipients}
+                    onChange={(e) => setForm((p) => ({ ...p, alertEmailRecipients: e.target.value }))}
+                    placeholder="admin@company.com, accountant@company.com"
+                    className="text-sm resize-none"
+                    rows={2}
+                  />
+                  <p className="text-xs text-slate-400 mt-1">افصل بين العناوين بفاصلة</p>
+                </div>
+                <div className="flex gap-2 flex-wrap">
+                  <PermissionGate module="settings" action="edit">
+                    <Button
+                      onClick={() => {
+                        if (!form.name.trim()) { toast.error("احفظ اسم الشركة أولاً من تبويب بيانات الشركة"); return; }
+                        saveMut.mutate(form);
+                      }}
+                      disabled={saveMut.isPending}
+                      className="bg-blue-600 hover:bg-blue-700 text-white h-9 text-sm"
+                    >
+                      حفظ إعدادات البريد
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={() => sendDigestMut.mutate({ force: true })}
+                      disabled={sendDigestMut.isPending}
+                      className="h-9 text-sm gap-1"
+                    >
+                      <Bell size={14} /> إرسال ملخص الآن
+                    </Button>
+                  </PermissionGate>
+                </div>
+                <p className="text-xs text-amber-700 bg-amber-50 border border-amber-100 rounded p-2">
+                  يتطلب إعداد <code className="text-[11px]">RESEND_API_KEY</code> و <code className="text-[11px]">ALERT_EMAIL_FROM</code> في متغيرات السيرفر.
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card className="border-0 shadow-sm">
+              <CardHeader className="pb-3 border-b border-slate-100">
+                <CardTitle className="text-sm font-semibold text-slate-800">أرصدة العملاء والموردين</CardTitle>
+              </CardHeader>
+              <CardContent className="pt-5 space-y-3">
+                <p className="text-sm text-slate-600">
+                  يتم تحديث الرصيد تلقائياً عند إنشاء فواتير آجلة، التحصيل، والمردودات.
+                  استخدم هذا الزر لإعادة حساب كل الأرصدة من الفواتير المفتوحة.
+                </p>
+                <PermissionGate module="settings" action="edit">
+                  <Button
+                    variant="outline"
+                    onClick={() => reconcileMut.mutate()}
+                    disabled={reconcileMut.isPending}
+                    className="gap-1.5"
+                  >
+                    <RefreshCw size={14} className={reconcileMut.isPending ? "animate-spin" : ""} />
+                    {reconcileMut.isPending ? "جاري التحديث..." : "إعادة حساب كل الأرصدة"}
+                  </Button>
+                </PermissionGate>
               </CardContent>
             </Card>
           </div>

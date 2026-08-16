@@ -2,9 +2,9 @@ import { useState } from "react";
 import ERPLayout from "@/components/ERPLayout";
 import { DataTable } from "@/components/DataTable";
 import { FormModal } from "@/components/FormModal";
+import { FieldLabel, FormSection, entryControlClass, entryTextareaClass } from "@/components/form/EntryForm";
 import { trpc } from "@/lib/trpc";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 
@@ -36,20 +36,38 @@ export default function CostCenters() {
         onPageChange={setPage}
         onAdd={() => { setForm(emptyForm); setOpen(true); }}
         addLabel="مركز تكلفة جديد"
+        permissionModule="cost_centers"
         columns={[
           { key: "code", label: "الكود", className: "w-24" },
           { key: "name", label: "اسم مركز التكلفة" },
           { key: "description", label: "الوصف" },
-          { key: "totalExpenses", label: "إجمالي المصروفات", render: (row: any) => `${Number(row.totalExpenses || 0).toLocaleString("ar-EG")} ج.م` },
+          { key: "totalExpenses", label: "إجمالي المصروفات", render: (row: any) => `${Number(row.totalExpenses || 0).toLocaleString("en-US")} ج.م` },
         ]}
       />
 
-      <FormModal open={open} onClose={() => { setOpen(false); setForm(emptyForm); }} title="إضافة مركز تكلفة" onSubmit={() => { if (!form.name.trim()) { toast.error("اسم مركز التكلفة مطلوب"); return; } createMut.mutate(form); }} isLoading={createMut.isPending}>
-        <div className="grid grid-cols-2 gap-4">
-          <div><Label className="text-xs font-medium text-slate-700 mb-1.5 block">اسم مركز التكلفة *</Label><Input value={form.name} onChange={f("name")} className="h-9 text-sm" /></div>
-          <div><Label className="text-xs font-medium text-slate-700 mb-1.5 block">الكود</Label><Input value={form.code} onChange={f("code")} className="h-9 text-sm" /></div>
-          <div className="col-span-2"><Label className="text-xs font-medium text-slate-700 mb-1.5 block">الوصف</Label><Textarea value={form.description} onChange={f("description")} className="text-sm resize-none" rows={2} /></div>
-        </div>
+      <FormModal
+        open={open}
+        onClose={() => { setOpen(false); setForm(emptyForm); }}
+        title="إضافة مركز تكلفة"
+        description="استخدم مراكز التكلفة لتوزيع المصروفات والتقارير."
+        onSubmit={() => { if (!form.name.trim()) { toast.error("اسم مركز التكلفة مطلوب"); return; } createMut.mutate(form); }}
+        isLoading={createMut.isPending}
+        size="lg"
+      >
+        <FormSection title="بيانات مركز التكلفة" accent="violet">
+          <div>
+            <FieldLabel required>اسم مركز التكلفة</FieldLabel>
+            <Input value={form.name} onChange={f("name")} className={entryControlClass} />
+          </div>
+          <div>
+            <FieldLabel>الكود</FieldLabel>
+            <Input value={form.code} onChange={f("code")} className={entryControlClass} />
+          </div>
+          <div className="sm:col-span-2">
+            <FieldLabel>الوصف</FieldLabel>
+            <Textarea value={form.description} onChange={f("description")} className={entryTextareaClass} rows={3} />
+          </div>
+        </FormSection>
       </FormModal>
     </ERPLayout>
   );

@@ -22,7 +22,7 @@ function formatMonth(key: string) {
 }
 
 function formatCurrency(val: number) {
-  return new Intl.NumberFormat("ar-EG", { style: "decimal", maximumFractionDigits: 0 }).format(val) + " ج.م";
+  return new Intl.NumberFormat("en-US", { style: "decimal", maximumFractionDigits: 0 }).format(val) + " ج.م";
 }
 
 const CustomTooltip = ({ active, payload, label }: any) => {
@@ -274,7 +274,7 @@ export default function SalesAnalytics() {
                             style={{ width: `${(item.total / (data.topItems[0]?.total || 1)) * 100}%` }}
                           />
                         </div>
-                        <div className="text-xs text-slate-400 mt-0.5">الكمية: {item.qty.toLocaleString("ar-EG")}</div>
+                        <div className="text-xs text-slate-400 mt-0.5">الكمية: {item.qty.toLocaleString("en-US")}</div>
                       </div>
                     </div>
                   ))}

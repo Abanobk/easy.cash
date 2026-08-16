@@ -2,25 +2,57 @@
 
 نظام محاسبة متكامل بالعربية (عملاء، موردين، مخازن، فواتير، حسابات، موظفين، تقارير).
 
-## النشر على TrueNAS (نفس أسلوب easy.shope)
+## النشر التلقائي (زي FlutterFlow Publish)
 
-النشر التلقائي عبر **GitHub Actions + Tailscale + SSH + Docker Compose**.
+أي `git push` على فرع **`main`** يشغّل GitHub Actions وينشر على السيرفر لوحده — من غير ما تشغّل `deploy.sh` يدوياً.
+
+```bash
+git add -A && git commit -m "…" && git push origin main
+# → راقب: https://github.com/Abanobk/easy.cash/actions
+```
+
+تشغيل يدوي من الماك (نفس أسلوب flutter_app2 عبر Cloudflare):
+
+```bash
+# سريع — يرفع التعديلات فقط (rsync) ثم يبني على السيرفر
+./scripts/deploy.sh
+# أو: pnpm deploy:fast
+
+# رفع فقط بدون Docker rebuild
+./scripts/deploy.sh --sync-only
+
+# رفع كامل قديم (tar لكل المشروع)
+./scripts/deploy.sh --full
+```
+
+مرة واحدة لو `rsync` مش موجود: `brew install rsync`
 
 ### 1) أسرار GitHub
 
 في المستودع: **Settings → Secrets and variables → Actions**
 
-يمكنك إعادة استخدام نفس أسرار **easy.shope** ما عدا `DEPLOY_PATH`:
+**المفضّل (Cloudflare Access — نفس نفق `ssh-deploy.easytecheg.net`):**
 
 | Secret | الوصف |
 |--------|--------|
-| `TAILSCALE_AUTHKEY` | مفتاح Reusable/Ephemeral من [Tailscale admin](https://login.tailscale.com/admin/settings/keys) |
+| `CF_ACCESS_CLIENT_ID` | Client ID من Access → Service Tokens |
+| `CF_ACCESS_CLIENT_SECRET` | Client Secret لنفس الـ token |
+| `CF_TUNNEL_HOST` | اختياري — الافتراضي `ssh-deploy.easytecheg.net` |
 | `SSH_PRIVATE_KEY` | المفتاح الخاص من `cat ~/.ssh/github_deploy_easyshope` |
-| `SSH_USER` | مستخدم SSH على TrueNAS (مثل `root`) |
-| `SSH_HOST` | عنوان Tailscale للـ NAS (مثل `100.92.194.111`) |
-| `DEPLOY_PATH` | مسار المشروع على السيرفر — مثل `/root/easy-cash` |
+| `SSH_USER` | مثل `root` |
+| `DEPLOY_PATH` | مثل `/root/easy-cash` |
 
-اختياري: `SSH_KNOWN_HOSTS` = مخرجات `ssh-keyscan -H <tailscale-ip>`
+إنشاء Service Token مرة واحدة من Cloudflare Zero Trust → Access → Service Auth → Create Service Token، واربطه بسياسة Application الخاصة بـ SSH.
+
+**بديل (Tailscale) — لو مفيش CF secrets:**
+
+| Secret | الوصف |
+|--------|--------|
+| `TAILSCALE_AUTHKEY` | مفتاح **Reusable/Ephemeral** جديد من [Tailscale Keys](https://login.tailscale.com/admin/settings/keys) (المفتاح القديم منتهي → `invalid key`) |
+| `SSH_HOST` | عنوان Tailscale للـ NAS |
+| `SSH_PRIVATE_KEY` / `SSH_USER` / `DEPLOY_PATH` | كما فوق |
+
+اختياري: `SSH_KNOWN_HOSTS` = مخرجات `ssh-keyscan -H <host>`
 
 ### 2) على TrueNAS
 

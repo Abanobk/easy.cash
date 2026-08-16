@@ -1,107 +1,235 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useSearch } from "wouter";
 import ERPLayout from "@/components/ERPLayout";
-import { DataTable, statusBadge } from "@/components/DataTable";
+import { DataTable } from "@/components/DataTable";
 import { FormModal } from "@/components/FormModal";
 import { trpc } from "@/lib/trpc";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import { Edit, Trash2 } from "lucide-react";
+import {
+  BANK_TYPE_META,
+  getBankTypeFromSearch,
+  type BankTxType,
+} from "@/config/finance-routes";
+import { formatBankAccountLabel } from "@/lib/bank-label";
 
-const emptyForm = {
-  type: "deposit" as "deposit" | "withdraw" | "deposit_customer" | "withdraw_supplier",
-  bankAccountId: undefined as number | undefined,
-  date: new Date().toISOString().split("T")[0],
-  amount: "",
-  reference: "",
-  description: "",
-  notes: "",
-};
+function buildEmptyForm(type: BankTxType) {
+  return {
+    type,
+    bankAccountId: undefined as number | undefined,
+    date: new Date().toISOString().split("T")[0],
+    amount: "",
+    reference: "",
+    description: "",
+    notes: "",
+    customerId: undefined as number | undefined,
+    supplierId: undefined as number | undefined,
+  };
+}
 
 export default function BankTransactions() {
+  const searchString = useSearch();
+  const lockedType = useMemo(
+    () => getBankTypeFromSearch(searchString) ?? "deposit",
+    [searchString],
+  );
+  const meta = BANK_TYPE_META[lockedType];
+
   const [page, setPage] = useState(1);
   const [open, setOpen] = useState(false);
-  const [form, setForm] = useState<typeof emptyForm>(emptyForm);
+  const [form, setForm] = useState(() => buildEmptyForm(lockedType));
 
-  const { data, isLoading, refetch } = trpc.bank.transactions.list.useQuery({ page, limit: 20 });
+  useEffect(() => {
+    setForm(buildEmptyForm(lockedType));
+    setPage(1);
+  }, [lockedType]);
+
+  const { data, isLoading, refetch } = trpc.bank.transactions.list.useQuery({
+    page,
+    limit: 20,
+    type: lockedType,
+  });
   const { data: bankAccounts } = trpc.bank.accounts.list.useQuery();
+  const { data: customers } = trpc.customers.list.useQuery({ page: 1, limit: 200 });
+  const { data: suppliers } = trpc.suppliers.list.useQuery({ page: 1, limit: 200 });
+  const fiscalCheck = trpc.parity.settings.fiscalYears.checkDate.useQuery(
+    { date: form.date },
+    { enabled: !!form.date },
+  );
   const createMut = trpc.bank.transactions.create.useMutation({
-    onSuccess: () => { toast.success("تم إضافة المعاملة البنكية"); refetch(); setOpen(false); setForm(emptyForm); },
+    onSuccess: (data) => {
+      let msg = "تم إضافة المعاملة البنكية";
+      if (data.allocations?.length) {
+        const parts = data.allocations.map(
+          (a) => `${a.invoiceNumber}: ${Number(a.amount).toLocaleString("en-US")} ج.م`,
+        );
+        msg += ` — تم التوزيع على: ${parts.join("، ")}`;
+      }
+      if (data.unallocated && Number(data.unallocated) > 0.001) {
+        msg += ` (متبقي غير موزّع: ${Number(data.unallocated).toLocaleString("en-US")} ج.م)`;
+      }
+      toast.success(msg);
+      refetch();
+      setOpen(false);
+      setForm(buildEmptyForm(lockedType));
+    },
     onError: (e) => toast.error(e.message),
   });
 
-  const handleSubmit = () => {
-    if (!form.amount || !form.bankAccountId) { toast.error("الحساب البنكي والمبلغ مطلوبان"); return; }
-    createMut.mutate({ ...form, bankAccountId: form.bankAccountId! });
+  const openCreate = () => {
+    setForm(buildEmptyForm(lockedType));
+    setOpen(true);
   };
 
-  const typeLabel = (type: string) => {
-    const map: Record<string, { label: string; color: string }> = {
-      deposit: { label: "إيداع", color: "text-green-600 bg-green-100" },
-      withdraw: { label: "سحب", color: "text-red-600 bg-red-100" },
-      deposit_customer: { label: "تحصيل عميل", color: "text-blue-600 bg-blue-100" },
-      withdraw_supplier: { label: "دفع مورد", color: "text-orange-600 bg-orange-100" },
-    };
-    const info = map[type] || { label: type, color: "text-slate-600 bg-slate-100" };
-    return <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${info.color}`}>{info.label}</span>;
+  const handleSubmit = () => {
+    if (!form.amount || !form.bankAccountId) {
+      toast.error("الحساب البنكي والمبلغ مطلوبان");
+      return;
+    }
+    if (lockedType === "deposit_customer" && !form.customerId) {
+      toast.error("يجب اختيار العميل");
+      return;
+    }
+    if (lockedType === "withdraw_customer" && !form.customerId) {
+      toast.error("يجب اختيار العميل");
+      return;
+    }
+    if (lockedType === "withdraw_supplier" && !form.supplierId) {
+      toast.error("يجب اختيار المورد");
+      return;
+    }
+    createMut.mutate({
+      type: lockedType,
+      bankAccountId: form.bankAccountId,
+      date: form.date,
+      amount: form.amount,
+      reference: form.reference || undefined,
+      description: form.description || undefined,
+      customerId: form.customerId,
+      supplierId: form.supplierId,
+    });
   };
 
   const f = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
-    setForm(prev => ({ ...prev, [k]: e.target.value }));
+    setForm((prev) => ({ ...prev, [k]: e.target.value }));
 
   return (
-    <ERPLayout title="المعاملات البنكية">
+    <ERPLayout title={meta.title}>
       <DataTable
-        title="المعاملات البنكية"
+        title={meta.title}
         data={data?.rows}
         isLoading={isLoading}
         total={data?.total}
         page={page}
         onPageChange={setPage}
-        onAdd={() => { setForm(emptyForm); setOpen(true); }}
-        addLabel="معاملة جديدة"
+        onAdd={openCreate}
+        addLabel={meta.addLabel}
+        permissionModule="bank"
+        onDelete={() => toast.info("لا يمكن الحذف حالياً")}
         columns={[
           { key: "number", label: "الرقم", className: "w-28" },
-          { key: "type", label: "النوع", render: (row: any) => typeLabel(row.type) },
-          { key: "bankAccountName", label: "الحساب البنكي" },
-          { key: "date", label: "التاريخ", render: (row: any) => row.date ? new Date(row.date).toLocaleDateString("ar-EG") : "-" },
-          { key: "amount", label: "المبلغ", render: (row: any) => `${Number(row.amount).toLocaleString("ar-EG")} ج.م` },
+          { key: "date", label: "التاريخ", render: (row: any) => row.date ? new Date(row.date).toLocaleDateString("en-GB") : "-" },
+          { key: "amount", label: "المبلغ", render: (row: any) => `${Number(row.amount).toLocaleString("en-US")} ج.م` },
           { key: "description", label: "البيان" },
+          { key: "reference", label: "المرجع" },
         ]}
-        actions={(row: any) => (
-          <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-red-500 hover:bg-red-50" onClick={() => toast.info("لا يمكن الحذف حالياً")}><Trash2 size={13} /></Button>
-        )}
       />
 
-      <FormModal open={open} onClose={() => { setOpen(false); setForm(emptyForm); }} title="إضافة معاملة بنكية" onSubmit={handleSubmit} isLoading={createMut.isPending}>
+      <FormModal
+        open={open}
+        onClose={() => { setOpen(false); setForm(buildEmptyForm(lockedType)); }}
+        title={meta.formTitle}
+        onSubmit={handleSubmit}
+        isLoading={createMut.isPending}
+      >
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <Label className="text-xs font-medium text-slate-700 mb-1.5 block">نوع المعاملة</Label>
-            <Select value={form.type} onValueChange={v => setForm(p => ({ ...p, type: v as any }))}>
-              <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
+            <Label className="text-xs font-medium text-slate-700 mb-1.5 block">الحساب البنكي *</Label>
+            <Select
+              value={form.bankAccountId?.toString() || ""}
+              onValueChange={(v) => setForm((p) => ({ ...p, bankAccountId: Number(v) }))}
+            >
+              <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="اختر الحساب" /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="deposit">إيداع</SelectItem>
-                <SelectItem value="withdraw">سحب</SelectItem>
-                <SelectItem value="deposit_customer">تحصيل عميل</SelectItem>
-                <SelectItem value="withdraw_supplier">دفع مورد</SelectItem>
+                {bankAccounts?.map((b: any) => (
+                  <SelectItem key={b.id} value={b.id.toString()}>
+                    {formatBankAccountLabel(b)}
+                  </SelectItem>
+                ))}
+                {!bankAccounts?.length && (
+                  <SelectItem value="__empty" disabled>
+                    لا توجد بنوك — أضف حساباً تحت «البنوك» في شجرة الحسابات
+                  </SelectItem>
+                )}
               </SelectContent>
             </Select>
           </div>
           <div>
-            <Label className="text-xs font-medium text-slate-700 mb-1.5 block">الحساب البنكي *</Label>
-            <Select value={form.bankAccountId?.toString() || ""} onValueChange={v => setForm(p => ({ ...p, bankAccountId: Number(v) }))}>
-              <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="اختر الحساب" /></SelectTrigger>
-              <SelectContent>{bankAccounts?.map((b: any) => <SelectItem key={b.id} value={b.id.toString()}>{b.bankName} - {b.accountNumber}</SelectItem>)}</SelectContent>
-            </Select>
+            <Label className="text-xs font-medium text-slate-700 mb-1.5 block">المبلغ *</Label>
+            <Input value={form.amount} onChange={f("amount")} type="number" placeholder="0.00" className="h-9 text-sm" />
           </div>
-          <div><Label className="text-xs font-medium text-slate-700 mb-1.5 block">التاريخ</Label><Input type="date" value={form.date} onChange={f("date")} className="h-9 text-sm" /></div>
-          <div><Label className="text-xs font-medium text-slate-700 mb-1.5 block">المبلغ *</Label><Input value={form.amount} onChange={f("amount")} type="number" placeholder="0.00" className="h-9 text-sm" /></div>
-          <div><Label className="text-xs font-medium text-slate-700 mb-1.5 block">المرجع</Label><Input value={form.reference} onChange={f("reference")} className="h-9 text-sm" /></div>
-          <div><Label className="text-xs font-medium text-slate-700 mb-1.5 block">البيان</Label><Input value={form.description} onChange={f("description")} className="h-9 text-sm" /></div>
-          <div className="col-span-2"><Label className="text-xs font-medium text-slate-700 mb-1.5 block">ملاحظات</Label><Textarea value={form.notes} onChange={f("notes")} className="text-sm resize-none" rows={2} /></div>
+          <div>
+            <Label className="text-xs font-medium text-slate-700 mb-1.5 block">التاريخ</Label>
+            <Input type="date" value={form.date} onChange={f("date")} className="h-9 text-sm" />
+            {fiscalCheck.data?.closed && (
+              <p className="text-xs text-red-600 mt-1">هذا التاريخ ضمن فترة مالية مغلقة</p>
+            )}
+          </div>
+          <div>
+            <Label className="text-xs font-medium text-slate-700 mb-1.5 block">المرجع</Label>
+            <Input value={form.reference} onChange={f("reference")} className="h-9 text-sm" placeholder="رقم فاتورة (اختياري)" />
+          </div>
+          {(lockedType === "deposit_customer" || lockedType === "withdraw_customer") && (
+            <div className="col-span-2">
+              <Label className="text-xs font-medium text-slate-700 mb-1.5 block">العميل *</Label>
+              <Select
+                value={form.customerId?.toString() || ""}
+                onValueChange={(v) => setForm((p) => ({ ...p, customerId: Number(v) }))}
+              >
+                <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="اختر العميل" /></SelectTrigger>
+                <SelectContent>
+                  {customers?.rows.map((c: any) => (
+                    <SelectItem key={c.id} value={c.id.toString()}>{c.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-slate-500 mt-1">
+                {lockedType === "withdraw_customer"
+                  ? "يرد المبلغ للعميل ويعكس عمولة المندوبين على هذا الرد"
+                  : "يُطبَّق المبلغ تلقائياً على أقدم الفواتير المفتوحة (أو الفاتورة في المرجع أولاً)"}
+              </p>
+            </div>
+          )}
+          {lockedType === "withdraw_supplier" && (
+            <div className="col-span-2">
+              <Label className="text-xs font-medium text-slate-700 mb-1.5 block">المورد *</Label>
+              <Select
+                value={form.supplierId?.toString() || ""}
+                onValueChange={(v) => setForm((p) => ({ ...p, supplierId: Number(v) }))}
+              >
+                <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="اختر المورد" /></SelectTrigger>
+                <SelectContent>
+                  {suppliers?.rows.map((s: any) => (
+                    <SelectItem key={s.id} value={s.id.toString()}>{s.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-slate-500 mt-1">
+                يُطبَّق المبلغ تلقائياً على أقدم فواتير الشراء المفتوحة (أو الفاتورة في المرجع أولاً)
+              </p>
+            </div>
+          )}
+          <div className="col-span-2">
+            <Label className="text-xs font-medium text-slate-700 mb-1.5 block">البيان</Label>
+            <Input value={form.description} onChange={f("description")} className="h-9 text-sm" />
+          </div>
+          <div className="col-span-2">
+            <Label className="text-xs font-medium text-slate-700 mb-1.5 block">ملاحظات</Label>
+            <Textarea value={form.notes} onChange={f("notes")} className="text-sm resize-none" rows={2} />
+          </div>
         </div>
       </FormModal>
     </ERPLayout>

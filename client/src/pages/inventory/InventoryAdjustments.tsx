@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { Plus, ClipboardList, Trash2 } from "lucide-react";
 import { toast } from "sonner";
+import { AddActionButton } from "@/components/AddActionButton";
 
 export default function InventoryAdjustments() {
   const [open, setOpen] = useState(false);
@@ -54,9 +55,9 @@ export default function InventoryAdjustments() {
             <CardTitle className="text-base font-semibold text-slate-800 flex items-center gap-2">
               <ClipboardList size={18} className="text-teal-600" /> تسوية المخزون
             </CardTitle>
-            <Button size="sm" className="bg-teal-600 hover:bg-teal-700 text-white gap-1" onClick={() => { resetForm(); setOpen(true); }}>
+            <AddActionButton module="inventory" size="sm" className="bg-teal-600 hover:bg-teal-700 text-white gap-1" onClick={() => { resetForm(); setOpen(true); }}>
               <Plus size={14} /> تسوية جديدة
-            </Button>
+            </AddActionButton>
           </div>
         </CardHeader>
         <CardContent className="p-0">
@@ -78,7 +79,7 @@ export default function InventoryAdjustments() {
                 <TableRow key={row.id} className="hover:bg-slate-50">
                   <TableCell className="text-sm font-medium text-teal-700">#{row.number}</TableCell>
                   <TableCell className="text-sm text-slate-700">{row.warehouseName}</TableCell>
-                  <TableCell className="text-xs text-slate-500">{row.date ? new Date(row.date).toLocaleDateString("ar-EG") : "-"}</TableCell>
+                  <TableCell className="text-xs text-slate-500">{row.date ? new Date(row.date).toLocaleDateString("en-GB") : "-"}</TableCell>
                   <TableCell className="text-xs text-slate-500">{row.reason || "-"}</TableCell>
                   <TableCell><Badge variant="secondary" className="text-xs">مؤكد</Badge></TableCell>
                 </TableRow>

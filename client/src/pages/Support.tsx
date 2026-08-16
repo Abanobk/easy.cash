@@ -13,6 +13,12 @@ import {
   LifeBuoy, Plus, MessageSquare, Clock, CheckCircle2,
   AlertCircle, XCircle, ChevronDown, ChevronUp, Send
 } from "lucide-react";
+import {
+  SUPPORT_EMAIL,
+  SUPPORT_PHONE_DISPLAY,
+  SUPPORT_PHONE_TEL,
+  SUPPORT_WHATSAPP_URL,
+} from "@/config/support-contact";
 
 const statusConfig: Record<string, { label: string; color: string; icon: any }> = {
   open: { label: "مفتوحة", color: "bg-blue-100 text-blue-700", icon: AlertCircle },
@@ -181,7 +187,7 @@ export default function Support() {
                         <div className="flex-1 min-w-0">
                           <div className="font-semibold text-gray-800 text-sm truncate">{ticket.subject}</div>
                           <div className="text-xs text-gray-500 mt-0.5">
-                            {new Date(ticket.createdAt).toLocaleDateString("ar-EG", { year: "numeric", month: "short", day: "numeric" })}
+                            {new Date(ticket.createdAt).toLocaleDateString("en-GB", { year: "numeric", month: "short", day: "numeric" })}
                           </div>
                         </div>
                       </div>
@@ -209,7 +215,7 @@ export default function Support() {
                           </div>
                           {ticket.repliedAt && (
                             <div className="text-xs text-gray-400 mt-1">
-                              تم الرد في: {new Date(ticket.repliedAt).toLocaleDateString("ar-EG")}
+                              تم الرد في: {new Date(ticket.repliedAt).toLocaleDateString("en-GB")}
                             </div>
                           )}
                         </div>
@@ -232,21 +238,32 @@ export default function Support() {
         <div className="mt-8 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-100 rounded-2xl p-5">
           <h3 className="font-semibold text-blue-800 mb-3 text-sm">طرق التواصل الأخرى</h3>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            <div className="bg-white rounded-xl p-3 border border-blue-100 text-center">
+            <a
+              href={`tel:${SUPPORT_PHONE_TEL}`}
+              className="bg-white rounded-xl p-3 border border-blue-100 text-center hover:border-blue-300 hover:shadow-sm transition-colors"
+            >
               <div className="text-lg mb-1">📞</div>
               <div className="text-xs font-medium text-gray-700">هاتف الدعم</div>
-              <div className="text-xs text-blue-600 font-mono mt-0.5">01000000000</div>
-            </div>
-            <div className="bg-white rounded-xl p-3 border border-blue-100 text-center">
+              <div className="text-xs text-blue-600 font-mono mt-0.5" dir="ltr">{SUPPORT_PHONE_DISPLAY}</div>
+            </a>
+            <a
+              href={`mailto:${SUPPORT_EMAIL}`}
+              className="bg-white rounded-xl p-3 border border-blue-100 text-center hover:border-blue-300 hover:shadow-sm transition-colors"
+            >
               <div className="text-lg mb-1">✉️</div>
               <div className="text-xs font-medium text-gray-700">البريد الإلكتروني</div>
-              <div className="text-xs text-blue-600 font-mono mt-0.5">support@easycash.app</div>
-            </div>
-            <div className="bg-white rounded-xl p-3 border border-blue-100 text-center">
+              <div className="text-xs text-blue-600 font-mono mt-0.5" dir="ltr">{SUPPORT_EMAIL}</div>
+            </a>
+            <a
+              href={SUPPORT_WHATSAPP_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="bg-white rounded-xl p-3 border border-blue-100 text-center hover:border-green-300 hover:shadow-sm transition-colors"
+            >
               <div className="text-lg mb-1">💬</div>
               <div className="text-xs font-medium text-gray-700">واتساب</div>
-              <div className="text-xs text-blue-600 font-mono mt-0.5">01000000000</div>
-            </div>
+              <div className="text-xs text-blue-600 font-mono mt-0.5" dir="ltr">{SUPPORT_PHONE_DISPLAY}</div>
+            </a>
           </div>
         </div>
       </div>
