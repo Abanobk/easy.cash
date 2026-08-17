@@ -1,5 +1,5 @@
 import crypto from "crypto";
-import type { MySql2Database } from "drizzle-orm/mysql2";
+import type { Db } from "./db";
 import { eq } from "drizzle-orm";
 import {
   companyProfile,
@@ -38,7 +38,7 @@ export function etaPortalUrl(mode: EtaMode) {
 }
 
 export async function getEtaSettingsForTenant(
-  db: MySql2Database,
+  db: Db,
   tenantId: number,
 ): Promise<EtaSettings | null> {
   const [row] = await db
@@ -61,7 +61,7 @@ export async function getEtaSettingsForTenant(
 }
 
 export async function saveEtaSettings(
-  db: MySql2Database,
+  db: Db,
   tenantId: number,
   input: {
     enabled: boolean;
@@ -103,7 +103,7 @@ export async function saveEtaSettings(
   return { success: true };
 }
 
-async function getEtaClientSecret(db: MySql2Database, tenantId: number) {
+async function getEtaClientSecret(db: Db, tenantId: number) {
   const [row] = await db
     .select({ etaClientSecretEnc: companyProfile.etaClientSecretEnc })
     .from(companyProfile)
@@ -132,7 +132,7 @@ async function fetchEtaToken(mode: EtaMode, clientId: string, clientSecret: stri
   return data.access_token as string;
 }
 
-export async function testEtaConnection(db: MySql2Database, tenantId: number) {
+export async function testEtaConnection(db: Db, tenantId: number) {
   const settings = await getEtaSettingsForTenant(db, tenantId);
   if (!settings) throw new Error("ملف الشركة غير موجود");
   if (!settings.clientId) throw new Error("Client ID مطلوب");
@@ -230,7 +230,7 @@ function buildEtaDocument(opts: {
 }
 
 async function markEtaFailed(
-  db: MySql2Database,
+  db: Db,
   tenantId: number,
   invoiceId: number,
   error: string,
@@ -247,7 +247,7 @@ async function markEtaFailed(
 }
 
 export async function submitSalesInvoiceToEta(
-  db: MySql2Database,
+  db: Db,
   tenantId: number,
   invoiceId: number,
 ) {
@@ -374,7 +374,7 @@ export async function submitSalesInvoiceToEta(
 }
 
 export async function checkEtaInvoiceStatus(
-  db: MySql2Database,
+  db: Db,
   tenantId: number,
   invoiceId: number,
 ) {

@@ -1,5 +1,5 @@
 import { and, eq, or, sql } from "drizzle-orm";
-import type { MySql2Database } from "drizzle-orm/mysql2";
+import type { Db } from "./db";
 import {
   customers,
   purchaseInvoices,
@@ -73,7 +73,7 @@ export function bucketInvoiceAmount(
 }
 
 export async function customerDebtAgingReport(
-  db: MySql2Database,
+  db: Db,
   tenantId: number,
   bucket: "default" | "year" | "half" = "default",
 ) {
@@ -166,7 +166,7 @@ export async function customerDebtAgingReport(
 }
 
 export async function supplierDebtAgingReport(
-  db: MySql2Database,
+  db: Db,
   tenantId: number,
   bucket: "default" | "year" | "half" = "default",
 ) {
@@ -260,7 +260,7 @@ export async function supplierDebtAgingReport(
   }));
 }
 
-export async function getDebtAgingSummary(db: MySql2Database, tenantId: number) {
+export async function getDebtAgingSummary(db: Db, tenantId: number) {
   const today = new Date();
 
   const salesRows = await db

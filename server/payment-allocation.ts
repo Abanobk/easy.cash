@@ -1,5 +1,5 @@
 import { and, asc, eq, or } from "drizzle-orm";
-import type { MySql2Database } from "drizzle-orm/mysql2";
+import type { Db } from "./db";
 import { purchaseInvoices, salesInvoices } from "../drizzle/schema";
 import { recalculateCustomerBalance, recalculateSupplierBalance } from "./contact-balances";
 import { tenantWhere } from "./tenant-scope";
@@ -49,7 +49,7 @@ function applyPurchaseInvoiceAmount(
 }
 
 async function applyToSalesInvoice(
-  db: MySql2Database,
+  db: Db,
   tenantId: number,
   invoiceId: number,
   payAmount: number,
@@ -70,7 +70,7 @@ async function applyToSalesInvoice(
 }
 
 async function applyToPurchaseInvoice(
-  db: MySql2Database,
+  db: Db,
   tenantId: number,
   invoiceId: number,
   payAmount: number,
@@ -91,7 +91,7 @@ async function applyToPurchaseInvoice(
 }
 
 export async function allocateCustomerPaymentFifo(
-  db: MySql2Database,
+  db: Db,
   tenantId: number,
   customerId: number,
   amount: string,
@@ -176,7 +176,7 @@ export async function allocateCustomerPaymentFifo(
 }
 
 export async function allocateSupplierPaymentFifo(
-  db: MySql2Database,
+  db: Db,
   tenantId: number,
   supplierId: number,
   amount: string,

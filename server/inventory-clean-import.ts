@@ -1,5 +1,5 @@
 import { and, eq } from "drizzle-orm";
-import type { MySql2Database } from "drizzle-orm/mysql2";
+import type { Db } from "./db";
 import {
   beginningInventory,
   itemCategories,
@@ -48,7 +48,7 @@ export type CleanImportRow = {
 
 /** يضمن وجود المخزن بالاسم (ينشئه لو مش موجود) */
 export async function ensureWarehouseByName(
-  db: MySql2Database,
+  db: Db,
   tenantId: number,
   rawName: string,
 ): Promise<{ id: number; name: string; created: boolean }> {
@@ -76,7 +76,7 @@ export async function ensureWarehouseByName(
 }
 
 async function ensureCategoryByName(
-  db: MySql2Database,
+  db: Db,
   tenantId: number,
   rawName: string | undefined,
 ): Promise<number | undefined> {
@@ -95,7 +95,7 @@ async function ensureCategoryByName(
 
 /** يجد صنف موجود أو ينشئه بكود تلقائي — بدون تكرار بالاسم/الباركود/الكود */
 export async function findOrCreateItemForImport(
-  db: MySql2Database,
+  db: Db,
   tenantId: number,
   row: { name: string; barcode?: string; code?: string; unit?: string; unitCost?: string; categoryId?: number },
 ): Promise<{ id: number; code: string; name: string; created: boolean }> {
@@ -168,7 +168,7 @@ export async function findOrCreateItemForImport(
 
 /** استبدال رصيد أول المدة لصنف×مخزن (بدون دبلكيت) */
 export async function replaceBeginningStock(
-  db: MySql2Database,
+  db: Db,
   tenantId: number,
   opts: {
     itemId: number;
@@ -223,7 +223,7 @@ export async function replaceBeginningStock(
  * مخازن تلقائي · أصناف بدون تكرار + كود · وحدات · كميات أول مدة
  */
 export async function cleanImportBeginningInventory(
-  db: MySql2Database,
+  db: Db,
   tenantId: number,
   input: { date: string; rows: CleanImportRow[] },
 ) {
@@ -308,7 +308,7 @@ export async function cleanImportBeginningInventory(
 
 /** مسح رصيد أول المدة + رصيد المخازن ثم حذف الأصناف المحددة */
 export async function purgeItemsWithStock(
-  db: MySql2Database,
+  db: Db,
   tenantId: number,
   itemIds: number[],
 ) {

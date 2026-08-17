@@ -69,7 +69,7 @@ export default function FundTransfer() {
     });
   };
 
-  const leafAccounts = (accounts || []).filter((a: { isParent?: boolean }) => !a.isParent);
+  const leafAccounts = (accounts || []).filter((a: { isParent?: boolean | null }) => !a.isParent);
 
   return (
     <ERPLayout title="تحويل الأموال">
@@ -86,7 +86,7 @@ export default function FundTransfer() {
         onRowClick={(row: { id?: number }) => row.id && navigate(tenantPath(tenantSlug, `/accounts/journal/${row.id}`))}
         columns={[
           { key: "number", label: "رقم القيد", className: "w-28" },
-          { key: "date", label: "التاريخ", render: (row: { date?: string }) => row.date ? new Date(row.date).toLocaleDateString("en-GB") : "-" },
+          { key: "date", label: "التاريخ", render: (row: { date?: string | Date | null }) => row.date ? new Date(row.date).toLocaleDateString("en-GB") : "-" },
           { key: "description", label: "البيان" },
           { key: "totalDebit", label: "المبلغ", render: (row: { totalDebit?: string }) => `${Number(row.totalDebit || 0).toLocaleString("en-US")} ج.م` },
         ]}

@@ -1,5 +1,5 @@
 import { and, asc, eq, sql } from "drizzle-orm";
-import type { MySql2Database } from "drizzle-orm/mysql2";
+import type { Db } from "./db";
 import { itemBatches, items, itemWarehouseStock, warehouses } from "../drizzle/schema";
 import { tenantWhere, withTenantId } from "./tenant-scope";
 
@@ -7,7 +7,7 @@ function num(v: unknown) {
   return Number(v ?? 0);
 }
 
-export async function getDefaultWarehouseId(db: MySql2Database, tenantId: number) {
+export async function getDefaultWarehouseId(db: Db, tenantId: number) {
   const [w] = await db
     .select({ id: warehouses.id })
     .from(warehouses)
@@ -18,7 +18,7 @@ export async function getDefaultWarehouseId(db: MySql2Database, tenantId: number
 }
 
 export async function resolveWarehouseId(
-  db: MySql2Database,
+  db: Db,
   tenantId: number,
   warehouseId?: number | null,
 ) {
@@ -28,7 +28,7 @@ export async function resolveWarehouseId(
   return def;
 }
 
-export async function syncItemTotalStock(db: MySql2Database, tenantId: number, itemId: number) {
+export async function syncItemTotalStock(db: Db, tenantId: number, itemId: number) {
   const [sumRow] = await db
     .select({ total: sql<string>`COALESCE(SUM(${itemWarehouseStock.quantity}), 0)` })
     .from(itemWarehouseStock)
@@ -40,7 +40,7 @@ export async function syncItemTotalStock(db: MySql2Database, tenantId: number, i
 }
 
 export async function adjustWarehouseStock(
-  db: MySql2Database,
+  db: Db,
   tenantId: number,
   opts: {
     itemId: number;
@@ -93,7 +93,7 @@ export async function adjustWarehouseStock(
 }
 
 export async function adjustBatchQuantity(
-  db: MySql2Database,
+  db: Db,
   tenantId: number,
   batchId: number,
   delta: number,
@@ -115,7 +115,7 @@ export async function adjustBatchQuantity(
 
 /** خصم FEFO من دفعات الصنف عند البيع بدون تحديد دفعة */
 export async function deductBatchesFefo(
-  db: MySql2Database,
+  db: Db,
   tenantId: number,
   itemId: number,
   quantity: number,
@@ -141,7 +141,7 @@ export async function deductBatchesFefo(
 }
 
 export async function receiveBatchStock(
-  db: MySql2Database,
+  db: Db,
   tenantId: number,
   opts: {
     itemId: number;
@@ -191,7 +191,7 @@ export async function receiveBatchStock(
 
 /** دفعات متاحة لصنف (كمية > 0) مرتبة FEFO */
 export async function listAvailableBatches(
-  db: MySql2Database,
+  db: Db,
   tenantId: number,
   itemId: number,
 ) {
@@ -218,7 +218,7 @@ export async function listAvailableBatches(
 
 /** حركة مخزنية موحّدة: مخزن + دفعة اختيارية */
 export async function applyStockMovement(
-  db: MySql2Database,
+  db: Db,
   tenantId: number,
   opts: {
     itemId: number;
@@ -264,7 +264,7 @@ export async function applyStockMovement(
 }
 
 export async function getWarehouseItemQty(
-  db: MySql2Database,
+  db: Db,
   tenantId: number,
   itemId: number,
   warehouseId: number,
@@ -283,7 +283,7 @@ export async function getWarehouseItemQty(
 }
 
 export async function transferStockBetweenWarehouses(
-  db: MySql2Database,
+  db: Db,
   tenantId: number,
   opts: {
     itemId: number;
@@ -312,7 +312,7 @@ export async function transferStockBetweenWarehouses(
 }
 
 /** ترحيل رصيد الأصناف الحالي إلى المخزن الافتراضي (مرة واحدة للشركات القديمة) */
-export async function backfillWarehouseStockFromItems(db: MySql2Database, tenantId: number) {
+export async function backfillWarehouseStockFromItems(db: Db, tenantId: number) {
   const warehouseId = await getDefaultWarehouseId(db, tenantId);
   if (!warehouseId) return { added: 0, message: "لا يوجد مخزن" };
 

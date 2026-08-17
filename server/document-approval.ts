@@ -1,5 +1,5 @@
 import { and, eq } from "drizzle-orm";
-import type { MySql2Database } from "drizzle-orm/mysql2";
+import type { Db } from "./db";
 import { documentApprovals, companySettings } from "../drizzle/schema";
 import { getGeneralAttrBool } from "./general-attributes";
 import { tenantWhere, withTenantId } from "./tenant-scope";
@@ -7,7 +7,7 @@ import { tenantWhere, withTenantId } from "./tenant-scope";
 export type ApprovalDocumentType = "sales_invoice" | "purchase_invoice" | "journal_entry";
 
 export async function queueDocumentApproval(
-  db: MySql2Database,
+  db: Db,
   tenantId: number,
   doc: { type: ApprovalDocumentType; id: number; number: string; requestedBy?: number },
 ) {
@@ -22,7 +22,7 @@ export async function queueDocumentApproval(
   );
 }
 
-export async function listPendingApprovals(db: MySql2Database, tenantId: number, limit = 100) {
+export async function listPendingApprovals(db: Db, tenantId: number, limit = 100) {
   return db
     .select()
     .from(documentApprovals)
@@ -32,7 +32,7 @@ export async function listPendingApprovals(db: MySql2Database, tenantId: number,
 }
 
 export async function resolveDocumentApproval(
-  db: MySql2Database,
+  db: Db,
   tenantId: number,
   approvalId: number,
   reviewerId: number | undefined,
@@ -60,7 +60,7 @@ export async function resolveDocumentApproval(
 }
 
 export async function companyRequiresApproval(
-  db: MySql2Database,
+  db: Db,
   tenantId: number,
 ): Promise<boolean> {
   const attrOverride = await getGeneralAttrBool(db, tenantId, "require_document_approval");

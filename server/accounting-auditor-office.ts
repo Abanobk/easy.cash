@@ -2,7 +2,7 @@
  * طبقة مكتب المحاسبة المتقدمة: مطابقات + مقارنة فترات + عينات + ذاكرة تشغيلات.
  */
 import { and, desc, eq, gte, lte, sql } from "drizzle-orm";
-import type { MySql2Database } from "drizzle-orm/mysql2";
+import type { Db } from "./db";
 import {
   accounts,
   auditReviewRuns,
@@ -80,7 +80,7 @@ export type OfficeAuditExtras = {
   } | null;
 };
 
-async function bankBookBalance(db: MySql2Database, tenantId: number, bankAccountId: number) {
+async function bankBookBalance(db: Db, tenantId: number, bankAccountId: number) {
   const rows = await db
     .select({ type: bankTransactions.type, amount: bankTransactions.amount })
     .from(bankTransactions)
@@ -95,7 +95,7 @@ async function bankBookBalance(db: MySql2Database, tenantId: number, bankAccount
 }
 
 export async function auditBankAndCashReconciliations(
-  db: MySql2Database,
+  db: Db,
   tenantId: number,
   out: AuditFinding[],
   policy: AuditPolicy,
@@ -190,7 +190,7 @@ export async function auditBankAndCashReconciliations(
 }
 
 export async function auditReceivablePayableReconciliations(
-  db: MySql2Database,
+  db: Db,
   tenantId: number,
   out: AuditFinding[],
   policy: AuditPolicy,
@@ -318,7 +318,7 @@ export async function auditReceivablePayableReconciliations(
 }
 
 export async function auditPeriodComparison(
-  db: MySql2Database,
+  db: Db,
   tenantId: number,
   current: { dateFrom: string; dateTo: string },
   income: IncomeSnapshot,
@@ -416,7 +416,7 @@ export async function auditPeriodComparison(
 }
 
 export async function collectAuditSamples(
-  db: MySql2Database,
+  db: Db,
   tenantId: number,
   period: { dateFrom: string; dateTo: string },
   out: AuditFinding[],
@@ -558,7 +558,7 @@ export async function collectAuditSamples(
 }
 
 export async function loadPreviousAuditMemory(
-  db: MySql2Database,
+  db: Db,
   tenantId: number,
   currentTitles: string[],
 ): Promise<OfficeAuditExtras["previousRun"]> {
@@ -591,7 +591,7 @@ export async function loadPreviousAuditMemory(
 }
 
 export async function persistAuditRun(
-  db: MySql2Database,
+  db: Db,
   tenantId: number,
   report: {
     summary: { critical: number; warning: number; info: number };

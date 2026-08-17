@@ -165,7 +165,7 @@ export default function JournalEntries() {
                         <Select value={line.accountId?.toString() || ""} onValueChange={v => updateLine(idx, "accountId", Number(v))}>
                           <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="اختر الحساب" /></SelectTrigger>
                           <SelectContent>
-                            {accountsList?.filter((a: { isParent?: boolean }) => !a.isParent).map((a: { id: number; code: string; name: string }) => (
+                            {accountsList?.filter((a: { isParent?: boolean | null }) => !a.isParent).map((a: { id: number; code: string; name: string }) => (
                               <SelectItem key={a.id} value={a.id.toString()}>{a.code} - {a.name}</SelectItem>
                             ))}
                           </SelectContent>

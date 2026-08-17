@@ -2,7 +2,7 @@
  * مراجع الحسابات الذكي — فحص آلي للملاحظات + ملخص للمساعد.
  */
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
-import type { MySql2Database } from "drizzle-orm/mysql2";
+import type { Db } from "./db";
 import {
   fiscalYears,
   importCostLines,
@@ -124,7 +124,7 @@ function push(
   });
 }
 
-async function auditJournals(db: MySql2Database, tenantId: number, out: AuditFinding[]) {
+async function auditJournals(db: Db, tenantId: number, out: AuditFinding[]) {
   const [draftCount] = await db
     .select({ count: sql<number>`count(*)` })
     .from(journalEntries)
@@ -209,7 +209,7 @@ async function auditJournals(db: MySql2Database, tenantId: number, out: AuditFin
   }
 }
 
-async function resolveAuditPeriod(db: MySql2Database, tenantId: number) {
+async function resolveAuditPeriod(db: Db, tenantId: number) {
   const [openFy] = await db
     .select()
     .from(fiscalYears)
@@ -243,7 +243,7 @@ function isNormalBalanceSuspicious(type: string, closingDebit: number, closingCr
 }
 
 async function auditTrialBalance(
-  db: MySql2Database,
+  db: Db,
   tenantId: number,
   out: AuditFinding[],
   stats: Record<string, number | string>,
@@ -377,7 +377,7 @@ async function auditTrialBalance(
   };
 }
 
-async function auditInvoiceIntegrity(db: MySql2Database, tenantId: number, out: AuditFinding[]) {
+async function auditInvoiceIntegrity(db: Db, tenantId: number, out: AuditFinding[]) {
   const badSales = await db
     .select({
       id: salesInvoices.id,
@@ -449,7 +449,7 @@ async function auditInvoiceIntegrity(db: MySql2Database, tenantId: number, out: 
   }
 }
 
-async function auditImportCosting(db: MySql2Database, tenantId: number, out: AuditFinding[]) {
+async function auditImportCosting(db: Db, tenantId: number, out: AuditFinding[]) {
   const shipments = await db
     .select()
     .from(importCostShipments)
@@ -601,7 +601,7 @@ async function auditImportCosting(db: MySql2Database, tenantId: number, out: Aud
   }
 }
 
-async function auditOperations(db: MySql2Database, tenantId: number, out: AuditFinding[], stats: Record<string, number | string>) {
+async function auditOperations(db: Db, tenantId: number, out: AuditFinding[], stats: Record<string, number | string>) {
   const alerts = await getOperationalAlerts(db, tenantId);
   const c = alerts.counts || ({} as Record<string, number>);
 
@@ -711,7 +711,7 @@ async function auditOperations(db: MySql2Database, tenantId: number, out: AuditF
 }
 
 export async function buildAccountingAuditReport(
-  db: MySql2Database,
+  db: Db,
   tenantId: number,
   opts?: { userId?: number; persist?: boolean },
 ): Promise<AccountingAuditReport> {

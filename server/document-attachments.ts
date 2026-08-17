@@ -3,7 +3,7 @@
  * غير إلزامي عند الإدخال — للمراجعة المستندية فقط.
  */
 import { and, desc, eq, gte, inArray } from "drizzle-orm";
-import type { MySql2Database } from "drizzle-orm/mysql2";
+import type { Db } from "./db";
 import {
   customers,
   documentAttachments,
@@ -162,7 +162,7 @@ type SystemDoc = {
 };
 
 async function loadSystemDoc(
-  db: MySql2Database,
+  db: Db,
   tenantId: number,
   entityType: AttachmentEntityType,
   entityId: number,
@@ -264,7 +264,7 @@ function compareExtracted(
 }
 
 export async function uploadDocumentAttachment(
-  db: MySql2Database,
+  db: Db,
   tenantId: number,
   input: {
     entityType: AttachmentEntityType;
@@ -316,7 +316,7 @@ export async function uploadDocumentAttachment(
 }
 
 export async function listDocumentAttachments(
-  db: MySql2Database,
+  db: Db,
   tenantId: number,
   entityType: AttachmentEntityType,
   entityId: number,
@@ -367,7 +367,7 @@ export async function listDocumentAttachments(
 }
 
 export async function getDocumentAttachmentContent(
-  db: MySql2Database,
+  db: Db,
   tenantId: number,
   id: number,
 ) {
@@ -386,7 +386,7 @@ export async function getDocumentAttachmentContent(
 }
 
 export async function deleteDocumentAttachment(
-  db: MySql2Database,
+  db: Db,
   tenantId: number,
   id: number,
 ) {
@@ -397,7 +397,7 @@ export async function deleteDocumentAttachment(
 }
 
 export async function recompareDocumentAttachment(
-  db: MySql2Database,
+  db: Db,
   tenantId: number,
   id: number,
 ) {
@@ -433,7 +433,7 @@ export async function recompareDocumentAttachment(
 
 /** مراجعة المرفقات: فروقات + تنبيه اختياري لفواتير كبيرة بدون مرفق */
 export async function auditDocumentAttachments(
-  db: MySql2Database,
+  db: Db,
   tenantId: number,
   out: AuditFinding[],
   opts?: { materialityEgp?: number },

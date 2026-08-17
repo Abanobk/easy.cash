@@ -1,4 +1,4 @@
-import type { MySql2Database } from "drizzle-orm/mysql2";
+import type { Db } from "./db";
 import { and, eq, gte, lte } from "drizzle-orm";
 import { assetSales, depreciationRunLines, depreciationRuns, fixedAssets } from "../drizzle/schema";
 import { tenantWhere } from "./tenant-scope";
@@ -10,7 +10,7 @@ function num(v: unknown) {
   return Number(v ?? 0);
 }
 
-const HANDLERS: Record<string, (db: MySql2Database<Record<string, never>>, f: ReportFilters) => Promise<ReportRow[]>> = {
+const HANDLERS: Record<string, (db: Db, f: ReportFilters) => Promise<ReportRow[]>> = {
   "fixedassetsreports-dep": async (db, f) => {
     const assets = await db.select().from(fixedAssets)
       .where(tenantWhere(fixedAssets, f.tenantId, eq(fixedAssets.status, "active")));
@@ -157,7 +157,7 @@ const HANDLERS: Record<string, (db: MySql2Database<Record<string, never>>, f: Re
 
 export const ASSETS_REPORT_SLUGS = Object.keys(HANDLERS);
 
-export async function runAssetsReport(db: MySql2Database<Record<string, never>>, slug: string, filters: ReportFilters) {
+export async function runAssetsReport(db: Db, slug: string, filters: ReportFilters) {
   const handler = HANDLERS[slug];
   if (!handler) return [{ message: "التقرير غير موجود", slug }];
   return handler(db, filters);

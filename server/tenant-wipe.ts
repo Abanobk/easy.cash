@@ -3,7 +3,7 @@
  * يحافظ على: tenants, app_users, subscriptions, صلاحيات المستخدمين الأساسية.
  */
 import { sql } from "drizzle-orm";
-import type { MySql2Database } from "drizzle-orm/mysql2";
+import type { Db } from "./db";
 import { eq } from "drizzle-orm";
 import { tenants } from "../drizzle/schema";
 
@@ -123,7 +123,7 @@ export type WipeResult = {
 };
 
 export async function resolveTenantIdBySlug(
-  db: MySql2Database<any>,
+  db: Db,
   slug: string,
 ): Promise<{ id: number; slug: string; name: string } | null> {
   const [row] = await db
@@ -138,7 +138,7 @@ export async function resolveTenantIdBySlug(
  * @param allowedSlugs إن وُجدت، يُرفض أي slug خارج القائمة (حماية من مسح مستأجر بالخطأ)
  */
 export async function wipeTenantBusinessData(
-  db: MySql2Database<any>,
+  db: Db,
   slug: string,
   opts: { allowedSlugs?: string[]; dryRun?: boolean } = {},
 ): Promise<WipeResult> {

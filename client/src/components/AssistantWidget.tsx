@@ -59,7 +59,7 @@ export default function AssistantWidget({ tenantSlug, location }: Props) {
     setMessages(next);
     chatMutation.mutate({
       messages: next
-        .filter((m) => m.role === "user" || m.role === "assistant")
+        .filter((m): m is typeof m & { role: "user" | "assistant" } => m.role === "user" || m.role === "assistant")
         .map((m) => ({ role: m.role, content: m.content })),
       page: {
         path: page.path,

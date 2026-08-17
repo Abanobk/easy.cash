@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { appRouter } from "./routers";
 import type { TrpcContext } from "./_core/context";
 
-// Mock authenticated context
+// Mock authenticated context — tenant-scoped, matches the SaaS multi-tenant model
 function createMockContext(): TrpcContext {
   return {
     user: {
@@ -18,6 +18,19 @@ function createMockContext(): TrpcContext {
     },
     req: { protocol: "https", headers: {} } as TrpcContext["req"],
     res: { clearCookie: () => {} } as TrpcContext["res"],
+    tenantId: 1,
+    tenantSlug: "test-tenant",
+    impersonatorId: null,
+    saasUser: {
+      id: 1,
+      email: "test@example.com",
+      role: "admin",
+      name: "Test User",
+      isActive: true,
+      ownerUserId: null,
+      accountOwnerId: 1,
+      tenantId: 1,
+    },
   };
 }
 

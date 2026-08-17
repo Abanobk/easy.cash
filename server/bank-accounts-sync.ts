@@ -1,5 +1,5 @@
 import { and, eq } from "drizzle-orm";
-import type { MySql2Database } from "drizzle-orm/mysql2";
+import type { Db } from "./db";
 import { accounts, bankAccounts } from "../drizzle/schema";
 import { tenantWhere, withTenantId } from "./tenant-scope";
 
@@ -13,7 +13,7 @@ type AccountRow = {
 
 /** حساب أب «البنوك» في الشجرة (عادة 1110) */
 export async function findBanksParentAccount(
-  db: MySql2Database<any>,
+  db: Db,
   tenantId: number,
 ): Promise<AccountRow | null> {
   const rows = await db
@@ -51,7 +51,7 @@ function collectDescendantLeaves(all: AccountRow[], parentId: number): AccountRo
 
 /** أوراق شجرة البنوك (حسابات بنكية في الدليل المحاسبي) */
 export async function listChartBankLeafAccounts(
-  db: MySql2Database<any>,
+  db: Db,
   tenantId: number,
 ): Promise<AccountRow[]> {
   const parent = await findBanksParentAccount(db, tenantId);
@@ -72,7 +72,7 @@ export async function listChartBankLeafAccounts(
 }
 
 export async function ensureBankAccountForGlAccount(
-  db: MySql2Database<any>,
+  db: Db,
   tenantId: number,
   gl: { id: number; name: string; code: string },
 ): Promise<number> {
@@ -112,7 +112,7 @@ export async function ensureBankAccountForGlAccount(
 
 /** مزامنة حسابات شجرة «البنوك» → جدول الحسابات البنكية التشغيلية */
 export async function syncBankAccountsFromChart(
-  db: MySql2Database<any>,
+  db: Db,
   tenantId: number,
 ): Promise<{ created: number; linked: number }> {
   const leaves = await listChartBankLeafAccounts(db, tenantId);
@@ -141,7 +141,7 @@ export async function syncBankAccountsFromChart(
 
 /** عند إنشاء حساب بنكي تشغيلي — أنشئ/اربط حساباً في شجرة البنوك */
 export async function ensureGlAccountForBankAccount(
-  db: MySql2Database<any>,
+  db: Db,
   tenantId: number,
   bank: { id: number; name: string; accountNumber?: string | null },
 ): Promise<number | null> {
@@ -208,7 +208,7 @@ export async function ensureGlAccountForBankAccount(
 
 /** الحساب المحاسبي المرتبط ببنك تشغيلي (للقيود التلقائية) */
 export async function resolveBankGlAccountId(
-  db: MySql2Database<any>,
+  db: Db,
   tenantId: number,
   bankAccountId?: number | null,
   fallbackAccountId?: number,

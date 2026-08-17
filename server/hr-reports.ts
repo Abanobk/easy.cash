@@ -1,4 +1,4 @@
-import type { MySql2Database } from "drizzle-orm/mysql2";
+import type { Db } from "./db";
 import { and, desc, eq, gte, lte } from "drizzle-orm";
 import {
   attendance,
@@ -14,7 +14,7 @@ import type { ReportFilters } from "./accounting-data";
 
 export type ReportRow = Record<string, unknown>;
 
-const HANDLERS: Record<string, (db: MySql2Database<Record<string, never>>, f: ReportFilters) => Promise<ReportRow[]>> = {
+const HANDLERS: Record<string, (db: Db, f: ReportFilters) => Promise<ReportRow[]>> = {
   "hrreports-attendance": async (db, f) => {
     const dateParts = [];
     if (f.dateFrom) dateParts.push(gte(attendance.date, f.dateFrom as any));
@@ -140,7 +140,7 @@ const HANDLERS: Record<string, (db: MySql2Database<Record<string, never>>, f: Re
 
 export const HR_REPORT_SLUGS = Object.keys(HANDLERS);
 
-export async function runHrReport(db: MySql2Database<Record<string, never>>, slug: string, filters: ReportFilters) {
+export async function runHrReport(db: Db, slug: string, filters: ReportFilters) {
   const handler = HANDLERS[slug];
   if (!handler) return [{ message: "التقرير غير موجود", slug }];
   return handler(db, filters);

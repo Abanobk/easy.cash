@@ -1,5 +1,5 @@
-import { and, eq, gte, lte, lt, sql, desc, asc, inArray } from "drizzle-orm";
-import type { MySql2Database } from "drizzle-orm/mysql2";
+import { and, eq, gte, lte, lt, sql, desc, asc, inArray, type Column } from "drizzle-orm";
+import type { Db } from "./db";
 import { customerDebtAgingReport, supplierDebtAgingReport } from "./debt-aging";
 import {
   accounts,
@@ -109,7 +109,7 @@ export function dateOnly(v: unknown) {
   return s.includes("T") ? s.split("T")[0] : s.slice(0, 10);
 }
 
-function dateConds(table: { date: { name: string } }, from?: string, to?: string) {
+function dateConds(table: { date: Column<any, object, object> }, from?: string, to?: string) {
   const parts = [];
   if (from) parts.push(gte(table.date, from as any));
   if (to) parts.push(lte(table.date, to as any));
@@ -135,7 +135,7 @@ function purchaseOpenFilter() {
 }
 
 export async function getPostedMovementByAccount(
-  db: MySql2Database<Record<string, never>>,
+  db: Db,
   tenantId: number,
   opts: { before?: string; from?: string; to?: string } = {},
 ) {
@@ -164,7 +164,7 @@ export async function getPostedMovementByAccount(
 }
 
 export async function getAccountBalancesAsOf(
-  db: MySql2Database<Record<string, never>>,
+  db: Db,
   tenantId: number,
   asOf?: string,
 ) {
@@ -178,7 +178,7 @@ export async function getAccountBalancesAsOf(
   });
 }
 
-export async function loadPostedJournalLines(db: MySql2Database<Record<string, never>>, filters: ReportFilters) {
+export async function loadPostedJournalLines(db: Db, filters: ReportFilters) {
   const dateParts = dateConds(journalEntries, filters.dateFrom, filters.dateTo);
   const rows = await db
     .select({
@@ -226,7 +226,7 @@ export async function loadPostedJournalLines(db: MySql2Database<Record<string, n
   });
 }
 
-export async function trialBalanceReport(db: MySql2Database<Record<string, never>>, filters: ReportFilters) {
+export async function trialBalanceReport(db: Db, filters: ReportFilters) {
   const allAccounts = await db.select().from(accounts)
     .where(tenantWhere(accounts, filters.tenantId, eq(accounts.isActive, true)))
     .orderBy(accounts.code);
@@ -261,7 +261,7 @@ export async function trialBalanceReport(db: MySql2Database<Record<string, never
     .filter((r) => r.periodDebit || r.periodCredit || r.openingDebit || r.openingCredit || r.closingDebit || r.closingCredit);
 }
 
-export async function generalJournalReport(db: MySql2Database<Record<string, never>>, filters: ReportFilters) {
+export async function generalJournalReport(db: Db, filters: ReportFilters) {
   const dateParts = dateConds(journalEntries, filters.dateFrom, filters.dateTo);
   const entries = await db.select().from(journalEntries)
     .where(tenantWhere(journalEntries, filters.tenantId,
@@ -295,7 +295,7 @@ export async function generalJournalReport(db: MySql2Database<Record<string, nev
   return result;
 }
 
-export async function salesInvoicesReport(db: MySql2Database<Record<string, never>>, filters: ReportFilters) {
+export async function salesInvoicesReport(db: Db, filters: ReportFilters) {
   const dateParts = dateConds(salesInvoices, filters.dateFrom, filters.dateTo);
   const rows = await db.select({
     number: salesInvoices.number,
@@ -363,7 +363,7 @@ export async function salesInvoicesReport(db: MySql2Database<Record<string, neve
   }));
 }
 
-export async function purchasesInvoicesReport(db: MySql2Database<Record<string, never>>, filters: ReportFilters) {
+export async function purchasesInvoicesReport(db: Db, filters: ReportFilters) {
   const dateParts = dateConds(purchaseInvoices, filters.dateFrom, filters.dateTo);
   const rows = await db.select({
     number: purchaseInvoices.number,
@@ -421,7 +421,7 @@ export async function purchasesInvoicesReport(db: MySql2Database<Record<string, 
   }));
 }
 
-export async function checksReport(db: MySql2Database<Record<string, never>>, filters: ReportFilters, type: "incoming" | "outgoing") {
+export async function checksReport(db: Db, filters: ReportFilters, type: "incoming" | "outgoing") {
   const dateParts = dateConds(checks, filters.dateFrom, filters.dateTo);
   const rows = await db.select({
     number: checks.number,
@@ -453,7 +453,7 @@ export async function checksReport(db: MySql2Database<Record<string, never>>, fi
   }));
 }
 
-export async function customersListReport(db: MySql2Database<Record<string, never>>, filters: ReportFilters) {
+export async function customersListReport(db: Db, filters: ReportFilters) {
   const rows = await db.select({
     code: customers.code,
     name: customers.name,
@@ -487,7 +487,7 @@ export async function customersListReport(db: MySql2Database<Record<string, neve
   }));
 }
 
-export async function customersSummaryReport(db: MySql2Database<Record<string, never>>, filters: ReportFilters) {
+export async function customersSummaryReport(db: Db, filters: ReportFilters) {
   const custRows = await db.select({
     id: customers.id,
     code: customers.code,
@@ -564,7 +564,7 @@ export async function customersSummaryReport(db: MySql2Database<Record<string, n
   });
 }
 
-export async function vendorsSummaryReport(db: MySql2Database<Record<string, never>>, filters: ReportFilters) {
+export async function vendorsSummaryReport(db: Db, filters: ReportFilters) {
   const vendorRows = await db.select({
     id: suppliers.id,
     code: suppliers.code,
@@ -627,7 +627,7 @@ export async function vendorsSummaryReport(db: MySql2Database<Record<string, nev
   });
 }
 
-export async function vendorsListReport(db: MySql2Database<Record<string, never>>, filters: ReportFilters) {
+export async function vendorsListReport(db: Db, filters: ReportFilters) {
   const rows = await db.select({
     code: suppliers.code,
     name: suppliers.name,
@@ -650,15 +650,15 @@ export async function vendorsListReport(db: MySql2Database<Record<string, never>
   }));
 }
 
-export async function debitsAgingReport(db: MySql2Database<Record<string, never>>, filters: ReportFilters, bucket: "default" | "year" | "half" = "default") {
+export async function debitsAgingReport(db: Db, filters: ReportFilters, bucket: "default" | "year" | "half" = "default") {
   return customerDebtAgingReport(db, filters.tenantId, bucket);
 }
 
-export async function creditsAgingReport(db: MySql2Database<Record<string, never>>, filters: ReportFilters, bucket: "default" | "year" | "half" = "default") {
+export async function creditsAgingReport(db: Db, filters: ReportFilters, bucket: "default" | "year" | "half" = "default") {
   return supplierDebtAgingReport(db, filters.tenantId, bucket);
 }
 
-export async function salesByItemsReport(db: MySql2Database<Record<string, never>>, filters: ReportFilters, monthly = false) {
+export async function salesByItemsReport(db: Db, filters: ReportFilters, monthly = false) {
   const dateParts = dateConds(salesInvoices, filters.dateFrom, filters.dateTo);
   const rows = await db.select({
     itemCode: items.code,
@@ -696,7 +696,7 @@ export async function salesByItemsReport(db: MySql2Database<Record<string, never
   return Array.from(map.values());
 }
 
-export async function monthlySalesTotalsReport(db: MySql2Database<Record<string, never>>, filters: ReportFilters) {
+export async function monthlySalesTotalsReport(db: Db, filters: ReportFilters) {
   const rows = await salesByItemsReport(db, filters, true);
   const map = new Map<string, { month: string; quantity: number; total: number; profit: number }>();
   for (const r of rows) {
@@ -710,7 +710,7 @@ export async function monthlySalesTotalsReport(db: MySql2Database<Record<string,
   return Array.from(map.values()).sort((a, b) => a.month.localeCompare(b.month));
 }
 
-export async function purchasesByItemsReport(db: MySql2Database<Record<string, never>>, filters: ReportFilters) {
+export async function purchasesByItemsReport(db: Db, filters: ReportFilters) {
   const dateParts = dateConds(purchaseInvoices, filters.dateFrom, filters.dateTo);
   const rows = await db.select({
     itemCode: items.code,
@@ -742,16 +742,16 @@ export async function purchasesByItemsReport(db: MySql2Database<Record<string, n
   return Array.from(map.values());
 }
 
-export async function customerStatementReport(db: MySql2Database<Record<string, never>>, filters: ReportFilters) {
+export async function customerStatementReport(db: Db, filters: ReportFilters) {
   return buildContactLedger(db, filters, "customer");
 }
 
-export async function vendorStatementReport(db: MySql2Database<Record<string, never>>, filters: ReportFilters) {
+export async function vendorStatementReport(db: Db, filters: ReportFilters) {
   return buildContactLedger(db, filters, "supplier");
 }
 
 async function buildContactLedger(
-  db: MySql2Database<Record<string, never>>,
+  db: Db,
   filters: ReportFilters,
   type: "customer" | "supplier",
 ) {
@@ -870,7 +870,7 @@ async function buildContactLedger(
   });
 }
 
-export async function customerItemStatementReport(db: MySql2Database<Record<string, never>>, filters: ReportFilters) {
+export async function customerItemStatementReport(db: Db, filters: ReportFilters) {
   if (!filters.customerId) return [{ message: "يجب اختيار عميل" }];
   const dateParts = dateConds(salesInvoices, filters.dateFrom, filters.dateTo);
   const rows = await db.select({
@@ -924,7 +924,7 @@ export async function customerItemStatementReport(db: MySql2Database<Record<stri
   });
 }
 
-export async function vendorItemStatementReport(db: MySql2Database<Record<string, never>>, filters: ReportFilters) {
+export async function vendorItemStatementReport(db: Db, filters: ReportFilters) {
   if (!filters.supplierId) return [{ message: "يجب اختيار مورد" }];
   const dateParts = dateConds(purchaseInvoices, filters.dateFrom, filters.dateTo);
   const rows = await db.select({
@@ -958,14 +958,14 @@ export async function vendorItemStatementReport(db: MySql2Database<Record<string
   });
 }
 
-export async function costCenterStatementReport(db: MySql2Database<Record<string, never>>, filters: ReportFilters) {
+export async function costCenterStatementReport(db: Db, filters: ReportFilters) {
   const lines = await loadPostedJournalLines(db, filters);
   if (!filters.costCenterId) return lines;
   const [cc] = await db.select().from(costCenters).where(eq(costCenters.id, filters.costCenterId));
   return lines.map((l) => ({ ...l, costCenter: cc?.name || "" }));
 }
 
-export async function monthlyExpensesReport(db: MySql2Database<Record<string, never>>, filters: ReportFilters) {
+export async function monthlyExpensesReport(db: Db, filters: ReportFilters) {
   const expenseAccounts = await db.select({ id: accounts.id, code: accounts.code, name: accounts.name })
     .from(accounts).where(tenantWhere(accounts, filters.tenantId, eq(accounts.type, "expense")));
   const expenseIds = new Set(expenseAccounts.map((a) => a.id));
@@ -985,7 +985,7 @@ export async function monthlyExpensesReport(db: MySql2Database<Record<string, ne
   return Array.from(map.values()).sort((a, b) => a.month.localeCompare(b.month) || a.accountCode.localeCompare(b.accountCode));
 }
 
-export async function itemsProfitsReport(db: MySql2Database<Record<string, never>>, filters: ReportFilters) {
+export async function itemsProfitsReport(db: Db, filters: ReportFilters) {
   const rows = await salesByItemsReport(db, filters, false);
   return rows.map((r) => ({
     itemCode: r.itemCode,
@@ -998,7 +998,7 @@ export async function itemsProfitsReport(db: MySql2Database<Record<string, never
   }));
 }
 
-export async function invoiceProfitsReport(db: MySql2Database<Record<string, never>>, filters: ReportFilters) {
+export async function invoiceProfitsReport(db: Db, filters: ReportFilters) {
   const dateParts = dateConds(salesInvoices, filters.dateFrom, filters.dateTo);
   const rows = await db.select({
     invoiceNumber: salesInvoices.number,
@@ -1039,7 +1039,7 @@ export async function invoiceProfitsReport(db: MySql2Database<Record<string, nev
   }));
 }
 
-export async function lastPricesReport(db: MySql2Database<Record<string, never>>, filters: ReportFilters) {
+export async function lastPricesReport(db: Db, filters: ReportFilters) {
   const dateParts = dateConds(salesInvoices, filters.dateFrom, filters.dateTo);
   const rows = await db.select({
     itemCode: items.code,
@@ -1109,7 +1109,7 @@ export async function lastPricesReport(db: MySql2Database<Record<string, never>>
   return Array.from(map.values());
 }
 
-export async function customersProfitsReport(db: MySql2Database<Record<string, never>>, filters: ReportFilters) {
+export async function customersProfitsReport(db: Db, filters: ReportFilters) {
   const dateParts = dateConds(salesInvoices, filters.dateFrom, filters.dateTo);
   const rows = await db.select({
     customerName: customers.name,
@@ -1138,7 +1138,7 @@ export async function customersProfitsReport(db: MySql2Database<Record<string, n
   return Array.from(map.values());
 }
 
-export async function matureInvoicesReport(db: MySql2Database<Record<string, never>>, filters: ReportFilters) {
+export async function matureInvoicesReport(db: Db, filters: ReportFilters) {
   const today = new Date().toISOString().split("T")[0];
   const dateParts = dateConds(salesInvoices, filters.dateFrom, filters.dateTo);
   const rows = await db.select({
@@ -1175,7 +1175,7 @@ export async function matureInvoicesReport(db: MySql2Database<Record<string, nev
     }));
 }
 
-export async function matureReceiptsReport(db: MySql2Database<Record<string, never>>, filters: ReportFilters) {
+export async function matureReceiptsReport(db: Db, filters: ReportFilters) {
   const today = new Date().toISOString().split("T")[0];
   const dateParts = dateConds(purchaseInvoices, filters.dateFrom, filters.dateTo);
   const rows = await db.select({
@@ -1212,7 +1212,7 @@ export async function matureReceiptsReport(db: MySql2Database<Record<string, nev
     }));
 }
 
-export async function branchesSummaryReport(db: MySql2Database<Record<string, never>>, filters: ReportFilters) {
+export async function branchesSummaryReport(db: Db, filters: ReportFilters) {
   const branchRows = await db.select().from(branches).where(tenantWhere(branches, filters.tenantId,
     reportBranchCond(branches.id, filters))).orderBy(branches.name);
   const salesDate = dateConds(salesInvoices, filters.dateFrom, filters.dateTo);
@@ -1304,7 +1304,7 @@ export async function branchesSummaryReport(db: MySql2Database<Record<string, ne
   });
 }
 
-export async function areasSummaryReport(db: MySql2Database<Record<string, never>>, filters: ReportFilters) {
+export async function areasSummaryReport(db: Db, filters: ReportFilters) {
   const areaRows = await db.select().from(salesAreas).where(tenantWhere(salesAreas, filters.tenantId,
     filters.areaId ? eq(salesAreas.id, filters.areaId) : undefined)).orderBy(salesAreas.name);
   const dateParts = dateConds(salesInvoices, filters.dateFrom, filters.dateTo);
@@ -1379,7 +1379,7 @@ function repInvoiceFilter(filters: ReportFilters) {
   )`;
 }
 
-export async function repSalesByItemsReport(db: MySql2Database<Record<string, never>>, filters: ReportFilters) {
+export async function repSalesByItemsReport(db: Db, filters: ReportFilters) {
   const dateParts = dateConds(salesInvoices, filters.dateFrom, filters.dateTo);
   const rows = await db.select({
     repName: salesReps.name,
@@ -1430,7 +1430,7 @@ export async function repSalesByItemsReport(db: MySql2Database<Record<string, ne
   }));
 }
 
-export async function repCollectingsReport(db: MySql2Database<Record<string, never>>, filters: ReportFilters) {
+export async function repCollectingsReport(db: Db, filters: ReportFilters) {
   type Raw = {
     date: string | Date | null;
     number: string | null;
@@ -1555,7 +1555,7 @@ export async function repCollectingsReport(db: MySql2Database<Record<string, nev
   return mapped.sort((a, b) => String(b.date).localeCompare(String(a.date)));
 }
 
-export async function repDailyReport(db: MySql2Database<Record<string, never>>, filters: ReportFilters) {
+export async function repDailyReport(db: Db, filters: ReportFilters) {
   const collections = await repCollectingsReport(db, filters);
   const dateParts = dateConds(salesInvoices, filters.dateFrom, filters.dateTo);
   const salesRows = await db.select({
@@ -1611,7 +1611,7 @@ export async function repDailyReport(db: MySql2Database<Record<string, never>>, 
   return Array.from(map.values()).sort((a, b) => a.date.localeCompare(b.date) || a.repName.localeCompare(b.repName));
 }
 
-export async function repDebitReport(db: MySql2Database<Record<string, never>>, filters: ReportFilters) {
+export async function repDebitReport(db: Db, filters: ReportFilters) {
   const rows = await db.select({
     customerName: customers.name,
     phone: customers.phone,
@@ -1633,7 +1633,7 @@ export async function repDebitReport(db: MySql2Database<Record<string, never>>, 
   }));
 }
 
-export async function subLedgerReport(db: MySql2Database<Record<string, never>>, filters: ReportFilters) {
+export async function subLedgerReport(db: Db, filters: ReportFilters) {
   const parentAccounts = await db.select({ id: accounts.id }).from(accounts)
     .where(tenantWhere(accounts, filters.tenantId, eq(accounts.isParent, true)));
   const parentIds = new Set(parentAccounts.map((a) => a.id));
@@ -1652,7 +1652,7 @@ function isCashLikeAccount(code: string, name: string) {
   return n.includes("نقد") || n.includes("خزينة") || n.includes("cash") || n.includes("بنك") || n.includes("bank") || /^11/.test(code) || /^12/.test(code);
 }
 
-export async function cashAccountStatementReport(db: MySql2Database<Record<string, never>>, filters: ReportFilters) {
+export async function cashAccountStatementReport(db: Db, filters: ReportFilters) {
   if (filters.accountId) {
     return loadPostedJournalLines(db, filters);
   }
@@ -1669,7 +1669,7 @@ export async function cashAccountStatementReport(db: MySql2Database<Record<strin
   return lines.sort((a, b) => String(a.date).localeCompare(String(b.date)) || String(a.documentNumber).localeCompare(String(b.documentNumber)));
 }
 
-export async function paymentsReport(db: MySql2Database<Record<string, never>>, filters: ReportFilters) {
+export async function paymentsReport(db: Db, filters: ReportFilters) {
   const cashDate = dateConds(cashTransactions, filters.dateFrom, filters.dateTo);
   const bankDate = dateConds(bankTransactions, filters.dateFrom, filters.dateTo);
   const cashRows = await db.select({
@@ -1756,7 +1756,7 @@ export async function paymentsReport(db: MySql2Database<Record<string, never>>, 
   return result.sort((a, b) => String(a.date).localeCompare(String(b.date)));
 }
 
-export async function balanceSheetFromAccounts(db: MySql2Database<Record<string, never>>, tenantId: number, asOf?: string) {
+export async function balanceSheetFromAccounts(db: Db, tenantId: number, asOf?: string) {
   const balanced = await getAccountBalancesAsOf(db, tenantId, asOf);
   return {
     assets: balanced.filter((a) => a.type === "asset" && !a.isParent).map((a) => ({ code: a.code, name: a.name, balance: num(a.balance) })),
@@ -1765,7 +1765,7 @@ export async function balanceSheetFromAccounts(db: MySql2Database<Record<string,
   };
 }
 
-export async function incomeStatementFromData(db: MySql2Database<Record<string, never>>, filters: ReportFilters) {
+export async function incomeStatementFromData(db: Db, filters: ReportFilters) {
   const periodMovement = await getPostedMovementByAccount(db, filters.tenantId, {
     from: filters.dateFrom,
     to: filters.dateTo,

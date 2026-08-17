@@ -1,4 +1,4 @@
-import type { MySql2Database } from "drizzle-orm/mysql2";
+import type { Db } from "./db";
 import { eq } from "drizzle-orm";
 import { accounts } from "../drizzle/schema";
 import {
@@ -19,7 +19,7 @@ import { tenantWhere } from "./tenant-scope";
 
 export type ReportRow = Record<string, unknown>;
 
-const HANDLERS: Record<string, (db: MySql2Database<Record<string, never>>, f: ReportFilters) => Promise<ReportRow[]>> = {
+const HANDLERS: Record<string, (db: Db, f: ReportFilters) => Promise<ReportRow[]>> = {
   "accounting-generaljournallist": generalJournalReport,
   "finalreports-generalledger": loadPostedJournalLines,
   "finalreports-subledger": subLedgerReport,
@@ -127,7 +127,7 @@ function num(v: unknown) {
 export const FINAL_REPORT_SLUGS = Object.keys(HANDLERS);
 
 export async function runFinalReport(
-  db: MySql2Database<Record<string, never>>,
+  db: Db,
   slug: string,
   filters: ReportFilters,
 ): Promise<ReportRow[]> {

@@ -1,5 +1,5 @@
 import { and, eq, inArray } from "drizzle-orm";
-import type { MySql2Database } from "drizzle-orm/mysql2";
+import type { Db } from "./db";
 import { customerSalesReps, customers, salesReps } from "../drizzle/schema";
 import { tenantWhere, withTenantId } from "./tenant-scope";
 
@@ -10,7 +10,7 @@ export type CustomerRepInput = {
 };
 
 export async function listCustomerSalesReps(
-  db: MySql2Database,
+  db: Db,
   tenantId: number,
   customerId: number,
 ) {
@@ -41,7 +41,7 @@ export async function listCustomerSalesReps(
 
 /** Replace all sales-rep links for a customer and sync customers.salesRepId (primary). */
 export async function setCustomerSalesReps(
-  db: MySql2Database,
+  db: Db,
   tenantId: number,
   customerId: number,
   reps: CustomerRepInput[],
@@ -89,7 +89,7 @@ export async function setCustomerSalesReps(
 }
 
 export async function listCustomerSalesRepsForCustomers(
-  db: MySql2Database,
+  db: Db,
   tenantId: number,
   customerIds: number[],
 ) {

@@ -1,5 +1,5 @@
 import { and, count, desc, eq, gte, lte, or, sql } from "drizzle-orm";
-import type { MySql2Database } from "drizzle-orm/mysql2";
+import type { Db } from "./db";
 import {
   checkRoutings,
   checks,
@@ -19,7 +19,7 @@ function addDays(date: Date, days: number) {
   return d.toISOString().slice(0, 10);
 }
 
-export async function getOperationalAlerts(db: MySql2Database, tenantId: number) {
+export async function getOperationalAlerts(db: Db, tenantId: number) {
   const today = new Date().toISOString().slice(0, 10);
   const weekAhead = addDays(new Date(), 7);
 

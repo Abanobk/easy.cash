@@ -2,7 +2,7 @@
  * استعادة كاملة لحمولة Easy Cash JSON داخل مستأجر (فواتير + قيود + حركات).
  * لا يعتمد على الاستيراد الجزئي القديم في import-service.
  */
-import type { MySql2Database } from "drizzle-orm/mysql2";
+import type { Db } from "./db";
 import { eq } from "drizzle-orm";
 import {
   accounts,
@@ -65,7 +65,7 @@ function dateStr(v: unknown): string {
 }
 
 async function insertReturningId(
-  db: MySql2Database<any>,
+  db: Db,
   table: any,
   values: Record<string, unknown>,
 ): Promise<number> {
@@ -74,7 +74,7 @@ async function insertReturningId(
 }
 
 async function upsertByCode(
-  db: MySql2Database<any>,
+  db: Db,
   table: any,
   tenantId: number,
   codeField: string,
@@ -91,7 +91,7 @@ async function upsertByCode(
 }
 
 export async function fullRestoreToTenant(
-  db: MySql2Database<any>,
+  db: Db,
   tenantId: number,
   payload: FullRestorePayload,
 ): Promise<FullRestoreReport> {

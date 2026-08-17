@@ -297,7 +297,7 @@ export default function SalesInvoices() {
                   <Select
                     value={form.currencyCode}
                     onValueChange={(code) => {
-                      const row = exchangeRates?.find((r: { code: string }) => r.code === code);
+                      const row = exchangeRates?.find((r: Record<string, unknown>) => r.code === code);
                       setForm((p) => ({
                         ...p,
                         currencyCode: code,
@@ -308,9 +308,11 @@ export default function SalesInvoices() {
                     <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="EGP">EGP — جنيه</SelectItem>
-                      {(exchangeRates || []).filter((r: { code: string }) => r.code !== "EGP").map((r: { id: number; code: string; name: string }) => (
-                        <SelectItem key={r.id} value={r.code}>{r.code} — {r.name}</SelectItem>
-                      ))}
+                      {(exchangeRates || [])
+                        .filter((r: Record<string, unknown>) => r.code !== "EGP")
+                        .map((r: Record<string, unknown>) => (
+                          <SelectItem key={String(r.id)} value={String(r.code)}>{String(r.code)} — {String(r.name)}</SelectItem>
+                        ))}
                     </SelectContent>
                   </Select>
                 </div>

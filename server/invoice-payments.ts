@@ -1,6 +1,6 @@
 import { count, eq } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
-import type { MySql2Database } from "drizzle-orm/mysql2";
+import type { Db } from "./db";
 import {
   cashTransactions,
   customers,
@@ -13,7 +13,7 @@ import { recalculateCustomerBalance, recalculateSupplierBalance } from "./contac
 import { assertDateNotInClosedPeriod } from "./fiscal-period-guard";
 import { tenantWhere, withTenantId } from "./tenant-scope";
 
-async function nextCashNumber(db: MySql2Database, tenantId: number) {
+async function nextCashNumber(db: Db, tenantId: number) {
   const [countResult] = await db
     .select({ count: count() })
     .from(cashTransactions)
@@ -22,7 +22,7 @@ async function nextCashNumber(db: MySql2Database, tenantId: number) {
 }
 
 export async function recordSalesInvoicePayment(
-  db: MySql2Database,
+  db: Db,
   tenantId: number,
   userId: number,
   opts: { invoiceId: number; amount: string; date: string; description?: string },
@@ -93,7 +93,7 @@ export async function recordSalesInvoicePayment(
 }
 
 export async function recordPurchaseInvoicePayment(
-  db: MySql2Database,
+  db: Db,
   tenantId: number,
   userId: number,
   opts: { invoiceId: number; amount: string; date: string; description?: string },

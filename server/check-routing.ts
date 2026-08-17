@@ -1,6 +1,6 @@
 import { and, desc, eq, gte, inArray, sql } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
-import type { MySql2Database } from "drizzle-orm/mysql2";
+import type { Db } from "./db";
 import {
   appUsers,
   bankAccounts,
@@ -43,7 +43,7 @@ type EventType =
   | "note";
 
 async function appendEvent(
-  db: MySql2Database,
+  db: Db,
   tenantId: number,
   input: {
     routingId: number;
@@ -73,7 +73,7 @@ async function appendEvent(
 }
 
 export async function ensureCheckRouting(
-  db: MySql2Database,
+  db: Db,
   tenantId: number,
   checkId: number,
   performedBy?: number,
@@ -131,7 +131,7 @@ export async function ensureCheckRouting(
   return created!;
 }
 
-export async function backfillOpenCheckRoutings(db: MySql2Database, tenantId: number) {
+export async function backfillOpenCheckRoutings(db: Db, tenantId: number) {
   const openChecks = await db
     .select({ id: checks.id })
     .from(checks)
@@ -158,7 +158,7 @@ export async function backfillOpenCheckRoutings(db: MySql2Database, tenantId: nu
   return { created, scanned: openChecks.length };
 }
 
-async function getRoutingOrThrow(db: MySql2Database, tenantId: number, routingId: number) {
+async function getRoutingOrThrow(db: Db, tenantId: number, routingId: number) {
   const [row] = await db
     .select()
     .from(checkRoutings)
@@ -168,7 +168,7 @@ async function getRoutingOrThrow(db: MySql2Database, tenantId: number, routingId
   return row;
 }
 
-async function assertTenantUser(db: MySql2Database, tenantId: number, userId: number) {
+async function assertTenantUser(db: Db, tenantId: number, userId: number) {
   const [user] = await db
     .select({ id: appUsers.id, name: appUsers.name, tenantId: appUsers.tenantId, isActive: appUsers.isActive })
     .from(appUsers)
@@ -180,7 +180,7 @@ async function assertTenantUser(db: MySql2Database, tenantId: number, userId: nu
   return user;
 }
 
-async function assertTenantBank(db: MySql2Database, tenantId: number, bankAccountId: number) {
+async function assertTenantBank(db: Db, tenantId: number, bankAccountId: number) {
   const [bank] = await db
     .select()
     .from(bankAccounts)
@@ -193,7 +193,7 @@ async function assertTenantBank(db: MySql2Database, tenantId: number, bankAccoun
 }
 
 export async function listCheckRoutings(
-  db: MySql2Database,
+  db: Db,
   tenantId: number,
   opts: {
     filter?: RoutingListFilter;
@@ -307,7 +307,7 @@ export async function listCheckRoutings(
   return { rows: mapped, total: Number(totalRow?.count ?? 0), page, limit };
 }
 
-export async function listRoutingEvents(db: MySql2Database, tenantId: number, routingId: number) {
+export async function listRoutingEvents(db: Db, tenantId: number, routingId: number) {
   await getRoutingOrThrow(db, tenantId, routingId);
   const events = await db
     .select()
@@ -356,7 +356,7 @@ export async function listRoutingEvents(db: MySql2Database, tenantId: number, ro
 }
 
 export async function assignCustody(
-  db: MySql2Database,
+  db: Db,
   tenantId: number,
   performedBy: number,
   input: { routingId: number; custodianUserId: number; notes?: string },
@@ -395,7 +395,7 @@ export async function assignCustody(
 }
 
 export async function routeCheck(
-  db: MySql2Database,
+  db: Db,
   tenantId: number,
   performedBy: number,
   input: {
@@ -442,7 +442,7 @@ export async function routeCheck(
 }
 
 export async function depositRoutedCheck(
-  db: MySql2Database,
+  db: Db,
   tenantId: number,
   performedBy: number,
   input: { routingId: number; depositDate?: string; bankAccountId?: number; notes?: string },
@@ -524,7 +524,7 @@ export async function depositRoutedCheck(
 }
 
 export async function syncRoutingAfterClearOrBounce(
-  db: MySql2Database,
+  db: Db,
   tenantId: number,
   checkId: number,
   outcome: "cleared" | "rejected",
@@ -553,7 +553,7 @@ export async function syncRoutingAfterClearOrBounce(
 }
 
 export async function collectRoutedCheck(
-  db: MySql2Database,
+  db: Db,
   tenantId: number,
   performedBy: number,
   input: { routingId: number; date?: string },
@@ -563,7 +563,7 @@ export async function collectRoutedCheck(
 }
 
 export async function rejectRoutedCheck(
-  db: MySql2Database,
+  db: Db,
   tenantId: number,
   performedBy: number,
   input: { routingId: number; date?: string },
@@ -572,7 +572,7 @@ export async function rejectRoutedCheck(
   return bounceCheck(db, tenantId, performedBy, routing.checkId, { date: input.date });
 }
 
-export async function routingSummaryCounts(db: MySql2Database, tenantId: number) {
+export async function routingSummaryCounts(db: Db, tenantId: number) {
   await backfillOpenCheckRoutings(db, tenantId);
   const today = new Date().toISOString().slice(0, 10);
   const rows = await db

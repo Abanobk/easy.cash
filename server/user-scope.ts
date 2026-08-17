@@ -1,6 +1,6 @@
 import { eq, inArray, isNull, or } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
-import type { MySql2Database } from "drizzle-orm/mysql2";
+import type { Db } from "./db";
 import { TRPCError } from "@trpc/server";
 import { appUsers } from "../drizzle/schema";
 import { roleBypassesPermissions } from "./permissions-service";
@@ -101,7 +101,7 @@ export function applyScopeToReportFilters<
     branchIds?: number[];
     warehouseIds?: number[];
   },
->(filters: T, scope: UserScope): T {
+>(filters: T, scope: UserScope): T & { branchIds?: number[]; warehouseIds?: number[] } {
   const out = { ...filters };
   if (scope.branchIds?.length) {
     if (out.branchId != null && !scope.branchIds.includes(out.branchId)) {
@@ -123,7 +123,7 @@ export function applyScopeToReportFilters<
 }
 
 export async function loadUserScope(
-  db: MySql2Database,
+  db: Db,
   userId: number,
 ): Promise<UserScope> {
   const [row] = await db
@@ -152,7 +152,7 @@ export function scopeContactTransactionFilter(
 }
 
 export async function loadUserScopeFromCtx(
-  db: MySql2Database | null,
+  db: Db | null,
   saasUser: { id: number } | null | undefined,
 ): Promise<UserScope> {
   if (!db || !saasUser) return { branchIds: null, warehouseIds: null };

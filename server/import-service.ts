@@ -1,5 +1,5 @@
 import { and, eq } from "drizzle-orm";
-import type { MySql2Database } from "drizzle-orm/mysql2";
+import type { Db } from "./db";
 import {
   accounts, customers, employees, items, suppliers, warehouses, itemCategories, departments,
 } from "../drizzle/schema";
@@ -55,7 +55,7 @@ function stripMeta(row: Record<string, unknown>) {
 }
 
 export async function importEntityRows(
-  db: MySql2Database<Record<string, never>>,
+  db: Db,
   tenantId: number,
   entity: ImportEntity,
   rows: Record<string, unknown>[],
@@ -100,7 +100,7 @@ export async function importEntityRows(
 }
 
 export async function importBulkPayload(
-  db: MySql2Database<Record<string, never>>,
+  db: Db,
   tenantId: number,
   data: Partial<Record<ImportEntity, Record<string, unknown>[]>>,
   opts: { upsertByCode?: boolean } = {},

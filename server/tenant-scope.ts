@@ -1,6 +1,6 @@
-import { SQL, and, eq } from "drizzle-orm";
+import { SQL, and, eq, type Column } from "drizzle-orm";
 
-type TenantTable = { tenantId: { name: string } };
+type TenantTable = { tenantId: Column<any, object, object> };
 
 export function tenantWhere<T extends TenantTable>(table: T, tenantId: number, ...extra: (SQL | undefined)[]) {
   const parts = [eq(table.tenantId, tenantId), ...extra.filter(Boolean)] as SQL[];

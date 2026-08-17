@@ -2,7 +2,7 @@
  * تغطية الفجوات المتبقية: مسار مستند، إقفال موجّه، توقعات سيولة، كشوف مرفوعة.
  */
 import { and, count, desc, eq, gte, lte, or, sql } from "drizzle-orm";
-import type { MySql2Database } from "drizzle-orm/mysql2";
+import type { Db } from "./db";
 import {
   bankTransactions,
   cashTransactions,
@@ -68,7 +68,7 @@ export type CoverageExtras = {
 };
 
 export async function auditDocumentTrail(
-  db: MySql2Database,
+  db: Db,
   tenantId: number,
   out: AuditFinding[],
 ) {
@@ -146,7 +146,7 @@ export async function auditDocumentTrail(
 }
 
 export async function buildClosingChecklist(
-  db: MySql2Database,
+  db: Db,
   tenantId: number,
   out: AuditFinding[],
   policy: AuditPolicy,
@@ -247,7 +247,7 @@ export async function buildClosingChecklist(
 }
 
 export async function buildLiquidityForecast(
-  db: MySql2Database,
+  db: Db,
   tenantId: number,
   out: AuditFinding[],
   policy: AuditPolicy,
@@ -403,7 +403,7 @@ export async function buildLiquidityForecast(
 }
 
 export async function runCoverageAudits(
-  db: MySql2Database,
+  db: Db,
   tenantId: number,
   out: AuditFinding[],
   policy: AuditPolicy,

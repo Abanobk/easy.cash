@@ -278,7 +278,7 @@ async function parseBankTextWithAi(text: string): Promise<ParsedBankLine[]> {
           debit,
           credit,
           balance: row.balance != null && row.balance !== "" ? n(row.balance) : undefined,
-        } satisfies ParsedBankLine;
+        } as ParsedBankLine;
       })
       .filter((x): x is ParsedBankLine => !!x);
   } catch {

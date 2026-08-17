@@ -1,5 +1,5 @@
 import { eq, inArray } from "drizzle-orm";
-import type { MySql2Database } from "drizzle-orm/mysql2";
+import type { Db } from "./db";
 import {
   items,
   productionOrderMaterials,
@@ -29,7 +29,7 @@ export function scrapQtyFromLine(absoluteQty: unknown, _orderQty: unknown, scrap
 }
 
 export async function estimateOrderMaterialCost(
-  db: MySql2Database,
+  db: Db,
   tenantId: number,
   orderId: number,
 ) {
@@ -71,7 +71,7 @@ export async function estimateOrderMaterialCost(
 
 /** تحديث متوسط تكلفة المنتج التام بعد الإنتاج (بدون لمس سعر الشراء) */
 async function updateFinishedGoodsAverageCost(
-  db: MySql2Database,
+  db: Db,
   tenantId: number,
   itemId: number,
   newQty: number,
@@ -95,7 +95,7 @@ async function updateFinishedGoodsAverageCost(
 
 /** التحقق من توفر المواد قبل البدء */
 export async function assertMaterialsAvailable(
-  db: MySql2Database,
+  db: Db,
   tenantId: number,
   orderId: number,
 ) {
@@ -136,7 +136,7 @@ export async function assertMaterialsAvailable(
 
 /** بدء التنفيذ: قيد WIP بقيمة المواد */
 export async function startProductionOrder(
-  db: MySql2Database,
+  db: Db,
   tenantId: number,
   orderId: number,
   createdBy?: number,
@@ -186,7 +186,7 @@ export async function startProductionOrder(
 
 /** إتمام أمر تشغيل: صرف مواد خام وإضافة المنتج التام + قيد إقفال WIP + متوسط تكلفة */
 export async function completeProductionOrder(
-  db: MySql2Database,
+  db: Db,
   tenantId: number,
   orderId: number,
   createdBy?: number,
@@ -273,7 +273,7 @@ export async function completeProductionOrder(
 
 /** إلغاء أمر (مسودة أو قيد التنفيذ قبل صرف المخزون) */
 export async function cancelProductionOrder(
-  db: MySql2Database,
+  db: Db,
   tenantId: number,
   orderId: number,
 ) {

@@ -1,5 +1,5 @@
 import { and, eq, like, ne, or, sql, type SQL } from "drizzle-orm";
-import type { MySql2Database } from "drizzle-orm/mysql2";
+import type { Db } from "./db";
 
 type CodeTable = {
   id: any;
@@ -129,7 +129,7 @@ function formatSerial(prefix: string | undefined, n: number, width: number): str
 }
 
 async function loadCodes(
-  db: MySql2Database<any>,
+  db: Db,
   table: CodeTable,
   tenantId: number,
 ): Promise<string[]> {
@@ -141,7 +141,7 @@ async function loadCodes(
 }
 
 export async function assertUniqueEntityCode(
-  db: MySql2Database<any>,
+  db: Db,
   table: CodeTable,
   tenantId: number,
   code: string,
@@ -173,7 +173,7 @@ export type ResolveEntityCodeOptions = {
  * عملاء C-0001، موردون S-0001، منتجات P-0001…
  */
 export async function resolveEntityCode(
-  db: MySql2Database<any>,
+  db: Db,
   table: CodeTable,
   tenantId: number,
   inputCode?: string | null,
@@ -207,7 +207,7 @@ export async function resolveEntityCode(
 
 /** اختصار: توليد كود حسب نوع الكيان */
 export async function resolveTypedEntityCode(
-  db: MySql2Database<any>,
+  db: Db,
   table: CodeTable,
   tenantId: number,
   kind: EntityCodeKind,

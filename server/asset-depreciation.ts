@@ -1,5 +1,5 @@
 import { eq } from "drizzle-orm";
-import type { MySql2Database } from "drizzle-orm/mysql2";
+import type { Db } from "./db";
 import { accounts, depreciationRunLines, depreciationRuns, fixedAssets } from "../drizzle/schema";
 import { resolveAccountMap } from "./auto-journal";
 import { tenantWhere, withTenantId } from "./tenant-scope";
@@ -14,7 +14,7 @@ function money(v: number) {
 
 /** قيد إهلاك شهري لكل الأصول النشطة */
 export async function postMonthlyDepreciation(
-  db: MySql2Database,
+  db: Db,
   tenantId: number,
   userId: number | undefined,
   period: string,
@@ -117,7 +117,7 @@ export async function postMonthlyDepreciation(
   return { skipped: false as const, totalDepreciation: totalDep, journal: result };
 }
 
-async function findAccumulatedDepreciationAccount(db: MySql2Database, tenantId: number) {
+async function findAccumulatedDepreciationAccount(db: Db, tenantId: number) {
   const rows = await db
     .select({ id: accounts.id, code: accounts.code, name: accounts.name })
     .from(accounts)

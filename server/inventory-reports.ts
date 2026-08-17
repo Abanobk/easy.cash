@@ -1,5 +1,5 @@
 import { and, eq, inArray, like, or, gte, lte } from "drizzle-orm";
-import type { MySql2Database } from "drizzle-orm/mysql2";
+import type { Db } from "./db";
 import {
   customers,
   inventoryAdjustmentItems,
@@ -51,7 +51,7 @@ function warehouseAllowed(warehouseId: number | null | undefined, filters: Inven
 
 /** يحوّل اختيار الفرع إلى قائمة مخازن (مع احترام نطاق المخازن إن وُجد) */
 export async function expandInventoryBranchFilter(
-  db: MySql2Database<any>,
+  db: Db,
   filters: InventoryReportFilters,
 ): Promise<InventoryReportFilters> {
   if (filters.warehouseId != null || filters.branchId == null) return filters;
@@ -131,7 +131,7 @@ function matchesItemFilters(
 }
 
 export async function collectInventoryMovements(
-  db: MySql2Database<Record<string, never>>,
+  db: Db,
   filters: InventoryReportFilters,
 ): Promise<InventoryMovementRow[]> {
   filters = await expandInventoryBranchFilter(db, filters);
@@ -411,7 +411,7 @@ export async function collectInventoryMovements(
   return rows.sort((a, b) => a.date.localeCompare(b.date) || a.documentNumber.localeCompare(b.documentNumber));
 }
 
-export async function inventoryStocktakeReport(db: MySql2Database<Record<string, never>>, filters: InventoryReportFilters) {
+export async function inventoryStocktakeReport(db: Db, filters: InventoryReportFilters) {
   filters = await expandInventoryBranchFilter(db, filters);
   const { tenantId, warehouseId, categoryId, itemId, search, batchNumber, expiryFrom, expiryTo } = filters;
 
@@ -635,7 +635,7 @@ export function itemInOutReport(movements: InventoryMovementRow[]) {
   return itemMovementSummaryReport(movements);
 }
 
-export async function itemCostsReport(db: MySql2Database<Record<string, never>>, filters: InventoryReportFilters) {
+export async function itemCostsReport(db: Db, filters: InventoryReportFilters) {
   const today = new Date().toISOString().split("T")[0];
   const asOf = (filters.dateTo || today).slice(0, 10);
   const useLive = asOf >= today;
@@ -950,7 +950,7 @@ export async function itemCostsReport(db: MySql2Database<Record<string, never>>,
   return consolidateByItem(warehouseRows);
 }
 
-export async function itemsListReport(db: MySql2Database<Record<string, never>>, filters: InventoryReportFilters) {
+export async function itemsListReport(db: Db, filters: InventoryReportFilters) {
   const { tenantId, categoryId, itemId, search } = filters;
   const conditions = [tenantWhere(items, tenantId, eq(items.isActive, true))];
   if (categoryId) conditions.push(eq(items.categoryId, categoryId));
@@ -980,7 +980,7 @@ export async function itemsListReport(db: MySql2Database<Record<string, never>>,
 
 /** أصناف راكدة — بدون حركة خلال N يوم (افتراضي 90) */
 export async function stagnantItemsReport(
-  db: MySql2Database<Record<string, never>>,
+  db: Db,
   filters: InventoryReportFilters,
 ) {
   const staleDays = filters.staleDays ?? 90;
@@ -1023,7 +1023,7 @@ export async function stagnantItemsReport(
 
 /** أعمار الأصناف — أيام منذ آخر حركة وارد */
 export async function itemAgingReport(
-  db: MySql2Database<Record<string, never>>,
+  db: Db,
   filters: InventoryReportFilters,
 ) {
   const movements = await collectInventoryMovements(db, {

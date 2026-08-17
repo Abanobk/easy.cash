@@ -5,6 +5,9 @@ import { ENV } from './_core/env';
 
 let _db: ReturnType<typeof drizzle> | null = null;
 
+/** النوع الفعلي لاتصال قاعدة البيانات — استخدم ده في أي دالة محتاجة db كباراميتر. */
+export type Db = NonNullable<Awaited<ReturnType<typeof getDb>>>;
+
 // Lazily create the drizzle instance so local tooling can run without a DB.
 export async function getDb() {
   if (!_db && process.env.DATABASE_URL) {

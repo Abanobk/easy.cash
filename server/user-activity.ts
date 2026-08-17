@@ -1,4 +1,4 @@
-import type { MySql2Database } from "drizzle-orm/mysql2";
+import type { Db } from "./db";
 import { userActivities } from "../drizzle/schema";
 import { withTenantId } from "./tenant-scope";
 
@@ -108,7 +108,7 @@ export function shouldLogTrpcPath(path: string, type: "query" | "mutation" | "su
 }
 
 export async function logUserActivity(
-  db: MySql2Database<any> | null | undefined,
+  db: Db | null | undefined,
   ctx: ActivityCtx,
   opts: {
     action: string;
@@ -138,7 +138,7 @@ export async function logUserActivity(
 
 /** تسجيل تلقائي بعد نجاح طفرة tRPC */
 export async function logTrpcMutationActivity(opts: {
-  db: MySql2Database<any> | null | undefined;
+  db: Db | null | undefined;
   ctx: ActivityCtx;
   path: string;
   type: "query" | "mutation" | "subscription";

@@ -1,11 +1,11 @@
 import { eq } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
-import type { MySql2Database } from "drizzle-orm/mysql2";
+import type { Db } from "./db";
 import { customers } from "../drizzle/schema";
 import { tenantWhere } from "./tenant-scope";
 
 export async function assertCustomerCreditLimit(
-  db: MySql2Database,
+  db: Db,
   tenantId: number,
   customerId: number,
   additionalAmount: string,

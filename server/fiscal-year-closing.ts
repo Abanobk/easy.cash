@@ -1,6 +1,6 @@
 import { and, count, eq, or, sql } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
-import type { MySql2Database } from "drizzle-orm/mysql2";
+import type { Db } from "./db";
 import {
   checks,
   fiscalYears,
@@ -36,9 +36,9 @@ export type FiscalCloseWarning = {
 };
 
 export async function getFiscalYearCloseReadiness(
-  db: MySql2Database,
+  db: Db,
   tenantId: number,
-  fy: { id: number; name: string; startDate: string; endDate: string; status: string },
+  fy: { id: number; name: string; startDate: string | Date; endDate: string | Date; status: string },
 ) {
   const startDate = String(fy.startDate).slice(0, 10);
   const endDate = String(fy.endDate).slice(0, 10);
@@ -165,10 +165,10 @@ export async function getFiscalYearCloseReadiness(
 }
 
 export async function closeFiscalYearWithJournals(
-  db: MySql2Database,
+  db: Db,
   tenantId: number,
   userId: number | undefined,
-  fy: { id: number; name: string; startDate: string; endDate: string; status: string },
+  fy: { id: number; name: string; startDate: string | Date; endDate: string | Date; status: string },
   opts?: { skipClosingJournal?: boolean },
 ) {
   const readiness = await getFiscalYearCloseReadiness(db, tenantId, fy);
@@ -204,7 +204,7 @@ export async function closeFiscalYearWithJournals(
 }
 
 export async function backfillMissingCogsJournals(
-  db: MySql2Database,
+  db: Db,
   tenantId: number,
   userId: number | undefined,
 ) {

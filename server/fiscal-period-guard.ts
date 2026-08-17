@@ -1,6 +1,6 @@
 import { and, eq, gte, lte } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
-import type { MySql2Database } from "drizzle-orm/mysql2";
+import type { Db } from "./db";
 import { fiscalYears } from "../drizzle/schema";
 import { tenantWhere } from "./tenant-scope";
 
@@ -9,11 +9,11 @@ function normalizeDate(date: string) {
 }
 
 export async function isDateInClosedPeriod(
-  db: MySql2Database,
+  db: Db,
   tenantId: number,
   date: string,
 ): Promise<boolean> {
-  const d = normalizeDate(date);
+  const d = new Date(normalizeDate(date));
   const [closed] = await db
     .select({ id: fiscalYears.id })
     .from(fiscalYears)
@@ -33,7 +33,7 @@ export async function isDateInClosedPeriod(
 }
 
 export async function assertDateNotInClosedPeriod(
-  db: MySql2Database,
+  db: Db,
   tenantId: number,
   date: string,
 ) {

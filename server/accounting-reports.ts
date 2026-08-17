@@ -1,4 +1,4 @@
-import type { MySql2Database } from "drizzle-orm/mysql2";
+import type { Db } from "./db";
 import {
   areasSummaryReport,
   balanceSheetFromAccounts,
@@ -57,7 +57,7 @@ import { tenantWhere } from "./tenant-scope";
 
 export type ReportRow = Record<string, unknown>;
 
-async function productionOrdersReport(db: MySql2Database<Record<string, never>>, f: ReportFilters) {
+async function productionOrdersReport(db: Db, f: ReportFilters) {
   const dateParts = [];
   if (f.dateFrom) dateParts.push(gte(productionOrders.date, f.dateFrom as any));
   if (f.dateTo) dateParts.push(lte(productionOrders.date, f.dateTo as any));
@@ -94,7 +94,7 @@ async function productionOrdersReport(db: MySql2Database<Record<string, never>>,
   }));
 }
 
-async function productionMaterialsReport(db: MySql2Database<Record<string, never>>, f: ReportFilters) {
+async function productionMaterialsReport(db: Db, f: ReportFilters) {
   const dateParts = [];
   if (f.dateFrom) dateParts.push(gte(productionOrders.date, f.dateFrom as any));
   if (f.dateTo) dateParts.push(lte(productionOrders.date, f.dateTo as any));
@@ -149,7 +149,7 @@ async function productionMaterialsReport(db: MySql2Database<Record<string, never
   });
 }
 
-const HANDLERS: Record<string, (db: MySql2Database<Record<string, never>>, f: ReportFilters) => Promise<ReportRow[]>> = {
+const HANDLERS: Record<string, (db: Db, f: ReportFilters) => Promise<ReportRow[]>> = {
   "accountingreports-accountstatment": (db, f) => loadPostedJournalLines(db, f),
   "accountingreports-customerstatment": customerStatementReport,
   "accountingreports-vendorstatment": vendorStatementReport,
@@ -331,7 +331,7 @@ const HANDLERS: Record<string, (db: MySql2Database<Record<string, never>>, f: Re
 export const ACCOUNTING_REPORT_SLUGS = Object.keys(HANDLERS);
 
 export async function runAccountingReport(
-  db: MySql2Database<Record<string, never>>,
+  db: Db,
   slug: string,
   filters: ReportFilters,
 ): Promise<ReportRow[]> {

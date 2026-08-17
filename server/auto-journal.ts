@@ -1,5 +1,5 @@
 import { and, count, eq, inArray, ne } from "drizzle-orm";
-import type { MySql2Database } from "drizzle-orm/mysql2";
+import type { Db } from "./db";
 import { accounts, items, journalEntries, journalEntryLines } from "../drizzle/schema";
 import { getPostedMovementByAccount, getAccountBalancesAsOf } from "./accounting-data";
 import { tenantWhere, withTenantId } from "./tenant-scope";
@@ -81,7 +81,7 @@ function matchAccount(
 }
 
 /** يُنشئ الحسابات الافتراضية لشركة جديدة عند فتح شجرة الحسابات أو أول قيد */
-export async function ensureDefaultAccounts(db: MySql2Database, tenantId: number) {
+export async function ensureDefaultAccounts(db: Db, tenantId: number) {
   const [existing] = await db
     .select({ count: count() })
     .from(accounts)
@@ -122,7 +122,7 @@ export async function ensureDefaultAccounts(db: MySql2Database, tenantId: number
 }
 
 /** يضيف حسابات القالب الناقصة لشركات لديها شجرة جزئية */
-export async function reseedChartFromTemplate(db: MySql2Database, tenantId: number) {
+export async function reseedChartFromTemplate(db: Db, tenantId: number) {
   const existing = await db
     .select({ id: accounts.id, code: accounts.code })
     .from(accounts)
@@ -172,7 +172,7 @@ export async function reseedChartFromTemplate(db: MySql2Database, tenantId: numb
 }
 
 export async function resolveAccountMap(
-  db: MySql2Database,
+  db: Db,
   tenantId: number,
 ): Promise<AccountMap> {
   await ensureDefaultAccounts(db, tenantId);
@@ -252,7 +252,7 @@ export async function resolveAccountMap(
   return map as AccountMap;
 }
 
-async function journalReferenceExists(db: MySql2Database, tenantId: number, reference: string) {
+async function journalReferenceExists(db: Db, tenantId: number, reference: string) {
   const [row] = await db
     .select({ id: journalEntries.id })
     .from(journalEntries)
@@ -267,7 +267,7 @@ async function journalReferenceExists(db: MySql2Database, tenantId: number, refe
 
 /** إلغاء قيد مرحّل بالمرجع (لحذف/عكس عمليات آلية) */
 export async function cancelPostedJournalByReference(
-  db: MySql2Database,
+  db: Db,
   tenantId: number,
   reference: string,
 ) {
@@ -289,7 +289,7 @@ export async function cancelPostedJournalByReference(
 }
 
 async function createPostedJournal(
-  db: MySql2Database,
+  db: Db,
   tenantId: number,
   createdBy: number | undefined,
   opts: {
@@ -347,7 +347,7 @@ async function createPostedJournal(
 }
 
 export async function createPostedJournalDirect(
-  db: MySql2Database,
+  db: Db,
   tenantId: number,
   createdBy: number | undefined,
   opts: {
@@ -361,7 +361,7 @@ export async function createPostedJournalDirect(
 }
 
 export async function postSalesInvoiceJournal(
-  db: MySql2Database,
+  db: Db,
   tenantId: number,
   createdBy: number | undefined,
   inv: {
@@ -415,7 +415,7 @@ export async function postSalesInvoiceJournal(
 }
 
 export async function postPurchaseInvoiceJournal(
-  db: MySql2Database,
+  db: Db,
   tenantId: number,
   createdBy: number | undefined,
   inv: {
@@ -470,7 +470,7 @@ export async function postPurchaseInvoiceJournal(
 }
 
 export async function postCashTransactionJournal(
-  db: MySql2Database,
+  db: Db,
   tenantId: number,
   createdBy: number | undefined,
   tx: {
@@ -547,7 +547,7 @@ export async function postCashTransactionJournal(
 }
 
 export async function postPayrollJournal(
-  db: MySql2Database,
+  db: Db,
   tenantId: number,
   createdBy: number | undefined,
   opts: { month: number; year: number; totalNet: number; payDate: string },
@@ -570,7 +570,7 @@ export async function postPayrollJournal(
 }
 
 export async function postBankTransactionJournal(
-  db: MySql2Database,
+  db: Db,
   tenantId: number,
   createdBy: number | undefined,
   tx: {
@@ -650,7 +650,7 @@ export async function postBankTransactionJournal(
 }
 
 export async function postSalesReturnJournal(
-  db: MySql2Database,
+  db: Db,
   tenantId: number,
   createdBy: number | undefined,
   ret: {
@@ -685,7 +685,7 @@ export async function postSalesReturnJournal(
 }
 
 export async function postPurchaseReturnJournal(
-  db: MySql2Database,
+  db: Db,
   tenantId: number,
   createdBy: number | undefined,
   ret: {
@@ -746,7 +746,7 @@ export async function postPurchaseReturnJournal(
 }
 
 export async function postCheckReceiveJournal(
-  db: MySql2Database,
+  db: Db,
   tenantId: number,
   createdBy: number | undefined,
   chk: {
@@ -805,7 +805,7 @@ export async function postCheckReceiveJournal(
 }
 
 export async function postCheckDepositJournal(
-  db: MySql2Database,
+  db: Db,
   tenantId: number,
   createdBy: number | undefined,
   chk: {
@@ -849,7 +849,7 @@ export async function postCheckDepositJournal(
 }
 
 export async function postCheckClearJournal(
-  db: MySql2Database,
+  db: Db,
   tenantId: number,
   createdBy: number | undefined,
   chk: {
@@ -907,7 +907,7 @@ export async function postCheckClearJournal(
 }
 
 export async function postCheckBounceJournal(
-  db: MySql2Database,
+  db: Db,
   tenantId: number,
   createdBy: number | undefined,
   chk: {
@@ -971,7 +971,7 @@ export async function postCheckBounceJournal(
 }
 
 export async function computeLinesCogs(
-  db: MySql2Database,
+  db: Db,
   tenantId: number,
   lines: { itemId: number; quantity: string }[],
 ) {
@@ -980,7 +980,7 @@ export async function computeLinesCogs(
 }
 
 export async function postSalesCogsJournal(
-  db: MySql2Database,
+  db: Db,
   tenantId: number,
   createdBy: number | undefined,
   inv: {
@@ -1020,7 +1020,7 @@ export async function postSalesCogsJournal(
 }
 
 export async function postSalesReturnCogsJournal(
-  db: MySql2Database,
+  db: Db,
   tenantId: number,
   createdBy: number | undefined,
   ret: {
@@ -1064,10 +1064,10 @@ export function fiscalYearCloseReference(fiscalYearId: number) {
 }
 
 export async function postYearEndClosingJournal(
-  db: MySql2Database,
+  db: Db,
   tenantId: number,
   createdBy: number | undefined,
-  fy: { id: number; name: string; startDate: string; endDate: string },
+  fy: { id: number; name: string; startDate: string | Date; endDate: string | Date },
 ) {
   const reference = fiscalYearCloseReference(fy.id);
   if (await journalReferenceExists(db, tenantId, reference)) {
@@ -1147,10 +1147,10 @@ export function fiscalYearOpenReference(fyId: number) {
 
 /** قيد افتتاحي — أرصدة المركز المالي في أول يوم من سنة مالية جديدة */
 export async function postYearOpeningJournal(
-  db: MySql2Database,
+  db: Db,
   tenantId: number,
   createdBy: number | undefined,
-  fy: { id: number; name: string; startDate: string },
+  fy: { id: number; name: string; startDate: string | Date },
   previousEndDate: string,
 ) {
   const reference = fiscalYearOpenReference(fy.id);
@@ -1197,7 +1197,7 @@ export async function postYearOpeningJournal(
 }
 
 export async function postAssetSaleJournal(
-  db: MySql2Database,
+  db: Db,
   tenantId: number,
   createdBy: number | undefined,
   sale: {
@@ -1275,7 +1275,7 @@ export async function postAssetSaleJournal(
 }
 
 export async function postCapitalMaintenanceJournal(
-  db: MySql2Database,
+  db: Db,
   tenantId: number,
   createdBy: number | undefined,
   row: {
@@ -1325,7 +1325,7 @@ export async function postCapitalMaintenanceJournal(
   });
 }
 
-async function resolveWipAccountId(db: MySql2Database, tenantId: number) {
+async function resolveWipAccountId(db: Db, tenantId: number) {
   const rows = await db
     .select({ id: accounts.id, code: accounts.code, name: accounts.name, isParent: accounts.isParent })
     .from(accounts)
@@ -1337,7 +1337,7 @@ async function resolveWipAccountId(db: MySql2Database, tenantId: number) {
 }
 
 export async function postProductionWipJournal(
-  db: MySql2Database,
+  db: Db,
   tenantId: number,
   createdBy: number | undefined,
   order: { id: number; number: string; date: string; productName: string },
@@ -1374,7 +1374,7 @@ export async function postProductionWipJournal(
 }
 
 export async function postProductionCompletionJournal(
-  db: MySql2Database,
+  db: Db,
   tenantId: number,
   createdBy: number | undefined,
   order: { id: number; number: string; date: string; productName: string },
@@ -1411,7 +1411,7 @@ export async function postProductionCompletionJournal(
 }
 
 async function resolveOrCreateLoanAccount(
-  db: MySql2Database,
+  db: Db,
   tenantId: number,
   kind: "receivable" | "payable",
 ) {
@@ -1450,7 +1450,7 @@ async function resolveOrCreateLoanAccount(
 }
 
 async function resolveSettlementAccountId(
-  db: MySql2Database,
+  db: Db,
   tenantId: number,
   opts: { method: "cash" | "bank"; bankAccountId?: number },
 ) {
@@ -1463,7 +1463,7 @@ async function resolveSettlementAccountId(
 
 /** قيد صرف/استلام أصل القرض */
 export async function postLoanOriginJournal(
-  db: MySql2Database,
+  db: Db,
   tenantId: number,
   createdBy: number | undefined,
   loan: {
@@ -1509,7 +1509,7 @@ export async function postLoanOriginJournal(
 
 /** قيد سداد قسط */
 export async function postLoanInstallmentPayJournal(
-  db: MySql2Database,
+  db: Db,
   tenantId: number,
   createdBy: number | undefined,
   opts: {
@@ -1556,7 +1556,7 @@ export async function postLoanInstallmentPayJournal(
 
 /** قيد حافز موظف (مصروف رواتب / صندوق أو بنك) */
 export async function postHrIncentiveJournal(
-  db: MySql2Database,
+  db: Db,
   tenantId: number,
   createdBy: number | undefined,
   opts: {

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { eq, desc, and, or, gte, lte, isNull, sql, like } from "drizzle-orm";
+import { eq, desc, and, or, gte, lte, isNull, sql, like, type Column } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { protectedProcedure, router } from "./_core/trpc";
 import { getDb } from "./db";
@@ -24,7 +24,7 @@ import {
   getFiscalYearCloseReadiness,
 } from "./fiscal-year-closing";
 
-type TenantTable = { tenantId: { name: string }; id: { name: string } };
+type TenantTable = { tenantId: Column<any, object, object>; id: Column<any, object, object> };
 
 /** توحيد نص الصنف/الباركود للمطابقة الذكية */
 function normalizeItemKey(value: string) {
@@ -55,7 +55,7 @@ function crudRouter<T extends TenantTable>(
     create: protectedProcedure.input(createSchema).mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      await db.insert(table as any).values(withTenantId(ctx.tenantId, input) as any);
+      await db.insert(table as any).values(withTenantId(ctx.tenantId, input as Record<string, unknown>) as any);
       return { success: true };
     }),
     update: protectedProcedure.input(z.object({ id: z.number() }).passthrough()).mutation(async ({ ctx, input }) => {
@@ -356,16 +356,16 @@ export const settingsExtendedRouter = router({
   }),
   importData: protectedProcedure.input(z.object({
     entity: z.enum(["customers", "suppliers", "items", "accounts", "employees", "warehouses", "itemCategories", "departments"]).optional(),
-    rows: z.array(z.record(z.unknown())).optional(),
+    rows: z.array(z.record(z.string(), z.unknown())).optional(),
     upsertByCode: z.boolean().optional(),
-    customers: z.array(z.record(z.unknown())).optional(),
-    suppliers: z.array(z.record(z.unknown())).optional(),
-    items: z.array(z.record(z.unknown())).optional(),
-    accounts: z.array(z.record(z.unknown())).optional(),
-    employees: z.array(z.record(z.unknown())).optional(),
-    warehouses: z.array(z.record(z.unknown())).optional(),
-    itemCategories: z.array(z.record(z.unknown())).optional(),
-    departments: z.array(z.record(z.unknown())).optional(),
+    customers: z.array(z.record(z.string(), z.unknown())).optional(),
+    suppliers: z.array(z.record(z.string(), z.unknown())).optional(),
+    items: z.array(z.record(z.string(), z.unknown())).optional(),
+    accounts: z.array(z.record(z.string(), z.unknown())).optional(),
+    employees: z.array(z.record(z.string(), z.unknown())).optional(),
+    warehouses: z.array(z.record(z.string(), z.unknown())).optional(),
+    itemCategories: z.array(z.record(z.string(), z.unknown())).optional(),
+    departments: z.array(z.record(z.string(), z.unknown())).optional(),
   })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });

@@ -1,5 +1,5 @@
 import { and, eq, like, notInArray } from "drizzle-orm";
-import type { MySql2Database } from "drizzle-orm/mysql2";
+import type { Db } from "./db";
 import { notifications } from "../drizzle/schema";
 import { getOperationalAlerts } from "./operational-alerts";
 import { tenantWhere, withTenantId } from "./tenant-scope";
@@ -149,7 +149,7 @@ export function buildOperationalNotificationDrafts(alerts: Awaited<ReturnType<ty
 }
 
 export async function syncOperationalNotifications(
-  db: MySql2Database,
+  db: Db,
   tenantId: number,
   userId: number,
 ) {

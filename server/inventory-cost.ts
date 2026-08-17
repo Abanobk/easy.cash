@@ -1,5 +1,5 @@
 import { and, eq, inArray, sql } from "drizzle-orm";
-import type { MySql2Database } from "drizzle-orm/mysql2";
+import type { Db } from "./db";
 import {
   items,
   purchaseInvoiceItems,
@@ -13,7 +13,7 @@ function num(v: unknown) {
 
 /** متوسط تكلفة مرجّح من المشتريات والتسويات المخزنية */
 export async function computeWeightedAverageCost(
-  db: MySql2Database,
+  db: Db,
   tenantId: number,
   itemId: number,
 ): Promise<number> {
@@ -58,7 +58,7 @@ export async function computeWeightedAverageCost(
 }
 
 export async function recalculateItemAverageCost(
-  db: MySql2Database,
+  db: Db,
   tenantId: number,
   itemId: number,
 ) {
@@ -71,7 +71,7 @@ export async function recalculateItemAverageCost(
 }
 
 export async function computeLinesCogsValue(
-  db: MySql2Database,
+  db: Db,
   tenantId: number,
   lines: { itemId: number; quantity: string }[],
 ) {
@@ -86,7 +86,7 @@ export async function computeLinesCogsValue(
 
 /** بعد فاتورة شراء: تحديث متوسط التكلفة المرجّح */
 export async function updateAverageCostAfterPurchase(
-  db: MySql2Database,
+  db: Db,
   tenantId: number,
   itemId: number,
   newQty: number,

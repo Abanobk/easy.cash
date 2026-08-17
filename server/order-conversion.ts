@@ -1,5 +1,5 @@
 import { and, count, eq } from "drizzle-orm";
-import type { MySql2Database } from "drizzle-orm/mysql2";
+import type { Db } from "./db";
 import {
   customers,
   purchaseInvoiceItems,
@@ -25,7 +25,7 @@ function num(v: unknown) {
 }
 
 export async function convertSalesOrderToInvoice(
-  db: MySql2Database,
+  db: Db,
   tenantId: number,
   userId: number | undefined,
   orderId: number,
@@ -135,7 +135,7 @@ export async function convertSalesOrderToInvoice(
 }
 
 export async function convertPurchaseOrderToInvoice(
-  db: MySql2Database,
+  db: Db,
   tenantId: number,
   userId: number | undefined,
   orderId: number,

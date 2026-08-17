@@ -1,5 +1,5 @@
 import { eq } from "drizzle-orm";
-import type { MySql2Database } from "drizzle-orm/mysql2";
+import type { Db } from "./db";
 import { generalAttributes } from "../drizzle/schema";
 import { tenantWhere } from "./tenant-scope";
 
@@ -13,7 +13,7 @@ export const KNOWN_GENERAL_ATTR_KEYS = [
 ] as const;
 
 export async function getGeneralAttr(
-  db: MySql2Database,
+  db: Db,
   tenantId: number,
   key: string,
 ): Promise<string | null> {
@@ -25,14 +25,14 @@ export async function getGeneralAttr(
   return row?.attrValue ?? null;
 }
 
-export async function getGeneralAttrBool(db: MySql2Database, tenantId: number, key: string) {
+export async function getGeneralAttrBool(db: Db, tenantId: number, key: string) {
   const v = await getGeneralAttr(db, tenantId, key);
   if (v == null || v === "") return null;
   return v === "true" || v === "1" || v.toLowerCase() === "yes";
 }
 
 export async function getGeneralAttrNumber(
-  db: MySql2Database,
+  db: Db,
   tenantId: number,
   key: string,
   fallback: number,

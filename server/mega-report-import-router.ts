@@ -17,7 +17,7 @@ import {
   productionOrderMaterials,
   beginningInventory,
 } from "../drizzle/schema";
-import { parseMegaReportBuffer } from "./mega-report-parse";
+import { parseMegaReportBuffer, type MegaInvoiceLine } from "./mega-report-parse";
 import { resolveTypedEntityCode } from "./entity-codes";
 
 function normalizeKey(value: string) {
@@ -135,7 +135,7 @@ export const megaReportImportRouter = router({
         };
       });
       return {
-        kind: parsed.kind as const,
+        kind: parsed.kind,
         fileName: input.fileName || "",
         summary: {
           documents: rows.length,
@@ -168,7 +168,7 @@ export const megaReportImportRouter = router({
         };
       });
       return {
-        kind: parsed.kind as const,
+        kind: parsed.kind,
         fileName: input.fileName || "",
         summary: {
           documents: sales.length,
@@ -202,7 +202,7 @@ export const megaReportImportRouter = router({
         };
       });
       return {
-        kind: parsed.kind as const,
+        kind: parsed.kind,
         fileName: input.fileName || "",
         summary: {
           documents: purchases.length,

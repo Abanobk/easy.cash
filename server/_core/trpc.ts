@@ -10,8 +10,12 @@ const t = initTRPC.context<TrpcContext>().create({
 export const router = t.router;
 export const publicProcedure = t.procedure;
 
-const requireUser = t.middleware(async opts => {
-  const { ctx, next } = opts;
+// ملحوظة: الثلاث خطوات (تحقق مستخدم/مستأجر، صلاحيات، تسجيل نشاط) مدموجة في middleware
+// واحد بدل ثلاثة .use() منفصلة — لو اتفصلوا تاني، TypeScript بيفقد تضييق نوع
+// tenantId من number|null إلى number عبر السلسلة (كل t.middleware() منفصل بيتفحص
+// ضد الـ context الأساسي مش الناتج المضيّق من اللي قبله).
+export const protectedProcedure = t.procedure.use(async (opts) => {
+  const { ctx, next, path, type, getRawInput } = opts;
 
   if (!ctx.user) {
     throw new TRPCError({ code: "UNAUTHORIZED", message: UNAUTHED_ERR_MSG });
@@ -28,50 +32,38 @@ const requireUser = t.middleware(async opts => {
     });
   }
 
-  return next({
-    ctx: {
-      ...ctx,
-      user: ctx.user,
-      tenantId: ctx.tenantId,
-    },
-  });
-});
-
-const requirePermission = t.middleware(async (opts) => {
-  const { ctx, next, path } = opts;
   if (ctx.saasUser) {
     const { assertTrpcPermission } = await import("../permission-middleware");
     await assertTrpcPermission(ctx.saasUser, path);
   }
-  return next({ ctx });
-});
 
-/** يسجّل حركات الإضافة/التعديل/الحذف بعد نجاح العملية */
-const auditActivity = t.middleware(async (opts) => {
-  const result = await opts.next();
-  if (result.ok && opts.type === "mutation") {
+  const nextCtx = {
+    ...ctx,
+    user: ctx.user,
+    tenantId: ctx.tenantId,
+  };
+
+  const result = await next({ ctx: nextCtx });
+
+  if (result.ok && type === "mutation") {
     try {
       const { getDb } = await import("../db");
       const { logTrpcMutationActivity } = await import("../user-activity");
       const db = await getDb();
       void logTrpcMutationActivity({
         db,
-        ctx: opts.ctx,
-        path: opts.path,
-        type: opts.type,
-        input: opts.getRawInput ? await opts.getRawInput() : undefined,
+        ctx: nextCtx,
+        path,
+        type,
+        input: getRawInput ? await getRawInput() : undefined,
       });
     } catch {
       // تجاهل فشل السجل
     }
   }
+
   return result;
 });
-
-export const protectedProcedure = t.procedure
-  .use(requireUser)
-  .use(requirePermission)
-  .use(auditActivity);
 
 export const adminProcedure = t.procedure.use(
   t.middleware(async opts => {

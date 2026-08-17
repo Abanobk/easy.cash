@@ -1453,6 +1453,7 @@ const purchasesRouter = router({
       date: z.string(),
       reason: z.string().optional(),
       notes: z.string().optional(),
+      warehouseId: z.number().optional(),
       items: z.array(z.object({
         itemId: z.number(),
         quantity: z.string(),
@@ -1957,6 +1958,7 @@ const salesRouter = router({
       date: z.string(),
       reason: z.string().optional(),
       notes: z.string().optional(),
+      warehouseId: z.number().optional(),
       items: z.array(z.object({
         itemId: z.number(),
         quantity: z.string(),
@@ -2221,8 +2223,8 @@ const hrRouter = router({
       // Delete existing records for the day then re-insert
       await db.delete(attendance).where(tenantWhere(attendance, ctx.tenantId, eq(attendance.date, new Date(input.date))));
       if (input.records.length > 0) {
-        await db.insert(attendance).values(withTenantId(ctx.tenantId, 
-          input.records.map(r => ({
+        await db.insert(attendance).values(
+          input.records.map(r => withTenantId(ctx.tenantId, {
             employeeId: r.employeeId,
             date: new Date(input.date),
             checkIn: r.checkIn,
@@ -2231,7 +2233,7 @@ const hrRouter = router({
             status: r.status as any,
             notes: r.notes,
           }))
-        ));
+        );
       }
       return { success: true, count: input.records.length };
     }),
@@ -3823,7 +3825,7 @@ const settingsRouter = router({
     import: protectedProcedure.input(z.object({
       payload: z.object({
         version: z.string().optional(),
-        data: z.record(z.string(), z.array(z.record(z.unknown()))),
+        data: z.record(z.string(), z.array(z.record(z.string(), z.unknown()))),
       }),
       upsertByCode: z.boolean().optional(),
     })).mutation(async ({ ctx, input }) => {
@@ -3847,7 +3849,7 @@ const settingsRouter = router({
     importFull: protectedProcedure.input(z.object({
       payload: z.object({
         version: z.string().optional(),
-        data: z.record(z.string(), z.array(z.record(z.unknown()))),
+        data: z.record(z.string(), z.array(z.record(z.string(), z.unknown()))),
       }),
       wipeFirst: z.boolean().optional(),
       wipeConfirm: z.string().optional(),
@@ -5117,6 +5119,7 @@ const saasRouter = router({
         endDate: subscriptions.endDate,
         planId: subscriptions.planId,
         planName: subscriptionPlans.nameAr,
+        planDurationDays: subscriptionPlans.durationDays,
         maxUsers: subscriptionPlans.maxUsers,
         maxInvoices: subscriptionPlans.maxInvoices,
       }).from(subscriptions)
@@ -6057,6 +6060,8 @@ const saasRouter = router({
           currency: "EGP",
           hasSecretKey: false,
           hasHmacSecret: false,
+          needsSecretResave: false,
+          readyForPayments: false,
           paymentMethods: [] as Array<{ id: number; methodType: "card" | "wallet"; integrationId: number; isEnabled: boolean; labelAr: string }>,
           ...defaultUrls,
         };
@@ -6123,6 +6128,8 @@ const saasRouter = router({
         currency: "EGP",
         hasSecretKey: false,
         hasHmacSecret: false,
+        needsSecretResave: false,
+        readyForPayments: false,
         paymentMethods: [] as Array<{ id: number; methodType: "card" | "wallet"; integrationId: number; isEnabled: boolean; labelAr: string }>,
         ...defaultUrls,
       };

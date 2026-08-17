@@ -1,5 +1,5 @@
 import { eq } from "drizzle-orm";
-import type { MySql2Database } from "drizzle-orm/mysql2";
+import type { Db } from "./db";
 import { companyAuditPolicies } from "../drizzle/schema";
 import { tenantWhere } from "./tenant-scope";
 
@@ -56,7 +56,7 @@ export function policyFromRow(row: typeof companyAuditPolicies.$inferSelect | nu
   };
 }
 
-export async function loadAuditPolicy(db: MySql2Database, tenantId: number): Promise<AuditPolicy> {
+export async function loadAuditPolicy(db: Db, tenantId: number): Promise<AuditPolicy> {
   try {
     const [row] = await db
       .select()
@@ -70,7 +70,7 @@ export async function loadAuditPolicy(db: MySql2Database, tenantId: number): Pro
 }
 
 export async function saveAuditPolicy(
-  db: MySql2Database,
+  db: Db,
   tenantId: number,
   input: Partial<AuditPolicy>,
 ): Promise<AuditPolicy> {

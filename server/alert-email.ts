@@ -1,4 +1,4 @@
-import type { MySql2Database } from "drizzle-orm/mysql2";
+import type { Db } from "./db";
 import { eq } from "drizzle-orm";
 import { companySettings } from "../drizzle/schema";
 import { getOperationalAlerts } from "./operational-alerts";
@@ -78,7 +78,7 @@ async function sendViaResend(opts: { to: string[]; subject: string; html: string
 }
 
 export async function sendOperationalAlertDigest(
-  db: MySql2Database,
+  db: Db,
   tenantId: number,
   opts?: { force?: boolean },
 ) {

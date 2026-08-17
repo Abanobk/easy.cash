@@ -1,5 +1,5 @@
 import { and, eq, inArray } from "drizzle-orm";
-import type { MySql2Database } from "drizzle-orm/mysql2";
+import type { Db } from "./db";
 import { itemSerials, items } from "../drizzle/schema";
 import { tenantWhere, withTenantId } from "./tenant-scope";
 
@@ -13,7 +13,7 @@ function parseSerialList(raw: string | string[] | undefined): string[] {
 }
 
 export async function assertItemTracksSerial(
-  db: MySql2Database,
+  db: Db,
   tenantId: number,
   itemId: number,
 ) {
@@ -25,7 +25,7 @@ export async function assertItemTracksSerial(
 }
 
 export async function registerPurchaseSerials(
-  db: MySql2Database,
+  db: Db,
   tenantId: number,
   opts: {
     itemId: number;
@@ -51,7 +51,7 @@ export async function registerPurchaseSerials(
 }
 
 export async function assignSalesSerials(
-  db: MySql2Database,
+  db: Db,
   tenantId: number,
   opts: {
     itemId: number;
@@ -96,7 +96,7 @@ export async function assignSalesSerials(
 }
 
 export async function listAvailableSerials(
-  db: MySql2Database,
+  db: Db,
   tenantId: number,
   itemId: number,
   warehouseId?: number,

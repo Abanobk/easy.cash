@@ -1,5 +1,5 @@
 import { and, eq, gte, lte, sql } from "drizzle-orm";
-import type { MySql2Database } from "drizzle-orm/mysql2";
+import type { Db } from "./db";
 import {
   attendance,
   employeeShifts,
@@ -55,7 +55,7 @@ function isLateByShift(checkIn: string | null | undefined, shiftStart: string, g
 }
 
 async function resolveEmployeeShift(
-  db: MySql2Database,
+  db: Db,
   tenantId: number,
   employeeId: number,
   monthEnd: string,
@@ -84,7 +84,7 @@ async function resolveEmployeeShift(
 }
 
 export async function calculateMonthPayroll(
-  db: MySql2Database,
+  db: Db,
   tenantId: number,
   month: number,
   year: number,
@@ -260,7 +260,7 @@ export async function calculateMonthPayroll(
 }
 
 export async function payMonthPayroll(
-  db: MySql2Database,
+  db: Db,
   tenantId: number,
   month: number,
   year: number,

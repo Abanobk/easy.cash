@@ -1,5 +1,5 @@
 import { eq } from "drizzle-orm";
-import type { MySql2Database } from "drizzle-orm/mysql2";
+import type { Db } from "./db";
 import {
   customers,
   purchaseInvoiceItems,
@@ -16,7 +16,7 @@ import { updateAverageCostAfterPurchase } from "./inventory-cost";
 import { tenantWhere } from "./tenant-scope";
 
 export async function finalizeSalesInvoice(
-  db: MySql2Database,
+  db: Db,
   tenantId: number,
   userId: number | undefined,
   invoiceId: number,
@@ -81,7 +81,7 @@ export async function finalizeSalesInvoice(
 }
 
 export async function finalizePurchaseInvoice(
-  db: MySql2Database,
+  db: Db,
   tenantId: number,
   userId: number | undefined,
   invoiceId: number,
@@ -148,7 +148,7 @@ export async function finalizePurchaseInvoice(
 }
 
 export async function finalizeJournalEntry(
-  db: MySql2Database,
+  db: Db,
   tenantId: number,
   entryId: number,
 ) {

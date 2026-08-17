@@ -1,5 +1,5 @@
 import { and, asc, eq, sql } from "drizzle-orm";
-import type { MySql2Database } from "drizzle-orm/mysql2";
+import type { Db } from "./db";
 import { TRPCError } from "@trpc/server";
 import { items, measureUnits } from "../drizzle/schema";
 import { tenantWhere, withTenantId } from "./tenant-scope";
@@ -32,7 +32,7 @@ export function normalizeMeasureUnitName(value: string): string {
 
 /** يزرع الوحدات الافتراضية + أي وحدات مستخدمة فعلاً في الأصناف */
 export async function ensureMeasureUnits(
-  db: MySql2Database,
+  db: Db,
   tenantId: number,
 ): Promise<void> {
   const [cnt] = await db
@@ -69,7 +69,7 @@ export async function ensureMeasureUnits(
 }
 
 export async function listMeasureUnits(
-  db: MySql2Database,
+  db: Db,
   tenantId: number,
   opts?: { activeOnly?: boolean },
 ) {
@@ -86,7 +86,7 @@ export async function listMeasureUnits(
 
 /** يتحقق أن الوحدة مسجّلة ونشطة — لمنع إدخال وحدة غير معتمدة في الشركة */
 export async function assertActiveMeasureUnit(
-  db: MySql2Database,
+  db: Db,
   tenantId: number,
   unitRaw: string | undefined | null,
 ): Promise<string> {
@@ -112,7 +112,7 @@ export async function assertActiveMeasureUnit(
 
 /** للاستيراد: يضمن وجود الوحدة (يُنشئها إن لزم) ثم يعيد الاسم المعتمد */
 export async function ensureMeasureUnitExists(
-  db: MySql2Database,
+  db: Db,
   tenantId: number,
   unitRaw: string | undefined | null,
 ): Promise<string> {

@@ -18,7 +18,57 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_DATABASE: easy_cash
+          MYSQL_USER: easy_cash
+          MYSQL_PASSWORD: ci_test_password
+          MYSQL_ROOT_PASSWORD: ci_test_root_password
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+    env:
+      DATABASE_URL: mysql://easy_cash:ci_test_password@127.0.0.1:3306/easy_cash
+      JWT_SECRET: ci-test-jwt-secret-not-for-production-use-only
+      ENCRYPTION_KEY: ci-test-encryption-key-not-for-production-use
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.4.1
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Type check (tsc)
+        run: pnpm check
+
+      - name: Apply DB migrations
+        run: npx drizzle-kit migrate
+
+      - name: Run tests
+        run: pnpm test
+
   deploy:
+    needs: test
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:

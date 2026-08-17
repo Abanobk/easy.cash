@@ -2,7 +2,7 @@
  * مطابقة كشف البنك المرفوع مع حركات البرنامج + كشوف عامة للمراجع.
  */
 import { and, desc, eq, gte, lte, sql } from "drizzle-orm";
-import type { MySql2Database } from "drizzle-orm/mysql2";
+import type { Db } from "./db";
 import {
   auditFindingClosures,
   auditStatementUploads,
@@ -33,7 +33,7 @@ function findingKey(title: string, category?: string) {
 }
 
 export async function importBankStatement(
-  db: MySql2Database,
+  db: Db,
   tenantId: number,
   input: {
     bankAccountId: number;
@@ -105,7 +105,7 @@ export async function importBankStatement(
 }
 
 export async function reconcileBankStatementImport(
-  db: MySql2Database,
+  db: Db,
   tenantId: number,
   importId: number,
 ) {
@@ -224,7 +224,7 @@ export async function reconcileBankStatementImport(
 }
 
 export async function auditUploadedBankStatements(
-  db: MySql2Database,
+  db: Db,
   tenantId: number,
   out: AuditFinding[],
   materialityEgp: number,
@@ -292,7 +292,7 @@ export async function auditUploadedBankStatements(
 }
 
 export async function saveGenericStatementUpload(
-  db: MySql2Database,
+  db: Db,
   tenantId: number,
   input: {
     kind: string;
@@ -356,7 +356,7 @@ export async function saveGenericStatementUpload(
   };
 }
 
-export async function listStatementUploads(db: MySql2Database, tenantId: number) {
+export async function listStatementUploads(db: Db, tenantId: number) {
   const banks = await db
     .select()
     .from(bankStatementImports)
@@ -372,7 +372,7 @@ export async function listStatementUploads(db: MySql2Database, tenantId: number)
   return { banks, others };
 }
 
-export async function getBankStatementDetail(db: MySql2Database, tenantId: number, importId: number) {
+export async function getBankStatementDetail(db: Db, tenantId: number, importId: number) {
   const [imp] = await db
     .select()
     .from(bankStatementImports)
@@ -388,7 +388,7 @@ export async function getBankStatementDetail(db: MySql2Database, tenantId: numbe
 }
 
 export async function upsertFindingClosure(
-  db: MySql2Database,
+  db: Db,
   tenantId: number,
   input: {
     findingTitle: string;
@@ -425,7 +425,7 @@ export async function upsertFindingClosure(
   return { id: Number((result as { insertId?: number }).insertId ?? 0), ...payload };
 }
 
-export async function listFindingClosures(db: MySql2Database, tenantId: number) {
+export async function listFindingClosures(db: Db, tenantId: number) {
   return db
     .select()
     .from(auditFindingClosures)
@@ -435,7 +435,7 @@ export async function listFindingClosures(db: MySql2Database, tenantId: number) 
 }
 
 export async function applyClosureStatusToFindings(
-  db: MySql2Database,
+  db: Db,
   tenantId: number,
   findings: AuditFinding[],
 ) {

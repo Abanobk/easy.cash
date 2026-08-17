@@ -1,6 +1,6 @@
 import { desc, eq } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
-import type { MySql2Database } from "drizzle-orm/mysql2";
+import type { Db } from "./db";
 import { checks, customers, suppliers } from "../drizzle/schema";
 import {
   postCheckBounceJournal,
@@ -12,7 +12,7 @@ import { allocateCustomerPaymentFifo, allocateSupplierPaymentFifo } from "./paym
 import { tenantWhere, withTenantId } from "./tenant-scope";
 
 export async function createCheckWithJournal(
-  db: MySql2Database,
+  db: Db,
   tenantId: number,
   userId: number,
   input: {
@@ -104,7 +104,7 @@ export async function createCheckWithJournal(
 }
 
 export async function clearCheck(
-  db: MySql2Database,
+  db: Db,
   tenantId: number,
   userId: number,
   checkId: number,
@@ -190,7 +190,7 @@ export async function clearCheck(
 }
 
 export async function bounceCheck(
-  db: MySql2Database,
+  db: Db,
   tenantId: number,
   userId: number,
   checkId: number,

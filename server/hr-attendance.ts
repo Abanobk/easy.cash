@@ -1,5 +1,5 @@
 import { and, eq } from "drizzle-orm";
-import type { MySql2Database } from "drizzle-orm/mysql2";
+import type { Db } from "./db";
 import { TRPCError } from "@trpc/server";
 import { attendance, employees, fingerprintMachines, machinePunches } from "../drizzle/schema";
 import { tenantWhere, withTenantId } from "./tenant-scope";
@@ -43,7 +43,7 @@ function dateOnlyFromDate(d: Date) {
 }
 
 export async function upsertDailyAttendance(
-  db: MySql2Database<Record<string, never>>,
+  db: Db,
   tenantId: number,
   data: {
     employeeId: number;
@@ -84,7 +84,7 @@ export async function upsertDailyAttendance(
   return (res as { insertId: number }).insertId;
 }
 
-async function loadEnrollMap(db: MySql2Database<Record<string, never>>, tenantId: number) {
+async function loadEnrollMap(db: Db, tenantId: number) {
   const empRows = await db.select({ id: employees.id, code: employees.code }).from(employees)
     .where(tenantWhere(employees, tenantId));
   const enrollMap = new Map<string, number>();
@@ -95,7 +95,7 @@ async function loadEnrollMap(db: MySql2Database<Record<string, never>>, tenantId
 }
 
 export async function ingestMachinePunchRows(
-  db: MySql2Database<Record<string, never>>,
+  db: Db,
   tenantId: number,
   machineId: number,
   rows: PunchRow[],
@@ -167,7 +167,7 @@ export async function ingestMachinePunchRows(
 }
 
 export async function syncMachinePunches(
-  db: MySql2Database<Record<string, never>>,
+  db: Db,
   tenantId: number,
   machineId: number,
   csvText: string,
@@ -176,7 +176,7 @@ export async function syncMachinePunches(
   return ingestMachinePunchRows(db, tenantId, machineId, parsed, "machine");
 }
 
-async function loadMachine(db: MySql2Database<Record<string, never>>, tenantId: number, machineId: number) {
+async function loadMachine(db: Db, tenantId: number, machineId: number) {
   const [machine] = await db.select().from(fingerprintMachines)
     .where(tenantWhere(fingerprintMachines, tenantId, eq(fingerprintMachines.id, machineId)));
   if (!machine) throw new TRPCError({ code: "NOT_FOUND", message: "الماكينة غير موجودة" });
@@ -185,7 +185,7 @@ async function loadMachine(db: MySql2Database<Record<string, never>>, tenantId: 
 }
 
 export async function syncMachineFromTcp(
-  db: MySql2Database<Record<string, never>>,
+  db: Db,
   tenantId: number,
   machineId: number,
   opts: { fullSync?: boolean } = {},
@@ -216,7 +216,7 @@ export async function syncMachineFromTcp(
 }
 
 export async function testMachineTcpConnection(
-  db: MySql2Database<Record<string, never>>,
+  db: Db,
   tenantId: number,
   machineId: number,
 ) {

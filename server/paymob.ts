@@ -2,6 +2,7 @@ import crypto from "crypto";
 import type { Request } from "express";
 import { resolveEncryptionKey } from "./security-secrets";
 import { intentionIncludesWallet, LIVE_UNIFIED_CARD_INTEGRATION_ID } from "./paymob-methods";
+import { ENV } from "./_core/env";
 
 export type PaymobPublicConfig = {
   publicKey: string;

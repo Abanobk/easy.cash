@@ -35,9 +35,9 @@ type SimpleEntityPageProps = {
   data?: Record<string, unknown>[] | null;
   isLoading?: boolean;
   onRefresh: () => void;
-  onCreate: (values: Record<string, string>) => Promise<void> | void;
-  onUpdate: (id: number, values: Record<string, string>) => Promise<void> | void;
-  onDelete: (id: number) => Promise<void> | void;
+  onCreate: (values: Record<string, string>) => Promise<unknown> | void;
+  onUpdate: (id: number, values: Record<string, string>) => Promise<unknown> | void;
+  onDelete: (id: number) => Promise<unknown> | void;
   addLabel?: string;
   addPermission?: { module: PermissionModule; action?: PermissionAction };
   permissionModule?: PermissionModule;

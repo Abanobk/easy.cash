@@ -1,5 +1,5 @@
 import { and, eq, or, sql } from "drizzle-orm";
-import type { MySql2Database } from "drizzle-orm/mysql2";
+import type { Db } from "./db";
 import {
   customers,
   purchaseInvoices,
@@ -21,7 +21,7 @@ const openPurchaseStatuses = or(
 );
 
 export async function recalculateCustomerBalance(
-  db: MySql2Database,
+  db: Db,
   tenantId: number,
   customerId: number,
 ) {
@@ -68,7 +68,7 @@ export async function recalculateCustomerBalance(
 }
 
 export async function recalculateSupplierBalance(
-  db: MySql2Database,
+  db: Db,
   tenantId: number,
   supplierId: number,
 ) {
@@ -114,7 +114,7 @@ export async function recalculateSupplierBalance(
   return balance;
 }
 
-export async function reconcileAllContactBalances(db: MySql2Database, tenantId: number) {
+export async function reconcileAllContactBalances(db: Db, tenantId: number) {
   const customerRows = await db
     .select({ id: customers.id })
     .from(customers)

@@ -3,7 +3,7 @@
  * الاستخراج يقترح مسودة — التأكيد يدوياً من المحاسب.
  */
 import { and, count, desc, eq, gte, like, lte } from "drizzle-orm";
-import type { MySql2Database } from "drizzle-orm/mysql2";
+import type { Db } from "./db";
 import {
   bankAccounts,
   bankTransactions,
@@ -116,7 +116,7 @@ function draftFromPartial(p: Record<string, unknown>): OpsDraft {
 }
 
 async function fuzzyFindParty(
-  db: MySql2Database,
+  db: Db,
   tenantId: number,
   name: string | undefined,
   prefer: "customer" | "supplier" | "any",
@@ -144,7 +144,7 @@ async function fuzzyFindParty(
 }
 
 async function fuzzyFindBank(
-  db: MySql2Database,
+  db: Db,
   tenantId: number,
   bankName?: string,
 ): Promise<number | undefined> {
@@ -253,7 +253,7 @@ async function extractFromText(text: string): Promise<OpsDraft> {
 }
 
 async function enrichDraft(
-  db: MySql2Database,
+  db: Db,
   tenantId: number,
   draft: OpsDraft,
 ): Promise<OpsDraft> {
@@ -302,7 +302,7 @@ function publicItem(row: typeof opsInboxItems.$inferSelect) {
 }
 
 export async function ingestWhatsAppItem(
-  db: MySql2Database,
+  db: Db,
   tenantId: number,
   input: {
     channelNote?: string;
@@ -377,7 +377,7 @@ export async function ingestWhatsAppItem(
 }
 
 export async function listOpsInbox(
-  db: MySql2Database,
+  db: Db,
   tenantId: number,
   opts: {
     source?: OpsSource;
@@ -403,7 +403,7 @@ export async function listOpsInbox(
   return rows.map(publicItem);
 }
 
-export async function getOpsInboxContent(db: MySql2Database, tenantId: number, id: number) {
+export async function getOpsInboxContent(db: Db, tenantId: number, id: number) {
   const [row] = await db
     .select()
     .from(opsInboxItems)
@@ -419,7 +419,7 @@ export async function getOpsInboxContent(db: MySql2Database, tenantId: number, i
 }
 
 export async function updateOpsDraft(
-  db: MySql2Database,
+  db: Db,
   tenantId: number,
   id: number,
   draft: OpsDraft,
@@ -448,7 +448,7 @@ export async function updateOpsDraft(
 }
 
 export async function setOpsInboxStatus(
-  db: MySql2Database,
+  db: Db,
   tenantId: number,
   id: number,
   status: "ignored" | "rejected" | "pending",
@@ -466,7 +466,7 @@ export async function setOpsInboxStatus(
   return { ok: true };
 }
 
-export async function reextractOpsItem(db: MySql2Database, tenantId: number, id: number) {
+export async function reextractOpsItem(db: Db, tenantId: number, id: number) {
   const [row] = await db
     .select()
     .from(opsInboxItems)
@@ -500,7 +500,7 @@ export async function reextractOpsItem(db: MySql2Database, tenantId: number, id:
 }
 
 export async function confirmOpsItem(
-  db: MySql2Database,
+  db: Db,
   tenantId: number,
   userId: number,
   id: number,
@@ -729,7 +729,7 @@ export async function confirmOpsItem(
 // ——— Factory daily ———
 
 export async function uploadFactoryDaily(
-  db: MySql2Database,
+  db: Db,
   tenantId: number,
   input: {
     workDate: string;
@@ -811,7 +811,7 @@ export async function uploadFactoryDaily(
 }
 
 export async function listFactoryDaily(
-  db: MySql2Database,
+  db: Db,
   tenantId: number,
   opts: { dateFrom?: string; dateTo?: string; status?: string; limit?: number },
 ) {
@@ -854,7 +854,7 @@ export async function listFactoryDaily(
   }));
 }
 
-export async function getFactoryDailyContent(db: MySql2Database, tenantId: number, id: number) {
+export async function getFactoryDailyContent(db: Db, tenantId: number, id: number) {
   const [row] = await db
     .select()
     .from(factoryDailyUploads)
@@ -870,7 +870,7 @@ export async function getFactoryDailyContent(db: MySql2Database, tenantId: numbe
 }
 
 export async function setFactoryDailyStatus(
-  db: MySql2Database,
+  db: Db,
   tenantId: number,
   id: number,
   status: "uploaded" | "reviewed" | "posted" | "ignored",

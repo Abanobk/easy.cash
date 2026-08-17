@@ -62,7 +62,7 @@ export function useDepartmentOptions() {
 export function useShiftOptions() {
   const q = trpc.parity.hr.shifts.list.useQuery();
   return useMemo(
-    () => (q.data || []).map((s: { id: number; name: string }) => ({ value: String(s.id), label: s.name })),
+    () => (q.data || []).map((s: Record<string, unknown>) => ({ value: String(s.id), label: String(s.name) })),
     [q.data],
   );
 }
@@ -70,7 +70,7 @@ export function useShiftOptions() {
 export function useVacationTypeOptions() {
   const q = trpc.parity.hr.vacations.list.useQuery();
   return useMemo(
-    () => (q.data || []).map((v: { id: number; name: string }) => ({ value: String(v.id), label: v.name })),
+    () => (q.data || []).map((v: Record<string, unknown>) => ({ value: String(v.id), label: String(v.name) })),
     [q.data],
   );
 }
@@ -78,7 +78,7 @@ export function useVacationTypeOptions() {
 export function useHrSystemOptions() {
   const q = trpc.parity.hr.systems.list.useQuery();
   return useMemo(
-    () => (q.data || []).map((s: { id: number; name: string }) => ({ value: String(s.id), label: s.name })),
+    () => (q.data || []).map((s: Record<string, unknown>) => ({ value: String(s.id), label: String(s.name) })),
     [q.data],
   );
 }

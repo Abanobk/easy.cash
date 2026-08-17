@@ -370,7 +370,7 @@ export default function ReportHub({ title, section, icon, reports, procedure }: 
                   "الصنف",
                   itemId,
                   setItemId,
-                  (itemsList?.rows || []).map((it: { id: number; name: string; code?: string }) => ({
+                  (itemsList?.rows || []).map((it: { id: number; name: string; code?: string | null }) => ({
                     id: it.id,
                     label: `${it.code || ""} ${it.name}`.trim(),
                   })),
@@ -391,7 +391,7 @@ export default function ReportHub({ title, section, icon, reports, procedure }: 
                   "المنطقة",
                   areaId,
                   setAreaId,
-                  (areasList || []).map((a: { id: number; name: string }) => ({ id: a.id, label: a.name })),
+                  (areasList || []).map((a: Record<string, unknown>) => ({ id: Number(a.id), label: String(a.name) })),
                 )}
                 {needs("paymentType") && (
                   <div>

@@ -21,8 +21,8 @@ export function effectiveSubscriptionStatus(status: string, endDate: string, tod
 }
 
 /** عند الحفظ: لا نبقي «منتهي» إذا تاريخ الانتهاء في المستقبل */
-export function normalizeSubscriptionStatusForSave(status: string, endDate: string, today = todayDateOnly()): string {
-  if (endDate >= today && status === "expired") return "trial";
+export function normalizeSubscriptionStatusForSave<T extends string>(status: T, endDate: string, today = todayDateOnly()): T {
+  if (endDate >= today && status === "expired") return "trial" as T;
   return status;
 }
 

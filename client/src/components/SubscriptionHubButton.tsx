@@ -12,7 +12,7 @@ import SubscriptionStatusBar, { type SubscriptionBanner } from "@/components/Sub
 import { toast } from "sonner";
 
 type Props = {
-  tenantSlug: string;
+  tenantSlug: string | null;
   banner: SubscriptionBanner | null | undefined;
 };
 
