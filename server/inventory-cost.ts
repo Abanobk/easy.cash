@@ -2,6 +2,7 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 import type { Db } from "./db";
 import {
   items,
+  itemWarehouseStock,
   purchaseInvoiceItems,
   purchaseInvoices,
 } from "../drizzle/schema";
@@ -84,13 +85,21 @@ export async function computeLinesCogsValue(
   return lines.reduce((sum, l) => sum + (costs.get(l.itemId) ?? 0) * num(l.quantity), 0);
 }
 
-/** بعد فاتورة شراء: تحديث متوسط التكلفة المرجّح */
+/**
+ * بعد فاتورة شراء: تحديث متوسط التكلفة المرجّح.
+ * ملحوظة مهمة: متوسط الصنف العام (items.averageCost) هو المصدر الوحيد لتكلفة البضاعة
+ * المباعة (COGS) في القيود المحاسبية — بيفضل بيتحدث زي ما هو من غير تغيير في سلوكه.
+ * warehouseId اختياري ولو اتبعت بيحدّث كمان متوسط منفصل خاص بالمخزن ده في
+ * item_warehouse_stock.unitCost — لغرض التقارير بس (جرد المخازن / تكاليف الأصناف)
+ * مطابقةً لسلوك Mega Cash اللي بيحسب تكلفة مستقلة لكل مخزن.
+ */
 export async function updateAverageCostAfterPurchase(
   db: Db,
   tenantId: number,
   itemId: number,
   newQty: number,
   newUnitCost: number,
+  warehouseId?: number | null,
 ) {
   const [item] = await db
     .select({ currentStock: items.currentStock, averageCost: items.averageCost, purchasePrice: items.purchasePrice })
@@ -107,4 +116,44 @@ export async function updateAverageCostAfterPurchase(
     .update(items)
     .set({ averageCost: String(avg.toFixed(4)), purchasePrice: String(newUnitCost) } as any)
     .where(tenantWhere(items, tenantId, eq(items.id, itemId)));
+
+  if (warehouseId) {
+    await updateWarehouseAverageCost(db, tenantId, itemId, warehouseId, newQty, newUnitCost);
+  }
+}
+
+/** متوسط تكلفة مرجّح خاص بمخزن واحد فقط — مطابقة تقرير «تكاليف الأصناف» في Mega Cash */
+export async function updateWarehouseAverageCost(
+  db: Db,
+  tenantId: number,
+  itemId: number,
+  warehouseId: number,
+  newQty: number,
+  newUnitCost: number,
+) {
+  if (!(newQty > 0) || !(newUnitCost > 0)) return;
+
+  const [row] = await db
+    .select({ quantity: itemWarehouseStock.quantity, unitCost: itemWarehouseStock.unitCost })
+    .from(itemWarehouseStock)
+    .where(tenantWhere(
+      itemWarehouseStock,
+      tenantId,
+      and(eq(itemWarehouseStock.itemId, itemId), eq(itemWarehouseStock.warehouseId, warehouseId)),
+    ));
+  if (!row) return;
+
+  const oldQty = Math.max(0, num(row.quantity) - newQty);
+  const oldCost = num(row.unitCost);
+  const totalQty = oldQty + newQty;
+  const avg = totalQty > 0 ? (oldQty * oldCost + newQty * newUnitCost) / totalQty : newUnitCost;
+
+  await db
+    .update(itemWarehouseStock)
+    .set({ unitCost: String(avg.toFixed(4)) } as any)
+    .where(tenantWhere(
+      itemWarehouseStock,
+      tenantId,
+      and(eq(itemWarehouseStock.itemId, itemId), eq(itemWarehouseStock.warehouseId, warehouseId)),
+    ));
 }

@@ -1237,6 +1237,7 @@ const purchasesRouter = router({
             item.itemId,
             Number(item.quantity),
             Number(item.price),
+            input.warehouseId,
           );
           if (item.serialNumbers) {
             const { registerPurchaseSerials } = await import("./inventory-serials");

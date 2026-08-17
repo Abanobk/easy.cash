@@ -1137,7 +1137,7 @@ export const inventoryExtendedRouter = router({
       });
       if (input.unitCost) {
         const { updateAverageCostAfterPurchase } = await import("./inventory-cost");
-        await updateAverageCostAfterPurchase(db, ctx.tenantId, input.itemId, Number(input.quantity), Number(input.unitCost));
+        await updateAverageCostAfterPurchase(db, ctx.tenantId, input.itemId, Number(input.quantity), Number(input.unitCost), input.warehouseId);
       }
       return { success: true };
     }),
@@ -1475,7 +1475,7 @@ export const inventoryExtendedRouter = router({
             warehouseId,
           });
           if (line.unitCost && Number(line.unitCost) > 0) {
-            await updateAverageCostAfterPurchase(db, ctx.tenantId, line.itemId, qty, Number(line.unitCost));
+            await updateAverageCostAfterPurchase(db, ctx.tenantId, line.itemId, qty, Number(line.unitCost), warehouseId);
           }
           imported += 1;
         } catch (err) {

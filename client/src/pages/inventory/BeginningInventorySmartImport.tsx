@@ -21,6 +21,19 @@ import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { useLocation } from "wouter";
 
+type CleanRow = {
+  key: string;
+  name: string;
+  warehouse: string;
+  quantity: string;
+  unitCost: string;
+  unit: string;
+  barcode: string;
+  code: string;
+  category: string;
+  included: boolean;
+};
+
 type PreviewRow = {
   index: number;
   rawName: string;
@@ -71,6 +84,8 @@ export default function BeginningInventorySmartImport() {
   const [previewRows, setPreviewRows] = useState<PreviewRow[]>([]);
   const [fileName, setFileName] = useState("");
   const [cleanBusy, setCleanBusy] = useState(false);
+  const [cleanRows, setCleanRows] = useState<CleanRow[] | null>(null);
+  const [cleanFileName, setCleanFileName] = useState("");
   const [rowFilter, setRowFilter] = useState<"all" | "ready" | "review" | "missing">("all");
   const [summary, setSummary] = useState<{
     total: number;
@@ -231,10 +246,10 @@ export default function BeginningInventorySmartImport() {
     ], { exclude: /تكلفة|سعر|cost|price|متوسط|اجمالي|إجمالي/ }),
   })).filter((r) => r.name || r.barcode || r.code);
 
-  /** استيراد نظيف أوتوماتيك: مخازن + أصناف بدون تكرار + كود + وحدات + رصيد */
-  const runCleanImport = async (file: File) => {
+  /** قراءة الإكسل وعرضه للمراجعة فقط — من غير أي حفظ في قاعدة البيانات */
+  const prepareCleanImport = async (file: File) => {
     setCleanBusy(true);
-    setFileName(file.name);
+    setCleanFileName(file.name);
     try {
       const XLSX = await import("xlsx");
       const buf = await file.arrayBuffer();
@@ -250,31 +265,62 @@ export default function BeginningInventorySmartImport() {
         toast.error("لم يُعثر على أعمدة صالحة — المخزن / الصنف / الكمية");
         return;
       }
-      const rows = mapped
-        .filter((r) => r.name && r.warehouse && Number(r.quantity) > 0)
-        .map((r) => ({
+      // لا نشيل الأصناف برصيد صفر — لسه محتاجين نضيفها كصنف حتى لو من غير رصيد أول مدة
+      const rows: CleanRow[] = mapped
+        .filter((r) => r.name && r.warehouse)
+        .map((r, idx) => ({
+          key: String(idx),
           name: r.name,
           warehouse: r.warehouse,
-          quantity: r.quantity,
+          quantity: r.quantity || "0",
+          unitCost: r.unitCost || "",
+          unit: r.unit || "",
+          barcode: r.barcode || "",
+          code: r.code || "",
+          category: r.category || "",
+          included: true,
+        }));
+      if (!rows.length) {
+        toast.error("لا توجد أسطر جاهزة (لازم: صنف + مخزن)");
+        return;
+      }
+      setCleanRows(rows);
+      toast.message(`${rows.length} سطر جاهز للمراجعة — راجعهم واضغط «تأكيد وحفظ»`);
+    } catch (e: any) {
+      toast.error(e?.message || "فشل قراءة الملف");
+    } finally {
+      setCleanBusy(false);
+    }
+  };
+
+  /** بعد المراجعة والتأكيد فقط: مخازن + أصناف بدون تكرار + كود + وحدات + رصيد */
+  const confirmCleanImport = async () => {
+    const rows = (cleanRows || []).filter((r) => r.included);
+    if (!rows.length) {
+      toast.error("لا توجد أسطر محدّدة للحفظ");
+      return;
+    }
+    setCleanBusy(true);
+    try {
+      const res = await cleanImportMut.mutateAsync({
+        date: importDate,
+        rows: rows.map((r) => ({
+          name: r.name,
+          warehouse: r.warehouse,
+          quantity: r.quantity || "0",
           barcode: r.barcode || undefined,
           code: r.code || undefined,
           unitCost: r.unitCost || undefined,
           unit: r.unit || undefined,
           category: r.category || undefined,
-        }));
-      if (!rows.length) {
-        toast.error("لا توجد أسطر جاهزة (لازم: صنف + مخزن + كمية)");
-        return;
-      }
-      if (!confirm(`استيراد نظيف تلقائي لـ ${rows.length} سطر؟\n\n• إنشاء مخازن ناقصة\n• أصناف بدون تكرار + كود تلقائي\n• وحدات قياس\n• اعتماد الرصيد (استبدال مش دبلكيت)`)) {
-        return;
-      }
-      const res = await cleanImportMut.mutateAsync({ date: importDate, rows });
+        })),
+      });
       toast.success(
         `تم: ${res.linesImported} سطر · أصناف جديدة ${res.itemsCreated} · مطابقة ${res.itemsMatched} · مخازن جديدة ${res.warehousesCreated}`,
       );
       if (res.failed) toast.message(`فشل ${res.failed}: ${(res.errors || []).slice(0, 2).join(" · ")}`);
       await Promise.all([utils.items.list.invalidate(), itemsQuery.refetch()]);
+      setCleanRows(null);
       navigate(tenantPath(tenantSlug, "/inventory/beginning-inventory"));
     } catch (e: any) {
       toast.error(e?.message || "فشل الاستيراد النظيف");
@@ -575,7 +621,9 @@ export default function BeginningInventorySmartImport() {
               <div className="flex-1">
                 <div className="text-lg font-black text-slate-900">استيراد نظيف تلقائي (موصى به)</div>
                 <p className="text-sm text-slate-700 font-semibold leading-relaxed mt-1">
-                  ملف واحد ينفّذ كل شيء: إنشاء مخازن ناقصة · أصناف بدون تكرار مع كود P-… · وحدات قياس · اعتماد الرصيد (استبدال مش دبلكيت).
+                  يقرأ الملف ويعرضه للمراجعة أولاً — مخازن ناقصة · أصناف بدون تكرار مع كود P-… · وحدات قياس · رصيد أول المدة.
+                  مفيش حفظ في قاعدة البيانات إلا بعد ما تراجع وتضغط «تأكيد وحفظ».
+                  الأصناف برصيد صفر بتتضاف كصنف موجود عندنا حتى لو من غير كمية أول مدة.
                 </p>
               </div>
             </div>
@@ -592,7 +640,7 @@ export default function BeginningInventorySmartImport() {
                   disabled={cleanBusy || cleanImportMut.isPending}
                   onChange={(e) => {
                     const f = e.target.files?.[0];
-                    if (f) void runCleanImport(f);
+                    if (f) void prepareCleanImport(f);
                     e.target.value = "";
                   }}
                 />
@@ -604,12 +652,96 @@ export default function BeginningInventorySmartImport() {
                   disabled={cleanBusy || cleanImportMut.isPending}
                 >
                   <span>
-                    {cleanBusy || cleanImportMut.isPending ? "جاري الاستيراد النظيف..." : "رفع Excel — استيراد نظيف تلقائي"}
+                    {cleanBusy ? "جاري قراءة الملف..." : "رفع Excel — استيراد نظيف تلقائي"}
                   </span>
                 </Button>
               </label>
+              {cleanFileName ? (
+                <span className="text-sm font-bold text-slate-700 bg-white border rounded-xl px-3 py-2.5 mt-5">{cleanFileName}</span>
+              ) : null}
             </div>
           </div>
+
+          {cleanRows && (
+            <div className="rounded-2xl border-2 border-blue-300 bg-white p-5 space-y-4" dir="rtl">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="text-lg font-black text-slate-900 flex items-center gap-2">
+                  <FileSpreadsheet className="text-blue-600" size={20} />
+                  مراجعة الاستيراد النظيف قبل الحفظ — {cleanRows.filter((r) => r.included).length} من {cleanRows.length} سطر محدّد
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    className="h-11 px-5 font-bold"
+                    disabled={cleanBusy || cleanImportMut.isPending}
+                    onClick={() => { setCleanRows(null); setCleanFileName(""); }}
+                  >
+                    إلغاء
+                  </Button>
+                  <Button
+                    className="bg-blue-600 hover:bg-blue-700 font-black h-11 px-6"
+                    disabled={cleanBusy || cleanImportMut.isPending || !cleanRows.some((r) => r.included)}
+                    onClick={() => void confirmCleanImport()}
+                  >
+                    {cleanImportMut.isPending ? "جاري الحفظ..." : "تأكيد وحفظ"}
+                  </Button>
+                </div>
+              </div>
+              <div className="overflow-x-auto border rounded-xl max-h-[420px] overflow-y-auto">
+                <table className="w-full text-sm min-w-[900px]">
+                  <thead className="sticky top-0 z-10 bg-slate-900 text-white">
+                    <tr>
+                      <th className="px-3 py-2.5 text-right font-black w-12">✓</th>
+                      <th className="px-3 py-2.5 text-right font-black">الصنف</th>
+                      <th className="px-3 py-2.5 text-right font-black">المخزن</th>
+                      <th className="px-3 py-2.5 text-right font-black w-28">الكمية</th>
+                      <th className="px-3 py-2.5 text-right font-black w-32">متوسط التكلفة</th>
+                      <th className="px-3 py-2.5 text-right font-black w-24">الوحدة</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {cleanRows.map((r) => {
+                      const qty = Number(r.quantity) || 0;
+                      return (
+                        <tr key={r.key} className={`border-t ${!r.included ? "opacity-40" : qty === 0 ? "bg-amber-50/60" : "bg-white"}`}>
+                          <td className="px-3 py-2.5 align-top">
+                            <input
+                              type="checkbox"
+                              className="h-5 w-5 accent-blue-600"
+                              checked={r.included}
+                              onChange={(e) => setCleanRows((p) => (p || []).map((x) => x.key === r.key ? { ...x, included: e.target.checked } : x))}
+                            />
+                          </td>
+                          <td className="px-3 py-2.5 align-top font-black text-slate-900">
+                            {r.name}
+                            {qty === 0 ? (
+                              <div className="text-xs font-bold text-amber-700 mt-0.5">بدون رصيد أول مدة — هيتضاف كصنف بس</div>
+                            ) : null}
+                          </td>
+                          <td className="px-3 py-2.5 align-top font-bold text-slate-700">{r.warehouse}</td>
+                          <td className="px-3 py-2.5 align-top">
+                            <Input
+                              className="h-10 text-sm font-black"
+                              value={r.quantity}
+                              onChange={(e) => setCleanRows((p) => (p || []).map((x) => x.key === r.key ? { ...x, quantity: e.target.value } : x))}
+                            />
+                          </td>
+                          <td className="px-3 py-2.5 align-top">
+                            <Input
+                              className="h-10 text-sm font-bold"
+                              value={r.unitCost}
+                              onChange={(e) => setCleanRows((p) => (p || []).map((x) => x.key === r.key ? { ...x, unitCost: e.target.value } : x))}
+                            />
+                          </td>
+                          <td className="px-3 py-2.5 align-top font-bold text-slate-700">{r.unit || "—"}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
 
           <div className="grid grid-cols-1 xl:grid-cols-12 gap-4">
             <div className="xl:col-span-7 rounded-2xl border-2 border-dashed border-emerald-300 bg-emerald-50/60 p-6 space-y-4">

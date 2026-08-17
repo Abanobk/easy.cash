@@ -214,7 +214,7 @@ export async function replaceBeginningStock(
     warehouseId: opts.warehouseId,
   });
   if (opts.unitCost && opts.unitCost > 0) {
-    await updateAverageCostAfterPurchase(db, tenantId, opts.itemId, opts.quantity, opts.unitCost);
+    await updateAverageCostAfterPurchase(db, tenantId, opts.itemId, opts.quantity, opts.unitCost, opts.warehouseId);
   }
 }
 
@@ -238,8 +238,8 @@ export async function cleanImportBeginningInventory(
   for (const raw of input.rows) {
     const name = String(raw.name || "").trim();
     const warehouse = String(raw.warehouse || "").trim();
-    const qty = Number(raw.quantity);
-    if (!name || !warehouse || !(qty > 0)) {
+    const qty = Number(raw.quantity) || 0;
+    if (!name || !warehouse || qty < 0) {
       if (name || warehouse) errors.push(`${name || "؟"} / ${warehouse || "؟"}: بيانات ناقصة`);
       continue;
     }

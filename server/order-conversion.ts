@@ -210,7 +210,7 @@ export async function convertPurchaseOrderToInvoice(
       direction: "in",
       warehouseId: order.warehouseId,
     });
-    await updateAverageCostAfterPurchase(db, tenantId, line.itemId, num(line.quantity), num(line.price));
+    await updateAverageCostAfterPurchase(db, tenantId, line.itemId, num(line.quantity), num(line.price), order.warehouseId);
   }
 
   await postPurchaseInvoiceJournal(db, tenantId, userId, {

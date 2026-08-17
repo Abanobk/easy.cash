@@ -197,6 +197,8 @@ export const itemWarehouseStock = mysqlTable("item_warehouse_stock", {
   itemId: int("itemId").notNull(),
   warehouseId: int("warehouseId").notNull(),
   quantity: decimal("quantity", { precision: 15, scale: 3 }).default("0"),
+  /** متوسط تكلفة مرجّح خاص بهذا المخزن فقط — منفصل عن items.averageCost (المتوسط العام للصنف) */
+  unitCost: decimal("unitCost", { precision: 15, scale: 4 }).default("0"),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
 

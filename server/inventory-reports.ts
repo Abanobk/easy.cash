@@ -490,6 +490,7 @@ export async function inventoryStocktakeReport(db: Db, filters: InventoryReportF
     warehouseId: itemWarehouseStock.warehouseId,
     warehouseName: warehouses.name,
     warehouseQty: itemWarehouseStock.quantity,
+    warehouseUnitCost: itemWarehouseStock.unitCost,
   }).from(itemWarehouseStock)
     .innerJoin(items, and(eq(itemWarehouseStock.itemId, items.id), eq(items.isActive, true)))
     .innerJoin(warehouses, eq(itemWarehouseStock.warehouseId, warehouses.id))
@@ -533,6 +534,10 @@ export async function inventoryStocktakeReport(db: Db, filters: InventoryReportF
 
     const qty = num(r.warehouseQty);
     const min = num(r.minStock);
+    // تكلفة المخزن ده تحديدًا (متوسط مرجّح مستقل) — مطابقة لتقرير «تكاليف الأصناف» في
+    // Mega Cash؛ لو لسه صفر (بيانات قديمة قبل الترقية) نرجع لمتوسط الصنف العام كتقدير.
+    const whCost = num(r.warehouseUnitCost);
+    const cost = whCost > 0 ? whCost : num(r.purchasePrice);
     result.push({
       itemId: r.itemId,
       code: r.code || "",
@@ -544,9 +549,9 @@ export async function inventoryStocktakeReport(db: Db, filters: InventoryReportF
       warehouseName: r.warehouseName || "—",
       quantity: qty,
       minStock: min,
-      purchasePrice: num(r.purchasePrice),
+      purchasePrice: cost,
       salePrice: num(r.salePrice),
-      stockValue: qty * num(r.purchasePrice),
+      stockValue: qty * cost,
       status: qty <= 0 ? "zero" : (min > 0 && qty <= min ? "low" : "ok"),
     });
   }
@@ -661,8 +666,12 @@ export async function itemCostsReport(db: Db, filters: InventoryReportFilters) {
     asOfDate: string;
   };
 
-  /** صف واحد لكل صنف — الكميات من كل المخازن تت累ّع (الصنف واحد مش مكرر) */
-  const consolidateByItem = (rows: Array<{
+  /**
+   * صف مستقل لكل صنف×مخزن — مطابقة لتقرير «تكاليف الأصناف» في Mega Cash اللي بيعرض
+   * قسم منفصل بالكامل لكل مخزن، وكل قسم بمتوسط تكلفة خاص بيه (مش رقم واحد مجمّع للصنف
+   * عبر كل المخازن).
+   */
+  const toRows = (rows: Array<{
     itemId: number;
     code: string;
     barcode: string;
@@ -677,95 +686,48 @@ export async function itemCostsReport(db: Db, filters: InventoryReportFilters) {
     averageCost: number;
     lineCostValue?: number;
   }>): CostRow[] => {
-    type Acc = {
-      itemId: number;
-      code: string;
-      barcode: string;
-      name: string;
-      unit: string;
-      categoryName: string;
-      salePrice: number;
-      quantity: number;
-      costValue: number;
-      warehouses: Map<number | string, string>;
-    };
-    const map = new Map<number, Acc>();
-    for (const r of rows) {
-      const qty = Number(r.quantity) || 0;
-      if (qty <= 0.0000001) continue;
-      const avg = Number(r.averageCost ?? r.purchasePrice) || 0;
-      const lineVal = r.lineCostValue != null ? Number(r.lineCostValue) : qty * avg;
-      if (!map.has(r.itemId)) {
-        map.set(r.itemId, {
+    return rows
+      .filter((r) => (Number(r.quantity) || 0) > 0.0000001)
+      .map((r) => {
+        const qty = Number(r.quantity) || 0;
+        const avg = Number(r.averageCost ?? r.purchasePrice) || 0;
+        const totalCostValue = r.lineCostValue != null ? Number(r.lineCostValue) : qty * avg;
+        const sale = Number(r.salePrice) || 0;
+        const margin = sale - avg;
+        const marginPct = sale > 0 ? (margin / sale) * 100 : 0;
+        return {
           itemId: r.itemId,
           code: r.code,
           barcode: r.barcode,
           name: r.name,
           unit: r.unit,
           categoryName: r.categoryName,
-          salePrice: Number(r.salePrice) || 0,
-          quantity: 0,
-          costValue: 0,
-          warehouses: new Map(),
-        });
-      }
-      const acc = map.get(r.itemId)!;
-      acc.quantity += qty;
-      acc.costValue += lineVal;
-      if (!(acc.salePrice > 0) && Number(r.salePrice) > 0) acc.salePrice = Number(r.salePrice);
-      const whKey = (r.warehouseId != null ? r.warehouseId : (r.warehouseName || "—"));
-      acc.warehouses.set(whKey, r.warehouseName || "—");
-    }
-
-    return [...map.values()].map((acc) => {
-      const avg = acc.quantity > 0 ? acc.costValue / acc.quantity : 0;
-      const sale = acc.salePrice;
-      const margin = sale - avg;
-      const marginPct = sale > 0 ? (margin / sale) * 100 : 0;
-      const whNames = [...acc.warehouses.values()];
-      const warehouseCount = whNames.length;
-      const warehouseName = warehouseCount <= 1
-        ? (whNames[0] || "—")
-        : `عدة مخازن (${warehouseCount})`;
-      return {
-        itemId: acc.itemId,
-        code: acc.code,
-        barcode: acc.barcode,
-        name: acc.name,
-        unit: acc.unit,
-        categoryName: acc.categoryName,
-        warehouseId: warehouseCount === 1 ? (typeof [...acc.warehouses.keys()][0] === "number" ? Number([...acc.warehouses.keys()][0]) : null) : null,
-        warehouseName,
-        warehouseCount,
-        quantity: acc.quantity,
-        purchasePrice: avg,
-        salePrice: sale,
-        averageCost: avg,
-        totalCostValue: acc.costValue,
-        totalSaleValue: acc.quantity * sale,
-        margin,
-        marginPct,
-        asOfDate: asOf,
-      };
-    }).sort((a, b) => a.name.localeCompare(b.name, "ar"));
+          warehouseId: r.warehouseId,
+          warehouseName: r.warehouseName || "—",
+          warehouseCount: 1,
+          quantity: qty,
+          purchasePrice: avg,
+          salePrice: sale,
+          averageCost: avg,
+          totalCostValue,
+          totalSaleValue: qty * sale,
+          margin,
+          marginPct,
+          asOfDate: asOf,
+        };
+      })
+      .sort((a, b) => a.warehouseName.localeCompare(b.warehouseName, "ar") || a.name.localeCompare(b.name, "ar"));
   };
 
   if (useLive) {
+    // inventoryStocktakeReport بيرجّع purchasePrice مضبوطة بالفعل على تكلفة المخزن نفسه
+    // (item_warehouse_stock.unitCost لو موجودة، وإلا متوسط الصنف العام كتقدير احتياطي).
     const stock = await inventoryStocktakeReport(db, filters);
-    const itemAvg = await db.select({
-      id: items.id,
-      averageCost: items.averageCost,
-    }).from(items).where(tenantWhere(items, filters.tenantId));
-    const avgMap = new Map(itemAvg.map((i) => [i.id, num(i.averageCost)]));
-
-    return consolidateByItem(stock.map((r) => {
-      const averageCost = avgMap.get(r.itemId) || r.purchasePrice;
-      return {
-        ...r,
-        averageCost,
-        lineCostValue: r.quantity * averageCost,
-      };
-    }));
+    return toRows(stock.map((r) => ({
+      ...r,
+      averageCost: r.purchasePrice,
+      lineCostValue: r.quantity * r.purchasePrice,
+    })));
   }
 
   // تاريخ سابق: رصيد حتى التاريخ = مخزون أول المدة + صافي الحركات حتى dateTo
@@ -947,7 +909,7 @@ export async function itemCostsReport(db: Db, filters: InventoryReportFilters) {
       };
     });
 
-  return consolidateByItem(warehouseRows);
+  return toRows(warehouseRows);
 }
 
 export async function itemsListReport(db: Db, filters: InventoryReportFilters) {

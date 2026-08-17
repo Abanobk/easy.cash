@@ -122,6 +122,7 @@ export async function finalizePurchaseInvoice(
       line.itemId,
       Number(line.quantity),
       Number(line.price),
+      inv.warehouseId,
     );
   }
 

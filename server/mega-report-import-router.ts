@@ -500,7 +500,7 @@ export const megaReportImportRouter = router({
             warehouseId: input.warehouseId,
           });
           if (Number(line.price) > 0) {
-            await updateAverageCostAfterPurchase(db, ctx.tenantId, line.itemId, Number(line.quantity), Number(line.price));
+            await updateAverageCostAfterPurchase(db, ctx.tenantId, line.itemId, Number(line.quantity), Number(line.price), input.warehouseId);
           }
         }
         imported += 1;
@@ -612,7 +612,7 @@ export const megaReportImportRouter = router({
           warehouseId: line.warehouseId,
         });
         if (line.unitCost && Number(line.unitCost) > 0) {
-          await updateAverageCostAfterPurchase(db, ctx.tenantId, line.itemId, Number(line.quantity), Number(line.unitCost));
+          await updateAverageCostAfterPurchase(db, ctx.tenantId, line.itemId, Number(line.quantity), Number(line.unitCost), line.warehouseId);
         }
         imported += 1;
       } catch (e) {
