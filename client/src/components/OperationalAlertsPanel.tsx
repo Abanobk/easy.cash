@@ -9,7 +9,7 @@ export function OperationalAlertsPanel() {
 
   if (isLoading) {
     return (
-      <Card className="border-0 shadow-sm">
+      <Card className="eca-card border-0 shadow-none">
         <CardContent className="p-6 text-center text-slate-400 text-sm">جاري تحميل التنبيهات...</CardContent>
       </Card>
     );
@@ -34,8 +34,8 @@ export function OperationalAlertsPanel() {
 
   if (!hasAlerts) {
     return (
-      <Card className="border-0 shadow-sm border-green-100 bg-green-50/50">
-        <CardContent className="p-5 text-sm text-green-700">
+      <Card className="border-0 shadow-none" style={{ background: "var(--good-100)", borderColor: "#bcd9c8" }}>
+        <CardContent className="p-5 text-sm" style={{ color: "var(--good-600)" }}>
           لا توجد تنبيهات تشغيلية عاجلة — كل شيء تحت السيطرة.
         </CardContent>
       </Card>
@@ -43,7 +43,7 @@ export function OperationalAlertsPanel() {
   }
 
   return (
-    <Card className="border-0 shadow-sm">
+    <Card className="eca-card border-0 shadow-none">
       <CardHeader className="pb-3">
         <CardTitle className="text-sm font-semibold text-slate-700 flex items-center gap-2">
           <AlertTriangle size={16} className="text-amber-500" />
@@ -236,7 +236,7 @@ export function OperationalAlertsPanel() {
 
         {alerts.counts.draftDocs > 0 && (
           <div className="text-xs text-slate-600 px-2">
-            <Link href="/pending-docs" className="text-blue-600 hover:underline">
+            <Link href="/pending-docs" className="hover:underline" style={{ color: "var(--brass-600)" }}>
               {alerts.counts.draftDocs} مستند مسودة يحتاج مراجعة
             </Link>
           </div>

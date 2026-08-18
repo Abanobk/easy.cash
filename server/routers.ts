@@ -17,7 +17,7 @@ import {
   taxes, salesReps, branches, companySettings, users,
   appUsers, subscriptions, subscriptionPlans,
   discountCoupons, companyProfile, supportTickets, userNotifications,
-  paymobSettings, subscriptionPayments, tenants
+  paymobSettings, subscriptionPayments, tenants, userActivities
 } from "../drizzle/schema";
 import { listCustomerSalesReps, setCustomerSalesReps, listCustomerSalesRepsForCustomers } from "./customer-sales-reps";
 import {
@@ -248,6 +248,52 @@ const dashboardRouter = router({
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     return getDebtAgingSummary(db, ctx.tenantId);
+  }),
+  /** أكثر 5 أصناف مبيعاً بالقيمة — الشهر الحالي، من فواتير مرحّلة فقط */
+  topProducts: protectedProcedure.query(async ({ ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    const now = new Date();
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const rows = await db.select({
+      itemId: salesInvoiceItems.itemId,
+      itemName: items.name,
+      itemCode: items.code,
+      qty: sum(salesInvoiceItems.quantity),
+      value: sum(salesInvoiceItems.total),
+    }).from(salesInvoiceItems)
+      .innerJoin(salesInvoices, eq(salesInvoiceItems.invoiceId, salesInvoices.id))
+      .innerJoin(items, eq(salesInvoiceItems.itemId, items.id))
+      .where(tenantWhere(salesInvoiceItems, ctx.tenantId, and(
+        inArray(salesInvoices.status, ["confirmed", "paid", "partial"]),
+        gte(salesInvoices.createdAt, monthStart),
+      )))
+      .groupBy(salesInvoiceItems.itemId, items.name, items.code)
+      .orderBy(desc(sum(salesInvoiceItems.total)))
+      .limit(5);
+    return rows.map((r) => ({
+      itemId: r.itemId,
+      name: r.itemName,
+      code: r.itemCode,
+      qty: Number(r.qty) || 0,
+      value: Number(r.value) || 0,
+    }));
+  }),
+  /** آخر حركات المستخدمين — سجل نشاط عام للوحة التحكم */
+  recentActivity: protectedProcedure.query(async ({ ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    const rows = await db.select({
+      id: userActivities.id,
+      userName: userActivities.userName,
+      action: userActivities.action,
+      details: userActivities.details,
+      createdAt: userActivities.createdAt,
+    }).from(userActivities)
+      .where(tenantWhere(userActivities, ctx.tenantId))
+      .orderBy(desc(userActivities.createdAt))
+      .limit(6);
+    return rows;
   }),
 });
 

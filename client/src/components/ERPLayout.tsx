@@ -143,7 +143,7 @@ function SidebarItem({ item, level = 0, onNavigate, tenantSlug }: SidebarItemPro
         </span>
       </div>
       {open && (
-        <div className="mt-1 space-y-1 border-r-[3px] border-blue-400/50 mr-3 pr-0.5">
+        <div className="mt-1 space-y-1 border-r-[3px] mr-3 pr-0.5" style={{ borderColor: "rgba(217,165,66,0.35)" }}>
           {item.children.map((child, i) => (
             <SidebarItem key={i} item={child} level={level + 1} onNavigate={onNavigate} tenantSlug={tenantSlug} />
           ))}
@@ -238,8 +238,8 @@ export default function ERPLayout({ children, title }: ERPLayoutProps) {
 
   if (!isAuthenticated) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-600 to-blue-800 flex items-center justify-center">
-        <div className="bg-white rounded-2xl shadow-2xl p-10 w-full max-w-md text-center">
+      <div className="min-h-screen flex items-center justify-center" style={{ background: "linear-gradient(135deg, var(--ink-900) 0%, var(--ink-700) 100%)" }}>
+        <div className="bg-white rounded-2xl shadow-2xl p-10 w-full max-w-md text-center eca-fade-up">
           <img
             src="/easy-cash-brand.png"
             alt="Easy Cash"
@@ -248,7 +248,7 @@ export default function ERPLayout({ children, title }: ERPLayoutProps) {
           <h1 className="text-2xl font-bold text-slate-800 mb-2">Easy Cash</h1>
           <p className="text-slate-500 mb-8 text-sm">نظام المحاسبة والإدارة المتكامل</p>
           <a href={tenantPath(tenantSlug, "/login")}>
-            <Button className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 text-base font-semibold rounded-xl">
+            <Button className="eca-btn-primary w-full py-3 text-base font-semibold rounded-xl border-0">
               تسجيل الدخول
             </Button>
           </a>
@@ -260,7 +260,7 @@ export default function ERPLayout({ children, title }: ERPLayoutProps) {
   const SidebarContent = (
     <div className="flex flex-col h-full">
       {/* هوية Easy Cash */}
-      <div className={`border-b border-blue-400/20 ${sidebarOpen ? "px-4 py-4" : "px-2 py-3"}`}>
+      <div className={`border-b border-white/10 ${sidebarOpen ? "px-4 py-4" : "px-2 py-3"}`}>
         {sidebarOpen ? (
           <div className="flex flex-col items-center text-center gap-2">
             <img
@@ -292,9 +292,9 @@ export default function ERPLayout({ children, title }: ERPLayoutProps) {
       </nav>
 
       {/* User info */}
-      <div className="border-t border-blue-400/20 p-3.5 bg-slate-950/40">
+      <div className="border-t border-white/10 p-3.5" style={{ background: "rgba(18,34,44,0.4)" }}>
         <div className="flex items-center gap-2.5 text-slate-200">
-          <div className="w-10 h-10 bg-gradient-to-br from-blue-400 to-blue-600 rounded-full flex items-center justify-center flex-shrink-0 shadow-md">
+          <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 shadow-md" style={{ background: "linear-gradient(135deg, var(--brass-400), var(--brass-600))" }}>
             <User size={16} className="text-white" strokeWidth={2.4} />
           </div>
           {sidebarOpen && (
@@ -322,7 +322,7 @@ export default function ERPLayout({ children, title }: ERPLayoutProps) {
         <div className="fixed inset-0 z-50 md:hidden">
           <div className="absolute inset-0 bg-black/55 backdrop-blur-[2px]" onClick={() => setMobileSidebarOpen(false)} />
           <aside className="absolute right-0 top-0 bottom-0 w-[19rem] erp-sidebar flex flex-col z-10">
-            <div className="flex items-center justify-between px-4 py-4 border-b border-blue-400/20">
+            <div className="flex items-center justify-between px-4 py-4 border-b border-white/10">
               <div className="flex items-center gap-2.5">
                 <img
                   src="/easy-cash-brand.png"
@@ -347,11 +347,11 @@ export default function ERPLayout({ children, title }: ERPLayoutProps) {
       {/* Main Content */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Top Bar */}
-        <header className="bg-white/95 backdrop-blur border-b-2 border-slate-200 px-4 py-3.5 flex items-center gap-3 shadow-sm flex-shrink-0 print:hidden">
+        <header className="bg-white/95 backdrop-blur border-b-2 px-4 py-3.5 flex items-center gap-3 shadow-sm flex-shrink-0 print:hidden" style={{ borderColor: "var(--line)" }}>
           {/* Mobile menu */}
           <button
             onClick={() => setMobileSidebarOpen(true)}
-            className="md:hidden text-slate-700 hover:text-blue-700 p-1.5 rounded-lg hover:bg-blue-50"
+            className="md:hidden p-1.5 rounded-lg transition-colors" style={{ color: "var(--ink-700)" }}
           >
             <Menu size={24} strokeWidth={2.4} />
           </button>
@@ -359,7 +359,7 @@ export default function ERPLayout({ children, title }: ERPLayoutProps) {
           {/* Desktop sidebar toggle */}
           <button
             onClick={() => setSidebarOpen(!sidebarOpen)}
-            className="hidden md:flex text-slate-700 hover:text-blue-700 transition-colors p-1.5 rounded-lg hover:bg-blue-50"
+            className="hidden md:flex transition-colors p-1.5 rounded-lg hover:bg-[var(--paper-100)]" style={{ color: "var(--ink-700)" }}
           >
             <Menu size={22} strokeWidth={2.4} />
           </button>
@@ -389,7 +389,7 @@ export default function ERPLayout({ children, title }: ERPLayoutProps) {
           {/* Top bar actions */}
           <div className="flex items-center gap-2">
             {/* Database indicator */}
-            <div className="hidden sm:flex items-center gap-1.5 bg-blue-100 border border-blue-300 rounded-lg px-3 py-2 text-sm text-blue-800 font-bold">
+            <div className="hidden sm:flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-bold" style={{ background: "var(--good-100)", border: "1px solid #bcd9c8", color: "var(--good-600)" }}>
               <div className="w-2.5 h-2.5 bg-green-500 rounded-full animate-pulse"></div>
               <span>قاعدة البيانات الرئيسية</span>
             </div>
@@ -404,7 +404,7 @@ export default function ERPLayout({ children, title }: ERPLayoutProps) {
 
             {/* Notifications */}
             <Link href={tenantPath(tenantSlug, "/notifications")}>
-              <button className="relative p-2.5 text-slate-600 hover:text-blue-700 hover:bg-blue-50 rounded-xl transition-colors">
+              <button className="relative p-2.5 rounded-xl transition-colors hover:bg-[var(--paper-100)]" style={{ color: "var(--muted-foreground)" }}>
                 <Bell size={20} strokeWidth={2.3} />
                 {(notifCount?.count ?? 0) > 0 && (
                   <span className="absolute -top-0.5 -left-0.5 min-w-5 h-5 px-1 bg-red-500 text-white text-xs rounded-full flex items-center justify-center font-extrabold">
@@ -416,7 +416,7 @@ export default function ERPLayout({ children, title }: ERPLayoutProps) {
 
             {/* Pending docs */}
             <Link href={tenantPath(tenantSlug, "/pending-docs")}>
-              <button className="relative p-2.5 text-slate-600 hover:text-blue-700 hover:bg-blue-50 rounded-xl transition-colors">
+              <button className="relative p-2.5 rounded-xl transition-colors hover:bg-[var(--paper-100)]" style={{ color: "var(--muted-foreground)" }}>
                 <FileText size={20} strokeWidth={2.3} />
                 {pendingDocsCount > 0 && (
                   <span className="absolute -top-0.5 -left-0.5 min-w-5 h-5 px-1 bg-amber-500 text-white text-xs rounded-full flex items-center justify-center font-extrabold">
@@ -430,7 +430,7 @@ export default function ERPLayout({ children, title }: ERPLayoutProps) {
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <button className="flex items-center gap-2 pl-2 pr-3 py-1.5 rounded-xl hover:bg-slate-100 transition-colors border border-transparent hover:border-slate-200">
-                  <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center shadow-sm">
+                  <div className="w-8 h-8 rounded-full flex items-center justify-center shadow-sm" style={{ background: "var(--brass-500)" }}>
                     <User size={15} className="text-white" strokeWidth={2.4} />
                   </div>
                   <span className="text-sm font-bold text-slate-800 hidden sm:block">{user?.name || "مستخدم"}</span>

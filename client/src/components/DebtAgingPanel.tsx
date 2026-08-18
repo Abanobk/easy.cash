@@ -47,7 +47,7 @@ export function DebtAgingPanel() {
 
   if (isLoading) {
     return (
-      <Card className="border-0 shadow-sm">
+      <Card className="eca-card border-0 shadow-none">
         <CardContent className="p-6 text-center text-slate-400 text-sm">جاري تحميل أعمار الديون...</CardContent>
       </Card>
     );
@@ -58,14 +58,14 @@ export function DebtAgingPanel() {
   const hasDebt = data.customers.total > 0 || data.suppliers.total > 0;
 
   return (
-    <Card className="border-0 shadow-sm">
+    <Card className="eca-card border-0 shadow-none">
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between gap-2">
           <CardTitle className="text-sm font-semibold text-slate-700 flex items-center gap-2">
-            <Clock size={16} className="text-blue-600" />
+            <Clock size={16} style={{ color: "var(--ink-500)" }} />
             أعمار الديون
           </CardTitle>
-          <Link href="/reports/accounting/accountingreports-debitsages" className="text-[10px] text-blue-600 hover:underline">
+          <Link href="/reports/accounting/accountingreports-debitsages" className="text-[10px] hover:underline" style={{ color: "var(--brass-600)" }}>
             تقرير تفصيلي
           </Link>
         </div>
@@ -80,7 +80,7 @@ export function DebtAgingPanel() {
             <section>
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-2">
-                  <Users size={14} className="text-blue-600" />
+                  <Users size={14} style={{ color: "var(--ink-500)" }} />
                   <span className="text-xs font-semibold text-slate-600">ذمم العملاء (مدينون)</span>
                 </div>
                 <Badge variant="outline" className="text-xs">{formatMoney(data.customers.total)} ج.م</Badge>
@@ -91,7 +91,7 @@ export function DebtAgingPanel() {
             <section>
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-2">
-                  <Truck size={14} className="text-purple-600" />
+                  <Truck size={14} style={{ color: "var(--brass-600)" }} />
                   <span className="text-xs font-semibold text-slate-600">ذمم الموردين (دائنون)</span>
                 </div>
                 <Badge variant="outline" className="text-xs">{formatMoney(data.suppliers.total)} ج.م</Badge>
