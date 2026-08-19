@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { SearchableSelect } from "@/components/ui/searchable-select";
-import { useWarehouseOptions, useCustomerOptions, useSupplierOptions } from "@/hooks/useEntityOptions";
+import { useWarehouseOptions, useCustomerOptions, useSupplierOptions, useItemOptions } from "@/hooks/useEntityOptions";
 import { tenantPath, useTenantSlug } from "@/lib/tenant";
 import { trpc } from "@/lib/trpc";
 import {
@@ -36,6 +36,7 @@ export default function MegaReportImportPage() {
   const warehouses = useWarehouseOptions();
   const customerOptions = useCustomerOptions();
   const supplierOptions = useSupplierOptions();
+  const itemOptions = useItemOptions();
   const utils = trpc.useUtils();
 
   const previewMut = trpc.megaReportImport.preview.useMutation();
@@ -338,7 +339,80 @@ export default function MegaReportImportPage() {
     }
   };
 
-  const summary = preview?.summary;
+  /** ملخص حي — بيتحدث فورًا مع أي ربط يدوي، مش بيفضل واقف على أول نتيجة من السيرفر */
+  const summary = useMemo(() => {
+    if (!preview) return undefined;
+    if (preview.kind === "sales" || preview.kind === "purchases") {
+      const docs = (preview.kind === "sales" ? preview.sales : preview.purchases) || [];
+      const lines = docs.reduce((s: number, d: any) => s + (d.lines?.length || 0), 0);
+      const matchedItems = docs.reduce((s: number, d: any) => s + (d.lines || []).filter((l: any) => l.status === "matched").length, 0);
+      return {
+        documents: docs.length,
+        lines,
+        matchedItems,
+        unmatchedItems: lines - matchedItems,
+        matchedParties: docs.filter((d: any) => d.partyStatus === "matched").length,
+        unmatchedParties: docs.filter((d: any) => d.partyStatus !== "matched").length,
+        readyDocs: docs.filter((d: any) => d.ready).length,
+      };
+    }
+    if (preview.kind === "item_costs") {
+      const rows = preview.itemCosts || [];
+      return {
+        documents: rows.length,
+        lines: rows.length,
+        matchedItems: rows.filter((r: any) => r.itemStatus === "matched").length,
+        unmatchedItems: rows.filter((r: any) => r.itemStatus !== "matched").length,
+        matchedParties: rows.filter((r: any) => r.warehouseStatus === "matched").length,
+        unmatchedParties: rows.filter((r: any) => r.warehouseStatus !== "matched").length,
+        readyDocs: rows.filter((r: any) => r.itemStatus === "matched" && r.warehouseStatus === "matched").length,
+      };
+    }
+    return preview.summary;
+  }, [preview]);
+
+  /** أصناف ناقصة بلا تكرار — نفس الاسم يتربط مرة واحدة ويتطبّق على كل الأسطر اللي بنفس الاسم */
+  const uniqueMissingItems = useMemo(() => {
+    if (!preview || (preview.kind !== "sales" && preview.kind !== "purchases")) {
+      return [] as Array<{ name: string; barcode?: string; count: number }>;
+    }
+    const map = new Map<string, { name: string; barcode?: string; count: number }>();
+    for (const row of missingItemRows) {
+      const key = row.name.trim();
+      if (!key) continue;
+      const existing = map.get(key);
+      if (existing) existing.count += 1;
+      else map.set(key, { name: key, barcode: row.barcode, count: 1 });
+    }
+    return Array.from(map.values());
+  }, [missingItemRows, preview]);
+
+  /** ربط يدوي لصنف: المستخدم متأكد إنه موجود، بس اسمه مختلف عن المسجل عندنا */
+  const manualMatchItem = (name: string, itemId: string, itemLabel: string) => {
+    if (!preview) return;
+    const id = Number(itemId);
+    if (!id) return;
+    setPreview((prev: any) => {
+      if (!prev) return prev;
+      const key = prev.kind === "sales" ? "sales" : "purchases";
+      const docs = (prev[key] || []).map((d: any) => {
+        const lines = (d.lines || []).map((l: any) => {
+          if (l.status === "matched" || l.name.trim() !== name) return l;
+          return { ...l, itemId: id, itemName: itemLabel, status: "matched" };
+        });
+        const lineMatched = lines.filter((l: any) => l.status === "matched").length;
+        return {
+          ...d,
+          lines,
+          lineMatched,
+          lineUnmatched: lines.length - lineMatched,
+          ready: !!d[prev.kind === "sales" ? "customerId" : "supplierId"] && lines.length > 0 && lines.every((l: any) => l.status === "matched"),
+        };
+      });
+      return { ...prev, [key]: docs };
+    });
+    toast.success("تم ربط الصنف في كل الفواتير اللي فيها");
+  };
 
   return (
     <ERPLayout title="استيراد تقارير Excel">
@@ -446,6 +520,39 @@ export default function MegaReportImportPage() {
                   <div className="text-sm font-bold mt-1.5 opacity-95">{c.label}</div>
                 </div>
               ))}
+            </div>
+          )}
+
+          {uniqueMissingItems.length > 0 && (
+            <div className="rounded-2xl border-2 overflow-hidden bg-white">
+              <div className="bg-rose-700 text-white px-4 py-3 font-black flex items-center gap-2">
+                <Package size={18} /> الأصناف الناقصة — راجعها قبل الإضافة ({uniqueMissingItems.length})
+              </div>
+              <p className="px-4 pt-3 text-sm font-semibold text-slate-600">
+                لو الصنف موجود عندك بالفعل بس باسم مختلف شوية، اربطه من هنا بدل ما تخليه يتعمل صنف جديد مكرر.
+              </p>
+              <div className="max-h-[50vh] overflow-auto divide-y p-4 pt-3 space-y-3">
+                {uniqueMissingItems.map((mi) => (
+                  <div key={mi.name} className="flex flex-wrap items-center gap-3 pb-3">
+                    <div className="min-w-0 flex-1">
+                      <div className="text-base font-black text-slate-900">{mi.name}</div>
+                      <div className="text-xs font-semibold text-slate-500">
+                        {mi.barcode ? `باركود ${mi.barcode} · ` : ""}ظهر في {mi.count} سطر
+                      </div>
+                    </div>
+                    <div className="w-full sm:w-72">
+                      <SearchableSelect
+                        options={itemOptions}
+                        onChange={(v, opt) => manualMatchItem(mi.name, v, opt.label.replace(/^.*—\s*/, ""))}
+                        placeholder="اربط بصنف موجود..."
+                        searchPlaceholder="اكتب أول حروف اسم الصنف..."
+                        emptyText="مفيش نتايج"
+                        className="h-9 text-sm bg-white"
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
 
