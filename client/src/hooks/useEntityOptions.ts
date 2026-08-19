@@ -31,6 +31,30 @@ export function useItemOptions() {
   );
 }
 
+export function useCustomerOptions() {
+  const q = trpc.customers.list.useQuery({ page: 1, limit: 500 });
+  return useMemo(
+    () =>
+      (q.data?.rows || []).map((c: { id: number; name: string; code?: string | null }) => ({
+        value: String(c.id),
+        label: c.code ? `${c.code} — ${c.name}` : c.name,
+      })),
+    [q.data],
+  );
+}
+
+export function useSupplierOptions() {
+  const q = trpc.suppliers.list.useQuery({ page: 1, limit: 500 });
+  return useMemo(
+    () =>
+      (q.data?.rows || []).map((s: { id: number; name: string; code?: string | null }) => ({
+        value: String(s.id),
+        label: s.code ? `${s.code} — ${s.name}` : s.name,
+      })),
+    [q.data],
+  );
+}
+
 export function useWarehouseOptions() {
   const q = trpc.warehouses.list.useQuery();
   return useMemo(

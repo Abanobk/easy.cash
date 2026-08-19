@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useWarehouseOptions } from "@/hooks/useEntityOptions";
+import { useWarehouseOptions, useCustomerOptions, useSupplierOptions } from "@/hooks/useEntityOptions";
 import { tenantPath, useTenantSlug } from "@/lib/tenant";
 import { trpc } from "@/lib/trpc";
 import {
@@ -33,6 +33,8 @@ export default function MegaReportImportPage() {
   const tenantSlug = useTenantSlug();
   const [, navigate] = useLocation();
   const warehouses = useWarehouseOptions();
+  const customerOptions = useCustomerOptions();
+  const supplierOptions = useSupplierOptions();
   const utils = trpc.useUtils();
 
   const previewMut = trpc.megaReportImport.preview.useMutation();
@@ -205,6 +207,32 @@ export default function MegaReportImportPage() {
     } finally {
       setBusy(false);
     }
+  };
+
+  /** ربط يدوي: المستخدم متأكد إن المورد/العميل دا موجود بالفعل، بس اسمه في الملف مختلف عن الاسم المسجل */
+  const manualMatchParty = (docIndex: number, partyId: string, partyLabel: string) => {
+    if (!preview) return;
+    const id = Number(partyId);
+    if (!id) return;
+    setPreview((prev: any) => {
+      if (!prev) return prev;
+      const key = prev.kind === "sales" ? "sales" : "purchases";
+      const idField = prev.kind === "sales" ? "customerId" : "supplierId";
+      const nameField = prev.kind === "sales" ? "customer" : "supplier";
+      const docs = (prev[key] || []).map((d: any) => {
+        if (d.index !== docIndex) return d;
+        const updated = {
+          ...d,
+          [idField]: id,
+          [nameField]: partyLabel,
+          partyStatus: "matched",
+        };
+        updated.ready = !!updated[idField] && updated.lines.length > 0 && updated.lines.every((l: any) => l.status === "matched");
+        return updated;
+      });
+      return { ...prev, [key]: docs };
+    });
+    toast.success("تم الربط");
   };
 
   const commit = async () => {
@@ -455,11 +483,16 @@ export default function MegaReportImportPage() {
               title="فواتير المبيعات"
               rows={(preview.sales || []).map((d: any) => ({
                 key: d.index,
+                docIndex: d.index,
                 ready: d.ready,
+                partyUnmatched: d.partyStatus !== "matched",
                 title: d.customer,
                 meta: `${d.serial || "—"} · ${d.date} · ${Number(d.total || 0).toLocaleString("en-US")}`,
                 detail: `${d.lineMatched}/${d.lines.length} أصناف مطابقة`,
               }))}
+              partyOptions={customerOptions}
+              partyPlaceholder="اختر عميل موجود..."
+              onManualMatch={manualMatchParty}
             />
           )}
           {kind === "purchases" && (
@@ -468,11 +501,16 @@ export default function MegaReportImportPage() {
               title="فواتير المشتريات"
               rows={(preview.purchases || []).map((d: any) => ({
                 key: d.index,
+                docIndex: d.index,
                 ready: d.ready,
+                partyUnmatched: d.partyStatus !== "matched",
                 title: d.supplier,
                 meta: `${d.serial || "—"} · ${d.date} · ${Number(d.total || 0).toLocaleString("en-US")}`,
                 detail: `${d.lineMatched}/${d.lines.length} أصناف مطابقة`,
               }))}
+              partyOptions={supplierOptions}
+              partyPlaceholder="اختر مورد موجود..."
+              onManualMatch={manualMatchParty}
             />
           )}
           {kind === "production" && (
@@ -546,10 +584,16 @@ function DocsTable({
   icon,
   title,
   rows,
+  partyOptions,
+  partyPlaceholder,
+  onManualMatch,
 }: {
   icon: React.ReactNode;
   title: string;
-  rows: Array<{ key: number; ready: boolean; title: string; meta: string; detail: string }>;
+  rows: Array<{ key: number; docIndex: number; ready: boolean; partyUnmatched?: boolean; title: string; meta: string; detail: string }>;
+  partyOptions?: Array<{ value: string; label: string }>;
+  partyPlaceholder?: string;
+  onManualMatch?: (docIndex: number, partyId: string, partyLabel: string) => void;
 }) {
   return (
     <div className="rounded-2xl border-2 overflow-hidden bg-white">
@@ -559,12 +603,29 @@ function DocsTable({
       <div className="max-h-[52vh] overflow-auto divide-y">
         {rows.map((r) => (
           <div key={r.key} className={`px-4 py-3 flex flex-wrap items-start justify-between gap-2 ${r.ready ? "bg-emerald-50/40" : "bg-rose-50/50"}`}>
-            <div>
+            <div className="min-w-0 flex-1">
               <div className="text-base font-black text-slate-900">{r.title || "—"}</div>
               <div className="text-sm font-bold text-slate-600">{r.meta}</div>
               <div className="text-sm font-semibold text-slate-500 mt-0.5">{r.detail}</div>
+              {r.partyUnmatched && onManualMatch && (
+                <div className="mt-2 max-w-xs">
+                  <Select onValueChange={(v) => {
+                    const opt = partyOptions?.find((o) => o.value === v);
+                    if (opt) onManualMatch(r.docIndex, opt.value, opt.label.replace(/^.*—\s*/, ""));
+                  }}>
+                    <SelectTrigger className="h-9 text-sm bg-white">
+                      <SelectValue placeholder={partyPlaceholder || "اختر من الموجود..."} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {(partyOptions || []).map((o) => (
+                        <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
             </div>
-            <span className={`text-sm font-extrabold px-2.5 py-1 rounded-md ${r.ready ? "bg-emerald-600 text-white" : "bg-rose-600 text-white"}`}>
+            <span className={`text-sm font-extrabold px-2.5 py-1 rounded-md shrink-0 ${r.ready ? "bg-emerald-600 text-white" : "bg-rose-600 text-white"}`}>
               {r.ready ? "جاهز" : "ناقص"}
             </span>
           </div>
