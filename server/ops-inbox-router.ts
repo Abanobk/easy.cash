@@ -186,6 +186,7 @@ export const opsInboxRouter = router({
           dateFrom: z.string().optional(),
           dateTo: z.string().optional(),
           status: z.string().optional(),
+          type: z.enum(["purchase", "sales", "mixing", "general"]).optional(),
           limit: z.number().int().min(1).max(300).optional(),
         })
         .optional(),
@@ -202,11 +203,17 @@ export const opsInboxRouter = router({
       z.object({
         workDate: z.string().min(8),
         title: z.string().min(1).max(255),
-        fileName: z.string().min(1).max(255),
-        mimeType: z.string().min(3).max(120),
-        contentBase64: z.string().min(20),
+        fileName: z.string().min(1).max(255).optional(),
+        mimeType: z.string().min(3).max(120).optional(),
+        contentBase64: z.string().min(20).optional(),
         notes: z.string().max(5000).optional(),
         alsoToInbox: z.boolean().optional(),
+        type: z.enum(["purchase", "sales", "mixing", "general"]).optional(),
+        partyName: z.string().max(255).optional(),
+        itemDescription: z.string().max(255).optional(),
+        quantity: z.string().optional(),
+        amount: z.string().optional(),
+        materialsUsed: z.string().max(5000).optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {

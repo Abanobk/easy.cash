@@ -10,7 +10,23 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { trpc } from "@/lib/trpc";
 import { tenantPath, useTenantSlug } from "@/lib/tenant";
 import { toast } from "sonner";
-import { Factory, Loader2, Upload } from "lucide-react";
+import { Factory, Loader2, Upload, ShoppingCart, TrendingUp, Beaker, FileText } from "lucide-react";
+
+type EntryType = "general" | "purchase" | "sales" | "mixing";
+
+const TYPE_TABS: Array<{ value: EntryType; label: string; icon: typeof Factory }> = [
+  { value: "general", label: "عام", icon: FileText },
+  { value: "purchase", label: "بيان شراء", icon: ShoppingCart },
+  { value: "sales", label: "بيان مبيعات", icon: TrendingUp },
+  { value: "mixing", label: "بيان خلاطات", icon: Beaker },
+];
+
+const TYPE_LABEL: Record<string, string> = {
+  general: "عام",
+  purchase: "بيان شراء",
+  sales: "بيان مبيعات",
+  mixing: "بيان خلاطات",
+};
 
 function readFileAsBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -37,12 +53,19 @@ export default function FactoryDailyPage() {
   const fileRef = useRef<HTMLInputElement>(null);
   const today = new Date().toISOString().slice(0, 10);
   const [workDate, setWorkDate] = useState(today);
+  const [entryType, setEntryType] = useState<EntryType>("general");
   const [title, setTitle] = useState("");
   const [notes, setNotes] = useState("");
+  const [partyName, setPartyName] = useState("");
+  const [itemDescription, setItemDescription] = useState("");
+  const [quantity, setQuantity] = useState("");
+  const [amount, setAmount] = useState("");
+  const [materialsUsed, setMaterialsUsed] = useState("");
   const [month, setMonth] = useState(today.slice(0, 7));
   const [dateFrom, setDateFrom] = useState(monthRange(today.slice(0, 7)).from);
   const [dateTo, setDateTo] = useState(monthRange(today.slice(0, 7)).to);
   const [statusFilter, setStatusFilter] = useState("all");
+  const [typeFilter, setTypeFilter] = useState("all");
   const [pendingFile, setPendingFile] = useState<{ fileName: string; mimeType: string; contentBase64: string } | null>(null);
 
   const utils = trpc.useUtils();
@@ -50,15 +73,25 @@ export default function FactoryDailyPage() {
     dateFrom,
     dateTo,
     status: statusFilter === "all" ? undefined : statusFilter,
+    type: typeFilter === "all" ? undefined : (typeFilter as EntryType),
     limit: 200,
   });
 
+  const resetEntryFields = () => {
+    setTitle("");
+    setNotes("");
+    setPartyName("");
+    setItemDescription("");
+    setQuantity("");
+    setAmount("");
+    setMaterialsUsed("");
+    setPendingFile(null);
+  };
+
   const uploadMut = trpc.opsInbox.factoryUpload.useMutation({
     onSuccess: (r) => {
-      toast.success(r.linkedInboxItemId ? "تم الرفع وأُنشئت مسودة للمراجعة" : "تم رفع شغل المصنع");
-      setTitle("");
-      setNotes("");
-      setPendingFile(null);
+      toast.success(r.linkedInboxItemId ? "تم الرفع وأُنشئت مسودة للمراجعة" : "تم حفظ البيان");
+      resetEntryFields();
       void utils.opsInbox.factoryList.invalidate();
       void utils.opsInbox.list.invalidate();
     },
@@ -92,22 +125,45 @@ export default function FactoryDailyPage() {
       mimeType: file.type || "application/octet-stream",
       contentBase64,
     });
-    if (!title.trim()) setTitle(`شغل مصنع ${workDate} — ${file.name}`);
+    if (!title.trim()) setTitle(`${TYPE_LABEL[entryType]} ${workDate} — ${file.name}`);
   };
 
   const submit = () => {
-    if (!pendingFile) {
+    if (entryType === "general" && !pendingFile) {
       toast.error("اختر ملف PDF أو صورة");
       return;
     }
+    if (entryType === "purchase" && !partyName.trim()) {
+      toast.error("اكتب اسم المورد");
+      return;
+    }
+    if (entryType === "sales" && !partyName.trim()) {
+      toast.error("اكتب اسم العميل");
+      return;
+    }
+    if (entryType === "mixing" && !itemDescription.trim()) {
+      toast.error("اكتب اسم المنتج/الخلطة");
+      return;
+    }
+    const autoTitle =
+      entryType === "purchase" ? `شراء — ${partyName || itemDescription || workDate}`
+      : entryType === "sales" ? `بيع — ${partyName || itemDescription || workDate}`
+      : entryType === "mixing" ? `خلطة — ${itemDescription || workDate}`
+      : pendingFile?.fileName || workDate;
     uploadMut.mutate({
       workDate,
-      title: title.trim() || pendingFile.fileName,
-      fileName: pendingFile.fileName,
-      mimeType: pendingFile.mimeType,
-      contentBase64: pendingFile.contentBase64,
+      title: title.trim() || autoTitle,
+      fileName: pendingFile?.fileName,
+      mimeType: pendingFile?.mimeType,
+      contentBase64: pendingFile?.contentBase64,
       notes: notes.trim() || undefined,
       alsoToInbox: true,
+      type: entryType,
+      partyName: partyName.trim() || undefined,
+      itemDescription: itemDescription.trim() || undefined,
+      quantity: quantity.trim() || undefined,
+      amount: amount.trim() || undefined,
+      materialsUsed: materialsUsed.trim() || undefined,
     });
   };
 
@@ -133,18 +189,42 @@ export default function FactoryDailyPage() {
             </div>
           </section>
 
-          <section className="rounded-2xl border border-slate-200 bg-white p-5 space-y-3">
-            <h3 className="text-sm font-semibold text-slate-800">رفع جديد</h3>
+          <section className="rounded-2xl border border-slate-200 bg-white p-5 space-y-4">
+            <div>
+              <h3 className="text-sm font-semibold text-slate-800 mb-2.5">بيان جديد</h3>
+              <div className="flex flex-wrap gap-1.5 p-1 rounded-xl bg-[var(--paper-50)] border border-[var(--line)] w-fit">
+                {TYPE_TABS.map((t) => {
+                  const Icon = t.icon;
+                  const active = entryType === t.value;
+                  return (
+                    <button
+                      key={t.value}
+                      type="button"
+                      onClick={() => setEntryType(t.value)}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-bold transition-colors ${
+                        active ? "bg-[var(--ink-700)] text-white" : "text-slate-600 hover:bg-white"
+                      }`}
+                    >
+                      <Icon size={14} />
+                      {t.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
             <div className="grid gap-3 md:grid-cols-2">
               <div>
                 <Label className="text-xs">تاريخ الشغل</Label>
                 <Input className="mt-1 h-9" type="date" value={workDate} onChange={(e) => setWorkDate(e.target.value)} />
               </div>
               <div>
-                <Label className="text-xs">الملف (PDF / صورة)</Label>
+                <Label className="text-xs">
+                  الملف (PDF / صورة) {entryType !== "general" && <span className="text-slate-400 font-normal">— اختياري</span>}
+                </Label>
                 <div className="mt-1 flex gap-2">
                   <Button type="button" variant="outline" className="h-9 gap-1.5" onClick={() => fileRef.current?.click()}>
-                    <Upload size={14} /> {pendingFile ? pendingFile.fileName : "اختر ملف"}
+                    <Upload size={14} /> {pendingFile ? pendingFile.fileName : "اختر ملف / صورة الأصل"}
                   </Button>
                   <input
                     ref={fileRef}
@@ -155,8 +235,47 @@ export default function FactoryDailyPage() {
                   />
                 </div>
               </div>
+
+              {(entryType === "purchase" || entryType === "sales") && (
+                <>
+                  <div>
+                    <Label className="text-xs">{entryType === "purchase" ? "المورد" : "العميل"}</Label>
+                    <Input className="mt-1 h-9" value={partyName} onChange={(e) => setPartyName(e.target.value)} placeholder={entryType === "purchase" ? "اسم المورد" : "اسم العميل"} />
+                  </div>
+                  <div>
+                    <Label className="text-xs">البيان / الصنف</Label>
+                    <Input className="mt-1 h-9" value={itemDescription} onChange={(e) => setItemDescription(e.target.value)} placeholder="وصف الصنف أو الخامة" />
+                  </div>
+                  <div>
+                    <Label className="text-xs">الكمية</Label>
+                    <Input className="mt-1 h-9" type="number" value={quantity} onChange={(e) => setQuantity(e.target.value)} />
+                  </div>
+                  <div>
+                    <Label className="text-xs">القيمة</Label>
+                    <Input className="mt-1 h-9" type="number" value={amount} onChange={(e) => setAmount(e.target.value)} />
+                  </div>
+                </>
+              )}
+
+              {entryType === "mixing" && (
+                <>
+                  <div>
+                    <Label className="text-xs">المنتج / الخلطة</Label>
+                    <Input className="mt-1 h-9" value={itemDescription} onChange={(e) => setItemDescription(e.target.value)} placeholder="اسم المنتج التام" />
+                  </div>
+                  <div>
+                    <Label className="text-xs">الكمية المنتجة</Label>
+                    <Input className="mt-1 h-9" type="number" value={quantity} onChange={(e) => setQuantity(e.target.value)} />
+                  </div>
+                  <div className="md:col-span-2">
+                    <Label className="text-xs">الخامات المستخدمة</Label>
+                    <Textarea className="mt-1" rows={2} value={materialsUsed} onChange={(e) => setMaterialsUsed(e.target.value)} placeholder="اسم الخامة والكمية، سطر لكل خامة" />
+                  </div>
+                </>
+              )}
+
               <div className="md:col-span-2">
-                <Label className="text-xs">العنوان</Label>
+                <Label className="text-xs">العنوان {entryType !== "general" && <span className="text-slate-400 font-normal">— اختياري، هيتحدد تلقائي لو سيبته فاضي</span>}</Label>
                 <Input className="mt-1 h-9" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="مثال: إنتاج وردية صباح — إيصالات" />
               </div>
               <div className="md:col-span-2">
@@ -164,9 +283,9 @@ export default function FactoryDailyPage() {
                 <Textarea className="mt-1" rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} />
               </div>
             </div>
-            <Button className="gap-1.5" disabled={uploadMut.isPending} onClick={submit}>
+            <Button className="eca-btn-primary border-0 gap-1.5" disabled={uploadMut.isPending} onClick={submit}>
               {uploadMut.isPending ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
-              رفع للشغل اليومي
+              حفظ البيان
             </Button>
           </section>
 
@@ -199,17 +318,44 @@ export default function FactoryDailyPage() {
                     </SelectContent>
                   </Select>
                 </div>
+                <div>
+                  <Label className="text-xs">النوع</Label>
+                  <Select value={typeFilter} onValueChange={setTypeFilter}>
+                    <SelectTrigger className="mt-1 h-9 w-36"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">الكل</SelectItem>
+                      <SelectItem value="general">عام</SelectItem>
+                      <SelectItem value="purchase">بيان شراء</SelectItem>
+                      <SelectItem value="sales">بيان مبيعات</SelectItem>
+                      <SelectItem value="mixing">بيان خلاطات</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
             </div>
 
             <div className="space-y-2">
-              {rows.map((row) => (
+              {rows.map((row: any) => (
                 <div key={row.id} className="rounded-xl border border-slate-200 p-3 flex flex-wrap items-start justify-between gap-3">
-                  <div>
-                    <p className="text-sm font-medium text-slate-800">{row.title}</p>
-                    <p className="text-xs text-slate-500 mt-0.5">
-                      {row.workDate} · {row.fileName} · {row.status}
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-[11px] font-bold px-2 py-0.5 rounded-md bg-[var(--paper-100)] text-[var(--ink-700)]">
+                        {TYPE_LABEL[row.type] || "عام"}
+                      </span>
+                      <p className="text-sm font-medium text-slate-800">{row.title}</p>
+                    </div>
+                    <p className="text-xs text-slate-500 mt-1">
+                      {row.workDate} · {row.hasFile ? row.fileName : "بدون ملف"} · {row.status}
                     </p>
+                    {(row.partyName || row.itemDescription || row.quantity != null || row.amount != null) && (
+                      <p className="text-xs text-slate-600 mt-1">
+                        {row.partyName ? `${row.type === "purchase" ? "المورد" : "العميل"}: ${row.partyName} · ` : ""}
+                        {row.itemDescription ? `${row.itemDescription} · ` : ""}
+                        {row.quantity != null ? `الكمية: ${row.quantity.toLocaleString("en-US")} · ` : ""}
+                        {row.amount != null ? `القيمة: ${row.amount.toLocaleString("en-US")}` : ""}
+                      </p>
+                    )}
+                    {row.materialsUsed ? <p className="text-xs text-slate-600 mt-1">الخامات: {row.materialsUsed}</p> : null}
                     {row.notes ? <p className="text-xs text-slate-600 mt-1">{row.notes}</p> : null}
                   </div>
                   <div className="flex flex-wrap gap-1.5">

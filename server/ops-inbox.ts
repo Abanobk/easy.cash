@@ -734,35 +734,49 @@ export async function uploadFactoryDaily(
   input: {
     workDate: string;
     title: string;
-    fileName: string;
-    mimeType: string;
-    contentBase64: string;
+    fileName?: string;
+    mimeType?: string;
+    contentBase64?: string;
     notes?: string;
     createdBy?: number;
     alsoToInbox?: boolean;
+    type?: "purchase" | "sales" | "mixing" | "general";
+    partyName?: string;
+    itemDescription?: string;
+    quantity?: string;
+    amount?: string;
+    materialsUsed?: string;
   },
 ) {
-  const contentBase64 = stripDataUrl(input.contentBase64);
+  const hasFile = !!input.contentBase64;
+  const contentBase64 = hasFile ? stripDataUrl(input.contentBase64!) : "";
   if (contentBase64.length > MAX_BASE64) throw new Error("حجم الملف كبير — الحد ~5 ميجابايت");
+  const fileName = input.fileName?.trim() || "بدون ملف مرفق";
 
   const insertResult = await db.insert(factoryDailyUploads).values({
     tenantId,
     workDate: input.workDate as any,
-    title: input.title.slice(0, 255) || input.fileName,
-    fileName: input.fileName.slice(0, 255),
+    title: input.title.slice(0, 255) || fileName,
+    fileName: fileName.slice(0, 255),
     mimeType: (input.mimeType || "application/octet-stream").slice(0, 120),
-    contentBase64,
+    contentBase64: hasFile ? contentBase64 : null,
     notes: input.notes || null,
     status: "uploaded",
+    type: input.type || "general",
+    partyName: input.partyName || null,
+    itemDescription: input.itemDescription || null,
+    quantity: input.quantity || null,
+    amount: input.amount || null,
+    materialsUsed: input.materialsUsed || null,
     createdBy: input.createdBy || null,
   });
   const id = Number((insertResult as { insertId?: number }).insertId ?? 0);
 
   let linkedInboxItemId: number | null = null;
-  if (input.alsoToInbox !== false) {
+  if (hasFile && input.alsoToInbox !== false) {
     const mime = (input.mimeType || "").toLowerCase();
     const isImage = mime.startsWith("image/");
-    const isPdf = mime.includes("pdf") || input.fileName.toLowerCase().endsWith(".pdf");
+    const isPdf = mime.includes("pdf") || fileName.toLowerCase().endsWith(".pdf");
     let draft: OpsDraft = {
       suggestedType: "other",
       date: input.workDate,
@@ -788,8 +802,8 @@ export async function uploadFactoryDaily(
       channelNote: "شغل المصنع اليومي",
       workDate: input.workDate as any,
       rawText: input.notes || input.title,
-      fileName: input.fileName,
-      mimeType: input.mimeType,
+      fileName,
+      mimeType: input.mimeType || "application/octet-stream",
       contentBase64,
       suggestedType: draft.suggestedType,
       extractedJson: JSON.stringify(draft),
@@ -813,12 +827,13 @@ export async function uploadFactoryDaily(
 export async function listFactoryDaily(
   db: Db,
   tenantId: number,
-  opts: { dateFrom?: string; dateTo?: string; status?: string; limit?: number },
+  opts: { dateFrom?: string; dateTo?: string; status?: string; type?: string; limit?: number },
 ) {
   const filters = [];
   if (opts.dateFrom) filters.push(gte(factoryDailyUploads.workDate as any, opts.dateFrom as any));
   if (opts.dateTo) filters.push(lte(factoryDailyUploads.workDate as any, opts.dateTo as any));
   if (opts.status) filters.push(eq(factoryDailyUploads.status, opts.status));
+  if (opts.type) filters.push(eq(factoryDailyUploads.type, opts.type as any));
 
   const rows = await db
     .select({
@@ -833,6 +848,12 @@ export async function listFactoryDaily(
       extractedJson: factoryDailyUploads.extractedJson,
       createdAt: factoryDailyUploads.createdAt,
       hasFile: factoryDailyUploads.contentBase64,
+      type: factoryDailyUploads.type,
+      partyName: factoryDailyUploads.partyName,
+      itemDescription: factoryDailyUploads.itemDescription,
+      quantity: factoryDailyUploads.quantity,
+      amount: factoryDailyUploads.amount,
+      materialsUsed: factoryDailyUploads.materialsUsed,
     })
     .from(factoryDailyUploads)
     .where(tenantWhere(factoryDailyUploads, tenantId, filters.length ? and(...filters) : undefined))
@@ -849,6 +870,12 @@ export async function listFactoryDaily(
     status: r.status,
     linkedInboxItemId: r.linkedInboxItemId,
     extracted: parseJson(r.extractedJson, null),
+    type: r.type,
+    partyName: r.partyName,
+    itemDescription: r.itemDescription,
+    quantity: r.quantity != null ? Number(r.quantity) : null,
+    amount: r.amount != null ? Number(r.amount) : null,
+    materialsUsed: r.materialsUsed,
     createdAt: r.createdAt,
     hasFile: !!r.hasFile,
   }));

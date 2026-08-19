@@ -1561,6 +1561,17 @@ export const factoryDailyUploads = mysqlTable("factory_daily_uploads", {
   status: varchar("status", { length: 32 }).notNull().default("uploaded"),
   extractedJson: text("extractedJson"),
   linkedInboxItemId: int("linkedInboxItemId"),
+  /** نوع البيان: شراء / مبيعات / خلاطات (مرجع الإنتاج) / عام */
+  type: mysqlEnum("type", ["purchase", "sales", "mixing", "general"]).notNull().default("general"),
+  /** المورد (شراء) أو العميل (مبيعات) — نص حر، بيان يومي سريع مش مربوط بكشف الحسابات الرسمي */
+  partyName: varchar("partyName", { length: 255 }),
+  /** بيان الصنف/المنتج — بيان شراء ومبيعات وخلاطات */
+  itemDescription: varchar("itemDescription", { length: 255 }),
+  quantity: decimal("quantity", { precision: 15, scale: 3 }),
+  /** قيمة العملية — شراء ومبيعات فقط */
+  amount: decimal("amount", { precision: 15, scale: 2 }),
+  /** الخامات المستخدمة — خلاطات فقط */
+  materialsUsed: text("materialsUsed"),
   createdBy: int("createdBy"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
