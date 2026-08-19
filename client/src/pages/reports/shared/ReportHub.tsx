@@ -32,6 +32,12 @@ type FilterInput = {
   categoryId?: number;
   areaId?: number;
   paymentType?: "cash" | "credit";
+  currencyCode?: string;
+  dueDateFrom?: string;
+  dueDateTo?: string;
+  paymentStatus?: "paid" | "partial" | "unpaid";
+  taxFilter?: "with" | "without";
+  discountFilter?: "with" | "without";
 };
 
 function defaultDates() {
@@ -60,6 +66,18 @@ function parseUrlFilters(search: string): Partial<FilterInput> {
   }
   const pt = params.get("paymentType");
   if (pt === "cash" || pt === "credit") out.paymentType = pt;
+  const cc = params.get("currencyCode");
+  if (cc) out.currencyCode = cc;
+  const ddf = params.get("dueDateFrom");
+  const ddt = params.get("dueDateTo");
+  if (ddf) out.dueDateFrom = ddf;
+  if (ddt) out.dueDateTo = ddt;
+  const ps = params.get("paymentStatus");
+  if (ps === "paid" || ps === "partial" || ps === "unpaid") out.paymentStatus = ps;
+  const tf = params.get("taxFilter");
+  if (tf === "with" || tf === "without") out.taxFilter = tf;
+  const discF = params.get("discountFilter");
+  if (discF === "with" || discF === "without") out.discountFilter = discF;
   return out;
 }
 
@@ -79,6 +97,12 @@ function buildFilterQueryString(query: FilterInput, includeDates: boolean) {
   if (query.categoryId) params.set("categoryId", String(query.categoryId));
   if (query.areaId) params.set("areaId", String(query.areaId));
   if (query.paymentType) params.set("paymentType", query.paymentType);
+  if (query.currencyCode) params.set("currencyCode", query.currencyCode);
+  if (query.dueDateFrom) params.set("dueDateFrom", query.dueDateFrom);
+  if (query.dueDateTo) params.set("dueDateTo", query.dueDateTo);
+  if (query.paymentStatus) params.set("paymentStatus", query.paymentStatus);
+  if (query.taxFilter) params.set("taxFilter", query.taxFilter);
+  if (query.discountFilter) params.set("discountFilter", query.discountFilter);
   const qs = params.toString();
   return qs ? `?${qs}` : "";
 }
@@ -135,6 +159,12 @@ export default function ReportHub({ title, section, icon, reports, procedure }: 
   const [categoryId, setCategoryId] = useState<string>("");
   const [areaId, setAreaId] = useState<string>("");
   const [paymentType, setPaymentType] = useState<string>("");
+  const [currencyCode, setCurrencyCode] = useState<string>("");
+  const [dueDateFrom, setDueDateFrom] = useState<string>("");
+  const [dueDateTo, setDueDateTo] = useState<string>("");
+  const [paymentStatus, setPaymentStatus] = useState<string>("");
+  const [taxFilter, setTaxFilter] = useState<string>("");
+  const [discountFilter, setDiscountFilter] = useState<string>("");
   const [query, setQuery] = useState<FilterInput>(() => ({ slug, ...dates }));
 
   useEffect(() => {
@@ -154,6 +184,12 @@ export default function ReportHub({ title, section, icon, reports, procedure }: 
     if (urlFilters.categoryId) setCategoryId(String(urlFilters.categoryId));
     if (urlFilters.areaId) setAreaId(String(urlFilters.areaId));
     if (urlFilters.paymentType) setPaymentType(urlFilters.paymentType);
+    if (urlFilters.currencyCode) setCurrencyCode(urlFilters.currencyCode);
+    if (urlFilters.dueDateFrom) setDueDateFrom(urlFilters.dueDateFrom);
+    if (urlFilters.dueDateTo) setDueDateTo(urlFilters.dueDateTo);
+    if (urlFilters.paymentStatus) setPaymentStatus(urlFilters.paymentStatus);
+    if (urlFilters.taxFilter) setTaxFilter(urlFilters.taxFilter);
+    if (urlFilters.discountFilter) setDiscountFilter(urlFilters.discountFilter);
     setQuery({ slug, ...dates, ...urlFilters });
   }, [slug, location]);
 
@@ -180,6 +216,7 @@ export default function ReportHub({ title, section, icon, reports, procedure }: 
   );
   const { data: categoriesList } = trpc.items.categories.useQuery(undefined, { enabled: needs("category") });
   const { data: areasList } = trpc.parity.sales.areas.list.useQuery(undefined, { enabled: needs("area") });
+  const { data: exchangeRatesList } = trpc.parity.settings.exchangeRates.list.useQuery(undefined, { enabled: needs("currency") });
 
   // عند تغيير الفرع أعد ضبط العميل/المورد/المخزن إن لم يعودوا ضمن الفرع
   useEffect(() => {
@@ -207,6 +244,12 @@ export default function ReportHub({ title, section, icon, reports, procedure }: 
     categoryId: query.categoryId,
     areaId: query.areaId,
     paymentType: query.paymentType,
+    currencyCode: query.currencyCode,
+    dueDateFrom: query.dueDateFrom,
+    dueDateTo: query.dueDateTo,
+    paymentStatus: query.paymentStatus,
+    taxFilter: query.taxFilter,
+    discountFilter: query.discountFilter,
   }), [slug, query, reportMeta?.needsDates]);
 
   const { data: rows = [], isLoading, refetch } = useReportData(procedure, filterInput, !!slug);
@@ -254,6 +297,12 @@ export default function ReportHub({ title, section, icon, reports, procedure }: 
       categoryId: categoryId ? Number(categoryId) : undefined,
       areaId: areaId ? Number(areaId) : undefined,
       paymentType: paymentType === "cash" || paymentType === "credit" ? paymentType : undefined,
+      currencyCode: currencyCode || undefined,
+      dueDateFrom: dueDateFrom || undefined,
+      dueDateTo: dueDateTo || undefined,
+      paymentStatus: paymentStatus === "paid" || paymentStatus === "partial" || paymentStatus === "unpaid" ? paymentStatus : undefined,
+      taxFilter: taxFilter === "with" || taxFilter === "without" ? taxFilter : undefined,
+      discountFilter: discountFilter === "with" || discountFilter === "without" ? discountFilter : undefined,
     });
     refetch();
   };
@@ -402,6 +451,75 @@ export default function ReportHub({ title, section, icon, reports, procedure }: 
                         <SelectItem value="all">الكل</SelectItem>
                         <SelectItem value="cash">نقدي</SelectItem>
                         <SelectItem value="credit">آجل</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+                {needs("currency") && (
+                  <div>
+                    <Label className="text-xs">العملة</Label>
+                    <Select value={currencyCode || "all"} onValueChange={(v) => setCurrencyCode(v === "all" ? "" : v)}>
+                      <SelectTrigger className="w-32"><SelectValue placeholder="الكل" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">الكل</SelectItem>
+                        <SelectItem value="EGP">EGP</SelectItem>
+                        {(exchangeRatesList || [])
+                          .filter((r: Record<string, unknown>) => r.code !== "EGP")
+                          .map((r: Record<string, unknown>) => (
+                            <SelectItem key={String(r.code)} value={String(r.code)}>{String(r.code)}</SelectItem>
+                          ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+                {needs("dueDate") && (
+                  <>
+                    <div>
+                      <Label className="text-xs">تاريخ استحقاق من</Label>
+                      <Input type="date" value={dueDateFrom} onChange={(e) => setDueDateFrom(e.target.value)} className="w-40" />
+                    </div>
+                    <div>
+                      <Label className="text-xs">تاريخ استحقاق إلى</Label>
+                      <Input type="date" value={dueDateTo} onChange={(e) => setDueDateTo(e.target.value)} className="w-40" />
+                    </div>
+                  </>
+                )}
+                {needs("paymentStatus") && (
+                  <div>
+                    <Label className="text-xs">حالة التحصيل / السداد</Label>
+                    <Select value={paymentStatus || "all"} onValueChange={(v) => setPaymentStatus(v === "all" ? "" : v)}>
+                      <SelectTrigger className="w-40"><SelectValue placeholder="الكل" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">الكل</SelectItem>
+                        <SelectItem value="paid">مسدد بالكامل</SelectItem>
+                        <SelectItem value="partial">مسدد جزئيًا</SelectItem>
+                        <SelectItem value="unpaid">غير مسدد</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+                {needs("taxFilter") && (
+                  <div>
+                    <Label className="text-xs">الضريبة</Label>
+                    <Select value={taxFilter || "all"} onValueChange={(v) => setTaxFilter(v === "all" ? "" : v)}>
+                      <SelectTrigger className="w-32"><SelectValue placeholder="الكل" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">الكل</SelectItem>
+                        <SelectItem value="with">بضريبة</SelectItem>
+                        <SelectItem value="without">بدون ضريبة</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+                {needs("discountFilter") && (
+                  <div>
+                    <Label className="text-xs">الخصم</Label>
+                    <Select value={discountFilter || "all"} onValueChange={(v) => setDiscountFilter(v === "all" ? "" : v)}>
+                      <SelectTrigger className="w-32"><SelectValue placeholder="الكل" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">الكل</SelectItem>
+                        <SelectItem value="with">بخصم</SelectItem>
+                        <SelectItem value="without">بدون خصم</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>

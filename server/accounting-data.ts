@@ -46,7 +46,36 @@ export type ReportFilters = {
   areaId?: number;
   paymentType?: "cash" | "credit";
   search?: string;
+  currencyCode?: string;
+  dueDateFrom?: string;
+  dueDateTo?: string;
+  paymentStatus?: "paid" | "partial" | "unpaid";
+  taxFilter?: "with" | "without";
+  discountFilter?: "with" | "without";
 };
+
+function dueDateConds(table: { dueDate: Column<any, object, object> }, from?: string, to?: string) {
+  const parts = [];
+  if (from) parts.push(gte(table.dueDate, from as any));
+  if (to) parts.push(lte(table.dueDate, to as any));
+  return parts;
+}
+
+/** حالة السداد كفلتر مستخدم — "unpaid" تعني آجلة لسه معلقة (status=confirmed) */
+function paymentStatusCond(column: Column<any, object, object>, status?: "paid" | "partial" | "unpaid") {
+  if (!status) return undefined;
+  return eq(column, status === "unpaid" ? "confirmed" : status);
+}
+
+function taxFilterCond(column: Column<any, object, object>, filter?: "with" | "without") {
+  if (!filter) return undefined;
+  return filter === "with" ? sql`${column} > 0` : sql`${column} = 0`;
+}
+
+function discountFilterCond(column: Column<any, object, object>, filter?: "with" | "without") {
+  if (!filter) return undefined;
+  return filter === "with" ? sql`${column} > 0` : sql`${column} = 0`;
+}
 
 /** شرط فرع: فرع واحد أو قائمة نطاق */
 export function reportBranchCond(column: any, filters: ReportFilters) {
@@ -297,6 +326,7 @@ export async function generalJournalReport(db: Db, filters: ReportFilters) {
 
 export async function salesInvoicesReport(db: Db, filters: ReportFilters) {
   const dateParts = dateConds(salesInvoices, filters.dateFrom, filters.dateTo);
+  const dueDateParts = dueDateConds(salesInvoices, filters.dueDateFrom, filters.dueDateTo);
   const rows = await db.select({
     number: salesInvoices.number,
     date: salesInvoices.date,
@@ -325,11 +355,16 @@ export async function salesInvoicesReport(db: Db, filters: ReportFilters) {
     .leftJoin(salesReps, eq(salesInvoices.salesRepId, salesReps.id))
     .leftJoin(salesAreas, eq(customers.areaId, salesAreas.id))
     .where(tenantWhere(salesInvoices, filters.tenantId,
-      and(salesPostedFilter(), ...(dateParts.length ? [and(...dateParts)] : []),
+      and(paymentStatusCond(salesInvoices.status, filters.paymentStatus) || salesPostedFilter(),
+        ...(dateParts.length ? [and(...dateParts)] : []),
+        ...(dueDateParts.length ? [and(...dueDateParts)] : []),
         filters.customerId ? eq(salesInvoices.customerId, filters.customerId) : undefined,
         reportBranchCond(salesInvoices.branchId, filters),
         reportWarehouseCond(salesInvoices.warehouseId, filters),
         filters.paymentType ? eq(salesInvoices.paymentType, filters.paymentType) : undefined,
+        filters.currencyCode ? eq(salesInvoices.currencyCode, filters.currencyCode) : undefined,
+        taxFilterCond(salesInvoices.tax, filters.taxFilter),
+        discountFilterCond(salesInvoices.discount, filters.discountFilter),
         filters.areaId ? eq(customers.areaId, filters.areaId) : undefined,
         filters.repId
           ? sql`(${salesInvoices.salesRepId} = ${filters.repId} OR ${customers.salesRepId} = ${filters.repId})`
@@ -365,6 +400,7 @@ export async function salesInvoicesReport(db: Db, filters: ReportFilters) {
 
 export async function purchasesInvoicesReport(db: Db, filters: ReportFilters) {
   const dateParts = dateConds(purchaseInvoices, filters.dateFrom, filters.dateTo);
+  const dueDateParts = dueDateConds(purchaseInvoices, filters.dueDateFrom, filters.dueDateTo);
   const rows = await db.select({
     number: purchaseInvoices.number,
     date: purchaseInvoices.date,
@@ -389,11 +425,16 @@ export async function purchasesInvoicesReport(db: Db, filters: ReportFilters) {
     .leftJoin(branches, eq(purchaseInvoices.branchId, branches.id))
     .leftJoin(warehouses, eq(purchaseInvoices.warehouseId, warehouses.id))
     .where(tenantWhere(purchaseInvoices, filters.tenantId,
-      and(purchasePostedFilter(), ...(dateParts.length ? [and(...dateParts)] : []),
+      and(paymentStatusCond(purchaseInvoices.status, filters.paymentStatus) || purchasePostedFilter(),
+        ...(dateParts.length ? [and(...dateParts)] : []),
+        ...(dueDateParts.length ? [and(...dueDateParts)] : []),
         filters.supplierId ? eq(purchaseInvoices.supplierId, filters.supplierId) : undefined,
         reportBranchCond(purchaseInvoices.branchId, filters),
         reportWarehouseCond(purchaseInvoices.warehouseId, filters),
         filters.paymentType ? eq(purchaseInvoices.paymentType, filters.paymentType) : undefined,
+        filters.currencyCode ? eq(purchaseInvoices.currencyCode, filters.currencyCode) : undefined,
+        taxFilterCond(purchaseInvoices.tax, filters.taxFilter),
+        discountFilterCond(purchaseInvoices.discount, filters.discountFilter),
         filters.search
           ? sql`(${purchaseInvoices.number} LIKE ${`%${filters.search}%`} OR ${suppliers.name} LIKE ${`%${filters.search}%`})`
           : undefined)))

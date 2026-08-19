@@ -9,7 +9,12 @@ export type ReportEntityFilter =
   | "warehouse"
   | "area"
   | "category"
-  | "paymentType";
+  | "paymentType"
+  | "currency"
+  | "dueDate"
+  | "paymentStatus"
+  | "taxFilter"
+  | "discountFilter";
 
 const ACCOUNTING_FILTERS: Record<string, ReportEntityFilter[]> = {
   "accountingreports-accountstatment": ["account"],
@@ -19,8 +24,8 @@ const ACCOUNTING_FILTERS: Record<string, ReportEntityFilter[]> = {
   "accountingreports-costcenterstatment": ["costCenter"],
   "accountingreports-customeraccountstatementbyitems": ["customer", "item"],
   "accountingreports-vendoraccountstatementbyitems": ["supplier", "item"],
-  "accountingreports-sales": ["customer", "branch", "warehouse", "rep", "area", "paymentType"],
-  "accountingreports-purchases": ["supplier", "branch", "warehouse", "paymentType"],
+  "accountingreports-sales": ["customer", "branch", "warehouse", "rep", "area", "paymentType", "currency", "dueDate", "paymentStatus", "taxFilter", "discountFilter"],
+  "accountingreports-purchases": ["supplier", "branch", "warehouse", "paymentType", "currency", "dueDate", "paymentStatus", "taxFilter", "discountFilter"],
   "accountingreports-customerssales": ["customer", "branch", "area", "rep", "paymentType"],
   "accountingreports-vendorspurchases": ["supplier", "branch", "paymentType"],
   "accountingreports-payments": ["customer", "supplier", "branch"],

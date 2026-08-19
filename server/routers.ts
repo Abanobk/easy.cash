@@ -3318,6 +3318,12 @@ const reportsRouter = router({
     areaId: z.number().optional(),
     paymentType: z.enum(["cash", "credit"]).optional(),
     search: z.string().optional(),
+    currencyCode: z.string().optional(),
+    dueDateFrom: z.string().optional(),
+    dueDateTo: z.string().optional(),
+    paymentStatus: z.enum(["paid", "partial", "unpaid"]).optional(),
+    taxFilter: z.enum(["with", "without"]).optional(),
+    discountFilter: z.enum(["with", "without"]).optional(),
   })).query(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
