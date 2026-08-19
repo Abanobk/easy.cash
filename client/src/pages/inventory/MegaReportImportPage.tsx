@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import { useWarehouseOptions, useCustomerOptions, useSupplierOptions } from "@/hooks/useEntityOptions";
 import { tenantPath, useTenantSlug } from "@/lib/tenant";
 import { trpc } from "@/lib/trpc";
@@ -609,19 +610,14 @@ function DocsTable({
               <div className="text-sm font-semibold text-slate-500 mt-0.5">{r.detail}</div>
               {r.partyUnmatched && onManualMatch && (
                 <div className="mt-2 max-w-xs">
-                  <Select onValueChange={(v) => {
-                    const opt = partyOptions?.find((o) => o.value === v);
-                    if (opt) onManualMatch(r.docIndex, opt.value, opt.label.replace(/^.*—\s*/, ""));
-                  }}>
-                    <SelectTrigger className="h-9 text-sm bg-white">
-                      <SelectValue placeholder={partyPlaceholder || "اختر من الموجود..."} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {(partyOptions || []).map((o) => (
-                        <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <SearchableSelect
+                    options={partyOptions || []}
+                    onChange={(v, opt) => onManualMatch(r.docIndex, v, opt.label.replace(/^.*—\s*/, ""))}
+                    placeholder={partyPlaceholder || "اختر من الموجود..."}
+                    searchPlaceholder="اكتب أول حروف الاسم..."
+                    emptyText="مفيش نتايج"
+                    className="h-9 text-sm bg-white"
+                  />
                 </div>
               )}
             </div>
