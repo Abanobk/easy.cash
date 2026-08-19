@@ -98,6 +98,16 @@ function cell(row: SheetRow, i: number) {
   return String(row[i] ?? "").trim();
 }
 
+/** Mega Cash يصدّر الأرقام بفاصلة آلاف (575,000.0000) — لازم نشيلها قبل أي استخدام رقمي */
+function stripThousands(value: string): string {
+  return value.replace(/,/g, "");
+}
+
+/** خلية رقمية (كمية/سعر/تكلفة/إجمالي) — بترجع القيمة من غير فاصلة الآلاف */
+function numCell(row: SheetRow, i: number) {
+  return stripThousands(cell(row, i));
+}
+
 function isNumeric(value: string) {
   if (!value) return false;
   return /^-?\d+(\.\d+)?$/.test(value.replace(/,/g, ""));
@@ -183,9 +193,9 @@ export function parseItemCostsReport(rows: SheetRow[]): MegaItemCostRow[] {
     if (!name) continue;
     out.push({
       warehouse: iWh >= 0 ? cell(r, iWh) : "",
-      totalCost: iTotal >= 0 ? cell(r, iTotal) : "",
-      unitCost: iAvg >= 0 ? cell(r, iAvg) : "",
-      quantity: iQty >= 0 ? cell(r, iQty) : "",
+      totalCost: iTotal >= 0 ? numCell(r, iTotal) : "",
+      unitCost: iAvg >= 0 ? numCell(r, iAvg) : "",
+      quantity: iQty >= 0 ? numCell(r, iQty) : "",
       name,
       category: iCat >= 0 ? cell(r, iCat) : "",
       unit: iUnit >= 0 ? cell(r, iUnit) : "",
@@ -207,14 +217,15 @@ export function parseSalesReport(rows: SheetRow[]): MegaSalesInvoice[] {
       const serialIdx = indexOfLabel(r, "مسلسل");
       const vals = r.slice(serialIdx >= 0 ? serialIdx + 1 : 10);
       const g = (j: number) => String(vals[j] ?? "").trim();
+      const gNum = (j: number) => stripThousands(g(j));
       const doc: MegaSalesInvoice = {
-        due: g(0),
-        expenses: g(1),
-        net: g(2),
-        additions: g(3),
-        tax: g(4),
-        discount: g(5),
-        total: g(6),
+        due: gNum(0),
+        expenses: gNum(1),
+        net: gNum(2),
+        additions: gNum(3),
+        tax: gNum(4),
+        discount: gNum(5),
+        total: gNum(6),
         customer: g(7),
         date: excelDateToIso(g(8)),
         serial: g(9),
@@ -231,13 +242,13 @@ export function parseSalesReport(rows: SheetRow[]): MegaSalesInvoice[] {
         if (isNumeric(rr[0]) && rr.length >= 8 && cell(rr, 7)) {
           const { name, barcode } = parseMegaItemCell(cell(rr, 7));
           doc.lines.push({
-            net: cell(rr, 0),
-            tax: cell(rr, 1),
-            discount: cell(rr, 2),
-            total: cell(rr, 3),
+            net: numCell(rr, 0),
+            tax: numCell(rr, 1),
+            discount: numCell(rr, 2),
+            total: numCell(rr, 3),
             unit: cell(rr, 4),
-            qty: cell(rr, 5),
-            price: cell(rr, 6),
+            qty: numCell(rr, 5),
+            price: numCell(rr, 6),
             name,
             barcode,
           });
@@ -264,12 +275,13 @@ export function parsePurchasesReport(rows: SheetRow[]): MegaPurchaseInvoice[] {
       const serialIdx = indexOfLabel(r, "مسلسل");
       const vals = r.slice(serialIdx >= 0 ? serialIdx + 1 : 9);
       const g = (j: number) => String(vals[j] ?? "").trim();
+      const gNum = (j: number) => stripThousands(g(j));
       const doc: MegaPurchaseInvoice = {
-        due: g(0),
-        net: g(1),
-        tax: g(2),
-        discount: g(3),
-        total: g(4),
+        due: gNum(0),
+        net: gNum(1),
+        tax: gNum(2),
+        discount: gNum(3),
+        total: gNum(4),
         supplier: g(5),
         date: excelDateToIso(g(6)),
         ref: g(7),
@@ -286,13 +298,13 @@ export function parsePurchasesReport(rows: SheetRow[]): MegaPurchaseInvoice[] {
         if (isNumeric(rr[0]) && rr.length >= 8 && cell(rr, 7)) {
           const { name, barcode } = parseMegaItemCell(cell(rr, 7));
           doc.lines.push({
-            net: cell(rr, 0),
-            tax: cell(rr, 1),
-            discount: cell(rr, 2),
-            total: cell(rr, 3),
+            net: numCell(rr, 0),
+            tax: numCell(rr, 1),
+            discount: numCell(rr, 2),
+            total: numCell(rr, 3),
             unit: cell(rr, 4),
-            qty: cell(rr, 5),
-            price: cell(rr, 6),
+            qty: numCell(rr, 5),
+            price: numCell(rr, 6),
             name,
             barcode,
           });
@@ -359,10 +371,10 @@ export function parseProductionReport(rows: SheetRow[]): MegaProductionOrder[] {
       const doc: MegaProductionOrder = {
         product,
         status: pairs["الحالة:"] || "",
-        rawCost: pairs["تكلفة المواد الخام:"] || "",
+        rawCost: stripThousands(pairs["تكلفة المواد الخام:"] || ""),
         barcode: pairs["الباركود :"] || pairs["الباركود:"] || "",
-        qty: pairs["الكمية:"] || "",
-        wasteCost: pairs["تكلفة التوالف:"] || "",
+        qty: stripThousands(pairs["الكمية:"] || ""),
+        wasteCost: stripThousands(pairs["تكلفة التوالف:"] || ""),
         site,
         materials: [],
         deliveries: [],
@@ -375,12 +387,12 @@ export function parseProductionReport(rows: SheetRow[]): MegaProductionOrder[] {
         if (rr[0] === "المصروفات" || rr[0] === "التسليم" || rr.includes("المنتج التام:")) break;
         if (isNumeric(rr[0]) && rr.length >= 8 && cell(rr, 7)) {
           doc.materials.push({
-            totalCost: cell(rr, 0),
-            wasteCost: cell(rr, 1),
-            rawCost: cell(rr, 2),
+            totalCost: numCell(rr, 0),
+            wasteCost: numCell(rr, 1),
+            rawCost: numCell(rr, 2),
             unit: cell(rr, 3),
-            wasteQty: cell(rr, 4),
-            qty: cell(rr, 5),
+            wasteQty: numCell(rr, 4),
+            qty: numCell(rr, 5),
             barcode: cell(rr, 6),
             name: cell(rr, 7),
           });
@@ -408,11 +420,11 @@ export function parseProductionReport(rows: SheetRow[]): MegaProductionOrder[] {
           if (rr.length >= 8 && (cell(rr, 6).includes("مخزن") || cell(rr, 6).includes("مصنع") || isNumeric(cell(rr, 7)))) {
             doc.deliveries.push({
               note: cell(rr, 0),
-              cost: cell(rr, 1),
-              remain: cell(rr, 2),
-              receivedQty: cell(rr, 3),
+              cost: numCell(rr, 1),
+              remain: numCell(rr, 2),
+              receivedQty: numCell(rr, 3),
               unit: cell(rr, 4),
-              originalQty: cell(rr, 5),
+              originalQty: numCell(rr, 5),
               warehouse: cell(rr, 6),
               date: excelDateToIso(cell(rr, 7)),
             });
