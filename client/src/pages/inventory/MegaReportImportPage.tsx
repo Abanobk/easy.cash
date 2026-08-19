@@ -169,9 +169,65 @@ export default function MegaReportImportPage() {
     return [];
   }, [preview]);
 
-  const refreshPreview = async () => {
-    if (!fileName) return;
-    toast.message("أعد رفع الملف بعد إضافة الناقص لتحديث المطابقة");
+  /** يطبّق الأصناف/الأطراف اللي اتعملت دلوقتي على الـ preview الحالي فورًا — من غير ما يحتاج المستخدم يرفع الملف تاني */
+  const applyCreatedItems = (created: Array<{ clientKey: string; id: number; name: string }>) => {
+    if (!created.length) return;
+    const createdMap = new Map(created.map((c) => [c.clientKey, c]));
+    setPreview((prev: any) => {
+      if (!prev) return prev;
+      if (prev.kind === "item_costs") {
+        const itemCosts = (prev.itemCosts || []).map((r: any) => {
+          const c = createdMap.get(`cost-${r.index}`);
+          if (!c) return r;
+          return { ...r, itemId: c.id, itemStatus: "matched" };
+        });
+        return { ...prev, itemCosts };
+      }
+      if (prev.kind === "sales" || prev.kind === "purchases") {
+        const key = prev.kind;
+        const idField = key === "sales" ? "customerId" : "supplierId";
+        const docs = (prev[key] || []).map((d: any) => {
+          const lines = (d.lines || []).map((l: any) => {
+            const c = createdMap.get(`${d.index}-${l.index}`);
+            if (!c) return l;
+            return { ...l, itemId: c.id, itemName: c.name, status: "matched" };
+          });
+          const lineMatched = lines.filter((l: any) => l.status === "matched").length;
+          return {
+            ...d,
+            lines,
+            lineMatched,
+            lineUnmatched: lines.length - lineMatched,
+            ready: !!d[idField] && lines.length > 0 && lines.every((l: any) => l.status === "matched"),
+          };
+        });
+        return { ...prev, [key]: docs };
+      }
+      return prev;
+    });
+  };
+
+  const applyCreatedParties = (created: Array<{ clientKey: string; id: number; name: string }>) => {
+    if (!created.length || !preview) return;
+    const createdMap = new Map(created.map((c) => [c.clientKey, c]));
+    setPreview((prev: any) => {
+      if (!prev) return prev;
+      const key = prev.kind === "sales" ? "sales" : "purchases";
+      const idField = key === "sales" ? "customerId" : "supplierId";
+      const nameField = key === "sales" ? "customer" : "supplier";
+      const docs = (prev[key] || []).map((d: any) => {
+        const c = createdMap.get(String(d.index));
+        if (!c) return d;
+        return {
+          ...d,
+          [idField]: c.id,
+          [nameField]: c.name,
+          partyStatus: "matched",
+          ready: !!c.id && (d.lines?.length ?? 0) > 0 && (d.lines || []).every((l: any) => l.status === "matched"),
+        };
+      });
+      return { ...prev, [key]: docs };
+    });
   };
 
   const addMissingItems = async () => {
@@ -179,14 +235,10 @@ export default function MegaReportImportPage() {
     setBusy(true);
     try {
       const res = await createItemsMut.mutateAsync({ rows: missingItemRows });
-      toast.success(`تمت إضافة ${res.created.length} صنف`);
+      toast.success(`تمت إضافة ${res.created.length} صنف وتم ربطها تلقائيًا`);
       if (res.errors?.length) toast.message(res.errors.slice(0, 2).join(" · "));
       await utils.items.list.invalidate();
-      if (preview?.kind === "item_costs" && res.created.length) {
-        toast.message("ارفع نفس الملف تاني ثم اضغط اعتماد لتطبيق الكميات (أو من استيراد ذكي لمخزون أول المدة)");
-      } else {
-        toast.message("ارفع نفس الملف مرة تانية عشان تتعمل مطابقة جديدة");
-      }
+      applyCreatedItems(res.created);
     } catch (e: any) {
       toast.error(e?.message || "فشل إضافة الأصناف");
     } finally {
@@ -198,12 +250,13 @@ export default function MegaReportImportPage() {
     if (!missingParties.length || !preview) return;
     setBusy(true);
     try {
-      const res = await createPartiesMut.mutateAsync({
-        kind: preview.kind === "purchases" ? "supplier" : "customer",
-        names: missingParties,
-      });
-      toast.success(`تمت إضافة ${res.created.length} ${preview.kind === "purchases" ? "مورد" : "عميل"}`);
-      toast.message("ارفع نفس الملف مرة تانية عشان تتعمل مطابقة جديدة");
+      const kind = preview.kind === "purchases" ? "supplier" : "customer";
+      const res = await createPartiesMut.mutateAsync({ kind, names: missingParties });
+      toast.success(`تمت إضافة ${res.created.length} ${kind === "supplier" ? "مورد" : "عميل"} وتم ربطهم تلقائيًا`);
+      if (res.errors?.length) toast.message(res.errors.slice(0, 2).join(" · "));
+      if (kind === "customer") await utils.customers.list.invalidate();
+      else await utils.suppliers.list.invalidate();
+      applyCreatedParties(res.created);
     } catch (e: any) {
       toast.error(e?.message || "فشل إضافة الأطراف");
     } finally {
@@ -566,7 +619,7 @@ export default function MegaReportImportPage() {
                   {missingItemRows.length ? `${missingItemRows.length} صنف` : ""}
                   {missingItemRows.length && missingParties.length ? " · " : ""}
                   {missingParties.length ? `${missingParties.length} ${kind === "purchases" ? "مورد" : "عميل"}` : ""}
-                  {" "}— ضيفهم ثم ارفع الملف تاني للمطابقة.
+                  {" "}— هيتربطوا فورًا بعد الإضافة، من غير ما تحتاج ترفع الملف تاني.
                 </p>
               </div>
               <div className="flex flex-wrap gap-2">
@@ -580,7 +633,6 @@ export default function MegaReportImportPage() {
                     إضافة {kind === "purchases" ? "الموردين" : "العملاء"} الناقصين
                   </Button>
                 )}
-                <Button variant="outline" className="font-bold h-11" onClick={() => void refreshPreview()}>تحديث المطابقة</Button>
               </div>
             </div>
           )}
