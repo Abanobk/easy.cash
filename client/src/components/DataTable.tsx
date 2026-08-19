@@ -41,10 +41,12 @@ interface DataTableProps<T> {
   headerExtra?: ReactNode;
 }
 
+const INFO_BADGE = "bg-[var(--paper-100)] text-[var(--ink-700)] border-[var(--line)]";
+
 export function statusBadge(status: string) {
   const map: Record<string, { label: string; className: string }> = {
     draft: { label: "مسودة", className: "bg-slate-200 text-slate-800 border-slate-300" },
-    confirmed: { label: "مؤكد", className: "bg-blue-200 text-blue-900 border-blue-300" },
+    confirmed: { label: "مؤكد", className: INFO_BADGE },
     paid: { label: "مدفوع", className: "bg-emerald-200 text-emerald-900 border-emerald-300" },
     partial: { label: "جزئي", className: "bg-amber-200 text-amber-950 border-amber-300" },
     cancelled: { label: "ملغي", className: "bg-red-200 text-red-900 border-red-300" },
@@ -53,18 +55,18 @@ export function statusBadge(status: string) {
     active: { label: "نشط", className: "bg-emerald-200 text-emerald-900 border-emerald-300" },
     inactive: { label: "غير نشط", className: "bg-slate-200 text-slate-700 border-slate-300" },
     terminated: { label: "منتهي", className: "bg-red-200 text-red-900 border-red-300" },
-    approved: { label: "معتمد", className: "bg-blue-200 text-blue-900 border-blue-300" },
+    approved: { label: "معتمد", className: INFO_BADGE },
     received: { label: "مستلم", className: "bg-emerald-200 text-emerald-900 border-emerald-300" },
     delivered: { label: "مسلّم", className: "bg-emerald-200 text-emerald-900 border-emerald-300" },
     present: { label: "حاضر", className: "bg-emerald-200 text-emerald-900 border-emerald-300" },
     absent: { label: "غائب", className: "bg-red-200 text-red-900 border-red-300" },
     late: { label: "متأخر", className: "bg-amber-200 text-amber-950 border-amber-300" },
-    leave: { label: "إجازة", className: "bg-blue-200 text-blue-900 border-blue-300" },
+    leave: { label: "إجازة", className: INFO_BADGE },
     holiday: { label: "عطلة", className: "bg-violet-200 text-violet-900 border-violet-300" },
-    deposited: { label: "مودع", className: "bg-blue-200 text-blue-900 border-blue-300" },
+    deposited: { label: "مودع", className: INFO_BADGE },
     cleared: { label: "مقاص", className: "bg-emerald-200 text-emerald-900 border-emerald-300" },
     bounced: { label: "مرتد", className: "bg-red-200 text-red-900 border-red-300" },
-    given: { label: "ممنوح", className: "bg-blue-200 text-blue-900 border-blue-300" },
+    given: { label: "ممنوح", className: INFO_BADGE },
     received_loan: { label: "مستلم", className: "bg-violet-200 text-violet-900 border-violet-300" },
     overdue: { label: "متأخر", className: "bg-red-200 text-red-900 border-red-300" },
   };
@@ -118,7 +120,7 @@ export function DataTable<T extends { id?: number | string }>({
 
   return (
     <Card className="erp-data-card border-0">
-      <CardHeader className="pb-4 border-b-2 border-slate-200 bg-gradient-to-l from-slate-50 to-white">
+      <CardHeader className="pb-4 border-b-2 border-slate-200 bg-gradient-to-l from-[var(--paper-50)] to-white">
         <div className="flex flex-col sm:flex-row sm:items-center gap-3">
           <div className="flex-1">
             <h2 className="text-xl font-extrabold text-slate-900 tracking-tight">{title}</h2>
@@ -138,7 +140,7 @@ export function DataTable<T extends { id?: number | string }>({
               </div>
             )}
             {canAdd && (
-              <Button onClick={onAdd} className="bg-blue-600 hover:bg-blue-700 text-white h-11 gap-2 text-[15px] font-extrabold px-5 shadow-md shadow-blue-600/30">
+              <Button onClick={onAdd} className="eca-btn-primary border-0 h-11 gap-2 text-[15px] font-extrabold px-5">
                 <Plus size={18} strokeWidth={2.5} />
                 {addLabel}
               </Button>
@@ -150,7 +152,7 @@ export function DataTable<T extends { id?: number | string }>({
         <div className="overflow-x-auto">
           <table className="erp-table w-full">
             <thead>
-              <tr className="border-b border-blue-200">
+              <tr className="border-b border-[var(--line)]">
                 {columns.map(col => (
                   <th key={col.key} className={`px-4 py-4 text-right ${col.className || ""}`}>
                     {col.label}
@@ -163,7 +165,7 @@ export function DataTable<T extends { id?: number | string }>({
               {isLoading ? (
                 <tr>
                   <td colSpan={columns.length + (hasActions ? 1 : 0)} className="py-16 text-center">
-                    <Loader2 size={28} className="animate-spin text-blue-600 mx-auto" />
+                    <Loader2 size={28} className="animate-spin text-[var(--brass-600)] mx-auto" />
                   </td>
                 </tr>
               ) : !data || data.length === 0 ? (
