@@ -5,6 +5,7 @@
  * - المبيعات / المشتريات (invoice blocks with header+lines)
  * - أوامر الإنتاج (order header + materials + delivery)
  */
+import * as XLSX from "xlsx";
 
 export type MegaReportKind = "item_costs" | "sales" | "purchases" | "production" | "unknown";
 
@@ -439,9 +440,6 @@ export function matrixToSheetRows(matrix: unknown[][]): SheetRow[] {
 }
 
 export function parseMegaReportBuffer(buf: Buffer | ArrayBuffer) {
-  // lazy require to keep parse unit-testable without xlsx in some contexts
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const XLSX = require("xlsx") as typeof import("xlsx");
   const wb = XLSX.read(buf, { type: "buffer", cellDates: false, raw: false });
   const sheet = wb.Sheets[wb.SheetNames[0]];
   const matrix = XLSX.utils.sheet_to_json<(string | number | null)[]>(sheet, {
