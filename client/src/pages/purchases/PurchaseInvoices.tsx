@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
-import { Plus, Trash2, Eye, ArrowRight, Banknote } from "lucide-react";
+import { Plus, Trash2, Eye, ArrowRight, Banknote, Copy } from "lucide-react";
 import { InvoicePrintButton } from "@/components/InvoicePrintButton";
 import PermissionGate from "@/components/PermissionGate";
 import { useLocation } from "wouter";
@@ -47,7 +47,9 @@ export default function PurchaseInvoices() {
   const [form, setForm] = useState(emptyForm);
   const [invoiceItems, setInvoiceItems] = useState<InvoiceItem[]>([]);
   const [paymentRow, setPaymentRow] = useState<any | null>(null);
+  const [duplicating, setDuplicating] = useState(false);
 
+  const utils = trpc.useUtils();
   const { data, isLoading, refetch } = trpc.purchases.invoices.list.useQuery({ page, limit: 20 });
   const { data: suppliers } = trpc.suppliers.list.useQuery({ page: 1, limit: 200 });
   const { data: allItems } = trpc.items.all.useQuery();
@@ -69,6 +71,43 @@ export default function PurchaseInvoices() {
   });
 
   const resetForm = () => { setForm(emptyForm); setInvoiceItems([]); };
+
+  /** نسخ فاتورة موجودة كنقطة بداية لفاتورة جديدة — زي "نسخ" في ميجا كاش */
+  const handleDuplicate = async (invoiceId: number) => {
+    setDuplicating(true);
+    try {
+      const inv = await utils.purchases.invoices.byId.fetch(invoiceId);
+      setForm({
+        supplierId: inv.supplierId,
+        date: new Date().toISOString().split("T")[0],
+        dueDate: "",
+        warehouseId: inv.warehouseId ?? undefined,
+        branchId: inv.branchId ?? undefined,
+        costCenterId: inv.costCenterId ?? undefined,
+        paymentType: (inv.paymentType as "cash" | "credit") || "cash",
+        currencyCode: inv.currencyCode || "EGP",
+        exchangeRate: inv.exchangeRate?.toString() || "1",
+        notes: `نسخة من الفاتورة ${inv.number}`,
+      });
+      setInvoiceItems(inv.items.map((i) => ({
+        itemId: i.itemId,
+        quantity: i.quantity?.toString() || "1",
+        price: i.price?.toString() || "0",
+        discount: i.discount?.toString() || "0",
+        tax: i.tax?.toString() || "0",
+        total: i.total?.toString() || "0",
+        batchNumber: "",
+        expiryDate: "",
+        serialNumbers: "",
+      })));
+      setShowForm(true);
+      toast.success(`تم نسخ الفاتورة ${inv.number} — راجع البيانات واحفظ`);
+    } catch (e: any) {
+      toast.error(e?.message || "فشل نسخ الفاتورة");
+    } finally {
+      setDuplicating(false);
+    }
+  };
 
   const addItem = () => setInvoiceItems(prev => [...prev, { itemId: 0, quantity: "1", price: "0", discount: "0", tax: "0", total: "0", batchNumber: "", expiryDate: "", serialNumbers: "" }]);
 
@@ -338,6 +377,18 @@ export default function PurchaseInvoices() {
               </PermissionGate>
             )}
             <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-blue-600 hover:bg-blue-50" onClick={() => navigate(`/purchases/invoices/${row.id}`)}><Eye size={13} /></Button>
+            <PermissionGate module="purchases" action="create">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 w-7 p-0 text-slate-600 hover:bg-slate-100"
+                title="نسخ لفاتورة جديدة"
+                disabled={duplicating}
+                onClick={() => void handleDuplicate(row.id)}
+              >
+                <Copy size={13} />
+              </Button>
+            </PermissionGate>
             <InvoicePrintButton
               invoiceId={row.id}
               type="purchase"

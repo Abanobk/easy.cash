@@ -1144,7 +1144,7 @@ const purchasesRouter = router({
         .leftJoin(suppliers, eq(purchaseInvoices.supplierId, suppliers.id))
         .leftJoin(branches, eq(purchaseInvoices.branchId, branches.id))
         .where(whereClause)
-        .orderBy(desc(purchaseInvoices.createdAt))
+        .orderBy(desc(purchaseInvoices.date), desc(purchaseInvoices.id))
         .limit(input.limit).offset(offset);
       const [total] = await db.select({ count: count() }).from(purchaseInvoices)
         .leftJoin(suppliers, eq(purchaseInvoices.supplierId, suppliers.id))
@@ -1604,7 +1604,7 @@ const salesRouter = router({
         .leftJoin(customers, eq(salesInvoices.customerId, customers.id))
         .leftJoin(branches, eq(salesInvoices.branchId, branches.id))
         .where(whereClause)
-        .orderBy(desc(salesInvoices.createdAt))
+        .orderBy(desc(salesInvoices.date), desc(salesInvoices.id))
         .limit(input.limit).offset(offset);
       const [total] = await db.select({ count: count() }).from(salesInvoices)
         .leftJoin(customers, eq(salesInvoices.customerId, customers.id))
