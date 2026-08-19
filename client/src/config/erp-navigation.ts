@@ -894,6 +894,462 @@ export const ERP_NAVIGATION: NavItemConfig[] = [
     "icon": "bar-chart-3",
     "children": [
       {
+        "label": "تقارير الحسابات",
+        "icon": "book-open",
+        "children": [
+                  {
+                    "label": "كشف حساب",
+                    "icon": "file-text",
+                    "path": "/reports/accounting/accountingreports-accountstatment",
+                    "status": "done",
+                    "featureKey": "accountingreports-accountstatment"
+                  },
+                  {
+                    "label": "كشف حساب خزائن",
+                    "icon": "file-text",
+                    "path": "/reports/accounting/accountingreports-accountstatment-cash", "status": "done",
+                    "featureKey": "accountingreports-accountstatment-cash"
+                  },
+                  {
+                    "label": "كشف حساب مركز تكلفة",
+                    "icon": "file-text",
+                    "path": "/reports/accounting/accountingreports-costcenterstatment", "status": "done",
+                    "featureKey": "accountingreports-costcenterstatment"
+                  },
+                  {
+                    "label": "ملخص الاعمال",
+                    "icon": "file-text",
+                    "path": "/reports/analytics",
+                    "status": "done",
+                    "featureKey": "accountingreports-dashboard"
+                  },
+                  {
+                    "label": "ملخص حركة الفروع",
+                    "icon": "file-text",
+                    "path": "/reports/accounting/accountingreports-branchessummary", "status": "done",
+                    "featureKey": "accountingreports-branchessummary"
+                  },
+                  {
+                    "label": "المصروفات شهريا",
+                    "icon": "file-text",
+                    "path": "/reports/accounting/accountingreports-monthlyexpenses", "status": "done",
+                    "featureKey": "accountingreports-monthlyexpenses"
+                  }
+        ]
+      },
+      {
+        "label": "تقارير المبيعات",
+        "icon": "trending-up",
+        "children": [
+                  {
+                    "label": "كشف حساب عميل",
+                    "icon": "file-text",
+                    "path": "/contacts/statement?type=customer",
+                    "status": "done",
+                    "featureKey": "accountingreports-customerstatment"
+                  },
+                  {
+                    "label": "كشف حساب عميل بالاصناف",
+                    "icon": "file-text",
+                    "path": "/reports/accounting/accountingreports-customeraccountstatementbyitems", "status": "done",
+                    "featureKey": "accountingreports-customeraccountstatementbyitems"
+                  },
+                  {
+                    "label": "المبيعات بالاصناف",
+                    "icon": "file-text",
+                    "path": "/reports/accounting/accountingreports-grosscustomersalesbyitems", "status": "done",
+                    "featureKey": "accountingreports-grosscustomersalesbyitems"
+                  },
+                  {
+                    "label": "البيع",
+                    "icon": "file-text",
+                    "path": "/reports/accounting/accountingreports-sales",
+                    "status": "done",
+                    "featureKey": "accountingreports-sales"
+                  },
+                  {
+                    "label": "قائمة العملاء",
+                    "icon": "file-text",
+                    "path": "/customers",
+                    "status": "done",
+                    "featureKey": "accountingreports-customerslist"
+                  },
+                  {
+                    "label": "اعمار الديون",
+                    "icon": "file-text",
+                    "path": "/reports/accounting/accountingreports-debitsages", "status": "done",
+                    "featureKey": "accountingreports-debitsages"
+                  },
+                  {
+                    "label": "اعمار الديون سنوي",
+                    "icon": "file-text",
+                    "path": "/reports/accounting/accountingreports-debitsagesbyyear", "status": "done",
+                    "featureKey": "accountingreports-debitsagesbyyear"
+                  },
+                  {
+                    "label": "اعمار الديون نصف سنوي",
+                    "icon": "file-text",
+                    "path": "/reports/accounting/accountingreports-debitsagesbyhalfyear", "status": "done",
+                    "featureKey": "accountingreports-debitsagesbyhalfyear"
+                  },
+                  {
+                    "label": "فواتير بيع مستحقة",
+                    "icon": "file-text",
+                    "path": "/reports/accounting/accountingreports-matureinvoices", "status": "done",
+                    "featureKey": "accountingreports-matureinvoices"
+                  },
+                  {
+                    "label": "طلبات البيع",
+                    "icon": "file-text",
+                    "path": "/reports/accounting/accountingreports-salesorders", "status": "done",
+                    "featureKey": "accountingreports-salesorders"
+                  },
+                  {
+                    "label": "ملخص حركة العملاء",
+                    "icon": "file-text",
+                    "path": "/reports/accounting/accountingreports-customerssummary", "status": "done",
+                    "featureKey": "accountingreports-customerssummary"
+                  },
+                  {
+                    "label": "ملخص حركة المناطق",
+                    "icon": "file-text",
+                    "path": "/reports/accounting/accountingreports-areassummary", "status": "done",
+                    "featureKey": "accountingreports-areassummary"
+                  },
+                  {
+                    "label": "مبيعات الاصناف شهريا بالكميات",
+                    "icon": "file-text",
+                    "path": "/reports/accounting/accountingreports-monthlysalesbyitems", "status": "done",
+                    "featureKey": "accountingreports-monthlysalesbyitems"
+                  },
+                  {
+                    "label": "مبيعات الاصناف شهريا",
+                    "icon": "file-text",
+                    "path": "/reports/accounting/accountingreports-monthlysalesbyitemstotals", "status": "done",
+                    "featureKey": "accountingreports-monthlysalesbyitemstotals"
+                  },
+                  {
+                    "label": "اخر سعر بيع / شراء",
+                    "icon": "file-text",
+                    "path": "/reports/accounting/accountingreports-lastprices", "status": "done",
+                    "featureKey": "accountingreports-lastprices"
+                  },
+                  {
+                    "label": "المبيعات بالعملاء",
+                    "icon": "file-text",
+                    "path": "/reports/accounting/accountingreports-customerssales", "status": "done",
+                    "featureKey": "accountingreports-customerssales"
+                  }
+        ]
+      },
+      {
+        "label": "تقارير الارباح",
+        "icon": "dollar-sign",
+        "children": [
+                  {
+                    "label": "ارباح الاصناف",
+                    "icon": "file-text",
+                    "path": "/reports/accounting/accountingreports-itemsprofits", "status": "done",
+                    "featureKey": "accountingreports-itemsprofits"
+                  },
+                  {
+                    "label": "ارباح العملاء",
+                    "icon": "file-text",
+                    "path": "/reports/accounting/accountingreports-customersprofits", "status": "done",
+                    "featureKey": "accountingreports-customersprofits"
+                  },
+                  {
+                    "label": "ارباح الفواتير",
+                    "icon": "file-text",
+                    "path": "/reports/accounting/accountingreports-invoiceprofits", "status": "done",
+                    "featureKey": "accountingreports-invoiceprofits"
+                  }
+        ]
+      },
+      {
+        "label": "تقارير المندوبين",
+        "icon": "user-check",
+        "children": [
+                  {
+                    "label": "مبيعات المندوبين بالاصناف",
+                    "icon": "file-text",
+                    "path": "/reports/accounting/accountingreports-grossrepsalesbyitems", "status": "done",
+                    "featureKey": "accountingreports-grossrepsalesbyitems"
+                  },
+                  {
+                    "label": "تحصيلات المندوبين",
+                    "icon": "file-text",
+                    "path": "/reports/accounting/accountingreports-repscollectings", "status": "done",
+                    "featureKey": "accountingreports-repscollectings"
+                  },
+                  {
+                    "label": "يومية مندوب",
+                    "icon": "file-text",
+                    "path": "/reports/accounting/accountingreports-repdaily", "status": "done",
+                    "featureKey": "accountingreports-repdaily"
+                  },
+                  {
+                    "label": "مديونية مندوب",
+                    "icon": "file-text",
+                    "path": "/reports/accounting/accountingreports-repdebit", "status": "done",
+                    "featureKey": "accountingreports-repdebit"
+                  }
+        ]
+      },
+      {
+        "label": "تقارير المشتريات",
+        "icon": "shopping-cart",
+        "children": [
+                  {
+                    "label": "كشف حساب مورد",
+                    "icon": "file-text",
+                    "path": "/contacts/statement?type=vendor",
+                    "status": "done",
+                    "featureKey": "accountingreports-vendorstatment"
+                  },
+                  {
+                    "label": "كشف حساب مورد بالاصناف",
+                    "icon": "file-text",
+                    "path": "/reports/accounting/accountingreports-vendoraccountstatementbyitems", "status": "done",
+                    "featureKey": "accountingreports-vendoraccountstatementbyitems"
+                  },
+                  {
+                    "label": "الشراء",
+                    "icon": "file-text",
+                    "path": "/reports/accounting/accountingreports-purchases",
+                    "status": "done",
+                    "featureKey": "accountingreports-purchases"
+                  },
+                  {
+                    "label": "قائمة الموردين",
+                    "icon": "file-text",
+                    "path": "/suppliers",
+                    "status": "done",
+                    "featureKey": "accountingreports-vendorslist"
+                  },
+                  {
+                    "label": "فواتير شراء مستحقة",
+                    "icon": "file-text",
+                    "path": "/reports/accounting/accountingreports-maturereceipts", "status": "done",
+                    "featureKey": "accountingreports-maturereceipts"
+                  },
+                  {
+                    "label": "المشتريات بالاصناف",
+                    "icon": "file-text",
+                    "path": "/reports/accounting/accountingreports-grossvendorpurchasesbyitems", "status": "done",
+                    "featureKey": "accountingreports-grossvendorpurchasesbyitems"
+                  },
+                  {
+                    "label": "ملخص حركة الموردين",
+                    "icon": "file-text",
+                    "path": "/reports/accounting/accountingreports-vendorssummary", "status": "done",
+                    "featureKey": "accountingreports-vendorssummary"
+                  },
+                  {
+                    "label": "المشتريات بالموردين",
+                    "icon": "file-text",
+                    "path": "/reports/accounting/accountingreports-vendorspurchases", "status": "done",
+                    "featureKey": "accountingreports-vendorspurchases"
+                  },
+                  {
+                    "label": "طلبات الشراء",
+                    "icon": "file-text",
+                    "path": "/reports/accounting/accountingreports-purchaseorders", "status": "done",
+                    "featureKey": "accountingreports-purchaseorders"
+                  }
+        ]
+      },
+      {
+        "label": "تقارير التحصيل والسداد",
+        "icon": "credit-card",
+        "children": [
+                  {
+                    "label": "الشيكات الصادرة",
+                    "icon": "file-text",
+                    "path": "/reports/accounting/accountingreports-checks-checkout", "status": "done",
+                    "featureKey": "accountingreports-checks-checkout"
+                  },
+                  {
+                    "label": "الشيكات الواردة",
+                    "icon": "file-text",
+                    "path": "/reports/accounting/accountingreports-checks-checkin", "status": "done",
+                    "featureKey": "accountingreports-checks-checkin"
+                  },
+                  {
+                    "label": "اقساط العملاء",
+                    "icon": "file-text",
+                    "path": "/reports/accounting/accountingreports-customersinstallments", "status": "done",
+                    "featureKey": "accountingreports-customersinstallments"
+                  },
+                  {
+                    "label": "معاملات نقدية وبنكية",
+                    "icon": "file-text",
+                    "path": "/reports/accounting/accountingreports-payments", "status": "done",
+                    "featureKey": "accountingreports-payments"
+                  },
+                  {
+                    "label": "اعمار ديون الموردين",
+                    "icon": "file-text",
+                    "path": "/reports/accounting/accountingreports-creditsages", "status": "done",
+                    "featureKey": "accountingreports-creditsages"
+                  },
+                  {
+                    "label": "اعمار ديون الموردين سنوي",
+                    "icon": "file-text",
+                    "path": "/reports/accounting/accountingreports-creditsagesbyyear", "status": "done",
+                    "featureKey": "accountingreports-creditsagesbyyear"
+                  },
+                  {
+                    "label": "اعمار ديون الموردين نصف سنوي",
+                    "icon": "file-text",
+                    "path": "/reports/accounting/accountingreports-creditsagesbyhalfyear", "status": "done",
+                    "featureKey": "accountingreports-creditsagesbyhalfyear"
+                  }
+        ]
+      },
+      {
+        "label": "تقارير الانتاج",
+        "icon": "factory",
+        "children": [
+                  {
+                    "label": "اوامر الانتاج",
+                    "icon": "file-text",
+                    "path": "/reports/accounting/accountingreports-productionorders", "status": "done",
+                    "featureKey": "accountingreports-productionorders"
+                  },
+                  {
+                    "label": "خامات وتوالف الانتاج",
+                    "icon": "file-text",
+                    "path": "/reports/accounting/accountingreports-productionmaterials", "status": "done",
+                    "featureKey": "accountingreports-productionmaterials"
+                  }
+        ]
+      },
+      {
+        "label": "تقارير شئون الموظفين",
+        "icon": "users",
+        "children": [
+          {
+            "label": "حضور وانصراف الموظفين",
+            "icon": "file-text",
+            "path": "/reports/hr/hrreports-attendance",
+            "status": "done",
+            "featureKey": "hrreports-attendance"
+          },
+          {
+            "label": "اجازات الموظفين",
+            "icon": "file-text",
+            "path": "/reports/hr/hrreports-employeesvactions",
+            "status": "done",
+            "featureKey": "hrreports-employeesvactions"
+          },
+          {
+            "label": "رواتب الموظفين",
+            "icon": "file-text",
+            "path": "/reports/hr/hrreports-employeespayroll",
+            "status": "done",
+            "featureKey": "hrreports-employeespayroll"
+          },
+          {
+            "label": "قائمة رواتب الموظفين",
+            "icon": "file-text",
+            "path": "/reports/hr/hrreports-employeespayroll-list",
+            "status": "done",
+            "featureKey": "hrreports-employeespayroll-list"
+          },
+          {
+            "label": "موظفين تحت الطلب",
+            "icon": "file-text",
+            "path": "/reports/hr/hrreports-employeesunderrequest",
+            "status": "done",
+            "featureKey": "hrreports-employeesunderrequest"
+          },
+          {
+            "label": "قائمة الموظفين",
+            "icon": "file-text",
+            "path": "/hr/employees",
+            "status": "done",
+            "featureKey": "hrreports-employeeslist"
+          },
+          {
+            "label": "السلف",
+            "icon": "file-text",
+            "path": "/reports/hr/hrreports-loans-list",
+            "status": "done",
+            "featureKey": "hrreports-loans-list"
+          }
+        ]
+      },
+      {
+        "label": "التقارير الختامية",
+        "icon": "pie-chart",
+        "children": [
+          {
+            "label": "دفتر اليومية",
+            "icon": "file-text",
+            "path": "/reports/final/accounting-generaljournallist",
+            "status": "done",
+            "featureKey": "accounting-generaljournallist"
+          },
+          {
+            "label": "الاستاذ العام",
+            "icon": "file-text",
+            "path": "/reports/final/finalreports-generalledger",
+            "status": "done",
+            "featureKey": "finalreports-generalledger"
+          },
+          {
+            "label": "الاستاذ المساعد",
+            "icon": "file-text",
+            "path": "/reports/final/finalreports-subledger",
+            "status": "done",
+            "featureKey": "finalreports-subledger"
+          },
+          {
+            "label": "ميزان المراجعة",
+            "icon": "file-text",
+            "path": "/reports/final/finalreports-trialbalance",
+            "status": "done",
+            "featureKey": "finalreports-trialbalance"
+          },
+          {
+            "label": "تكلفة المبيعات",
+            "icon": "file-text",
+            "path": "/reports/final/finalreports-salescost",
+            "status": "done",
+            "featureKey": "finalreports-salescost"
+          },
+          {
+            "label": "قائمة الدخل",
+            "icon": "file-text",
+            "path": "/reports/final/finalreports-incomestatment",
+            "status": "done",
+            "featureKey": "finalreports-incomestatment"
+          },
+          {
+            "label": "الميزانية العمومية",
+            "icon": "file-text",
+            "path": "/reports/final/finalreports-balancesheet",
+            "status": "done",
+            "featureKey": "finalreports-balancesheet"
+          },
+          {
+            "label": "قائمة المركز المالى",
+            "icon": "file-text",
+            "path": "/reports/final/finalreports-financialstatment",
+            "status": "done",
+            "featureKey": "finalreports-financialstatment"
+          },
+          {
+            "label": "التدفقات النقدية",
+            "icon": "file-text",
+            "path": "/reports/final/finalreports-cashflow",
+            "status": "done",
+            "featureKey": "finalreports-cashflow"
+          }
+        ]
+      },
+      {
         "label": "تقارير المخازن",
         "icon": "package",
         "children": [
@@ -970,357 +1426,6 @@ export const ERP_NAVIGATION: NavItemConfig[] = [
         ]
       },
       {
-        "label": "تقارير الحسابات",
-        "icon": "book-open",
-        "children": [
-          {
-            "label": "كشف حساب",
-            "icon": "file-text",
-            "path": "/reports/accounting/accountingreports-accountstatment",
-            "status": "done",
-            "featureKey": "accountingreports-accountstatment"
-          },
-          {
-            "label": "كشف حساب عميل",
-            "icon": "file-text",
-            "path": "/contacts/statement?type=customer",
-            "status": "done",
-            "featureKey": "accountingreports-customerstatment"
-          },
-          {
-            "label": "كشف حساب مورد",
-            "icon": "file-text",
-            "path": "/contacts/statement?type=vendor",
-            "status": "done",
-            "featureKey": "accountingreports-vendorstatment"
-          },
-          {
-            "label": "كشف حساب عميل بالاصناف",
-            "icon": "file-text",
-            "path": "/reports/accounting/accountingreports-customeraccountstatementbyitems", "status": "done",
-            "featureKey": "accountingreports-customeraccountstatementbyitems"
-          },
-          {
-            "label": "كشف حساب مورد بالاصناف",
-            "icon": "file-text",
-            "path": "/reports/accounting/accountingreports-vendoraccountstatementbyitems", "status": "done",
-            "featureKey": "accountingreports-vendoraccountstatementbyitems"
-          },
-          {
-            "label": "ارباح الاصناف",
-            "icon": "file-text",
-            "path": "/reports/accounting/accountingreports-itemsprofits", "status": "done",
-            "featureKey": "accountingreports-itemsprofits"
-          },
-          {
-            "label": "المبيعات بالاصناف",
-            "icon": "file-text",
-            "path": "/reports/accounting/accountingreports-grosscustomersalesbyitems", "status": "done",
-            "featureKey": "accountingreports-grosscustomersalesbyitems"
-          },
-          {
-            "label": "البيع",
-            "icon": "file-text",
-            "path": "/reports/accounting/accountingreports-sales",
-            "status": "done",
-            "featureKey": "accountingreports-sales"
-          },
-          {
-            "label": "الشراء",
-            "icon": "file-text",
-            "path": "/reports/accounting/accountingreports-purchases",
-            "status": "done",
-            "featureKey": "accountingreports-purchases"
-          },
-          {
-            "label": "الشيكات الصادرة",
-            "icon": "file-text",
-            "path": "/reports/accounting/accountingreports-checks-checkout", "status": "done",
-            "featureKey": "accountingreports-checks-checkout"
-          },
-          {
-            "label": "الشيكات الواردة",
-            "icon": "file-text",
-            "path": "/reports/accounting/accountingreports-checks-checkin", "status": "done",
-            "featureKey": "accountingreports-checks-checkin"
-          },
-          {
-            "label": "مبيعات المندوبين بالاصناف",
-            "icon": "file-text",
-            "path": "/reports/accounting/accountingreports-grossrepsalesbyitems", "status": "done",
-            "featureKey": "accountingreports-grossrepsalesbyitems"
-          },
-          {
-            "label": "تحصيلات المندوبين",
-            "icon": "file-text",
-            "path": "/reports/accounting/accountingreports-repscollectings", "status": "done",
-            "featureKey": "accountingreports-repscollectings"
-          },
-          {
-            "label": "قائمة العملاء",
-            "icon": "file-text",
-            "path": "/customers",
-            "status": "done",
-            "featureKey": "accountingreports-customerslist"
-          },
-          {
-            "label": "قائمة الموردين",
-            "icon": "file-text",
-            "path": "/suppliers",
-            "status": "done",
-            "featureKey": "accountingreports-vendorslist"
-          },
-          {
-            "label": "كشف حساب مركز تكلفة",
-            "icon": "file-text",
-            "path": "/reports/accounting/accountingreports-costcenterstatment", "status": "done",
-            "featureKey": "accountingreports-costcenterstatment"
-          },
-          {
-            "label": "اعمار الديون",
-            "icon": "file-text",
-            "path": "/reports/accounting/accountingreports-debitsages", "status": "done",
-            "featureKey": "accountingreports-debitsages"
-          },
-          {
-            "label": "اعمار الديون سنوي",
-            "icon": "file-text",
-            "path": "/reports/accounting/accountingreports-debitsagesbyyear", "status": "done",
-            "featureKey": "accountingreports-debitsagesbyyear"
-          },
-          {
-            "label": "اعمار الديون نصف سنوي",
-            "icon": "file-text",
-            "path": "/reports/accounting/accountingreports-debitsagesbyhalfyear", "status": "done",
-            "featureKey": "accountingreports-debitsagesbyhalfyear"
-          },
-          {
-            "label": "اعمار ديون الموردين",
-            "icon": "file-text",
-            "path": "/reports/accounting/accountingreports-creditsages", "status": "done",
-            "featureKey": "accountingreports-creditsages"
-          },
-          {
-            "label": "اعمار ديون الموردين سنوي",
-            "icon": "file-text",
-            "path": "/reports/accounting/accountingreports-creditsagesbyyear", "status": "done",
-            "featureKey": "accountingreports-creditsagesbyyear"
-          },
-          {
-            "label": "اعمار ديون الموردين نصف سنوي",
-            "icon": "file-text",
-            "path": "/reports/accounting/accountingreports-creditsagesbyhalfyear", "status": "done",
-            "featureKey": "accountingreports-creditsagesbyhalfyear"
-          },
-          {
-            "label": "اوامر الانتاج",
-            "icon": "file-text",
-            "path": "/reports/accounting/accountingreports-productionorders", "status": "done",
-            "featureKey": "accountingreports-productionorders"
-          },
-          {
-            "label": "فواتير بيع مستحقة",
-            "icon": "file-text",
-            "path": "/reports/accounting/accountingreports-matureinvoices", "status": "done",
-            "featureKey": "accountingreports-matureinvoices"
-          },
-          {
-            "label": "فواتير شراء مستحقة",
-            "icon": "file-text",
-            "path": "/reports/accounting/accountingreports-maturereceipts", "status": "done",
-            "featureKey": "accountingreports-maturereceipts"
-          },
-          {
-            "label": "ملخص الاعمال",
-            "icon": "file-text",
-            "path": "/reports/analytics",
-            "status": "done",
-            "featureKey": "accountingreports-dashboard"
-          },
-          {
-            "label": "المشتريات بالاصناف",
-            "icon": "file-text",
-            "path": "/reports/accounting/accountingreports-grossvendorpurchasesbyitems", "status": "done",
-            "featureKey": "accountingreports-grossvendorpurchasesbyitems"
-          },
-          {
-            "label": "طلبات البيع",
-            "icon": "file-text",
-            "path": "/reports/accounting/accountingreports-salesorders", "status": "done",
-            "featureKey": "accountingreports-salesorders"
-          },
-          {
-            "label": "كشف حساب خزائن",
-            "icon": "file-text",
-            "path": "/reports/accounting/accountingreports-accountstatment-cash", "status": "done",
-            "featureKey": "accountingreports-accountstatment-cash"
-          },
-          {
-            "label": "ملخص حركة المناطق",
-            "icon": "file-text",
-            "path": "/reports/accounting/accountingreports-areassummary", "status": "done",
-            "featureKey": "accountingreports-areassummary"
-          },
-          {
-            "label": "ملخص حركة العملاء",
-            "icon": "file-text",
-            "path": "/reports/accounting/accountingreports-customerssummary", "status": "done",
-            "featureKey": "accountingreports-customerssummary"
-          },
-          {
-            "label": "ملخص حركة الموردين",
-            "icon": "file-text",
-            "path": "/reports/accounting/accountingreports-vendorssummary", "status": "done",
-            "featureKey": "accountingreports-vendorssummary"
-          },
-          {
-            "label": "يومية مندوب",
-            "icon": "file-text",
-            "path": "/reports/accounting/accountingreports-repdaily", "status": "done",
-            "featureKey": "accountingreports-repdaily"
-          },
-          {
-            "label": "مبيعات الاصناف شهريا بالكميات",
-            "icon": "file-text",
-            "path": "/reports/accounting/accountingreports-monthlysalesbyitems", "status": "done",
-            "featureKey": "accountingreports-monthlysalesbyitems"
-          },
-          {
-            "label": "مبيعات الاصناف شهريا",
-            "icon": "file-text",
-            "path": "/reports/accounting/accountingreports-monthlysalesbyitemstotals", "status": "done",
-            "featureKey": "accountingreports-monthlysalesbyitemstotals"
-          },
-          {
-            "label": "مديونية مندوب",
-            "icon": "file-text",
-            "path": "/reports/accounting/accountingreports-repdebit", "status": "done",
-            "featureKey": "accountingreports-repdebit"
-          },
-          {
-            "label": "اقساط العملاء",
-            "icon": "file-text",
-            "path": "/reports/accounting/accountingreports-customersinstallments", "status": "done",
-            "featureKey": "accountingreports-customersinstallments"
-          },
-          {
-            "label": "خامات وتوالف الانتاج",
-            "icon": "file-text",
-            "path": "/reports/accounting/accountingreports-productionmaterials", "status": "done",
-            "featureKey": "accountingreports-productionmaterials"
-          },
-          {
-            "label": "ارباح العملاء",
-            "icon": "file-text",
-            "path": "/reports/accounting/accountingreports-customersprofits", "status": "done",
-            "featureKey": "accountingreports-customersprofits"
-          },
-          {
-            "label": "ملخص حركة الفروع",
-            "icon": "file-text",
-            "path": "/reports/accounting/accountingreports-branchessummary", "status": "done",
-            "featureKey": "accountingreports-branchessummary"
-          },
-          {
-            "label": "معاملات نقدية وبنكية",
-            "icon": "file-text",
-            "path": "/reports/accounting/accountingreports-payments", "status": "done",
-            "featureKey": "accountingreports-payments"
-          },
-          {
-            "label": "ارباح الفواتير",
-            "icon": "file-text",
-            "path": "/reports/accounting/accountingreports-invoiceprofits", "status": "done",
-            "featureKey": "accountingreports-invoiceprofits"
-          },
-          {
-            "label": "اخر سعر بيع / شراء",
-            "icon": "file-text",
-            "path": "/reports/accounting/accountingreports-lastprices", "status": "done",
-            "featureKey": "accountingreports-lastprices"
-          },
-          {
-            "label": "المبيعات بالعملاء",
-            "icon": "file-text",
-            "path": "/reports/accounting/accountingreports-customerssales", "status": "done",
-            "featureKey": "accountingreports-customerssales"
-          },
-          {
-            "label": "المشتريات بالموردين",
-            "icon": "file-text",
-            "path": "/reports/accounting/accountingreports-vendorspurchases", "status": "done",
-            "featureKey": "accountingreports-vendorspurchases"
-          },
-          {
-            "label": "المصروفات شهريا",
-            "icon": "file-text",
-            "path": "/reports/accounting/accountingreports-monthlyexpenses", "status": "done",
-            "featureKey": "accountingreports-monthlyexpenses"
-          },
-          {
-            "label": "طلبات الشراء",
-            "icon": "file-text",
-            "path": "/reports/accounting/accountingreports-purchaseorders", "status": "done",
-            "featureKey": "accountingreports-purchaseorders"
-          }
-        ]
-      },
-      {
-        "label": "تقارير شئون الموظفين",
-        "icon": "users",
-        "children": [
-          {
-            "label": "حضور وانصراف الموظفين",
-            "icon": "file-text",
-            "path": "/reports/hr/hrreports-attendance",
-            "status": "done",
-            "featureKey": "hrreports-attendance"
-          },
-          {
-            "label": "اجازات الموظفين",
-            "icon": "file-text",
-            "path": "/reports/hr/hrreports-employeesvactions",
-            "status": "done",
-            "featureKey": "hrreports-employeesvactions"
-          },
-          {
-            "label": "رواتب الموظفين",
-            "icon": "file-text",
-            "path": "/reports/hr/hrreports-employeespayroll",
-            "status": "done",
-            "featureKey": "hrreports-employeespayroll"
-          },
-          {
-            "label": "قائمة رواتب الموظفين",
-            "icon": "file-text",
-            "path": "/reports/hr/hrreports-employeespayroll-list",
-            "status": "done",
-            "featureKey": "hrreports-employeespayroll-list"
-          },
-          {
-            "label": "موظفين تحت الطلب",
-            "icon": "file-text",
-            "path": "/reports/hr/hrreports-employeesunderrequest",
-            "status": "done",
-            "featureKey": "hrreports-employeesunderrequest"
-          },
-          {
-            "label": "قائمة الموظفين",
-            "icon": "file-text",
-            "path": "/hr/employees",
-            "status": "done",
-            "featureKey": "hrreports-employeeslist"
-          },
-          {
-            "label": "السلف",
-            "icon": "file-text",
-            "path": "/reports/hr/hrreports-loans-list",
-            "status": "done",
-            "featureKey": "hrreports-loans-list"
-          }
-        ]
-      },
-      {
         "label": "تقارير الاصول الثابتة",
         "icon": "wrench",
         "children": [
@@ -1344,75 +1449,6 @@ export const ERP_NAVIGATION: NavItemConfig[] = [
             "path": "/reports/assets/fixedassetsreports-soldfixedassets",
             "status": "done",
             "featureKey": "fixedassetsreports-soldfixedassets"
-          }
-        ]
-      },
-      {
-        "label": "التقارير الختامية",
-        "icon": "pie-chart",
-        "children": [
-          {
-            "label": "دفتر اليومية",
-            "icon": "file-text",
-            "path": "/reports/final/accounting-generaljournallist",
-            "status": "done",
-            "featureKey": "accounting-generaljournallist"
-          },
-          {
-            "label": "الاستاذ العام",
-            "icon": "file-text",
-            "path": "/reports/final/finalreports-generalledger",
-            "status": "done",
-            "featureKey": "finalreports-generalledger"
-          },
-          {
-            "label": "الاستاذ المساعد",
-            "icon": "file-text",
-            "path": "/reports/final/finalreports-subledger",
-            "status": "done",
-            "featureKey": "finalreports-subledger"
-          },
-          {
-            "label": "ميزان المراجعة",
-            "icon": "file-text",
-            "path": "/reports/final/finalreports-trialbalance",
-            "status": "done",
-            "featureKey": "finalreports-trialbalance"
-          },
-          {
-            "label": "تكلفة المبيعات",
-            "icon": "file-text",
-            "path": "/reports/final/finalreports-salescost",
-            "status": "done",
-            "featureKey": "finalreports-salescost"
-          },
-          {
-            "label": "قائمة الدخل",
-            "icon": "file-text",
-            "path": "/reports/final/finalreports-incomestatment",
-            "status": "done",
-            "featureKey": "finalreports-incomestatment"
-          },
-          {
-            "label": "الميزانية العمومية",
-            "icon": "file-text",
-            "path": "/reports/final/finalreports-balancesheet",
-            "status": "done",
-            "featureKey": "finalreports-balancesheet"
-          },
-          {
-            "label": "قائمة المركز المالى",
-            "icon": "file-text",
-            "path": "/reports/final/finalreports-financialstatment",
-            "status": "done",
-            "featureKey": "finalreports-financialstatment"
-          },
-          {
-            "label": "التدفقات النقدية",
-            "icon": "file-text",
-            "path": "/reports/final/finalreports-cashflow",
-            "status": "done",
-            "featureKey": "finalreports-cashflow"
           }
         ]
       }
