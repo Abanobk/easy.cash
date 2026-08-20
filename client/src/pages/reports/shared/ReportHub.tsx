@@ -13,6 +13,7 @@ import type { ReportSectionDef } from "@/config/report-sections";
 import { getReportEntityFilters, type ReportEntityFilter } from "@/config/report-filter-config";
 import { reportColumnLabel, REPORT_TOTAL_COLUMNS } from "@/config/report-column-labels";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { printTableReport } from "@/lib/print-report";
 
 type ReportProcedure = "accountingBySlug" | "finalBySlug" | "hrBySlug" | "assetsBySlug";
 
@@ -335,9 +336,28 @@ export default function ReportHub({ title, section, icon, reports, procedure }: 
     XLSX.writeFile(wb, `${section}-${slug}-${new Date().toISOString().split("T")[0]}.xlsx`);
   };
 
+  const { data: company } = trpc.saas.getCompanyProfile.useQuery();
+
+  const handlePrintReport = () => {
+    if (!rows.length) return;
+    printTableReport({
+      title: reportMeta?.title || title,
+      dateFrom: reportMeta?.needsDates ? query.dateFrom : undefined,
+      dateTo: reportMeta?.needsDates ? query.dateTo : undefined,
+      columns: columns.map((key) => ({ key, label: reportColumnLabel(key) })),
+      rows: rows as Record<string, unknown>[],
+      totals,
+      companyName: company?.name,
+      companyAddress: company?.address ?? undefined,
+      companyPhone: company?.phone ?? undefined,
+      companyTaxNumber: company?.taxNumber ?? undefined,
+      companyLogo: company?.logo,
+    });
+  };
+
   return (
     <ERPLayout title={title}>
-      <div className="flex flex-col lg:flex-row gap-4 min-h-[70vh]" dir="rtl">
+      <div className="flex flex-col lg:flex-row gap-4" dir="rtl">
         <aside className="lg:w-64 flex-shrink-0 print:hidden max-h-[80vh] overflow-y-auto">
           <Card className="border-0 shadow-sm">
             <CardContent className="p-2">
@@ -534,8 +554,8 @@ export default function ReportHub({ title, section, icon, reports, procedure }: 
                 <Button variant="outline" onClick={handleExport} disabled={!rows.length} className="gap-1">
                   <Download size={16} /> Excel
                 </Button>
-                <Button variant="outline" onClick={() => window.print()} className="gap-1">
-                  <Printer size={16} /> طباعة
+                <Button variant="outline" onClick={handlePrintReport} disabled={!rows.length} className="gap-1">
+                  <Printer size={16} /> طباعة / PDF
                 </Button>
               </div>
             </CardContent>
