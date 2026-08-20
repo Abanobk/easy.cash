@@ -357,35 +357,15 @@ export default function ReportHub({ title, section, icon, reports, procedure }: 
 
   return (
     <ERPLayout title={title}>
-      <div className="flex flex-col lg:flex-row gap-4" dir="rtl">
-        <aside className="lg:w-64 flex-shrink-0 print:hidden max-h-[80vh] overflow-y-auto">
-          <Card className="border-0 shadow-sm">
-            <CardContent className="p-2">
-              <p className="text-xs font-semibold text-slate-500 px-2 py-2 flex items-center gap-2">
-                {icon} {title}
-              </p>
-              <nav className="space-y-0.5">
-                {reports.map((r) => (
-                  <button
-                    key={r.slug}
-                    type="button"
-                    onClick={() => navigate(tenantPath(tenantSlug, `/reports/${section}/${r.slug}`))}
-                    className={`w-full text-right px-3 py-2 rounded-lg text-sm transition-colors ${
-                      slug === r.slug ? "bg-blue-600 text-white font-medium" : "text-slate-600 hover:bg-slate-100"
-                    }`}
-                  >
-                    {r.title}
-                  </button>
-                ))}
-              </nav>
-            </CardContent>
-          </Card>
-        </aside>
+      <div className="space-y-4" dir="rtl">
+        <div className="flex items-center gap-2.5">
+          <span style={{ color: "var(--brass-600)" }}>{icon}</span>
+          <h1 className="text-lg font-extrabold" style={{ color: "var(--ink-900)" }}>{reportMeta?.title || title}</h1>
+        </div>
 
-        <div className="flex-1 space-y-4">
-          <Card className="border-0 shadow-sm print:hidden">
+        <div className="space-y-4">
+          <Card className="eca-card border-0 shadow-none print:hidden">
             <CardContent className="p-4">
-              <h2 className="font-semibold text-slate-800 mb-4">{reportMeta?.title}</h2>
               <div className="flex flex-wrap gap-3 items-end">
                 {reportMeta?.needsDates && (
                   <>
@@ -548,7 +528,7 @@ export default function ReportHub({ title, section, icon, reports, procedure }: 
                   <Label className="text-xs">بحث</Label>
                   <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="رقم فاتورة / اسم..." />
                 </div>
-                <Button onClick={handleSearch} className="bg-blue-600 hover:bg-blue-700 gap-1">
+                <Button onClick={handleSearch} className="eca-btn-primary border-0 gap-1">
                   <Search size={16} /> عرض
                 </Button>
                 <Button variant="outline" onClick={handleExport} disabled={!rows.length} className="gap-1">
@@ -561,7 +541,7 @@ export default function ReportHub({ title, section, icon, reports, procedure }: 
             </CardContent>
           </Card>
 
-          <Card className="border-0 shadow-sm overflow-x-auto">
+          <Card className="eca-card border-0 shadow-none overflow-x-auto">
             <CardContent className="p-0">
               {isLoading ? (
                 <p className="p-8 text-center text-slate-500">جاري التحميل...</p>
@@ -570,7 +550,7 @@ export default function ReportHub({ title, section, icon, reports, procedure }: 
               ) : (
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="bg-slate-800 text-white">
+                    <tr style={{ background: "var(--ink-700)", color: "white" }}>
                       {columns.map((col) => (
                         <th key={col} className="px-3 py-2 text-right font-medium whitespace-nowrap">{reportColumnLabel(col)}</th>
                       ))}
@@ -578,18 +558,19 @@ export default function ReportHub({ title, section, icon, reports, procedure }: 
                   </thead>
                   <tbody>
                     {(rows as Record<string, unknown>[]).map((row, i) => (
-                      <tr key={i} className={i % 2 === 0 ? "bg-white" : "bg-slate-50"}>
+                      <tr key={i} style={{ background: i % 2 === 0 ? "#ffffff" : "var(--paper-50)" }}>
                         {columns.map((col) => {
                           const val = row[col];
                           const drillSlug = row.drillSlug as string | undefined;
                           const drillSection = row.section as string | undefined;
                           const isMetricCol = col === "metric" && drillSlug && drillSection;
                           return (
-                            <td key={col} className="px-3 py-2 border-b border-slate-100 whitespace-nowrap">
+                            <td key={col} className="px-3 py-2 border-b whitespace-nowrap" style={{ borderColor: "var(--line)" }}>
                               {isMetricCol ? (
                                 <button
                                   type="button"
-                                  className="text-blue-600 hover:underline font-medium"
+                                  className="hover:underline font-medium"
+                                  style={{ color: "var(--brass-600)" }}
                                   onClick={() => {
                                     const qs = buildFilterQueryString(query, true);
                                     navigate(tenantPath(tenantSlug, `/reports/${drillSection}/${drillSlug}${qs}`));
@@ -606,7 +587,7 @@ export default function ReportHub({ title, section, icon, reports, procedure }: 
                   </tbody>
                   {totals && (
                     <tfoot>
-                      <tr className="bg-slate-100 font-semibold border-t-2 border-slate-300">
+                      <tr className="font-semibold border-t-2" style={{ background: "var(--paper-100)", borderColor: "var(--brass-500)" }}>
                         {columns.map((col, i) => (
                           <td key={col} className="px-3 py-2 whitespace-nowrap">
                             {i === 0 && totals[col] == null
