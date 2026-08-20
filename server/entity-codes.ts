@@ -205,6 +205,31 @@ export async function resolveEntityCode(
   return `${fallbackPrefix}-${Date.now().toString().slice(-8)}`;
 }
 
+export type BarcodeTable = {
+  id: any;
+  tenantId: any;
+  barcode: any;
+};
+
+/**
+ * باركود رقمي تسلسلي يولّده النظام نفسه (مش مأخوذ من مصدر خارجي زي ميجا كاش) —
+ * بيكمل من أكبر باركود رقمي بحت موجود عند نفس العميل. مفيد لما العميل يفضّل
+ * يبدأ ترقيم باركود خاص بيه بدل ما يعتمد على أرقام مرجعية من نظام قديم.
+ */
+export async function resolveNextBarcode(
+  db: Db,
+  table: BarcodeTable,
+  tenantId: number,
+): Promise<string> {
+  const [row] = await db
+    .select({ max: sql<number | null>`MAX(CAST(${table.barcode} AS UNSIGNED))` })
+    .from(table as any)
+    .where(and(eq(table.tenantId, tenantId), sql`${table.barcode} REGEXP '^[0-9]+$'`));
+  const max = Number(row?.max || 0);
+  const width = Math.max(6, String(max + 1).length);
+  return String(max + 1).padStart(width, "0");
+}
+
 /** اختصار: توليد كود حسب نوع الكيان */
 export async function resolveTypedEntityCode(
   db: Db,

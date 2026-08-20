@@ -326,17 +326,23 @@ export const megaReportImportRouter = router({
       unitCost: z.string().optional(),
       unit: z.string().optional(),
     })).min(1).max(2000),
+    /** لو مفعّل: يتجاهل الباركود الجاي من ملف ميجا (لو موجود) ويولّد باركود رقمي تسلسلي جديد بدل ما يسيبه فاضي */
+    autoBarcode: z.boolean().optional(),
   })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     const { ensureMeasureUnitExists } = await import("./measure-units");
+    const { resolveNextBarcode } = await import("./entity-codes");
     const created: Array<{ clientKey: string; id: number; name: string; code: string; barcode: string }> = [];
     const errors: string[] = [];
     for (const row of input.rows) {
       try {
         const code = await resolveTypedEntityCode(db, items, ctx.tenantId!, "item", undefined);
         const rawBarcode = (row.barcode || "").trim();
-        const barcode = rawBarcode && rawBarcode !== row.name.trim() && rawBarcode.length <= 40 ? rawBarcode : null;
+        let barcode: string | null = rawBarcode && rawBarcode !== row.name.trim() && rawBarcode.length <= 40 ? rawBarcode : null;
+        if (!barcode && input.autoBarcode) {
+          barcode = await resolveNextBarcode(db, items, ctx.tenantId!);
+        }
         const cost = row.unitCost && Number(row.unitCost) > 0 ? String(row.unitCost) : "0";
         const unit = await ensureMeasureUnitExists(db, ctx.tenantId!, row.unit);
         // سعر مرجعي فقط — الرصيد/متوسط التكلفة عند اعتماد الكميات

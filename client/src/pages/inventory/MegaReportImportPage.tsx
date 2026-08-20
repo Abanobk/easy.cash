@@ -292,8 +292,10 @@ export default function MegaReportImportPage() {
           if (!key || byName.has(key)) continue;
           byName.set(key, row);
         }
-        const res = await createItemsMut.mutateAsync({ rows: Array.from(byName.values()) });
-        toast.success(`تمت إضافة ${res.created.length} صنف وتم ربطها تلقائيًا في كل الأماكن اللي فيها`);
+        // مش بنبعت باركود ميجا كاش أصلًا — الأصناف الجديدة تاخد باركود رقمي تسلسلي من عندنا
+        const rows = Array.from(byName.values()).map((r) => ({ clientKey: r.clientKey, name: r.name }));
+        const res = await createItemsMut.mutateAsync({ rows, autoBarcode: true });
+        toast.success(`تمت إضافة ${res.created.length} صنف بباركود تلقائي جديد وتم ربطها في كل الأماكن اللي فيها`);
         if (res.errors?.length) toast.message(res.errors.slice(0, 2).join(" · "));
         await utils.items.list.invalidate();
         applyCreatedItemsByName(res.created);
