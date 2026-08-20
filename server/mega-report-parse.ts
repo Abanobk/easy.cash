@@ -7,7 +7,7 @@
  */
 import * as XLSX from "xlsx";
 
-export type MegaReportKind = "item_costs" | "sales" | "purchases" | "production" | "unknown";
+export type MegaReportKind = "item_costs" | "sales" | "purchases" | "production" | "bom" | "unknown";
 
 export type SheetRow = string[];
 
@@ -94,6 +94,24 @@ export type MegaProductionOrder = {
   deliveries: MegaProductionDelivery[];
 };
 
+export type MegaBomComponent = {
+  unit: string;
+  availableQty: string;
+  requiredQty: string;
+  name: string;
+  barcode: string;
+  serial: string;
+};
+
+export type MegaBomProduct = {
+  unit: string;
+  availableQty: string;
+  name: string;
+  barcode: string;
+  category: string;
+  components: MegaBomComponent[];
+};
+
 function cell(row: SheetRow, i: number) {
   return String(row[i] ?? "").trim();
 }
@@ -158,6 +176,7 @@ export function detectMegaReportKind(rows: SheetRow[]): MegaReportKind {
   const head = rows.slice(0, 12).map((r) => r.join(" | "));
   const blob = head.join("\n");
   if (rows[0]?.[0] === "المخزن" && rows[0]?.includes("الصنف")) return "item_costs";
+  if (blob.includes("تقدير الكميات بالمكونات")) return "bom";
   if (blob.includes("اوامر الانتاج") || blob.includes("أوامر الإنتاج") || blob.includes("المنتج التام:")) return "production";
   if (blob.includes("المشتريات") || blob.includes("المستحق سداده")) return "purchases";
   if (blob.includes("المبيعات") || blob.includes("المستحق تحصيله")) return "sales";
@@ -166,8 +185,53 @@ export function detectMegaReportKind(rows: SheetRow[]): MegaReportKind {
     if (r[0] === "المستحق سداده") return "purchases";
     if (r[0] === "المستحق تحصيله") return "sales";
     if (r.includes("المنتج التام:")) return "production";
+    if (r[0] === "الوحدة" && r[2] === "المنتج التام / المجموعة") return "bom";
   }
   return "unknown";
+}
+
+/** تقدير الكميات بالمكونات: بلوك لكل منتج تام (الوحدة/الكمية المتاحة/الاسم/الباركود/الفئة)
+ *  متبوع بجدول مكوناته (وحدة/كمية متاحة/كمية مطلوبة لكل وحدة/اسم الخام/باركود/مسلسل)
+ *  وينتهي بصف إجمالي رقمي بحت بنتجاهله. */
+export function parseBomReport(rows: SheetRow[]): MegaBomProduct[] {
+  const docs: MegaBomProduct[] = [];
+  let i = 0;
+  while (i < rows.length) {
+    const r = rows[i];
+    if (r?.[0] === "الوحدة" && r?.[2] === "المنتج التام / المجموعة") {
+      const doc: MegaBomProduct = {
+        unit: cell(r, 5),
+        availableQty: numCell(r, 6),
+        name: cell(r, 7),
+        barcode: cell(r, 8),
+        category: cell(r, 9),
+        components: [],
+      };
+      i += 1;
+      if (rows[i]?.[0] === "المكونات") i += 1;
+      while (i < rows.length) {
+        const rr = rows[i];
+        if (!rr?.length) { i += 1; continue; }
+        if (rr[0] === "الوحدة" && rr[2] === "المنتج التام / المجموعة") break;
+        if (isNumeric(rr[0])) { i += 1; break; } // صف إجمالي المكونات — نهاية البلوك
+        if (cell(rr, 3)) {
+          doc.components.push({
+            unit: cell(rr, 0),
+            availableQty: numCell(rr, 1),
+            requiredQty: numCell(rr, 2),
+            name: cell(rr, 3),
+            barcode: cell(rr, 4),
+            serial: cell(rr, 5),
+          });
+        }
+        i += 1;
+      }
+      docs.push(doc);
+      continue;
+    }
+    i += 1;
+  }
+  return docs;
 }
 
 export function parseItemCostsReport(rows: SheetRow[]): MegaItemCostRow[] {
@@ -463,19 +527,23 @@ export function parseMegaReportBuffer(buf: Buffer | ArrayBuffer) {
   const kind = detectMegaReportKind(rows);
   if (kind === "item_costs") {
     const itemCosts = parseItemCostsReport(rows);
-    return { kind, rows: rows.length, itemCosts, sales: [], purchases: [], production: [] };
+    return { kind, rows: rows.length, itemCosts, sales: [], purchases: [], production: [], bom: [] };
   }
   if (kind === "sales") {
     const sales = parseSalesReport(rows);
-    return { kind, rows: rows.length, itemCosts: [], sales, purchases: [], production: [] };
+    return { kind, rows: rows.length, itemCosts: [], sales, purchases: [], production: [], bom: [] };
   }
   if (kind === "purchases") {
     const purchases = parsePurchasesReport(rows);
-    return { kind, rows: rows.length, itemCosts: [], sales: [], purchases, production: [] };
+    return { kind, rows: rows.length, itemCosts: [], sales: [], purchases, production: [], bom: [] };
   }
   if (kind === "production") {
     const production = parseProductionReport(rows);
-    return { kind, rows: rows.length, itemCosts: [], sales: [], purchases: [], production };
+    return { kind, rows: rows.length, itemCosts: [], sales: [], purchases: [], production, bom: [] };
   }
-  return { kind, rows: rows.length, itemCosts: [], sales: [], purchases: [], production: [] };
+  if (kind === "bom") {
+    const bom = parseBomReport(rows);
+    return { kind, rows: rows.length, itemCosts: [], sales: [], purchases: [], production: [], bom };
+  }
+  return { kind, rows: rows.length, itemCosts: [], sales: [], purchases: [], production: [], bom: [] };
 }

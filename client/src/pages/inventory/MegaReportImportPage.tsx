@@ -16,6 +16,7 @@ import {
   Package,
   ShoppingCart,
   Factory,
+  Boxes,
   Upload,
   Warehouse,
 } from "lucide-react";
@@ -28,6 +29,7 @@ const KIND_LABEL: Record<string, string> = {
   sales: "المبيعات (تقرير مطبوع)",
   purchases: "المشتريات (تقرير مطبوع)",
   production: "أوامر الإنتاج (تقرير مطبوع)",
+  bom: "تركيبة الأصناف (تقدير الكميات بالمكونات)",
 };
 
 export default function MegaReportImportPage() {
@@ -46,6 +48,7 @@ export default function MegaReportImportPage() {
   const commitPurchMut = trpc.megaReportImport.commitPurchases.useMutation();
   const commitProdMut = trpc.megaReportImport.commitProduction.useMutation();
   const commitCostsMut = trpc.megaReportImport.commitItemCosts.useMutation();
+  const commitBomMut = trpc.megaReportImport.commitBom.useMutation();
   const syncUnitsMut = trpc.parity.inventory.beginningInventory.syncItemUnits.useMutation();
 
   const [fileName, setFileName] = useState("");
@@ -151,6 +154,19 @@ export default function MegaReportImportPage() {
       }
       return out;
     }
+    if (preview.kind === "bom") {
+      const out: Array<{ clientKey: string; name: string; barcode?: string }> = [];
+      for (const d of preview.bom || []) {
+        if (d.productStatus !== "matched") {
+          out.push({ clientKey: `b-${d.index}-product`, name: d.product, barcode: d.barcode || undefined });
+        }
+        for (const c of d.components || []) {
+          if (c.status === "matched") continue;
+          out.push({ clientKey: `b-${d.index}-c-${c.index}`, name: c.name, barcode: c.barcode || undefined });
+        }
+      }
+      return out;
+    }
     return [];
   }, [preview]);
 
@@ -230,15 +246,64 @@ export default function MegaReportImportPage() {
     });
   };
 
+  /** نفس فكرة applyCreatedItems لكن بالمطابقة على الاسم مش clientKey — لازمة لـ BOM لأن نفس الخام بيتكرر في عشرات المنتجات */
+  const applyCreatedItemsByName = (created: Array<{ id: number; name: string }>) => {
+    if (!created.length) return;
+    const byName = new Map(created.map((c) => [c.name.trim(), c]));
+    setPreview((prev: any) => {
+      if (!prev || prev.kind !== "bom") return prev;
+      const docs = (prev.bom || []).map((d: any) => {
+        let productId = d.productId;
+        let productStatus = d.productStatus;
+        if (productStatus !== "matched") {
+          const c = byName.get(String(d.product || "").trim());
+          if (c) { productId = c.id; productStatus = "matched"; }
+        }
+        const components = (d.components || []).map((comp: any) => {
+          if (comp.status === "matched") return comp;
+          const c = byName.get(String(comp.name || "").trim());
+          if (!c) return comp;
+          return { ...comp, itemId: c.id, status: "matched" };
+        });
+        const compMatched = components.filter((c: any) => c.status === "matched").length;
+        return {
+          ...d,
+          productId,
+          productStatus,
+          components,
+          compMatched,
+          compUnmatched: components.length - compMatched,
+          ready: productStatus === "matched" && components.length > 0 && components.every((c: any) => c.status === "matched"),
+        };
+      });
+      return { ...prev, bom: docs };
+    });
+  };
+
   const addMissingItems = async () => {
     if (!missingItemRows.length) return;
     setBusy(true);
     try {
-      const res = await createItemsMut.mutateAsync({ rows: missingItemRows });
-      toast.success(`تمت إضافة ${res.created.length} صنف وتم ربطها تلقائيًا`);
-      if (res.errors?.length) toast.message(res.errors.slice(0, 2).join(" · "));
-      await utils.items.list.invalidate();
-      applyCreatedItems(res.created);
+      if (preview?.kind === "bom") {
+        // دمج الأصناف الناقصة بالاسم — نفس الخام (زي "طبة + غطاء احمر مقاس 42") بيظهر في عشرات المنتجات
+        const byName = new Map<string, { clientKey: string; name: string; barcode?: string }>();
+        for (const row of missingItemRows) {
+          const key = row.name.trim();
+          if (!key || byName.has(key)) continue;
+          byName.set(key, row);
+        }
+        const res = await createItemsMut.mutateAsync({ rows: Array.from(byName.values()) });
+        toast.success(`تمت إضافة ${res.created.length} صنف وتم ربطها تلقائيًا في كل الأماكن اللي فيها`);
+        if (res.errors?.length) toast.message(res.errors.slice(0, 2).join(" · "));
+        await utils.items.list.invalidate();
+        applyCreatedItemsByName(res.created);
+      } else {
+        const res = await createItemsMut.mutateAsync({ rows: missingItemRows });
+        toast.success(`تمت إضافة ${res.created.length} صنف وتم ربطها تلقائيًا`);
+        if (res.errors?.length) toast.message(res.errors.slice(0, 2).join(" · "));
+        await utils.items.list.invalidate();
+        applyCreatedItems(res.created);
+      }
     } catch (e: any) {
       toast.error(e?.message || "فشل إضافة الأصناف");
     } finally {
@@ -292,7 +357,7 @@ export default function MegaReportImportPage() {
 
   const commit = async () => {
     if (!preview) return;
-    if (!warehouseId && preview.kind !== "production" && preview.kind !== "item_costs") {
+    if (!warehouseId && preview.kind !== "production" && preview.kind !== "item_costs" && preview.kind !== "bom") {
       return toast.error("اختَر مخزن الاعتماد");
     }
     setBusy(true);
@@ -384,6 +449,20 @@ export default function MegaReportImportPage() {
         });
         toast.success(`تم استيراد ${res.imported} أمر إنتاج (معلّق كمسودة)`);
         if (res.errors?.length) toast.message(res.errors.slice(0, 2).join(" · "));
+      } else if (preview.kind === "bom") {
+        const documents = (preview.bom || [])
+          .filter((d: any) => d.ready)
+          .map((d: any) => ({
+            productId: Number(d.productId),
+            lines: (d.components || [])
+              .map((c: any) => ({ materialItemId: Number(c.itemId), quantityPerUnit: String(c.requiredQty || "0") }))
+              .filter((l: any) => Number(l.quantityPerUnit) > 0),
+          }))
+          .filter((d: any) => d.lines.length > 0);
+        if (!documents.length) return toast.error("لا توجد تركيبات جاهزة — طابق الأصناف الناقصة أولاً");
+        const res = await commitBomMut.mutateAsync({ documents });
+        toast.success(`تم استيراد تركيبة ${res.imported} صنف`);
+        if (res.errors?.length) toast.message(res.errors.slice(0, 2).join(" · "));
       }
     } catch (e: any) {
       toast.error(e?.message || "فشل الاعتماد");
@@ -421,12 +500,26 @@ export default function MegaReportImportPage() {
         readyDocs: rows.filter((r: any) => r.itemStatus === "matched" && r.warehouseStatus === "matched").length,
       };
     }
+    if (preview.kind === "bom") {
+      const docs = preview.bom || [];
+      const lines = docs.reduce((s: number, d: any) => s + (d.components?.length || 0), 0);
+      const compMatched = docs.reduce((s: number, d: any) => s + (d.components || []).filter((c: any) => c.status === "matched").length, 0);
+      return {
+        documents: docs.length,
+        lines,
+        matchedItems: compMatched + docs.filter((d: any) => d.productStatus === "matched").length,
+        unmatchedItems: (lines - compMatched) + docs.filter((d: any) => d.productStatus !== "matched").length,
+        matchedParties: docs.filter((d: any) => d.productStatus === "matched").length,
+        unmatchedParties: docs.filter((d: any) => d.productStatus !== "matched").length,
+        readyDocs: docs.filter((d: any) => d.ready).length,
+      };
+    }
     return preview.summary;
   }, [preview]);
 
   /** أصناف ناقصة بلا تكرار — نفس الاسم يتربط مرة واحدة ويتطبّق على كل الأسطر اللي بنفس الاسم */
   const uniqueMissingItems = useMemo(() => {
-    if (!preview || (preview.kind !== "sales" && preview.kind !== "purchases")) {
+    if (!preview || (preview.kind !== "sales" && preview.kind !== "purchases" && preview.kind !== "bom")) {
       return [] as Array<{ name: string; barcode?: string; count: number }>;
     }
     const map = new Map<string, { name: string; barcode?: string; count: number }>();
@@ -445,6 +538,36 @@ export default function MegaReportImportPage() {
     if (!preview) return;
     const id = Number(itemId);
     if (!id) return;
+    if (preview.kind === "bom") {
+      setPreview((prev: any) => {
+        if (!prev) return prev;
+        const docs = (prev.bom || []).map((d: any) => {
+          let productId = d.productId;
+          let productStatus = d.productStatus;
+          if (productStatus !== "matched" && String(d.product || "").trim() === name) {
+            productId = id;
+            productStatus = "matched";
+          }
+          const components = (d.components || []).map((c: any) => {
+            if (c.status === "matched" || String(c.name || "").trim() !== name) return c;
+            return { ...c, itemId: id, status: "matched" };
+          });
+          const compMatched = components.filter((c: any) => c.status === "matched").length;
+          return {
+            ...d,
+            productId,
+            productStatus,
+            components,
+            compMatched,
+            compUnmatched: components.length - compMatched,
+            ready: productStatus === "matched" && components.length > 0 && components.every((c: any) => c.status === "matched"),
+          };
+        });
+        return { ...prev, bom: docs };
+      });
+      toast.success("تم ربط الصنف في كل الأماكن اللي فيها");
+      return;
+    }
     setPreview((prev: any) => {
       if (!prev) return prev;
       const key = prev.kind === "sales" ? "sales" : "purchases";
@@ -482,7 +605,7 @@ export default function MegaReportImportPage() {
               <ArrowRight size={16} /> رجوع
             </Button>
             <div className="text-sm font-bold text-slate-600">
-              يفهم تصدير التقارير: تكاليف الأصناف · البيع · الشراء · أوامر الإنتاج
+              يفهم تصدير التقارير: تكاليف الأصناف · البيع · الشراء · أوامر الإنتاج · تركيبة الأصناف (BOM)
             </div>
           </div>
 
@@ -504,7 +627,7 @@ export default function MegaReportImportPage() {
                 </div>
                 <div>
                   <div className="text-lg font-black">رفع ملف التقرير</div>
-                  <div className="text-sm font-semibold text-slate-600">xlsx من تقارير النظام القديم — بيع / شراء / إنتاج / تكاليف</div>
+                  <div className="text-sm font-semibold text-slate-600">xlsx من تقارير النظام القديم — بيع / شراء / إنتاج / تكاليف / تركيبة أصناف</div>
                 </div>
               </div>
               <label className="inline-flex">
@@ -714,6 +837,65 @@ export default function MegaReportImportPage() {
                     ))}
                   </tbody>
                 </table>
+              </div>
+            </div>
+          )}
+          {kind === "bom" && (
+            <div className="rounded-2xl border-2 overflow-hidden bg-white">
+              <div className="bg-slate-900 text-white px-4 py-3 font-black flex items-center gap-2">
+                <Boxes size={18} /> تركيبات الأصناف — خام لكل صنف تام ({preview.bom?.length || 0})
+              </div>
+              <p className="px-4 pt-3 text-sm font-semibold text-slate-600">
+                كل بلوك هو منتج تام ومكوناته الخام بالكمية المطلوبة لإنتاج وحدة واحدة — الاعتماد بيستبدل خلطة كل منتج بالكامل بالجديدة.
+              </p>
+              <div className="max-h-[60vh] overflow-auto divide-y p-4 pt-3 space-y-3">
+                {(preview.bom || []).map((d: any) => (
+                  <div key={d.index} className={`rounded-xl border p-3 ${d.ready ? "bg-emerald-50/40 border-emerald-200" : "bg-rose-50/50 border-rose-200"}`}>
+                    <div className="flex flex-wrap items-start justify-between gap-2">
+                      <div className="min-w-0 flex-1">
+                        <div className="text-base font-black text-slate-900">{d.product || "—"}</div>
+                        <div className="text-xs font-semibold text-slate-500">
+                          باركود {d.barcode || "—"} · {d.compMatched}/{d.components.length} مكونات مطابقة
+                        </div>
+                      </div>
+                      <span className={`text-xs font-extrabold px-2.5 py-1 rounded-md shrink-0 ${d.ready ? "bg-emerald-600 text-white" : "bg-rose-600 text-white"}`}>
+                        {d.ready ? "جاهز" : "ناقص"}
+                      </span>
+                    </div>
+                    {d.productStatus !== "matched" && (
+                      <div className="mt-2 max-w-xs">
+                        <SearchableSelect
+                          options={itemOptions}
+                          onChange={(v, opt) => manualMatchItem(d.product, v, opt.label.replace(/^.*—\s*/, ""))}
+                          placeholder="اربط المنتج التام بصنف موجود..."
+                          searchPlaceholder="اكتب أول حروف اسم الصنف..."
+                          emptyText="مفيش نتايج"
+                          className="h-9 text-sm bg-white"
+                        />
+                      </div>
+                    )}
+                    <table className="w-full text-sm mt-2">
+                      <thead>
+                        <tr className="text-slate-500">
+                          <th className="px-2 py-1 text-right font-bold">الحالة</th>
+                          <th className="px-2 py-1 text-right font-bold">الخام</th>
+                          <th className="px-2 py-1 text-right font-bold">الوحدة</th>
+                          <th className="px-2 py-1 text-right font-bold">الكمية / وحدة</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(d.components || []).map((c: any) => (
+                          <tr key={c.index} className="border-t">
+                            <td className="px-2 py-1">{c.status === "matched" ? <CheckCircle2 className="text-emerald-600" size={15} /> : <AlertTriangle className="text-rose-600" size={15} />}</td>
+                            <td className="px-2 py-1 font-bold">{c.name}</td>
+                            <td className="px-2 py-1">{c.unit}</td>
+                            <td className="px-2 py-1 font-semibold">{c.requiredQty}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ))}
               </div>
             </div>
           )}

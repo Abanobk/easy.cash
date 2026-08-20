@@ -16,6 +16,7 @@ import {
   productionOrders,
   productionOrderMaterials,
   beginningInventory,
+  itemBomLines,
 } from "../drizzle/schema";
 import { parseMegaReportBuffer, type MegaInvoiceLine } from "./mega-report-parse";
 import { resolveTypedEntityCode } from "./entity-codes";
@@ -149,6 +150,7 @@ export const megaReportImportRouter = router({
         sales: [],
         purchases: [],
         production: [],
+        bom: [],
       };
     }
 
@@ -183,6 +185,7 @@ export const megaReportImportRouter = router({
         sales,
         purchases: [],
         production: [],
+        bom: [],
       };
     }
 
@@ -217,6 +220,53 @@ export const megaReportImportRouter = router({
         sales: [],
         purchases,
         production: [],
+        bom: [],
+      };
+    }
+
+    if (parsed.kind === "bom") {
+      const bom = parsed.bom.map((doc, index) => {
+        const product = matchOne(itemCatalog, { barcode: doc.barcode, name: doc.name });
+        const components = doc.components.map((c, ci) => {
+          const hit = matchOne(itemCatalog, { barcode: c.barcode, name: c.name });
+          return {
+            index: ci,
+            ...c,
+            itemId: hit.id,
+            status: hit.id ? "matched" : "unmatched",
+          };
+        });
+        return {
+          index,
+          product: doc.name,
+          barcode: doc.barcode,
+          unit: doc.unit,
+          category: doc.category,
+          productId: product.id,
+          productStatus: product.id ? "matched" : "unmatched",
+          components,
+          compMatched: components.filter((c) => c.status === "matched").length,
+          compUnmatched: components.filter((c) => c.status !== "matched").length,
+          ready: !!product.id && components.length > 0 && components.every((c) => c.status === "matched"),
+        };
+      });
+      return {
+        kind: "bom" as const,
+        fileName: input.fileName || "",
+        summary: {
+          documents: bom.length,
+          lines: bom.reduce((s, d) => s + d.components.length, 0),
+          matchedItems: bom.reduce((s, d) => s + d.compMatched + (d.productStatus === "matched" ? 1 : 0), 0),
+          unmatchedItems: bom.reduce((s, d) => s + d.compUnmatched + (d.productStatus === "matched" ? 0 : 1), 0),
+          matchedParties: bom.filter((d) => d.productStatus === "matched").length,
+          unmatchedParties: bom.filter((d) => d.productStatus !== "matched").length,
+          readyDocs: bom.filter((d) => d.ready).length,
+        },
+        itemCosts: [],
+        sales: [],
+        purchases: [],
+        production: [],
+        bom,
       };
     }
 
@@ -263,6 +313,7 @@ export const megaReportImportRouter = router({
       sales: [],
       purchases: [],
       production,
+      bom: [],
     };
   }),
 
@@ -617,6 +668,49 @@ export const megaReportImportRouter = router({
         imported += 1;
       } catch (e) {
         errors.push(`#${line.itemId}: ${e instanceof Error ? e.message : String(e)}`);
+      }
+    }
+    return { imported, failed: errors.length, errors: errors.slice(0, 30) };
+  }),
+
+  /** اعتماد تركيبات (BOM) لأصناف تامة من تقرير "تقدير الكميات بالمكونات" — كل منتج يستبدل خلطته بالكامل */
+  commitBom: protectedProcedure.input(z.object({
+    documents: z.array(z.object({
+      productId: z.number(),
+      lines: z.array(z.object({
+        materialItemId: z.number(),
+        quantityPerUnit: z.string(),
+      })).min(1),
+    })).min(1).max(2000),
+  })).mutation(async ({ ctx, input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    let imported = 0;
+    const errors: string[] = [];
+    for (const doc of input.documents) {
+      try {
+        const merged = new Map<number, number>();
+        for (const line of doc.lines) {
+          if (line.materialItemId === doc.productId) continue;
+          const qty = Number(line.quantityPerUnit);
+          if (!Number.isFinite(qty) || qty <= 0) continue;
+          merged.set(line.materialItemId, (merged.get(line.materialItemId) || 0) + qty);
+        }
+        if (!merged.size) { errors.push(`#${doc.productId}: لا توجد مكونات صالحة`); continue; }
+        await db.delete(itemBomLines).where(
+          tenantWhere(itemBomLines, ctx.tenantId, eq(itemBomLines.productId, doc.productId)),
+        );
+        for (const [materialItemId, quantityPerUnit] of merged) {
+          await db.insert(itemBomLines).values(withTenantId(ctx.tenantId, {
+            productId: doc.productId,
+            materialItemId,
+            quantityPerUnit: String(quantityPerUnit),
+            scrapPercent: "0",
+          }) as any);
+        }
+        imported += 1;
+      } catch (e) {
+        errors.push(`#${doc.productId}: ${e instanceof Error ? e.message : String(e)}`);
       }
     }
     return { imported, failed: errors.length, errors: errors.slice(0, 30) };
