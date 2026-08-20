@@ -134,6 +134,10 @@ export function num(v: unknown) {
 
 export function dateOnly(v: unknown) {
   if (!v) return "";
+  if (v instanceof Date) {
+    if (Number.isNaN(v.getTime())) return "";
+    return v.toISOString().slice(0, 10);
+  }
   const s = String(v);
   return s.includes("T") ? s.split("T")[0] : s.slice(0, 10);
 }
@@ -460,6 +464,235 @@ export async function purchasesInvoicesReport(db: Db, filters: ReportFilters) {
     status: r.status,
     paymentType: r.paymentType === "cash" ? "نقدي" : r.paymentType === "credit" ? "آجل" : r.paymentType,
   }));
+}
+
+export type DetailedInvoiceLine = {
+  name: string;
+  unit: string;
+  quantity: number;
+  price: number;
+  discount: number;
+  tax: number;
+  total: number;
+};
+
+export type DetailedInvoiceDoc = {
+  serial: string;
+  ref: string;
+  date: string;
+  party: string;
+  subtotal: number;
+  discount: number;
+  tax: number;
+  net: number;
+  due: number;
+  lines: DetailedInvoiceLine[];
+};
+
+export type DetailedInvoiceReport = {
+  documents: DetailedInvoiceDoc[];
+  summary: {
+    netTotal: number;
+    discount: number;
+    tax: number;
+    grossTotal: number;
+    due: number;
+    paid: number;
+    documentsCount: number;
+    quantityTotal: number;
+  };
+};
+
+/** تقرير المشتريات المفصّل (فاتورة + أسطرها) — لمطابقة شكل تقرير ميجا كاش المطبوع بالظبط */
+export async function purchasesInvoicesDetailedReport(db: Db, filters: ReportFilters): Promise<DetailedInvoiceReport> {
+  const dateParts = dateConds(purchaseInvoices, filters.dateFrom, filters.dateTo);
+  const dueDateParts = dueDateConds(purchaseInvoices, filters.dueDateFrom, filters.dueDateTo);
+  const invoices = await db.select({
+    id: purchaseInvoices.id,
+    number: purchaseInvoices.number,
+    date: purchaseInvoices.date,
+    supplierName: suppliers.name,
+    subtotal: purchaseInvoices.subtotal,
+    discount: purchaseInvoices.discount,
+    tax: purchaseInvoices.tax,
+    total: purchaseInvoices.total,
+    paid: purchaseInvoices.paid,
+    remaining: purchaseInvoices.remaining,
+  }).from(purchaseInvoices)
+    .leftJoin(suppliers, eq(purchaseInvoices.supplierId, suppliers.id))
+    .where(tenantWhere(purchaseInvoices, filters.tenantId,
+      and(paymentStatusCond(purchaseInvoices.status, filters.paymentStatus) || purchasePostedFilter(),
+        ...(dateParts.length ? [and(...dateParts)] : []),
+        ...(dueDateParts.length ? [and(...dueDateParts)] : []),
+        filters.supplierId ? eq(purchaseInvoices.supplierId, filters.supplierId) : undefined,
+        reportBranchCond(purchaseInvoices.branchId, filters),
+        reportWarehouseCond(purchaseInvoices.warehouseId, filters),
+        filters.paymentType ? eq(purchaseInvoices.paymentType, filters.paymentType) : undefined,
+        filters.currencyCode ? eq(purchaseInvoices.currencyCode, filters.currencyCode) : undefined,
+        taxFilterCond(purchaseInvoices.tax, filters.taxFilter),
+        discountFilterCond(purchaseInvoices.discount, filters.discountFilter),
+        filters.search
+          ? sql`(${purchaseInvoices.number} LIKE ${`%${filters.search}%`} OR ${suppliers.name} LIKE ${`%${filters.search}%`})`
+          : undefined)))
+    .orderBy(desc(purchaseInvoices.date));
+
+  const ids = invoices.map((r) => r.id);
+  const lineRows = ids.length
+    ? await db.select({
+        invoiceId: purchaseInvoiceItems.invoiceId,
+        name: items.name,
+        unit: items.unit,
+        quantity: purchaseInvoiceItems.quantity,
+        price: purchaseInvoiceItems.price,
+        discount: purchaseInvoiceItems.discount,
+        tax: purchaseInvoiceItems.tax,
+        total: purchaseInvoiceItems.total,
+      }).from(purchaseInvoiceItems)
+        .leftJoin(items, eq(purchaseInvoiceItems.itemId, items.id))
+        .where(inArray(purchaseInvoiceItems.invoiceId, ids))
+    : [];
+  const linesByInvoice = new Map<number, DetailedInvoiceLine[]>();
+  for (const l of lineRows) {
+    const arr = linesByInvoice.get(l.invoiceId) || [];
+    arr.push({
+      name: l.name || "",
+      unit: l.unit || "",
+      quantity: num(l.quantity),
+      price: num(l.price),
+      discount: num(l.discount),
+      tax: num(l.tax),
+      total: num(l.total),
+    });
+    linesByInvoice.set(l.invoiceId, arr);
+  }
+
+  const documents: DetailedInvoiceDoc[] = invoices.map((r) => ({
+    serial: r.number,
+    ref: "",
+    date: dateOnly(r.date),
+    party: r.supplierName || "",
+    subtotal: num(r.subtotal),
+    discount: num(r.discount),
+    tax: num(r.tax),
+    net: num(r.total),
+    due: num(r.remaining),
+    lines: linesByInvoice.get(r.id) || [],
+  }));
+
+  const summary = documents.reduce((s, d) => {
+    s.netTotal += d.net;
+    s.discount += d.discount;
+    s.tax += d.tax;
+    s.due += d.due;
+    s.paid += d.net - d.due;
+    s.quantityTotal += d.lines.reduce((ls, l) => ls + l.quantity, 0);
+    return s;
+  }, { netTotal: 0, discount: 0, tax: 0, due: 0, paid: 0, quantityTotal: 0 });
+
+  return {
+    documents,
+    summary: {
+      ...summary,
+      grossTotal: summary.netTotal + summary.discount,
+      documentsCount: documents.length,
+    },
+  };
+}
+
+/** تقرير المبيعات المفصّل (فاتورة + أسطرها) — لمطابقة شكل تقرير ميجا كاش المطبوع بالظبط */
+export async function salesInvoicesDetailedReport(db: Db, filters: ReportFilters): Promise<DetailedInvoiceReport> {
+  const dateParts = dateConds(salesInvoices, filters.dateFrom, filters.dateTo);
+  const dueDateParts = dueDateConds(salesInvoices, filters.dueDateFrom, filters.dueDateTo);
+  const invoices = await db.select({
+    id: salesInvoices.id,
+    number: salesInvoices.number,
+    date: salesInvoices.date,
+    customerName: customers.name,
+    subtotal: salesInvoices.subtotal,
+    discount: salesInvoices.discount,
+    tax: salesInvoices.tax,
+    total: salesInvoices.total,
+    paid: salesInvoices.paid,
+    remaining: salesInvoices.remaining,
+  }).from(salesInvoices)
+    .leftJoin(customers, eq(salesInvoices.customerId, customers.id))
+    .where(tenantWhere(salesInvoices, filters.tenantId,
+      and(paymentStatusCond(salesInvoices.status, filters.paymentStatus) || salesPostedFilter(),
+        ...(dateParts.length ? [and(...dateParts)] : []),
+        ...(dueDateParts.length ? [and(...dueDateParts)] : []),
+        filters.customerId ? eq(salesInvoices.customerId, filters.customerId) : undefined,
+        reportBranchCond(salesInvoices.branchId, filters),
+        reportWarehouseCond(salesInvoices.warehouseId, filters),
+        filters.paymentType ? eq(salesInvoices.paymentType, filters.paymentType) : undefined,
+        filters.currencyCode ? eq(salesInvoices.currencyCode, filters.currencyCode) : undefined,
+        taxFilterCond(salesInvoices.tax, filters.taxFilter),
+        discountFilterCond(salesInvoices.discount, filters.discountFilter),
+        filters.search
+          ? sql`(${salesInvoices.number} LIKE ${`%${filters.search}%`} OR ${customers.name} LIKE ${`%${filters.search}%`})`
+          : undefined)))
+    .orderBy(desc(salesInvoices.date));
+
+  const ids = invoices.map((r) => r.id);
+  const lineRows = ids.length
+    ? await db.select({
+        invoiceId: salesInvoiceItems.invoiceId,
+        name: items.name,
+        unit: items.unit,
+        quantity: salesInvoiceItems.quantity,
+        price: salesInvoiceItems.price,
+        discount: salesInvoiceItems.discount,
+        tax: salesInvoiceItems.tax,
+        total: salesInvoiceItems.total,
+      }).from(salesInvoiceItems)
+        .leftJoin(items, eq(salesInvoiceItems.itemId, items.id))
+        .where(inArray(salesInvoiceItems.invoiceId, ids))
+    : [];
+  const linesByInvoice = new Map<number, DetailedInvoiceLine[]>();
+  for (const l of lineRows) {
+    const arr = linesByInvoice.get(l.invoiceId) || [];
+    arr.push({
+      name: l.name || "",
+      unit: l.unit || "",
+      quantity: num(l.quantity),
+      price: num(l.price),
+      discount: num(l.discount),
+      tax: num(l.tax),
+      total: num(l.total),
+    });
+    linesByInvoice.set(l.invoiceId, arr);
+  }
+
+  const documents: DetailedInvoiceDoc[] = invoices.map((r) => ({
+    serial: r.number,
+    ref: "",
+    date: dateOnly(r.date),
+    party: r.customerName || "",
+    subtotal: num(r.subtotal),
+    discount: num(r.discount),
+    tax: num(r.tax),
+    net: num(r.total),
+    due: num(r.remaining),
+    lines: linesByInvoice.get(r.id) || [],
+  }));
+
+  const summary = documents.reduce((s, d) => {
+    s.netTotal += d.net;
+    s.discount += d.discount;
+    s.tax += d.tax;
+    s.due += d.due;
+    s.paid += d.net - d.due;
+    s.quantityTotal += d.lines.reduce((ls, l) => ls + l.quantity, 0);
+    return s;
+  }, { netTotal: 0, discount: 0, tax: 0, due: 0, paid: 0, quantityTotal: 0 });
+
+  return {
+    documents,
+    summary: {
+      ...summary,
+      grossTotal: summary.netTotal + summary.discount,
+      documentsCount: documents.length,
+    },
+  };
 }
 
 export async function checksReport(db: Db, filters: ReportFilters, type: "incoming" | "outgoing") {

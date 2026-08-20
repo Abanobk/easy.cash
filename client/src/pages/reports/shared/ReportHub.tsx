@@ -13,7 +13,7 @@ import type { ReportSectionDef } from "@/config/report-sections";
 import { getReportEntityFilters, type ReportEntityFilter } from "@/config/report-filter-config";
 import { reportColumnLabel, REPORT_TOTAL_COLUMNS } from "@/config/report-column-labels";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { printTableReport } from "@/lib/print-report";
+import { printTableReport, printGroupedInvoiceReport } from "@/lib/print-report";
 
 type ReportProcedure = "accountingBySlug" | "finalBySlug" | "hrBySlug" | "assetsBySlug";
 
@@ -337,9 +337,50 @@ export default function ReportHub({ title, section, icon, reports, procedure }: 
   };
 
   const { data: company } = trpc.saas.getCompanyProfile.useQuery();
+  const utils = trpc.useUtils();
+  const [printing, setPrinting] = useState(false);
+  const isPurchasesOrSalesDetail = slug === "accountingreports-purchases" || slug === "accountingreports-sales";
 
-  const handlePrintReport = () => {
+  const handlePrintReport = async () => {
     if (!rows.length) return;
+    const companyProps = {
+      companyName: company?.name,
+      companyAddress: company?.address ?? undefined,
+      companyPhone: company?.phone ?? undefined,
+      companyTaxNumber: company?.taxNumber ?? undefined,
+      companyLogo: company?.logo,
+    };
+
+    if (isPurchasesOrSalesDetail) {
+      setPrinting(true);
+      try {
+        const kind = slug === "accountingreports-purchases" ? "purchases" as const : "sales" as const;
+        const detail = await utils.reports.purchasesSalesDetail.fetch({
+          kind,
+          dateFrom: query.dateFrom,
+          dateTo: query.dateTo,
+          customerId: query.customerId,
+          supplierId: query.supplierId,
+          warehouseId: query.warehouseId,
+          branchId: query.branchId,
+          paymentType: query.paymentType,
+          search: query.search,
+        });
+        printGroupedInvoiceReport({
+          title: reportMeta?.title || title,
+          partyLabel: kind === "purchases" ? "المورد" : "العميل",
+          dateFrom: query.dateFrom,
+          dateTo: query.dateTo,
+          documents: detail.documents,
+          summary: detail.summary,
+          ...companyProps,
+        });
+      } finally {
+        setPrinting(false);
+      }
+      return;
+    }
+
     printTableReport({
       title: reportMeta?.title || title,
       dateFrom: reportMeta?.needsDates ? query.dateFrom : undefined,
@@ -347,11 +388,7 @@ export default function ReportHub({ title, section, icon, reports, procedure }: 
       columns: columns.map((key) => ({ key, label: reportColumnLabel(key) })),
       rows: rows as Record<string, unknown>[],
       totals,
-      companyName: company?.name,
-      companyAddress: company?.address ?? undefined,
-      companyPhone: company?.phone ?? undefined,
-      companyTaxNumber: company?.taxNumber ?? undefined,
-      companyLogo: company?.logo,
+      ...companyProps,
     });
   };
 
@@ -534,8 +571,8 @@ export default function ReportHub({ title, section, icon, reports, procedure }: 
                 <Button variant="outline" onClick={handleExport} disabled={!rows.length} className="gap-1">
                   <Download size={16} /> Excel
                 </Button>
-                <Button variant="outline" onClick={handlePrintReport} disabled={!rows.length} className="gap-1">
-                  <Printer size={16} /> طباعة / PDF
+                <Button variant="outline" onClick={() => void handlePrintReport()} disabled={!rows.length || printing} className="gap-1">
+                  <Printer size={16} /> {printing ? "جاري التجهيز..." : "طباعة / PDF"}
                 </Button>
               </div>
             </CardContent>

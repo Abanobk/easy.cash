@@ -91,6 +91,7 @@ import {
   itemsListReport,
 } from "./inventory-reports";
 import { runAccountingReport } from "./accounting-reports";
+import { purchasesInvoicesDetailedReport, salesInvoicesDetailedReport } from "./accounting-data";
 import { runFinalReport } from "./final-reports";
 import { runHrReport } from "./hr-reports";
 import { runAssetsReport } from "./assets-reports";
@@ -3330,6 +3331,34 @@ const reportsRouter = router({
     const scope = await loadUserScopeFromCtx(db, ctx.saasUser);
     const { slug, ...filters } = input;
     return runAccountingReport(db, slug, applyScopeToReportFilters({ tenantId: ctx.tenantId, ...filters }, scope));
+  }),
+
+  /** نسخة مفصّلة (فاتورة + أسطرها) من تقريري الشراء/البيع — لمطابقة شكل تقرير ميجا كاش المطبوع بالظبط */
+  purchasesSalesDetail: protectedProcedure.input(z.object({
+    kind: z.enum(["sales", "purchases"]),
+    dateFrom: z.string().optional(),
+    dateTo: z.string().optional(),
+    customerId: z.number().optional(),
+    supplierId: z.number().optional(),
+    warehouseId: z.number().optional(),
+    branchId: z.number().optional(),
+    paymentType: z.enum(["cash", "credit"]).optional(),
+    search: z.string().optional(),
+    currencyCode: z.string().optional(),
+    dueDateFrom: z.string().optional(),
+    dueDateTo: z.string().optional(),
+    paymentStatus: z.enum(["paid", "partial", "unpaid"]).optional(),
+    taxFilter: z.enum(["with", "without"]).optional(),
+    discountFilter: z.enum(["with", "without"]).optional(),
+  })).query(async ({ ctx, input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    const scope = await loadUserScopeFromCtx(db, ctx.saasUser);
+    const { kind, ...filters } = input;
+    const scoped = applyScopeToReportFilters({ tenantId: ctx.tenantId, ...filters }, scope);
+    return kind === "purchases"
+      ? purchasesInvoicesDetailedReport(db, scoped)
+      : salesInvoicesDetailedReport(db, scoped);
   }),
 
   finalBySlug: protectedProcedure.input(z.object({
