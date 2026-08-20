@@ -9,6 +9,7 @@ import {
   parseProductionReport,
   parsePurchasesReport,
   parseSalesReport,
+  parseStockLedgerReport,
   type SheetRow,
 } from "./mega-report-parse";
 
@@ -75,5 +76,31 @@ describe("mega-report-parse", () => {
     expect(production[0].materials.length).toBeGreaterThanOrEqual(3);
     expect(production[0].materials[0].barcode).toBe("401012");
     expect(production[0].deliveries[0]?.warehouse).toContain("انتاج");
+  });
+
+  it("parses Mega detailed stock-movement ledger", () => {
+    const rows = loadFixture("mega-stock-ledger-sample.json");
+    expect(detectMegaReportKind(rows)).toBe("stock_ledger");
+    const ledger = parseStockLedgerReport(rows);
+    expect(ledger.length).toBe(6);
+    expect(ledger[0]).toEqual({
+      date: "2026-08-04",
+      op: "امر انتاج",
+      ref: "Prod.10061",
+      warehouse: "مخزن KAM - انتاج تام",
+      name: "صفيحة بلوجولد احمر عبوة 15 كجم cr",
+      barcode: "804002",
+      unit: "صفيحة",
+      qtyIn: "34.0000",
+      qtyOut: "0.0000",
+      balanceQty: "34.0000",
+      valIn: "38466.97",
+      valOut: "0.00",
+      balanceVal: "38466.97",
+    });
+    // آخر حركة لنفس الصنف تعكس الرصيد النهائي بعد فاتورة المبيعات
+    const lastForFirstItem = ledger.filter((l) => l.barcode === "804002").at(-1);
+    expect(lastForFirstItem?.balanceQty).toBe("0.0000");
+    expect(lastForFirstItem?.balanceVal).toBe("0.00");
   });
 });

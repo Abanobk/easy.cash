@@ -7,7 +7,7 @@
  */
 import * as XLSX from "xlsx";
 
-export type MegaReportKind = "item_costs" | "sales" | "purchases" | "production" | "bom" | "unknown";
+export type MegaReportKind = "item_costs" | "sales" | "purchases" | "production" | "bom" | "stock_ledger" | "unknown";
 
 export type SheetRow = string[];
 
@@ -177,6 +177,7 @@ export function detectMegaReportKind(rows: SheetRow[]): MegaReportKind {
   const blob = head.join("\n");
   if (rows[0]?.[0] === "المخزن" && rows[0]?.includes("الصنف")) return "item_costs";
   if (blob.includes("تقدير الكميات بالمكونات")) return "bom";
+  if (blob.includes("حركة تفصيلية للمخازن")) return "stock_ledger";
   if (blob.includes("اوامر الانتاج") || blob.includes("أوامر الإنتاج") || blob.includes("المنتج التام:")) return "production";
   if (blob.includes("المشتريات") || blob.includes("المستحق سداده")) return "purchases";
   if (blob.includes("المبيعات") || blob.includes("المستحق تحصيله")) return "sales";
@@ -504,6 +505,58 @@ export function parseProductionReport(rows: SheetRow[]): MegaProductionOrder[] {
   return docs;
 }
 
+export type MegaStockLedgerRow = {
+  date: string;
+  op: string;
+  ref: string;
+  warehouse: string;
+  name: string;
+  barcode: string;
+  unit: string;
+  qtyIn: string;
+  qtyOut: string;
+  balanceQty: string;
+  valIn: string;
+  valOut: string;
+  balanceVal: string;
+};
+
+/** حركة تفصيلية للمخازن — كشف حركة خام: كل صف عملية واحدة (شراء/إنتاج/بيع/تحويل/تسوية)
+ *  مرتبة زمنيًا لكل صنف×مخزن، بالرصيد والقيمة بعد كل حركة. أعمدة الملف من ميجا كاش
+ *  بترتيب RTL بصري: [رصيد قيمة، القيمة الصادرة، القيمة الواردة، الرصيد، الكمية الصادرة،
+ *  الكمية الواردة، وحدة القياس، الصنف(+باركود)، المخزن، نوع العملية(+مرجع)، التاريخ]. */
+export function parseStockLedgerReport(rows: SheetRow[]): MegaStockLedgerRow[] {
+  const out: MegaStockLedgerRow[] = [];
+  for (const r of rows) {
+    const dateRaw = cell(r, 10);
+    if (!dateRaw) continue;
+    const date = excelDateToIso(dateRaw);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) continue; // يتجاهل صفوف الفئة/الإجمالي/الفاضية
+    const opCell = String(r[9] ?? "");
+    const opParts = opCell.split("\n").map((p) => p.trim()).filter(Boolean);
+    const op = opParts[0] || "";
+    const ref = opParts[1] || "";
+    const warehouse = String(r[8] ?? "").replace(/\n/g, " ").replace(/\s+/g, " ").trim();
+    const { name, barcode } = parseMegaItemCell(String(r[7] ?? ""));
+    out.push({
+      date,
+      op,
+      ref,
+      warehouse,
+      name,
+      barcode: barcode || "",
+      unit: cell(r, 6),
+      qtyIn: numCell(r, 5),
+      qtyOut: numCell(r, 4),
+      balanceQty: numCell(r, 3),
+      valIn: numCell(r, 2),
+      valOut: numCell(r, 1),
+      balanceVal: numCell(r, 0),
+    });
+  }
+  return out;
+}
+
 /** Normalize sheet_to_json / raw matrix into string rows */
 export function matrixToSheetRows(matrix: unknown[][]): SheetRow[] {
   return matrix.map((row) =>
@@ -527,23 +580,27 @@ export function parseMegaReportBuffer(buf: Buffer | ArrayBuffer) {
   const kind = detectMegaReportKind(rows);
   if (kind === "item_costs") {
     const itemCosts = parseItemCostsReport(rows);
-    return { kind, rows: rows.length, itemCosts, sales: [], purchases: [], production: [], bom: [] };
+    return { kind, rows: rows.length, itemCosts, sales: [], purchases: [], production: [], bom: [], stockLedger: [] };
   }
   if (kind === "sales") {
     const sales = parseSalesReport(rows);
-    return { kind, rows: rows.length, itemCosts: [], sales, purchases: [], production: [], bom: [] };
+    return { kind, rows: rows.length, itemCosts: [], sales, purchases: [], production: [], bom: [], stockLedger: [] };
   }
   if (kind === "purchases") {
     const purchases = parsePurchasesReport(rows);
-    return { kind, rows: rows.length, itemCosts: [], sales: [], purchases, production: [], bom: [] };
+    return { kind, rows: rows.length, itemCosts: [], sales: [], purchases, production: [], bom: [], stockLedger: [] };
   }
   if (kind === "production") {
     const production = parseProductionReport(rows);
-    return { kind, rows: rows.length, itemCosts: [], sales: [], purchases: [], production, bom: [] };
+    return { kind, rows: rows.length, itemCosts: [], sales: [], purchases: [], production, bom: [], stockLedger: [] };
   }
   if (kind === "bom") {
     const bom = parseBomReport(rows);
-    return { kind, rows: rows.length, itemCosts: [], sales: [], purchases: [], production: [], bom };
+    return { kind, rows: rows.length, itemCosts: [], sales: [], purchases: [], production: [], bom, stockLedger: [] };
   }
-  return { kind, rows: rows.length, itemCosts: [], sales: [], purchases: [], production: [], bom: [] };
+  if (kind === "stock_ledger") {
+    const stockLedger = parseStockLedgerReport(rows);
+    return { kind, rows: rows.length, itemCosts: [], sales: [], purchases: [], production: [], bom: [], stockLedger };
+  }
+  return { kind, rows: rows.length, itemCosts: [], sales: [], purchases: [], production: [], bom: [], stockLedger: [] };
 }
