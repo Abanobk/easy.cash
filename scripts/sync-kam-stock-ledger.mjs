@@ -15,6 +15,7 @@
  *   DATABASE_URL=... node scripts/sync-kam-stock-ledger.mjs --file "/tmp/ledger.xlsx" --apply
  */
 import path from "node:path";
+import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { config } from "dotenv";
 import { drizzle } from "drizzle-orm/mysql2";
@@ -33,6 +34,7 @@ function arg(name, fallback) {
 const slug = arg("--slug", "kam");
 const file = arg("--file", "");
 const APPLY = process.argv.includes("--apply");
+const CREATE_MISSING = process.argv.includes("--create-missing-items");
 
 // نسخة مستقلة من دوال server/mega-report-parse.ts (بدل ما نستوردها) — الحاوية على السيرفر
 // فيها dist/ المبني بس مفيهاش شجرة server/ الأصلية، فالسكربت لازم يكون قايم بذاته.
@@ -146,7 +148,8 @@ async function main() {
   const tenantId = tenant.id;
   console.log(`Tenant: ${slug} (id=${tenantId})`);
 
-  const wb = XLSX.readFile(file);
+  const buf = readFileSync(file);
+  const wb = XLSX.read(buf, { type: "buffer", cellDates: false, raw: false });
   const sheet = wb.Sheets[wb.SheetNames[0]];
   const matrix = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "", raw: false });
   const rows = matrixToSheetRows(matrix);
@@ -185,6 +188,43 @@ async function main() {
   const stockByKey = new Map(existingStock.map((s) => [`${s.itemId}-${s.warehouseId}`, s]));
 
   const itemCurrent = new Map(catalogItems.map((i) => [i.id, i]));
+
+  if (CREATE_MISSING) {
+    const seenNames = new Set();
+    let maxCodeNum = 0;
+    const codeRows = await db.select({ code: items.code }).from(items).where(eq(items.tenantId, tenantId));
+    for (const r of codeRows) {
+      const m = String(r.code || "").match(/^P-0*(\d+)$/);
+      if (m) maxCodeNum = Math.max(maxCodeNum, Number(m[1]));
+    }
+    let maxBarcodeNum = 0;
+    for (const it of catalogItems) {
+      if (/^\d+$/.test(String(it.barcode || ""))) maxBarcodeNum = Math.max(maxBarcodeNum, Number(it.barcode));
+    }
+    let created = 0;
+    for (const [, r] of lastByKey) {
+      const nameKey = normalizeKey(r.name);
+      if (seenNames.has(nameKey) || (byName.get(nameKey) || []).length > 0) continue;
+      seenNames.add(nameKey);
+      maxCodeNum += 1;
+      maxBarcodeNum += 1;
+      const code = `P-${String(maxCodeNum).padStart(4, "0")}`;
+      const barcode = String(maxBarcodeNum).padStart(6, "0");
+      console.log(`Creating missing item: "${r.name}" -> ${code} / ${barcode}`);
+      if (APPLY) {
+        const [ins] = await db.insert(items).values({
+          tenantId, code, barcode, name: r.name, unit: r.unit || "قطعة",
+          purchasePrice: "0", averageCost: "0", salePrice: "0", currentStock: "0", isActive: true,
+        });
+        const newId = ins.insertId;
+        const newItem = { id: newId, name: r.name, barcode };
+        catalogItems.push(newItem);
+        byName.set(nameKey, [newItem]);
+      }
+      created += 1;
+    }
+    console.log(`Missing items ${APPLY ? "created" : "would be created"}: ${created}`);
+  }
 
   const matched = [];
   const unmatchedItems = new Set();
