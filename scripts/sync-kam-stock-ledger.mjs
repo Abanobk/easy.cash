@@ -34,6 +34,90 @@ const slug = arg("--slug", "kam");
 const file = arg("--file", "");
 const APPLY = process.argv.includes("--apply");
 
+// نسخة مستقلة من دوال server/mega-report-parse.ts (بدل ما نستوردها) — الحاوية على السيرفر
+// فيها dist/ المبني بس مفيهاش شجرة server/ الأصلية، فالسكربت لازم يكون قايم بذاته.
+function cell(row, i) {
+  return String(row[i] ?? "").trim();
+}
+function stripThousands(value) {
+  return value.replace(/,/g, "");
+}
+function numCell(row, i) {
+  return stripThousands(cell(row, i));
+}
+function excelDateToIso(value) {
+  const s = String(value || "").trim();
+  if (!s) return "";
+  if (/^\d+(\.\d+)?$/.test(s)) {
+    const n = Number(s);
+    if (n > 20000 && n < 80000) {
+      const epoch = Date.UTC(1899, 11, 30);
+      const d = new Date(epoch + Math.floor(n) * 86400000);
+      return d.toISOString().slice(0, 10);
+    }
+  }
+  const m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
+  if (m) {
+    let y = Number(m[3]);
+    if (y < 100) y += 2000;
+    const mo = String(Number(m[2])).padStart(2, "0");
+    const day = String(Number(m[1])).padStart(2, "0");
+    return `${y}-${mo}-${day}`;
+  }
+  if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
+  return s;
+}
+function parseMegaItemCell(raw) {
+  const text = String(raw || "").replace(/\r/g, "\n").trim();
+  if (!text) return { name: "", barcode: null };
+  const parts = text.split("\n").map((p) => p.trim()).filter(Boolean);
+  const name = parts[0] || text;
+  let barcode = null;
+  const joined = text.replace(/\n/g, " ");
+  const m = joined.match(/\(([^)]+)\)\s*$/);
+  if (m) barcode = m[1].trim();
+  else if (parts.length > 1) {
+    const last = parts[parts.length - 1].replace(/[()]/g, "").trim();
+    if (last && last !== name) barcode = last;
+  }
+  return { name, barcode };
+}
+function matrixToSheetRows(matrix) {
+  return matrix.map((row) =>
+    (row || []).map((c) => {
+      if (c == null) return "";
+      if (typeof c === "number") return String(c);
+      return String(c).trim();
+    }),
+  );
+}
+function detectStockLedgerKind(rows) {
+  const head = rows.slice(0, 12).map((r) => r.join(" | "));
+  const blob = head.join("\n");
+  return blob.includes("حركة تفصيلية للمخازن");
+}
+function parseStockLedgerReport(rows) {
+  const out = [];
+  for (const r of rows) {
+    const dateRaw = cell(r, 10);
+    if (!dateRaw) continue;
+    const date = excelDateToIso(dateRaw);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) continue;
+    const opCell = String(r[9] ?? "");
+    const opParts = opCell.split("\n").map((p) => p.trim()).filter(Boolean);
+    const op = opParts[0] || "";
+    const ref = opParts[1] || "";
+    const warehouse = String(r[8] ?? "").replace(/\n/g, " ").replace(/\s+/g, " ").trim();
+    const { name, barcode } = parseMegaItemCell(String(r[7] ?? ""));
+    out.push({
+      date, op, ref, warehouse, name, barcode: barcode || "",
+      unit: cell(r, 6), qtyIn: numCell(r, 5), qtyOut: numCell(r, 4), balanceQty: numCell(r, 3),
+      valIn: numCell(r, 2), valOut: numCell(r, 1), balanceVal: numCell(r, 0),
+    });
+  }
+  return out;
+}
+
 function normalizeKey(value) {
   return String(value || "")
     .trim()
@@ -53,7 +137,6 @@ async function main() {
   if (slug !== "kam") throw new Error("هذا السكربت مقفول على slug=kam للحماية");
 
   const { items, warehouses, itemWarehouseStock, productionOrders, tenants } = await import("../drizzle/schema.ts");
-  const { detectMegaReportKind, parseStockLedgerReport, matrixToSheetRows } = await import("../server/mega-report-parse.ts");
 
   const db = drizzle(process.env.DATABASE_URL);
 
@@ -67,9 +150,8 @@ async function main() {
   const sheet = wb.Sheets[wb.SheetNames[0]];
   const matrix = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "", raw: false });
   const rows = matrixToSheetRows(matrix);
-  const kind = detectMegaReportKind(rows);
-  console.log(`Detected report kind: ${kind}`);
-  if (kind !== "stock_ledger") throw new Error(`الملف مش "حركة تفصيلية للمخازن" — النوع المكتشف: ${kind}`);
+  if (!detectStockLedgerKind(rows)) throw new Error('الملف مش "حركة تفصيلية للمخازن"');
+  console.log("Detected report: حركة تفصيلية للمخازن");
 
   const ledger = parseStockLedgerReport(rows);
   console.log(`Ledger rows parsed: ${ledger.length}`);
