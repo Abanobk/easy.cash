@@ -181,6 +181,16 @@ async function main() {
   const whByName = new Map();
   for (const w of catalogWarehouses) whByName.set(normalizeKey(w.name), w);
 
+  // نفس المخزن باسم مختلف شوية في تقرير ميجا كاش عن الاسم عندنا (أكّد المستخدم إنهم نفس المخزن) —
+  // بدل ما نغيّر اسم المخزن عندنا (ممكن يكون مستخدم في أماكن تانية)، نعمل alias هنا بس.
+  const WAREHOUSE_ALIASES = {
+    "مخزن kam مواد تعبئة وتغلييف": "مخزن kam تعبئة و تغليف",
+  };
+  for (const [fromKey, toKey] of Object.entries(WAREHOUSE_ALIASES)) {
+    const target = whByName.get(normalizeKey(toKey));
+    if (target) whByName.set(normalizeKey(fromKey), target);
+  }
+
   const existingStock = await db.select({
     id: itemWarehouseStock.id, itemId: itemWarehouseStock.itemId, warehouseId: itemWarehouseStock.warehouseId,
     quantity: itemWarehouseStock.quantity, unitCost: itemWarehouseStock.unitCost,
