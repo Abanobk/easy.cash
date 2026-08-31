@@ -1401,6 +1401,23 @@ export const tenantScreenPermissions = mysqlTable("tenant_screen_permissions", {
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
 
+/**
+ * صلاحيات تفصيلية زي ميجا كاش — قسم رئيسي ← عنصر ← مجموعة أفعال محددة له (shared/permission-tree.ts).
+ * صف واحد لكل (دور × عنصر) بمصفوفة JSON للأفعال المسموحة، بدل عمود منفصل لكل فعل —
+ * لأن مجموعة الأفعال بتختلف من عنصر للتاني (فاتورة شراء ليها 22 فعل، بيانات بسيطة 4 بس).
+ * طبقة إضافية فوق tenantRolePermissions الحالية — مرحلة الإدخال والتخزين، الربط بالتنفيذ
+ * الفعلي في الـtRPC/الواجهة هيحصل تدريجيًا بعد كده.
+ */
+export const tenantEntityPermissions = mysqlTable("tenant_entity_permissions", {
+  id: int("id").autoincrement().primaryKey(),
+  tenantId: int("tenantId").notNull(),
+  role: varchar("role", { length: 64 }).notNull(),
+  moduleKey: varchar("moduleKey", { length: 64 }).notNull(),
+  entityKey: varchar("entityKey", { length: 128 }).notNull(),
+  allowedActions: json("allowedActions").$type<string[]>().default([]).notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
 /** سياسة مراجعة الشركة — أهداف وهوامش وتحمل فروقات للمراجع الذكي */
 export const companyAuditPolicies = mysqlTable("company_audit_policies", {
   id: int("id").autoincrement().primaryKey(),

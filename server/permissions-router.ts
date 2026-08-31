@@ -27,9 +27,10 @@ import {
   getScreenOverridesForRole,
   saveScreenPermissionsForRole,
 } from "./screen-permissions-service";
-import { appUsers } from "../drizzle/schema";
+import { appUsers, tenantEntityPermissions } from "../drizzle/schema";
 import { getDb } from "./db";
 import { and, eq } from "drizzle-orm";
+import { PERMISSION_TREE_RESOLVED, findEntityActions } from "../shared/permission-tree";
 
 const roleKeySchema = z.string().min(1).max(64);
 const editableRoleKeySchema = z.string().min(1).max(64).refine((v) => isEditableRoleKey(v), {
@@ -288,5 +289,73 @@ export const permissionsRouter = router({
       if (!ctx.tenantId) throw new TRPCError({ code: "BAD_REQUEST" });
       await saveScreenPermissionsForRole(ctx.tenantId, input.role, input.screens);
       return { success: true };
+    }),
+
+  /**
+   * الشجرة التفصيلية (زي ميجا كاش) — قسم ← عنصر ← أفعال محددة له. مرحلة تخزين/إدارة بس
+   * حاليًا (shared/permission-tree.ts) — الربط بالتنفيذ الفعلي هيحصل تدريجيًا بعد كده.
+   */
+  entityTree: protectedProcedure
+    .input(z.object({ role: roleKeySchema }))
+    .query(async ({ ctx, input }) => {
+      adminOnly(ctx);
+      if (!ctx.tenantId) throw new TRPCError({ code: "BAD_REQUEST" });
+      await assertRoleExists(ctx.tenantId, input.role);
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const rows = await db.select().from(tenantEntityPermissions).where(
+        and(eq(tenantEntityPermissions.tenantId, ctx.tenantId), eq(tenantEntityPermissions.role, input.role)),
+      );
+      const saved = new Map<string, string[]>();
+      for (const r of rows) saved.set(`${r.moduleKey}::${r.entityKey}`, (r.allowedActions as string[]) || []);
+      const tree = PERMISSION_TREE_RESOLVED.map((m) => ({
+        key: m.key,
+        label: m.label,
+        entities: m.entities.map((e) => ({
+          key: e.key,
+          label: e.label,
+          availableActions: e.actions,
+          allowedActions: saved.get(`${m.key}::${e.key}`) || [],
+        })),
+      }));
+      return { role: input.role, tree };
+    }),
+
+  saveEntityTree: protectedProcedure
+    .input(z.object({
+      role: editableRoleKeySchema,
+      entities: z.array(z.object({
+        moduleKey: z.string().min(1).max(64),
+        entityKey: z.string().min(1).max(128),
+        allowedActions: z.array(z.string()).max(30),
+      })).max(1000),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      adminOnly(ctx);
+      if (!ctx.tenantId) throw new TRPCError({ code: "BAD_REQUEST" });
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+      const rowsToInsert: Array<{ moduleKey: string; entityKey: string; allowedActions: string[] }> = [];
+      for (const e of input.entities) {
+        const valid = findEntityActions(e.moduleKey, e.entityKey);
+        if (!valid) continue; // عنصر غير معروف في الشجرة — يتجاهل بدل ما يفشل الحفظ كله
+        const allowed = e.allowedActions.filter((a) => (valid as string[]).includes(a));
+        if (allowed.length > 0) rowsToInsert.push({ moduleKey: e.moduleKey, entityKey: e.entityKey, allowedActions: allowed });
+      }
+
+      await db.delete(tenantEntityPermissions).where(
+        and(eq(tenantEntityPermissions.tenantId, ctx.tenantId), eq(tenantEntityPermissions.role, input.role)),
+      );
+      for (const r of rowsToInsert) {
+        await db.insert(tenantEntityPermissions).values({
+          tenantId: ctx.tenantId,
+          role: input.role,
+          moduleKey: r.moduleKey,
+          entityKey: r.entityKey,
+          allowedActions: r.allowedActions,
+        });
+      }
+      return { success: true, saved: rowsToInsert.length };
     }),
 });

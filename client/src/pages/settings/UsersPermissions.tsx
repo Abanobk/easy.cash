@@ -11,7 +11,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { toast } from "sonner";
 import {
   Shield, User, Crown, Edit, Plus, Trash2, Key, Eye, EyeOff, Calculator, ShoppingCart,
-  Warehouse, Link2, SlidersHorizontal, MapPin, LayoutGrid, Layers, Users, Search,
+  Warehouse, Link2, SlidersHorizontal, MapPin, LayoutGrid, Layers, Users, Search, ListTree,
 } from "lucide-react";
 import TenantLoginShareActions from "@/components/TenantLoginShareActions";
 import { useTenantSlug } from "@/lib/tenant";
@@ -19,13 +19,14 @@ import { buildTenantLoginUrl } from "@/lib/tenant-login";
 
 import RolePermissionsMatrix from "@/components/settings/RolePermissionsMatrix";
 import ScreenPermissionsMatrix from "@/components/settings/ScreenPermissionsMatrix";
+import EntityPermissionsTree from "@/components/settings/EntityPermissionsTree";
 import UserPermissionOverrides from "@/components/settings/UserPermissionOverrides";
 import PermissionGate from "@/components/PermissionGate";
 import { AddActionButton } from "@/components/AddActionButton";
 
 type AppRole = string;
 
-type Tab = "screens" | "roles" | "users";
+type Tab = "screens" | "roles" | "entities" | "users";
 
 interface UserForm {
   name: string;
@@ -174,6 +175,7 @@ export default function UsersPermissions() {
 
   const tabs = [
     { id: "users" as const, label: "المستخدمون", hint: "الحسابات والأدوار", icon: Users, count: users?.length },
+    { id: "entities" as const, label: "الصلاحيات التفصيلية", hint: "قسم ← عنصر ← أفعال زي ميجا كاش", icon: ListTree },
     { id: "screens" as const, label: "تفصيل الشاشات", hint: "صلاحية كل شاشة", icon: LayoutGrid },
     { id: "roles" as const, label: "أقسام عامة", hint: "اختصار لكل قسم", icon: Layers },
   ];
@@ -238,7 +240,9 @@ export default function UsersPermissions() {
           })}
         </div>
 
-        {activeTab === "screens" ? (
+        {activeTab === "entities" ? (
+          <EntityPermissionsTree />
+        ) : activeTab === "screens" ? (
           <ScreenPermissionsMatrix />
         ) : activeTab === "roles" ? (
           <RolePermissionsMatrix />
