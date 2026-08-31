@@ -63,6 +63,67 @@ export const PERM_ACTION_LABELS: Record<PermActionKey, string> = {
   allWarehouses: "تعامل على كل المخازن",
 };
 
+/**
+ * تصنيف كل فعل لفئة معنى (للعرض فقط — تلوين وترتيب في الواجهة عشان الشجرة الكبيرة
+ * (٢٣ فعل × ١٦٦ عنصر) متبقاش لغبطة بصرية. الترتيب هنا بيحدد ترتيب ظهور الأفعال جوه
+ * كل عنصر في الواجهة (نفس الفئة تتجمع مع بعض).
+ */
+export type PermActionCategory =
+  | "core"
+  | "destructive"
+  | "approval"
+  | "scope"
+  | "finance"
+  | "sensitive"
+  | "print";
+
+export const PERM_ACTION_CATEGORY: Record<PermActionKey, PermActionCategory> = {
+  add: "core",
+  edit: "core",
+  viewDoc: "core",
+  viewDocList: "core",
+  deleteCancel: "destructive",
+  approve: "approval",
+  unapprove: "approval",
+  changeDate: "approval",
+  backdate: "approval",
+  allBranches: "scope",
+  allWarehouses: "scope",
+  viewOtherUsersDocs: "scope",
+  copy: "scope",
+  addDiscount: "finance",
+  addTax: "finance",
+  viewSecretAccounts: "sensitive",
+  viewCosts: "sensitive",
+  viewBalances: "sensitive",
+  changePriceCost: "sensitive",
+  changeExchangeRate: "sensitive",
+  skipPriceLimit: "sensitive",
+  print: "print",
+  printWithoutApproval: "print",
+};
+
+export const PERM_ACTION_CATEGORY_LABELS: Record<PermActionCategory, string> = {
+  core: "أساسي",
+  destructive: "حذف / إلغاء",
+  approval: "اعتماد وتحكم بالتاريخ",
+  scope: "نطاق الصلاحية",
+  finance: "خصومات وضرائب",
+  sensitive: "بيانات حساسة ومالية",
+  print: "طباعة",
+};
+
+/** ترتيب ظهور الفئات في الواجهة */
+export const PERM_ACTION_CATEGORY_ORDER: PermActionCategory[] = [
+  "core",
+  "destructive",
+  "approval",
+  "scope",
+  "finance",
+  "sensitive",
+  "print",
+];
+
 /** حزم صلاحيات جاهزة — كل عنصر في الشجرة بياخد وحدة منها بدل ما نكررها يدوي في كل سطر. */
 export const PERM_BUNDLES = {
   /** بيانات بسيطة: إضافة/تعديل/عرض/حذف بس (إدارات، وظائف، فترات عمل...) */
