@@ -20,7 +20,9 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import PermissionGate from "@/components/PermissionGate";
+import EntityPermissionGate from "@/components/EntityPermissionGate";
 import { usePermissions } from "@/hooks/usePermissions";
+import { useEntityAllowed } from "@/hooks/useEntityPermission";
 
 type Tab = "orders" | "new";
 type MaterialRow = { itemId: string; quantity: string; notes: string };
@@ -158,6 +160,9 @@ export default function Production() {
   const [query, setQuery] = useState({ search: "", status: "all", warehouseId: "all", dateFrom: "", dateTo: "" });
 
   const [editId, setEditId] = useState<number | null>(null);
+  const entityCanAdd = useEntityAllowed("production", "productionOrder", "add");
+  const entityCanEdit = useEntityAllowed("production", "productionOrder", "edit");
+  const entityCanSave = editId ? entityCanEdit : entityCanAdd;
   const [viewId, setViewId] = useState<number | null>(null);
   const [form, setForm] = useState(emptyForm);
   const [materials, setMaterials] = useState<MaterialRow[]>([]);
@@ -281,7 +286,7 @@ export default function Production() {
   };
 
   const saveOrder = (andApprove = false) => {
-    if (!canEdit) return toast.error("ليس لديك صلاحية");
+    if (!canEdit || !entityCanSave) return toast.error("ليس لديك صلاحية");
     if (!form.productId || !form.warehouseId || !form.quantity) {
       return toast.error("الصنف ومخزن الخامات والكمية مطلوبة");
     }
@@ -339,7 +344,7 @@ export default function Production() {
         <div className="flex flex-wrap gap-2 p-1.5 rounded-2xl bg-slate-100 border border-slate-200">
           {([
             { id: "orders" as const, label: "قائمة أوامر الإنتاج", icon: Factory },
-            { id: "new" as const, label: editId ? "تعديل أمر إنتاج" : "أمر إنتاج", icon: Plus },
+            ...(entityCanSave ? [{ id: "new" as const, label: editId ? "تعديل أمر إنتاج" : "أمر إنتاج", icon: Plus }] : []),
           ]).map((t) => {
             const Icon = t.icon;
             const active = tab === t.id;
@@ -443,7 +448,9 @@ export default function Production() {
                             <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setViewId(row.id)}><Eye size={14} /></Button>
                             {row.status === "draft" && (
                               <PermissionGate module="production" action="edit">
-                                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(row.id)}><Pencil size={14} /></Button>
+                                <EntityPermissionGate moduleKey="production" entityKey="productionOrder" action="edit">
+                                  <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(row.id)}><Pencil size={14} /></Button>
+                                </EntityPermissionGate>
                               </PermissionGate>
                             )}
                           </div>
@@ -501,31 +508,41 @@ export default function Production() {
                   <div className="flex flex-wrap gap-2">
                     {detailQ.data.status === "draft" && (
                       <PermissionGate module="production" action="edit">
-                        <Button size="sm" className="bg-amber-600 hover:bg-amber-700 font-extrabold"
-                          disabled={statusMut.isPending}
-                          onClick={() => statusMut.mutate({ id: viewId, status: "in_progress" })}>
-                          <CheckCircle2 size={14} className="me-1" /> اعتماد
-                        </Button>
-                        <Button size="sm" variant="outline" onClick={() => openEdit(viewId)}>تعديل</Button>
-                        <Button size="sm" variant="outline" className="text-red-700"
-                          onClick={() => statusMut.mutate({ id: viewId, status: "cancelled" })}>
-                          <XCircle size={14} className="me-1" /> إلغاء
-                        </Button>
+                        <EntityPermissionGate moduleKey="production" entityKey="productionOrder" action="approve">
+                          <Button size="sm" className="bg-amber-600 hover:bg-amber-700 font-extrabold"
+                            disabled={statusMut.isPending}
+                            onClick={() => statusMut.mutate({ id: viewId, status: "in_progress" })}>
+                            <CheckCircle2 size={14} className="me-1" /> اعتماد
+                          </Button>
+                        </EntityPermissionGate>
+                        <EntityPermissionGate moduleKey="production" entityKey="productionOrder" action="edit">
+                          <Button size="sm" variant="outline" onClick={() => openEdit(viewId)}>تعديل</Button>
+                        </EntityPermissionGate>
+                        <EntityPermissionGate moduleKey="production" entityKey="productionOrder" action="deleteCancel">
+                          <Button size="sm" variant="outline" className="text-red-700"
+                            onClick={() => statusMut.mutate({ id: viewId, status: "cancelled" })}>
+                            <XCircle size={14} className="me-1" /> إلغاء
+                          </Button>
+                        </EntityPermissionGate>
                       </PermissionGate>
                     )}
                     {detailQ.data.status === "in_progress" && (
                       <PermissionGate module="production" action="edit">
-                        <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 font-extrabold"
-                          disabled={statusMut.isPending}
-                          onClick={() => statusMut.mutate({ id: viewId, status: "completed" })}>
-                          إتمام / استلام الإنتاج التام
-                        </Button>
+                        <EntityPermissionGate moduleKey="production" entityKey="productionOrder" action="edit">
+                          <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 font-extrabold"
+                            disabled={statusMut.isPending}
+                            onClick={() => statusMut.mutate({ id: viewId, status: "completed" })}>
+                            إتمام / استلام الإنتاج التام
+                          </Button>
+                        </EntityPermissionGate>
                       </PermissionGate>
                     )}
                     {detailQ.data.status === "draft" && (
                       <PermissionGate module="production" action="delete">
-                        <Button size="sm" variant="outline" className="text-red-700"
-                          onClick={() => { if (confirm("حذف الأمر؟")) deleteMut.mutate(viewId); }}>حذف</Button>
+                        <EntityPermissionGate moduleKey="production" entityKey="productionOrder" action="deleteCancel">
+                          <Button size="sm" variant="outline" className="text-red-700"
+                            onClick={() => { if (confirm("حذف الأمر؟")) deleteMut.mutate(viewId); }}>حذف</Button>
+                        </EntityPermissionGate>
                       </PermissionGate>
                     )}
                   </div>
@@ -684,18 +701,20 @@ export default function Production() {
                   طباعة بعد الحفظ
                 </label>
 
-                {canEdit ? (
+                {canEdit && entityCanSave ? (
                   <div className="flex flex-wrap gap-2">
                     <Button className="font-extrabold bg-slate-800 hover:bg-slate-900"
                       disabled={createMut.isPending || updateMut.isPending}
                       onClick={() => saveOrder(false)}>
                       حفظ
                     </Button>
-                    <Button className="font-extrabold bg-amber-600 hover:bg-amber-700"
-                      disabled={createMut.isPending || updateMut.isPending || statusMut.isPending}
-                      onClick={() => saveOrder(true)}>
-                      اعتماد
-                    </Button>
+                    <EntityPermissionGate moduleKey="production" entityKey="productionOrder" action="approve">
+                      <Button className="font-extrabold bg-amber-600 hover:bg-amber-700"
+                        disabled={createMut.isPending || updateMut.isPending || statusMut.isPending}
+                        onClick={() => saveOrder(true)}>
+                        اعتماد
+                      </Button>
+                    </EntityPermissionGate>
                     {editId && (
                       <Button variant="outline" onClick={() => { resetForm(); setTabNav("orders"); }}>إلغاء التعديل</Button>
                     )}

@@ -86,6 +86,25 @@ export const permissionsRouter = router({
     };
   }),
 
+  /**
+   * صلاحيات المستخدم الحالي التفصيلية (للتنفيذ الفعلي في الواجهة — إخفاء/تعطيل الأزرار).
+   * entities هنا فيها بس العناصر اللي المدير ظبطها فعليًا لدور المستخدم؛ أي عنصر غير موجود
+   * يعتبر "غير مقيّد" (بيرجع للنظام القديم) — نفس منطق assertEntityAction في السيرفر.
+   */
+  myEntityPermissions: protectedProcedure.query(async ({ ctx }) => {
+    if (!ctx.saasUser || !ctx.tenantId) return { bypass: true, entities: {} as Record<string, string[]> };
+    const bypass = roleBypassesPermissions(ctx.saasUser.role);
+    if (bypass) return { bypass: true, entities: {} as Record<string, string[]> };
+    const db = await getDb();
+    if (!db) return { bypass: true, entities: {} as Record<string, string[]> };
+    const rows = await db.select().from(tenantEntityPermissions).where(
+      and(eq(tenantEntityPermissions.tenantId, ctx.tenantId), eq(tenantEntityPermissions.role, ctx.saasUser.role)),
+    );
+    const entities: Record<string, string[]> = {};
+    for (const r of rows) entities[`${r.moduleKey}::${r.entityKey}`] = (r.allowedActions as string[]) || [];
+    return { bypass: false, entities };
+  }),
+
   /** قائمة الأدوار (مدمجة + مخصصة) لتعيين الصلاحيات والمستخدمين */
   listRoles: protectedProcedure.query(async ({ ctx }) => {
     adminOnly(ctx);

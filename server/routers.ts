@@ -74,6 +74,8 @@ import {
 import { activateSubscriptionPayment } from "./paymob-subscription";
 import { assistantRouter } from "./assistant-router";
 import { permissionsRouter } from "./permissions-router";
+import { assertEntityAction } from "./entity-permission-service";
+import type { PermActionKey } from "../shared/permission-tree";
 import { importCostingRouter } from "./import-costing-router";
 import { accountingAuditorRouter } from "./accounting-auditor-router";
 import { documentAttachmentsRouter } from "./document-attachments-router";
@@ -4353,6 +4355,7 @@ const productionRouter = router({
     dateFrom: z.string().optional(),
     dateTo: z.string().optional(),
   })).query(async ({ ctx, input }) => {
+    await assertEntityAction(ctx, "production", "productionOrder", "viewDocList");
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     const scope = await loadUserScopeFromCtx(db, ctx.saasUser);
@@ -4404,6 +4407,7 @@ const productionRouter = router({
   }),
 
   get: protectedProcedure.input(z.number()).query(async ({ ctx, input }) => {
+    await assertEntityAction(ctx, "production", "productionOrder", "viewDoc");
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     const [order] = await db.select({
@@ -4515,6 +4519,7 @@ const productionRouter = router({
       warehouseId: z.number().optional(),
     })).optional(),
   })).mutation(async ({ ctx, input }) => {
+    await assertEntityAction(ctx, "production", "productionOrder", "add");
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     await assertDateNotInClosedPeriod(db, ctx.tenantId, input.date);
@@ -4570,6 +4575,7 @@ const productionRouter = router({
       warehouseId: z.number().optional(),
     })),
   })).mutation(async ({ ctx, input }) => {
+    await assertEntityAction(ctx, "production", "productionOrder", "edit");
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     const [existing] = await db.select().from(productionOrders)
@@ -4608,6 +4614,7 @@ const productionRouter = router({
   }),
 
   delete: protectedProcedure.input(z.number()).mutation(async ({ ctx, input }) => {
+    await assertEntityAction(ctx, "production", "productionOrder", "deleteCancel");
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     const [existing] = await db.select().from(productionOrders)
@@ -4769,6 +4776,11 @@ const productionRouter = router({
     id: z.number(),
     status: z.enum(["draft", "in_progress", "completed", "cancelled"]),
   })).mutation(async ({ ctx, input }) => {
+    // "اعتماد" أمر الإنتاج في واجهتنا هو تحديدًا الانتقال draft → in_progress (زي ما اسم الزرار
+    // في الواجهة نفسه)؛ الإلغاء دايمًا تحت "حذف / إلغاء"؛ باقي الانتقالات تحت "تعديل".
+    const actionForStatus: PermActionKey =
+      input.status === "in_progress" ? "approve" : input.status === "cancelled" ? "deleteCancel" : "edit";
+    await assertEntityAction(ctx, "production", "productionOrder", actionForStatus);
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     try {
