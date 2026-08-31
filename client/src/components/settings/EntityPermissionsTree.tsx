@@ -337,11 +337,20 @@ export default function EntityPermissionsTree() {
                 const pct = moduleTotalCount > 0 ? Math.round((moduleAllowedCount / moduleTotalCount) * 100) : 0;
                 const Icon = MODULE_ICONS[m.key] || Layers;
                 return (
-                  <div key={m.key} className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+                  <div
+                    key={m.key}
+                    className={`rounded-2xl border overflow-hidden transition-all ${
+                      isOpen
+                        ? "border-blue-300 shadow-md ring-1 ring-blue-100"
+                        : "border-slate-200 bg-white shadow-sm hover:border-slate-300"
+                    }`}
+                  >
                     <button
                       type="button"
                       onClick={() => toggleModuleOpen(m.key)}
-                      className="w-full flex items-center justify-between gap-3 px-3.5 py-3 hover:bg-slate-50 text-right"
+                      className={`w-full flex items-center justify-between gap-3 px-3.5 py-3 text-right transition-colors ${
+                        isOpen ? "bg-blue-50/80 hover:bg-blue-50" : "bg-white hover:bg-slate-50"
+                      }`}
                     >
                       <div className="flex items-center gap-3 min-w-0">
                         <span className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${
@@ -351,7 +360,7 @@ export default function EntityPermissionsTree() {
                         </span>
                         <div className="min-w-0 text-right">
                           <div className="flex items-center gap-2">
-                            <span className="font-extrabold text-slate-900 truncate">{m.label}</span>
+                            <span className={`font-extrabold truncate ${isOpen ? "text-blue-900" : "text-slate-900"}`}>{m.label}</span>
                             <span className="text-[11px] font-bold text-slate-400 shrink-0">{m.entities.length} عنصر</span>
                           </div>
                           <div className="flex items-center gap-2 mt-1.5 w-40 max-w-full">
@@ -369,12 +378,16 @@ export default function EntityPermissionsTree() {
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
                         <AllToggle allOn={allOn} onClick={() => setModuleAll(m, !allOn)} stopPropagation />
-                        {isOpen ? <ChevronDown size={16} className="text-slate-400" /> : <ChevronLeft size={16} className="text-slate-400" />}
+                        <span className={`w-6 h-6 rounded-full flex items-center justify-center transition-colors ${
+                          isOpen ? "bg-blue-600 text-white" : "bg-slate-100 text-slate-400"
+                        }`}>
+                          {isOpen ? <ChevronDown size={14} /> : <ChevronLeft size={14} />}
+                        </span>
                       </div>
                     </button>
 
                     {isOpen && (
-                      <div className="border-t border-slate-100 bg-slate-50/70 p-3">
+                      <div className="border-t border-blue-100 bg-slate-50/70 p-3">
                         <div className="grid grid-cols-1 xl:grid-cols-2 gap-2">
                           {m.entities.map((e) => {
                             const allowed = current[`${m.key}::${e.key}`] || [];
