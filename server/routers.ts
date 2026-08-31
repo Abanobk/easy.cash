@@ -369,6 +369,8 @@ const customersRouter = router({
     limit: z.number().default(20),
     branchId: z.number().optional(),
   })).query(async ({ ctx, input }) => {
+    // ملحوظة: مش بنقيّد هنا بـ viewDocList — الإندبوينت ده مشترك كمصدر بيانات (اختيار
+    // عميل) لفواتير البيع والمعاملات في شاشات تانية كتير، مش بس شاشة إدارة العملاء.
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     const scope = await loadUserScopeFromCtx(db, ctx.saasUser);
@@ -419,6 +421,7 @@ const customersRouter = router({
     /** Mega Cash: register the same party as a supplier too. */
     alsoAsSupplier: z.boolean().optional(),
   })).mutation(async ({ ctx, input }) => {
+    await assertEntityAction(ctx, "contacts", "customer", "add");
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     const scope = await loadUserScopeFromCtx(db, ctx.saasUser);
@@ -531,6 +534,7 @@ const customersRouter = router({
     /** If not yet linked, create a supplier twin (Mega Cash dual-role). */
     alsoAsSupplier: z.boolean().optional(),
   })).mutation(async ({ ctx, input }) => {
+    await assertEntityAction(ctx, "contacts", "customer", "edit");
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     const scope = await loadUserScopeFromCtx(db, ctx.saasUser);
@@ -591,6 +595,7 @@ const customersRouter = router({
     return { success: true, linkedSupplierId: linkedSupplierId ?? undefined, supplierCode };
   }),
   delete: protectedProcedure.input(z.number()).mutation(async ({ ctx, input }) => {
+    await assertEntityAction(ctx, "contacts", "customer", "deleteCancel");
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     const [existing] = await db.select({ linkedSupplierId: customers.linkedSupplierId }).from(customers)
@@ -612,6 +617,7 @@ const suppliersRouter = router({
     limit: z.number().default(20),
     branchId: z.number().optional(),
   })).query(async ({ ctx, input }) => {
+    // نفس ملحوظة العملاء: مصدر بيانات مشترك (اختيار مورد) لفواتير الشراء وشاشات تانية.
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     const scope = await loadUserScopeFromCtx(db, ctx.saasUser);
@@ -643,6 +649,7 @@ const suppliersRouter = router({
     /** Mega Cash: register the same party as a customer too. */
     alsoAsCustomer: z.boolean().optional(),
   })).mutation(async ({ ctx, input }) => {
+    await assertEntityAction(ctx, "contacts", "supplier", "add");
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     let code: string;
@@ -731,6 +738,7 @@ const suppliersRouter = router({
     /** If not yet linked, create a customer twin (Mega Cash dual-role). */
     alsoAsCustomer: z.boolean().optional(),
   })).mutation(async ({ ctx, input }) => {
+    await assertEntityAction(ctx, "contacts", "supplier", "edit");
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     const [existing] = await db.select().from(suppliers)
@@ -778,6 +786,7 @@ const suppliersRouter = router({
     return { success: true, linkedCustomerId: linkedCustomerId ?? undefined, customerCode };
   }),
   delete: protectedProcedure.input(z.number()).mutation(async ({ ctx, input }) => {
+    await assertEntityAction(ctx, "contacts", "supplier", "deleteCancel");
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     const [existing] = await db.select({ linkedCustomerId: suppliers.linkedCustomerId }).from(suppliers)
@@ -794,6 +803,7 @@ const suppliersRouter = router({
 // ===================== CONTACT CATEGORIES =====================
 const contactCategoriesRouter = router({
   list: protectedProcedure.query(async ({ ctx }) => {
+    // مصدر بيانات مشترك (فلتر فئة) في شاشات العملاء/الموردين — مش مقيّد هنا.
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     return db.select().from(contactCategories).where(tenantWhere(contactCategories, ctx.tenantId)).orderBy(contactCategories.name);
@@ -802,6 +812,7 @@ const contactCategoriesRouter = router({
     name: z.string().min(1),
     type: z.enum(["customer", "supplier", "both"]),
   })).mutation(async ({ ctx, input }) => {
+    await assertEntityAction(ctx, "contacts", "contactCategories", "add");
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     await db.insert(contactCategories).values(withTenantId(ctx.tenantId, input) as any);
@@ -812,6 +823,7 @@ const contactCategoriesRouter = router({
     name: z.string().min(1),
     type: z.enum(["customer", "supplier", "both"]),
   })).mutation(async ({ ctx, input }) => {
+    await assertEntityAction(ctx, "contacts", "contactCategories", "edit");
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     const { id, ...data } = input;
@@ -819,6 +831,7 @@ const contactCategoriesRouter = router({
     return { success: true };
   }),
   delete: protectedProcedure.input(z.number()).mutation(async ({ ctx, input }) => {
+    await assertEntityAction(ctx, "contacts", "contactCategories", "deleteCancel");
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     await db.delete(contactCategories).where(tenantWhere(contactCategories, ctx.tenantId, eq(contactCategories.id, input)));
@@ -887,6 +900,7 @@ const itemsRouter = router({
     trackSerial: z.boolean().optional(),
     description: z.string().optional(),
   })).mutation(async ({ ctx, input }) => {
+    await assertEntityAction(ctx, "inventory", "item", "add");
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     const { assertActiveMeasureUnit } = await import("./measure-units");
@@ -940,6 +954,7 @@ const itemsRouter = router({
     description: z.string().optional(),
     isActive: z.boolean().optional(),
   })).mutation(async ({ ctx, input }) => {
+    await assertEntityAction(ctx, "inventory", "item", "edit");
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     const { assertActiveMeasureUnit } = await import("./measure-units");
@@ -991,6 +1006,7 @@ const itemsRouter = router({
     return { success: true };
   }),
   delete: protectedProcedure.input(z.number()).mutation(async ({ ctx, input }) => {
+    await assertEntityAction(ctx, "inventory", "item", "deleteCancel");
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     await db.delete(items).where(tenantWhere(items, ctx.tenantId, eq(items.id, input)));
@@ -1001,12 +1017,14 @@ const itemsRouter = router({
     itemIds: z.array(z.number()).min(1).max(2000),
     confirm: z.literal("PURGE_ITEMS"),
   })).mutation(async ({ ctx, input }) => {
+    await assertEntityAction(ctx, "inventory", "item", "deleteCancel");
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     const { purgeItemsWithStock } = await import("./inventory-clean-import");
     return purgeItemsWithStock(db, ctx.tenantId!, input.itemIds);
   }),
   categories: protectedProcedure.query(async ({ ctx }) => {
+    // مصدر بيانات مشترك (اختيار فئة صنف) — مش مقيّد هنا.
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     return db.select().from(itemCategories).where(tenantWhere(itemCategories, ctx.tenantId)).orderBy(itemCategories.name);
@@ -1015,6 +1033,7 @@ const itemsRouter = router({
     name: z.string().min(1),
     parentId: z.number().optional(),
   })).mutation(async ({ ctx, input }) => {
+    await assertEntityAction(ctx, "inventory", "itemCategories", "add");
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     await db.insert(itemCategories).values(withTenantId(ctx.tenantId, input) as any);
@@ -1027,6 +1046,7 @@ const warehousesRouter = router({
   list: protectedProcedure.input(z.object({
     branchId: z.number().optional(),
   }).optional()).query(async ({ ctx, input }) => {
+    // مصدر بيانات مشترك (اختيار مخزن) في فواتير البيع/الشراء والإنتاج والتقارير — مش مقيّد هنا.
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     const scope = await loadUserScopeFromCtx(db, ctx.saasUser);
@@ -1056,6 +1076,7 @@ const warehousesRouter = router({
     address: z.string().optional(),
     branchId: z.number().optional().nullable(),
   })).mutation(async ({ ctx, input }) => {
+    await assertEntityAction(ctx, "inventory", "warehouses", "add");
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     const scope = await loadUserScopeFromCtx(db, ctx.saasUser);
@@ -1077,6 +1098,7 @@ const warehousesRouter = router({
     branchId: z.number().optional().nullable(),
     isActive: z.boolean().optional(),
   })).mutation(async ({ ctx, input }) => {
+    await assertEntityAction(ctx, "inventory", "warehouses", "edit");
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     const scope = await loadUserScopeFromCtx(db, ctx.saasUser);
@@ -1087,6 +1109,7 @@ const warehousesRouter = router({
     return { success: true };
   }),
   delete: protectedProcedure.input(z.number()).mutation(async ({ ctx, input }) => {
+    await assertEntityAction(ctx, "inventory", "warehouses", "deleteCancel");
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     await db.delete(warehouses).where(tenantWhere(warehouses, ctx.tenantId, eq(warehouses.id, input)));
@@ -1109,6 +1132,7 @@ const purchasesRouter = router({
       page: z.number().default(1),
       limit: z.number().default(20),
     })).query(async ({ ctx, input }) => {
+      await assertEntityAction(ctx, "purchases", "purchaseInvoice", "viewDocList");
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       const offset = (input.page - 1) * input.limit;
@@ -1155,6 +1179,7 @@ const purchasesRouter = router({
       return { rows, total: total.count };
     }),
     byId: protectedProcedure.input(z.number()).query(async ({ ctx, input }) => {
+      await assertEntityAction(ctx, "purchases", "purchaseInvoice", "viewDoc");
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       const scope = ctx.saasUser ? await loadUserScope(db, ctx.saasUser.id) : { branchIds: null, warehouseIds: null };
@@ -1195,6 +1220,7 @@ const purchasesRouter = router({
       date: z.string(),
       description: z.string().optional(),
     })).mutation(async ({ ctx, input }) => {
+      await assertEntityAction(ctx, "purchases", "purchaseInvoice", "edit");
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       return recordPurchaseInvoicePayment(db, ctx.tenantId, ctx.user.id, input);
@@ -1228,6 +1254,7 @@ const purchasesRouter = router({
         serialNumbers: z.string().optional(),
       })),
     })).mutation(async ({ ctx, input }) => {
+      await assertEntityAction(ctx, "purchases", "purchaseInvoice", "add");
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       await assertDateNotInClosedPeriod(db, ctx.tenantId, input.date);
@@ -1329,6 +1356,7 @@ const purchasesRouter = router({
   }),
   orders: router({
     list: protectedProcedure.input(z.object({ page: z.number().default(1), limit: z.number().default(20) })).query(async ({ ctx, input }) => {
+      await assertEntityAction(ctx, "purchases", "purchaseOrder", "viewDocList");
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       const scope = await loadUserScopeFromCtx(db, ctx.saasUser);
@@ -1350,6 +1378,7 @@ const purchasesRouter = router({
       return { rows, total: total.count };
     }),
     byId: protectedProcedure.input(z.number()).query(async ({ ctx, input }) => {
+      await assertEntityAction(ctx, "purchases", "purchaseOrder", "viewDoc");
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       const scope = await loadUserScopeFromCtx(db, ctx.saasUser);
@@ -1404,6 +1433,7 @@ const purchasesRouter = router({
         notes: z.string().optional(),
       })),
     })).mutation(async ({ ctx, input }) => {
+      await assertEntityAction(ctx, "purchases", "purchaseOrder", "add");
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       await assertDateNotInClosedPeriod(db, ctx.tenantId, input.date);
@@ -1439,6 +1469,7 @@ const purchasesRouter = router({
       return { success: true, id: orderId, number };
     }),
     approve: protectedProcedure.input(z.number()).mutation(async ({ ctx, input }) => {
+      await assertEntityAction(ctx, "purchases", "purchaseOrder", "approve");
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       const scope = await loadUserScopeFromCtx(db, ctx.saasUser);
@@ -1453,6 +1484,7 @@ const purchasesRouter = router({
       paymentType: z.enum(["cash", "credit"]).optional(),
       date: z.string().optional(),
     })).mutation(async ({ ctx, input }) => {
+      await assertEntityAction(ctx, "purchases", "purchaseOrder", "edit");
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       const scope = await loadUserScopeFromCtx(db, ctx.saasUser);
@@ -1466,6 +1498,7 @@ const purchasesRouter = router({
       });
     }),
     cancel: protectedProcedure.input(z.number()).mutation(async ({ ctx, input }) => {
+      await assertEntityAction(ctx, "purchases", "purchaseOrder", "deleteCancel");
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       const scope = await loadUserScopeFromCtx(db, ctx.saasUser);
@@ -1480,6 +1513,7 @@ const purchasesRouter = router({
   }),
   returns: router({
     list: protectedProcedure.input(z.object({ page: z.number().default(1), limit: z.number().default(20) })).query(async ({ ctx, input }) => {
+      await assertEntityAction(ctx, "purchases", "purchaseReturnInvoice", "viewDocList");
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       const offset = (input.page - 1) * input.limit;
@@ -1510,6 +1544,7 @@ const purchasesRouter = router({
         unitPrice: z.string(),
       })),
     })).mutation(async ({ ctx, input }) => {
+      await assertEntityAction(ctx, "purchases", "purchaseReturnInvoice", "add");
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       await assertDateNotInClosedPeriod(db, ctx.tenantId, input.date);
@@ -1568,6 +1603,7 @@ const salesRouter = router({
       page: z.number().default(1),
       limit: z.number().default(20),
     })).query(async ({ ctx, input }) => {
+      await assertEntityAction(ctx, "sales", input.paymentType === "cash" ? "cashSaleInvoice" : "saleInvoice", "viewDocList");
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       const offset = (input.page - 1) * input.limit;
@@ -1620,6 +1656,7 @@ const salesRouter = router({
       const scope = ctx.saasUser ? await loadUserScope(db, ctx.saasUser.id) : { branchIds: null, warehouseIds: null };
       const [inv] = await db.select().from(salesInvoices).where(tenantWhere(salesInvoices, ctx.tenantId, eq(salesInvoices.id, input)));
       if (!inv) throw new TRPCError({ code: "NOT_FOUND" });
+      await assertEntityAction(ctx, "sales", inv.paymentType === "cash" ? "cashSaleInvoice" : "saleInvoice", "viewDoc");
       if (scope.branchIds?.length && inv.branchId && !scope.branchIds.includes(inv.branchId)) {
         throw new TRPCError({ code: "FORBIDDEN", message: "لا يمكنك عرض فواتير هذا الفرع" });
       }
@@ -1657,6 +1694,9 @@ const salesRouter = router({
     })).mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const [inv] = await db.select({ paymentType: salesInvoices.paymentType }).from(salesInvoices)
+        .where(tenantWhere(salesInvoices, ctx.tenantId, eq(salesInvoices.id, input.invoiceId))).limit(1);
+      await assertEntityAction(ctx, "sales", inv?.paymentType === "cash" ? "cashSaleInvoice" : "saleInvoice", "edit");
       return recordSalesInvoicePayment(db, ctx.tenantId, ctx.user.id, input);
     }),
     submitToEta: protectedProcedure.input(z.number()).mutation(async ({ ctx, input }) => {
@@ -1713,6 +1753,7 @@ const salesRouter = router({
         serialNumbers: z.string().optional(),
       })),
     })).mutation(async ({ ctx, input }) => {
+      await assertEntityAction(ctx, "sales", input.paymentType === "cash" ? "cashSaleInvoice" : "saleInvoice", "add");
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       await assertDateNotInClosedPeriod(db, ctx.tenantId, input.date);
@@ -1818,6 +1859,7 @@ const salesRouter = router({
   }),
   orders: router({
     list: protectedProcedure.input(z.object({ page: z.number().default(1), limit: z.number().default(20) })).query(async ({ ctx, input }) => {
+      await assertEntityAction(ctx, "sales", "saleOrder", "viewDocList");
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       const scope = await loadUserScopeFromCtx(db, ctx.saasUser);
@@ -1842,6 +1884,7 @@ const salesRouter = router({
       return { rows, total: total.count };
     }),
     byId: protectedProcedure.input(z.number()).query(async ({ ctx, input }) => {
+      await assertEntityAction(ctx, "sales", "saleOrder", "viewDoc");
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       const scope = await loadUserScopeFromCtx(db, ctx.saasUser);
@@ -1897,6 +1940,7 @@ const salesRouter = router({
         notes: z.string().optional(),
       })),
     })).mutation(async ({ ctx, input }) => {
+      await assertEntityAction(ctx, "sales", "saleOrder", "add");
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       await assertDateNotInClosedPeriod(db, ctx.tenantId, input.date);
@@ -1935,6 +1979,7 @@ const salesRouter = router({
       return { success: true, id: orderId, number };
     }),
     approve: protectedProcedure.input(z.number()).mutation(async ({ ctx, input }) => {
+      await assertEntityAction(ctx, "sales", "saleOrder", "approve");
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       const scope = await loadUserScopeFromCtx(db, ctx.saasUser);
@@ -1952,6 +1997,7 @@ const salesRouter = router({
       paymentType: z.enum(["cash", "credit"]).optional(),
       date: z.string().optional(),
     })).mutation(async ({ ctx, input }) => {
+      await assertEntityAction(ctx, "sales", "saleOrder", "edit");
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       const scope = await loadUserScopeFromCtx(db, ctx.saasUser);
@@ -1968,6 +2014,7 @@ const salesRouter = router({
       });
     }),
     cancel: protectedProcedure.input(z.number()).mutation(async ({ ctx, input }) => {
+      await assertEntityAction(ctx, "sales", "saleOrder", "deleteCancel");
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       const scope = await loadUserScopeFromCtx(db, ctx.saasUser);
@@ -1985,6 +2032,7 @@ const salesRouter = router({
   }),
   returns: router({
     list: protectedProcedure.input(z.object({ page: z.number().default(1), limit: z.number().default(20) })).query(async ({ ctx, input }) => {
+      await assertEntityAction(ctx, "sales", "saleReturnInvoice", "viewDocList");
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       const offset = (input.page - 1) * input.limit;
@@ -2015,6 +2063,7 @@ const salesRouter = router({
         unitPrice: z.string(),
       })),
     })).mutation(async ({ ctx, input }) => {
+      await assertEntityAction(ctx, "sales", "saleReturnInvoice", "add");
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       await assertDateNotInClosedPeriod(db, ctx.tenantId, input.date);
@@ -2076,6 +2125,7 @@ const hrRouter = router({
       page: z.number().default(1),
       limit: z.number().default(20),
     })).query(async ({ ctx, input }) => {
+      // مصدر بيانات مشترك (اختيار موظف) في الحضور والسلف — مش مقيّد هنا.
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       const offset = (input.page - 1) * input.limit;
@@ -2118,6 +2168,7 @@ const hrRouter = router({
       bankAccount: z.string().optional(),
       notes: z.string().optional(),
     })).mutation(async ({ ctx, input }) => {
+      await assertEntityAction(ctx, "hr", "employees", "add");
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       try {
@@ -2141,6 +2192,7 @@ const hrRouter = router({
       status: z.enum(["active", "inactive", "terminated"]).optional(),
       notes: z.string().optional(),
     })).mutation(async ({ ctx, input }) => {
+      await assertEntityAction(ctx, "hr", "employees", "edit");
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       const { id, ...data } = input;
@@ -2148,6 +2200,7 @@ const hrRouter = router({
       return { success: true };
     }),
     delete: protectedProcedure.input(z.number()).mutation(async ({ ctx, input }) => {
+      await assertEntityAction(ctx, "hr", "employees", "deleteCancel");
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       await db.delete(employees).where(tenantWhere(employees, ctx.tenantId, eq(employees.id, input)));
@@ -2156,17 +2209,20 @@ const hrRouter = router({
   }),
   departments: router({
     list: protectedProcedure.query(async ({ ctx }) => {
+      // مصدر بيانات مشترك (اختيار إدارة) في شاشة الموظفين — مش مقيّد هنا.
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       return db.select().from(departments).where(tenantWhere(departments, ctx.tenantId)).orderBy(departments.name);
     }),
     create: protectedProcedure.input(z.object({ name: z.string().min(1), description: z.string().optional(), parentId: z.number().optional() })).mutation(async ({ ctx, input }) => {
+      await assertEntityAction(ctx, "hr", "departments", "add");
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       await db.insert(departments).values(withTenantId(ctx.tenantId, input) as any);
       return { success: true };
     }),
     update: protectedProcedure.input(z.object({ id: z.number(), name: z.string().min(1), description: z.string().optional() })).mutation(async ({ ctx, input }) => {
+      await assertEntityAction(ctx, "hr", "departments", "edit");
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       const { id, ...data } = input;
@@ -2174,6 +2230,7 @@ const hrRouter = router({
       return { success: true };
     }),
     delete: protectedProcedure.input(z.number()).mutation(async ({ ctx, input }) => {
+      await assertEntityAction(ctx, "hr", "departments", "deleteCancel");
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       await db.delete(departments).where(tenantWhere(departments, ctx.tenantId, eq(departments.id, input)));
@@ -2182,23 +2239,27 @@ const hrRouter = router({
   }),
   jobTitles: router({
     list: protectedProcedure.query(async ({ ctx }) => {
+      // مصدر بيانات مشترك (اختيار وظيفة) في شاشة الموظفين — مش مقيّد هنا.
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       return db.select().from(jobTitles).where(tenantWhere(jobTitles, ctx.tenantId)).orderBy(jobTitles.name);
     }),
     create: protectedProcedure.input(z.object({ name: z.string().min(1) })).mutation(async ({ ctx, input }) => {
+      await assertEntityAction(ctx, "hr", "jobs", "add");
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       await db.insert(jobTitles).values(withTenantId(ctx.tenantId, input) as any);
       return { success: true };
     }),
     update: protectedProcedure.input(z.object({ id: z.number(), name: z.string().min(1) })).mutation(async ({ ctx, input }) => {
+      await assertEntityAction(ctx, "hr", "jobs", "edit");
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       await db.update(jobTitles).set({ name: input.name }).where(tenantWhere(jobTitles, ctx.tenantId, eq(jobTitles.id, input.id)));
       return { success: true };
     }),
     delete: protectedProcedure.input(z.number()).mutation(async ({ ctx, input }) => {
+      await assertEntityAction(ctx, "hr", "jobs", "deleteCancel");
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       await db.delete(jobTitles).where(tenantWhere(jobTitles, ctx.tenantId, eq(jobTitles.id, input)));
@@ -2237,6 +2298,7 @@ const hrRouter = router({
       status: z.enum(["present", "absent", "late", "leave", "holiday"]).default("present"),
       notes: z.string().optional(),
     })).mutation(async ({ ctx, input }) => {
+      await assertEntityAction(ctx, "hr", "attendance", "add");
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       await db.insert(attendance).values(withTenantId(ctx.tenantId, input) as any);
@@ -2268,6 +2330,7 @@ const hrRouter = router({
         notes: z.string().optional(),
       })),
     })).mutation(async ({ ctx, input }) => {
+      await assertEntityAction(ctx, "hr", "attendance", "add");
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       // Delete existing records for the day then re-insert
@@ -2318,6 +2381,7 @@ const hrRouter = router({
       return calculateMonthPayroll(db, ctx.tenantId, input.month, input.year);
     }),
     payMonth: protectedProcedure.input(z.object({ month: z.number().min(1).max(12), year: z.number() })).mutation(async ({ ctx, input }) => {
+      await assertEntityAction(ctx, "hr", "salaryAccount", "approve");
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       const result = await payMonthPayroll(db, ctx.tenantId, input.month, input.year);
@@ -2343,6 +2407,7 @@ const hrRouter = router({
       netSalary: z.string(),
       notes: z.string().optional(),
     })).mutation(async ({ ctx, input }) => {
+      await assertEntityAction(ctx, "hr", "salaryAccount", "add");
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       await db.insert(payroll).values(withTenantId(ctx.tenantId, input) as any);
@@ -2351,6 +2416,8 @@ const hrRouter = router({
   }),
   advances: router({
     list: protectedProcedure.query(async ({ ctx }) => {
+      // ملاحظة: عنصر "معاملات الموظفين" في الشجرة معرّف بحزمة ما فيهاش "إضافة/اعتماد" أصلًا
+      // (زي ما ميجا عارضاها في اللقطة) — مش هنقيّد هنا لحد ما نراجع الحزمة المناسبة فعليًا.
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       return db.select({
@@ -2388,6 +2455,7 @@ const hrRouter = router({
 // ===================== ACCOUNTS =====================
 const accountsRouter = router({
   chart: protectedProcedure.query(async ({ ctx }) => {
+    // مصدر بيانات مشترك (اختيار حساب) في قيود اليومية وتحويل الأموال والتقارير — مش مقيّد هنا.
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     const { ensureDefaultAccounts } = await import("./auto-journal");
@@ -2402,6 +2470,7 @@ const accountsRouter = router({
     isParent: z.boolean().optional(),
     notes: z.string().optional(),
   })).mutation(async ({ ctx, input }) => {
+    await assertEntityAction(ctx, "accounts", "chartOfAccounts", "add");
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     const [inserted] = await db.insert(accounts).values(withTenantId(ctx.tenantId, compactRow(input as Record<string, unknown>)) as any);
@@ -2445,6 +2514,7 @@ const accountsRouter = router({
   }),
   journal: router({
     list: protectedProcedure.input(z.object({ page: z.number().default(1), limit: z.number().default(20), reference: z.string().optional() })).query(async ({ ctx, input }) => {
+      await assertEntityAction(ctx, "accounts", "journalEntry", "viewDocList");
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       const offset = (input.page - 1) * input.limit;
@@ -2468,6 +2538,7 @@ const accountsRouter = router({
       return { rows, total: total.count };
     }),
     byId: protectedProcedure.input(z.number()).query(async ({ ctx, input }) => {
+      await assertEntityAction(ctx, "accounts", "journalEntry", "viewDoc");
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       const [entry] = await db.select().from(journalEntries).where(tenantWhere(journalEntries, ctx.tenantId, eq(journalEntries.id, input)));
@@ -2500,6 +2571,7 @@ const accountsRouter = router({
         costCenterId: z.number().optional(),
       })),
     })).mutation(async ({ ctx, input }) => {
+      await assertEntityAction(ctx, "accounts", "journalEntry", "add");
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       await assertDateNotInClosedPeriod(db, ctx.tenantId, input.date);
@@ -2548,6 +2620,7 @@ const accountsRouter = router({
       return db.select().from(taxes).where(tenantWhere(taxes, ctx.tenantId)).orderBy(taxes.name);
     }),
     create: protectedProcedure.input(z.object({ name: z.string().min(1), rate: z.string() })).mutation(async ({ ctx, input }) => {
+      await assertEntityAction(ctx, "accounts", "taxes", "add");
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       await db.insert(taxes).values(withTenantId(ctx.tenantId, input) as any);
@@ -2606,6 +2679,15 @@ const cashRouter = router({
     description: z.string().optional(),
     reference: z.string().optional(),
   })).mutation(async ({ ctx, input }) => {
+    // "type" بيحدد أي عنصر من الأربعة في قسم "معاملات نقدية" — نفس الـprocedure بيخدمهم كلهم.
+    const cashEntityForType: Record<string, string> = {
+      receive: "cashReceipt",
+      receive_customer: "cashReceiptFromCustomer",
+      pay: "cashPayment",
+      pay_supplier: "cashPaymentToSupplier",
+      pay_customer: "cashPayment",
+    };
+    await assertEntityAction(ctx, "cash", cashEntityForType[input.type] || "cashPayment", "add");
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     if ((input.type === "receive_customer" || input.type === "pay_customer") && !input.customerId) {
@@ -2747,6 +2829,15 @@ const bankRouter = router({
       description: z.string().optional(),
       reference: z.string().optional(),
     })).mutation(async ({ ctx, input }) => {
+      // "type" بيحدد أي عنصر من عناصر قسم "معاملات بنكية".
+      const bankEntityForType: Record<string, string> = {
+        deposit: "bankDeposit",
+        deposit_customer: "bankDepositFromCustomer",
+        withdraw: "bankWithdrawal",
+        withdraw_supplier: "bankWithdrawalToSupplier",
+        withdraw_customer: "bankWithdrawal",
+      };
+      await assertEntityAction(ctx, "bank", bankEntityForType[input.type] || "bankWithdrawal", "add");
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       if ((input.type === "deposit_customer" || input.type === "withdraw_customer") && !input.customerId) {
@@ -2832,6 +2923,7 @@ const bankRouter = router({
       date: z.string(),
       description: z.string().optional(),
     })).mutation(async ({ ctx, input }) => {
+      await assertEntityAction(ctx, "bank", input.type === "incoming" ? "checkIn" : "checkOut", "add");
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       const [countResult] = await db.select({ count: count() }).from(checks).where(tenantWhere(checks, ctx.tenantId));
@@ -2844,6 +2936,8 @@ const bankRouter = router({
     })).mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const [chk] = await db.select({ type: checks.type }).from(checks).where(tenantWhere(checks, ctx.tenantId, eq(checks.id, input.id))).limit(1);
+      await assertEntityAction(ctx, "bank", chk?.type === "outgoing" ? "checkOut" : "checkIn", "approve");
       return clearCheck(db, ctx.tenantId, ctx.user.id, input.id, { date: input.date });
     }),
     bounce: protectedProcedure.input(z.object({
@@ -2852,6 +2946,8 @@ const bankRouter = router({
     })).mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const [chk] = await db.select({ type: checks.type }).from(checks).where(tenantWhere(checks, ctx.tenantId, eq(checks.id, input.id))).limit(1);
+      await assertEntityAction(ctx, "bank", chk?.type === "outgoing" ? "checkOut" : "checkIn", "deleteCancel");
       return bounceCheck(db, ctx.tenantId, ctx.user.id, input.id, { date: input.date });
     }),
   }),
@@ -3468,6 +3564,7 @@ const assetsRouter = router({
     limit: z.number().default(20),
     status: z.enum(["active", "disposed", "under_maintenance"]).optional(),
   })).query(async ({ ctx, input }) => {
+    await assertEntityAction(ctx, "assets", "assets", "viewDocList");
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     const offset = (input.page - 1) * input.limit;
@@ -3487,6 +3584,7 @@ const assetsRouter = router({
     location: z.string().optional(),
     notes: z.string().optional(),
   })).mutation(async ({ ctx, input }) => {
+    await assertEntityAction(ctx, "assets", "assets", "add");
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     await db.insert(fixedAssets).values(withTenantId(ctx.tenantId, { ...input, currentValue: input.purchasePrice }) as any);
@@ -3532,6 +3630,7 @@ const loansRouter = router({
     type: z.enum(["given", "received"]).optional(),
     status: z.enum(["active", "paid", "cancelled"]).optional(),
   })).query(async ({ ctx, input }) => {
+    await assertEntityAction(ctx, "loans", "loan", "viewDocList");
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     const offset = (input.page - 1) * input.limit;
@@ -3548,6 +3647,7 @@ const loansRouter = router({
     return { rows, total: total.count };
   }),
   get: protectedProcedure.input(z.number()).query(async ({ ctx, input }) => {
+    await assertEntityAction(ctx, "loans", "loan", "viewDoc");
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     const [loan] = await db.select().from(loans).where(tenantWhere(loans, ctx.tenantId, eq(loans.id, input))).limit(1);
@@ -3577,6 +3677,7 @@ const loansRouter = router({
     bankAccountId: z.number().optional(),
     postJournal: z.boolean().default(true),
   })).mutation(async ({ ctx, input }) => {
+    await assertEntityAction(ctx, "loans", "loan", "add");
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     if (input.settlementMethod === "bank" && !input.bankAccountId) {
@@ -3665,6 +3766,7 @@ const loansRouter = router({
     id: z.number(),
     status: z.enum(["active", "paid", "cancelled"]),
   })).mutation(async ({ ctx, input }) => {
+    await assertEntityAction(ctx, "loans", "loan", input.status === "cancelled" ? "deleteCancel" : "edit");
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     await db.update(loans).set({ status: input.status })
@@ -3786,6 +3888,7 @@ const loansRouter = router({
 // ===================== COST CENTERS =====================
 const costCentersRouter = router({
   list: protectedProcedure.query(async ({ ctx }) => {
+    // مصدر بيانات مشترك (اختيار مركز تكلفة) في قيود اليومية وتحويل الأموال وفواتير كتير — مش مقيّد هنا.
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     return db.select().from(costCenters).where(tenantWhere(costCenters, ctx.tenantId, eq(costCenters.isActive, true))).orderBy(costCenters.name);
@@ -3795,6 +3898,7 @@ const costCentersRouter = router({
     code: z.string().optional(),
     parentId: z.number().optional(),
   })).mutation(async ({ ctx, input }) => {
+    await assertEntityAction(ctx, "cost_centers", "costCenters", "add");
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     await db.insert(costCenters).values(withTenantId(ctx.tenantId, input) as any);
@@ -3805,6 +3909,7 @@ const costCentersRouter = router({
 // ===================== SALES REPS =====================
 const salesRepsRouter = router({
   list: protectedProcedure.query(async ({ ctx }) => {
+    // مصدر بيانات مشترك (اختيار مندوب) في شاشة العملاء وتقارير كتير — مش مقيّد هنا.
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     return db.select().from(salesReps).where(tenantWhere(salesReps, ctx.tenantId, eq(salesReps.isActive, true))).orderBy(salesReps.name);
@@ -3817,6 +3922,7 @@ const salesRepsRouter = router({
     address: z.string().optional(),
     notes: z.string().optional(),
   })).mutation(async ({ ctx, input }) => {
+    await assertEntityAction(ctx, "sales_reps", "salesReps", "add");
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     try {
@@ -3835,6 +3941,7 @@ const salesRepsRouter = router({
     address: z.string().optional(),
     notes: z.string().optional(),
   })).mutation(async ({ ctx, input }) => {
+    await assertEntityAction(ctx, "sales_reps", "salesReps", "edit");
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     const { id, ...data } = input;
@@ -3842,6 +3949,7 @@ const salesRepsRouter = router({
     return { success: true };
   }),
   delete: protectedProcedure.input(z.number()).mutation(async ({ ctx, input }) => {
+    await assertEntityAction(ctx, "sales_reps", "salesReps", "deleteCancel");
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     await db.update(salesReps).set({ isActive: false } as any).where(tenantWhere(salesReps, ctx.tenantId, eq(salesReps.id, input)));
@@ -4010,6 +4118,7 @@ const settingsRouter = router({
       alertEmailRecipients: z.string().optional(),
       requireDocumentApproval: z.boolean().optional(),
     })).mutation(async ({ ctx, input }) => {
+      await assertEntityAction(ctx, "settings", "companySettings", "edit");
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       const [existing] = await db.select().from(companySettings).where(tenantWhere(companySettings, ctx.tenantId)).limit(1);
@@ -4076,6 +4185,7 @@ const settingsRouter = router({
   }),
   branches: router({
     list: protectedProcedure.query(async ({ ctx }) => {
+      // مصدر بيانات مشترك (اختيار فرع) في شاشات كتير جدًا — مش مقيّد هنا.
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       const scope = await loadUserScopeFromCtx(db, ctx.saasUser);
@@ -4090,6 +4200,7 @@ const settingsRouter = router({
       phone: z.string().optional(),
       managerName: z.string().optional(),
     })).mutation(async ({ ctx, input }) => {
+      await assertEntityAction(ctx, "settings", "branches", "add");
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       await db.insert(branches).values(withTenantId(ctx.tenantId, input) as any);
@@ -4104,6 +4215,7 @@ const settingsRouter = router({
       managerName: z.string().optional(),
       isActive: z.boolean().optional(),
     })).mutation(async ({ ctx, input }) => {
+      await assertEntityAction(ctx, "settings", "branches", "edit");
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       const { id, ...data } = input;
@@ -4111,6 +4223,7 @@ const settingsRouter = router({
       return { success: true };
     }),
     delete: protectedProcedure.input(z.number()).mutation(async ({ ctx, input }) => {
+      await assertEntityAction(ctx, "settings", "branches", "deleteCancel");
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       await db.delete(branches).where(tenantWhere(branches, ctx.tenantId, eq(branches.id, input)));
@@ -4813,6 +4926,7 @@ const productionRouter = router({
 const inventoryRouter = router({
   transfers: router({
     list: protectedProcedure.input(z.object({ page: z.number().default(1), limit: z.number().default(20) })).query(async ({ ctx, input }) => {
+      await assertEntityAction(ctx, "inventory", "stockTransfer", "viewDocList");
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       const scope = await loadUserScopeFromCtx(db, ctx.saasUser);
@@ -4841,6 +4955,7 @@ const inventoryRouter = router({
       notes: z.string().optional(),
       items: z.array(z.object({ itemId: z.number(), quantity: z.string(), batchId: z.number().optional() })),
     })).mutation(async ({ ctx, input }) => {
+      await assertEntityAction(ctx, "inventory", "stockTransfer", "add");
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       await assertDateNotInClosedPeriod(db, ctx.tenantId, input.date);
@@ -4870,6 +4985,7 @@ const inventoryRouter = router({
   }),
   adjustments: router({
     list: protectedProcedure.input(z.object({ page: z.number().default(1), limit: z.number().default(20) })).query(async ({ ctx, input }) => {
+      await assertEntityAction(ctx, "inventory", "stockAdjustment", "viewDocList");
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       const scope = await loadUserScopeFromCtx(db, ctx.saasUser);
@@ -4896,6 +5012,7 @@ const inventoryRouter = router({
       notes: z.string().optional(),
       items: z.array(z.object({ itemId: z.number(), quantity: z.string(), reason: z.string().optional() })),
     })).mutation(async ({ ctx, input }) => {
+      await assertEntityAction(ctx, "inventory", "stockAdjustment", "add");
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       await assertDateNotInClosedPeriod(db, ctx.tenantId, input.date);
