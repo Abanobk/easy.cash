@@ -367,12 +367,14 @@ export async function buildLiquidityForecast(
     "لا يشمل مبيعات/مشتريات مستقبلية غير مسجّلة.",
   ];
 
-  if (policy.minCashReserveEgp > 0 && net30 + policy.minCashReserveEgp * 0 < policy.minCashReserveEgp && net30 < 0) {
+  // خطر السيولة "حسب السياسة": صافي التدفق المتوقع لـ30 يوم نزيف يتجاوز حجم حد السيولة الأدنى
+  // نفسه اللي حدّده المستخدم — يعني الاحتياطي المطلوب لن يكفي لو تحقق هذا التوقع فعلاً.
+  if (policy.minCashReserveEgp > 0 && net30 < 0 && Math.abs(net30) >= policy.minCashReserveEgp) {
     push(out, {
       severity: "warning",
       category: "سيولة متوقعة",
       title: "ضغط سيولة متوقع خلال 30 يوم",
-      detail: `صافي متوقع 30 يوم: ${money(net30)} ج (تدفق داخل ${money(inflow30)} − خارج ${money(outflow30)}).`,
+      detail: `صافي متوقع 30 يوم: ${money(net30)} ج (تدفق داخل ${money(inflow30)} − خارج ${money(outflow30)}) — يتجاوز حد السيولة الأدنى بالسياسة (${money(policy.minCashReserveEgp)} ج).`,
       recommendation: "عجّل التحصيل أو أجّل مدفوعات غير حرجة، وراجع حد السيولة في السياسة.",
       link: "/sales/invoices",
     });

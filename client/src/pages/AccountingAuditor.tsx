@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import ERPLayout from "@/components/ERPLayout";
 import PermissionGate from "@/components/PermissionGate";
+import AuditNarrativeReport from "@/components/audit/AuditNarrativeReport";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -448,8 +449,13 @@ export default function AccountingAuditorPage() {
                   ) : null}
 
                   <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                    <h3 className="mb-3 text-sm font-semibold text-slate-800">تقرير مكتب المحاسبة</h3>
-                    <div className="whitespace-pre-wrap text-sm leading-7 text-slate-700">{report.narrative}</div>
+                    <div className="mb-4 flex items-center gap-2">
+                      <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-900 text-white">
+                        <Scale size={15} />
+                      </div>
+                      <h3 className="text-sm font-semibold text-slate-800">تقرير مكتب المحاسبة</h3>
+                    </div>
+                    <AuditNarrativeReport narrative={report.narrative} tenantSlug={tenantSlug} />
                   </section>
 
                   {report.office?.samples?.length ? (
