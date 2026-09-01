@@ -3,6 +3,7 @@ import {
   AlertTriangle,
   CheckCircle2,
   FileUp,
+  Gavel,
   Info,
   Loader2,
   Printer,
@@ -10,6 +11,8 @@ import {
   Save,
   Scale,
   ShieldAlert,
+  ShieldQuestion,
+  ShieldX,
 } from "lucide-react";
 import ERPLayout from "@/components/ERPLayout";
 import PermissionGate from "@/components/PermissionGate";
@@ -33,6 +36,14 @@ const severityMeta: Record<Severity, { label: string; className: string; Icon: t
   critical: { label: "حرج", className: "bg-red-600 text-white", Icon: ShieldAlert },
   warning: { label: "تحذير", className: "bg-amber-500 text-white", Icon: AlertTriangle },
   info: { label: "معلومة", className: "bg-sky-600 text-white", Icon: Info },
+};
+
+type OpinionType = "unqualified" | "qualified" | "adverse" | "disclaimer";
+const opinionMeta: Record<OpinionType, { className: string; ring: string; Icon: typeof Gavel }> = {
+  unqualified: { className: "bg-emerald-600 text-white", ring: "border-emerald-200 bg-emerald-50", Icon: CheckCircle2 },
+  qualified: { className: "bg-amber-500 text-white", ring: "border-amber-200 bg-amber-50", Icon: ShieldQuestion },
+  adverse: { className: "bg-red-600 text-white", ring: "border-red-200 bg-red-50", Icon: ShieldX },
+  disclaimer: { className: "bg-slate-500 text-white", ring: "border-slate-200 bg-slate-50", Icon: ShieldQuestion },
 };
 
 type PolicyForm = {
@@ -184,6 +195,7 @@ export default function AccountingAuditorPage() {
                         narrative: report.narrative,
                         generatedAt: report.generatedAt,
                         summary: report.summary,
+                        opinion: report.opinion,
                         trialBalance: report.trialBalance,
                         income: report.income,
                         liquidity: report.coverage?.liquidity,
@@ -398,6 +410,24 @@ export default function AccountingAuditorPage() {
 
               {report ? (
                 <>
+                  {report.opinion ? (
+                    <section className={`flex flex-wrap items-start gap-4 rounded-2xl border p-5 ${opinionMeta[report.opinion.type as OpinionType]?.ring || "border-slate-200 bg-slate-50"}`}>
+                      <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${opinionMeta[report.opinion.type as OpinionType]?.className || "bg-slate-500 text-white"}`}>
+                        {(() => {
+                          const OpinionIcon = opinionMeta[report.opinion.type as OpinionType]?.Icon || Gavel;
+                          return <OpinionIcon size={20} />;
+                        })()}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2 text-[11px] font-medium uppercase tracking-wide text-slate-500">
+                          <Gavel size={12} /> رأي المراجع الداخلي
+                        </div>
+                        <p className="mt-0.5 text-base font-semibold text-slate-900">{report.opinion.label}</p>
+                        <p className="mt-1 text-sm leading-relaxed text-slate-600">{report.opinion.rationale}</p>
+                      </div>
+                    </section>
+                  ) : null}
+
                   <section className="grid gap-3 md:grid-cols-3">
                     {report.trialBalance ? (
                       <div className={`rounded-2xl border p-4 ${report.trialBalance.balanced ? "border-emerald-200 bg-emerald-50" : "border-red-200 bg-red-50"}`}>
@@ -483,6 +513,11 @@ export default function AccountingAuditorPage() {
                               <div className={`mt-0.5 rounded-lg p-2 ${meta.className}`}><Icon size={14} /></div>
                               <div>
                                 <div className="flex flex-wrap items-center gap-2">
+                                  {f.refCode ? (
+                                    <span className="rounded-md bg-slate-100 px-1.5 py-0.5 font-mono text-[10px] font-semibold tabular-nums text-slate-500">
+                                      {f.refCode}
+                                    </span>
+                                  ) : null}
                                   <h4 className="text-sm font-semibold text-slate-900">{f.title}</h4>
                                   <Badge className={meta.className}>{meta.label}</Badge>
                                   <Badge variant="outline" className="text-[10px]">{f.category}</Badge>

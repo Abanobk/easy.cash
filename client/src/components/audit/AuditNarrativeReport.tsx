@@ -5,6 +5,7 @@ import {
   BarChart3,
   FileSearch,
   Flag,
+  Gavel,
   GitCompare,
   Landmark,
   ListChecks,
@@ -25,6 +26,7 @@ import {
 type IconType = ComponentType<{ size?: number; className?: string }>;
 
 const KEYWORD_ICONS: Array<{ test: RegExp; icon: IconType; tone: string }> = [
+  { test: /رأي المراجع/, icon: Gavel, tone: "fuchsia" },
   { test: /ميزان|توازن/, icon: Scale, tone: "emerald" },
   { test: /بنك|كشوف/, icon: Landmark, tone: "sky" },
   { test: /مطابق|ذمم/, icon: GitCompare, tone: "violet" },
@@ -50,6 +52,7 @@ const TONE_STYLES: Record<string, { bar: string; chip: string; icon: string }> =
   cyan: { bar: "bg-cyan-500", chip: "bg-cyan-50 text-cyan-700", icon: "text-cyan-600" },
   blue: { bar: "bg-blue-500", chip: "bg-blue-50 text-blue-700", icon: "text-blue-600" },
   slate: { bar: "bg-slate-500", chip: "bg-slate-50 text-slate-700", icon: "text-slate-600" },
+  fuchsia: { bar: "bg-fuchsia-500", chip: "bg-fuchsia-50 text-fuchsia-700", icon: "text-fuchsia-600" },
 };
 
 function iconFor(title: string) {

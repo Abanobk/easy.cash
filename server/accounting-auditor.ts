@@ -45,6 +45,8 @@ export type AuditSeverity = "critical" | "warning" | "info";
 
 export type AuditFinding = {
   id: string;
+  /** رقم مرجعي احترافي متسلسل بعد ترتيب الشدة (F-001 الأولوية الأعلى) — للربط داخل تقرير المراجع. */
+  refCode?: string;
   severity: AuditSeverity;
   category: string;
   title: string;
@@ -88,6 +90,58 @@ export type IncomeSnapshot = {
   netProfit: number;
 };
 
+/**
+ * تقييم داخلي آلي لحالة الحسابات — بصياغة قريبة من رأي المراجع التقليدي (نظيف/متحفظ/سلبي/
+ * امتناع) لكنه ليس رأي مراجعة قانونية خارجية ولا بديلاً عنه؛ محسوب بقواعد ثابتة من نتائج
+ * الفحص الآلي نفسها (مش توليد لغوي) عشان يفضل موضوعي وقابل لإعادة الإنتاج بنفس المدخلات.
+ */
+export type AuditOpinionType = "unqualified" | "qualified" | "adverse" | "disclaimer";
+
+export type AuditOpinion = {
+  type: AuditOpinionType;
+  label: string;
+  rationale: string;
+};
+
+function computeAuditOpinion(
+  trialBalance: TrialBalanceSnapshot,
+  summary: { critical: number; warning: number; info: number; total: number },
+): AuditOpinion {
+  if (!trialBalance.accountsReviewed) {
+    return {
+      type: "disclaimer",
+      label: "امتناع عن إبداء رأي — بيانات غير كافية",
+      rationale: "لا توجد حسابات ذات حركة كافية للمراجعة في الفترة الحالية؛ يلزم تسجيل مستندات فعلية قبل تكوين رأي.",
+    };
+  }
+  if (!trialBalance.balanced) {
+    return {
+      type: "adverse",
+      label: "رأي سلبي — الميزان غير متوازن",
+      rationale: `فرق ${trialBalance.difference.toLocaleString("en-US")} ج بين إجمالي المدين والدائن يجعل التقارير المالية الحالية غير موثوقة قبل تصحيحه.`,
+    };
+  }
+  if (summary.critical > 0) {
+    return {
+      type: "qualified",
+      label: "رأي متحفظ — مشروط بمعالجة الملاحظات الحرجة",
+      rationale: `${summary.critical} ملاحظة حرجة مفتوحة قد تؤثر ماديّاً على دقة الأرصدة أو التقارير حتى تُعالَج.`,
+    };
+  }
+  if (summary.warning > 0) {
+    return {
+      type: "unqualified",
+      label: "رأي غير متحفظ مع لفت نظر",
+      rationale: `الميزان متوازن ولا توجد ملاحظات حرجة، لكن يوجد ${summary.warning} ملاحظة تحذيرية تشغيلية تستحق المتابعة.`,
+    };
+  }
+  return {
+    type: "unqualified",
+    label: "رأي نظيف — غير متحفظ",
+    rationale: "الميزان متوازن ولا توجد ملاحظات حرجة أو تحذيرية مفتوحة في نطاق الفحص الآلي الحالي.",
+  };
+}
+
 export type AccountingAuditReport = {
   generatedAt: string;
   summary: {
@@ -96,6 +150,7 @@ export type AccountingAuditReport = {
     info: number;
     total: number;
   };
+  opinion: AuditOpinion;
   findings: AuditFinding[];
   stats: Record<string, number | string>;
   trialBalance?: TrialBalanceSnapshot;
@@ -793,6 +848,13 @@ export async function buildAccountingAuditReport(
     summary.total = 1;
   }
 
+  // ترقيم مرجعي احترافي (F-001 هو الأعلى شدة) بعد استقرار القائمة النهائية بالكامل
+  withClosures.forEach((f, i) => {
+    (f as AuditFinding).refCode = `F-${String(i + 1).padStart(3, "0")}`;
+  });
+
+  const opinion = computeAuditOpinion(trialBalance, summary);
+
   const office: OfficeAuditExtras = {
     periodCompare,
     samples,
@@ -802,6 +864,7 @@ export async function buildAccountingAuditReport(
   const report: AccountingAuditReport = {
     generatedAt: new Date().toISOString(),
     summary,
+    opinion,
     findings: withClosures as AuditFinding[],
     stats,
     trialBalance,
@@ -819,8 +882,8 @@ export async function buildAccountingAuditReport(
 }
 
 export function findingsPromptBlock(report: AccountingAuditReport): string {
-  const lines = report.findings.slice(0, 80).map((f, i) =>
-    `${i + 1}) [${f.severity}] ${f.category} — ${f.title}
+  const lines = report.findings.slice(0, 80).map((f) =>
+    `${f.refCode || "F-???"}) [${f.severity}] ${f.category} — ${f.title}
 التفصيل: ${f.detail}
 التوصية: ${f.recommendation}
 الرابط: ${f.link || "—"}
@@ -853,7 +916,13 @@ ${tb.reversedNature.length ? tb.reversedNature.map((a) => `- ${a.code} ${a.name}
     : "";
   const coverageBlock = report.coverage ? coveragePromptBlock(report.coverage) : "";
 
-  return `${tbBlock}
+  const opinionBlock = `تقييم المراجع الداخلي المحسوب آلياً (استخدمه كما هو في بند "خاتمة للإدارة"،
+لا تخترع رأياً مختلفاً عنه): ${report.opinion.label}
+سبب هذا التقييم: ${report.opinion.rationale}`;
+
+  return `${opinionBlock}
+
+${tbBlock}
 
 ${incomeBlock}
 
