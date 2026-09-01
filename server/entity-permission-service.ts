@@ -7,13 +7,17 @@
  * للنظام القديم (module × 4 أفعال) زي ما هو دايمًا. بس أول ما المدير يحفظ أي حاجة
  * لعنصر معيّن لدور معيّن، القائمة المحفوظة بتبقى هي المرجع الوحيد لهذا العنصر (أي فعل
  * مش موجود فيها = ممنوع)، حتى لو النظام القديم كان بيسمح بيه.
+ *
+ * استثناء واحد: موديولات إضافية خاصة بينا (CORE_MIGRATION_EXEMPT_MODULES — أدوات
+ * الذكاء الاصطناعي وتكليف شحنة) بتتقفل هي نفسها افتراضيًا (مش تفضل مفتوحة) أول ما
+ * الدور يبقى متحكم فيه بالتفصيل من قسم أساسي واحد على الأقل — راجع isRoleCoreMigrated.
  */
 import { TRPCError } from "@trpc/server";
-import { and, eq } from "drizzle-orm";
+import { and, eq, notInArray } from "drizzle-orm";
 import { tenantEntityPermissions } from "../drizzle/schema";
 import { getDb } from "./db";
 import { roleBypassesPermissions } from "./permissions-service";
-import { PERM_ACTION_LABELS, type PermActionKey } from "../shared/permission-tree";
+import { PERM_ACTION_LABELS, CORE_MIGRATION_EXEMPT_MODULES, type PermActionKey } from "../shared/permission-tree";
 
 type EntityPermCtx = {
   tenantId: number | null | undefined;
@@ -45,6 +49,29 @@ export async function getEntityAllowedActions(
   return (row.allowedActions as string[]) || [];
 }
 
+/**
+ * true لو الدور متحكم فيه بالتفصيل فعلاً — عنده صف واحد على الأقل في قسم "أساسي"
+ * (مش أدوات الذكاء الاصطناعي/تكليف شحنة — CORE_MIGRATION_EXEMPT_MODULES). بيستخدمها
+ * assertEntityAction عشان يقرر هل موديول إضافي محدش فتحله فيه حاجة يتقفل افتراضيًا
+ * (الدور ده أصلاً بييتحكم فيه بالتفصيل) ولا يفضل مفتوح (الدور بريء تمامًا لسه).
+ */
+export async function isRoleCoreMigrated(tenantId: number, role: string): Promise<boolean> {
+  const db = await getDb();
+  if (!db) return false;
+  const [row] = await db
+    .select({ id: tenantEntityPermissions.id })
+    .from(tenantEntityPermissions)
+    .where(
+      and(
+        eq(tenantEntityPermissions.tenantId, tenantId),
+        eq(tenantEntityPermissions.role, role),
+        notInArray(tenantEntityPermissions.moduleKey, [...CORE_MIGRATION_EXEMPT_MODULES]),
+      ),
+    )
+    .limit(1);
+  return !!row;
+}
+
 /** يرمي FORBIDDEN لو الدور ظابط العنصر ده صراحة والفعل مش موجود في القائمة المسموحة. */
 export async function assertEntityAction(
   ctx: EntityPermCtx,
@@ -56,7 +83,17 @@ export async function assertEntityAction(
   if (roleBypassesPermissions(ctx.saasUser.role)) return;
   if (!ctx.tenantId) return;
   const allowed = await getEntityAllowedActions(ctx.tenantId, ctx.saasUser.role, moduleKey, entityKey);
-  if (allowed === null) return; // لسه مش متظبط — سلوك قديم زي ما هو
+  if (allowed === null) {
+    // العنصر ده لسه مش متظبط لهذا الدور. لو موديول إضافي (زي أدوات الذكاء الاصطناعي)
+    // والدور أصلاً متحكم فيه بالتفصيل من قسم أساسي، يتقفل افتراضيًا بدل ما يفضل مفتوح.
+    if (CORE_MIGRATION_EXEMPT_MODULES.has(moduleKey) && await isRoleCoreMigrated(ctx.tenantId, ctx.saasUser.role)) {
+      throw new TRPCError({
+        code: "FORBIDDEN",
+        message: `لا تملك صلاحية "${PERM_ACTION_LABELS[action]}" على هذا العنصر`,
+      });
+    }
+    return; // سلوك قديم زي ما هو
+  }
   if (!allowed.includes(action)) {
     throw new TRPCError({
       code: "FORBIDDEN",

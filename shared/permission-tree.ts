@@ -163,6 +163,27 @@ export const PERM_BUNDLES = {
 
 export type PermBundleKey = keyof typeof PERM_BUNDLES;
 
+/**
+ * موديولات إضافية خاصة ببرنامجنا (مش جزء من شجرة ميجا الأساسية: أدوات ذكاء اصطناعي،
+ * تكليف شحنة). قفل عنصر واحد فيهم لوحده مايفعّلش "وضع التقييد" (اللي بيقفل أي قسم
+ * تاني الدور محدش لمسه) — لكن هما نفسهم برضو بيتقفلوا افتراضيًا أول ما الدور يبقى
+ * متحكم فيه بالتفصيل من قسم أساسي واحد على الأقل. شايفها في:
+ * - client/src/lib/entity-nav-filter.ts (إخفاء عناصر القائمة الجانبية)
+ * - client/src/hooks/useEntityPermission.ts (إخفاء أزرار زي "مراجع الحسابات")
+ * - server/entity-permission-service.ts (المنع الفعلي في الـtRPC)
+ */
+export const CORE_MIGRATION_EXEMPT_MODULES: ReadonlySet<string> = new Set(["ai_tools", "import_costing"]);
+
+/** true لو الدور متحكم فيه بالتفصيل فعلاً (عنده صف في قسم أساسي واحد على الأقل). */
+export function isCoreMigrated(entityKeys: Iterable<string>): boolean {
+  for (const k of entityKeys) {
+    const sep = k.indexOf("::");
+    const moduleKey = sep === -1 ? k : k.slice(0, sep);
+    if (!CORE_MIGRATION_EXEMPT_MODULES.has(moduleKey)) return true;
+  }
+  return false;
+}
+
 export type PermEntity = {
   key: string;
   label: string;

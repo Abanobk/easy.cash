@@ -12,16 +12,19 @@
  *   الشجرة لنفس القسم؛ لو العنصر متظبط وأفعاله فاضية (أو مش متظبط خالص) يتشال، ولو العنصر
  *   مش متعرف عليه (فشلت المطابقة) يفضل ظاهر (أضمن — نتجنب إخفاء شاشة حقيقية بالغلط).
  *
- * ملحوظة مهمة (درس اتعلمناه): "أدوات الذكاء الاصطناعي" و"تكليف شحنة" مش جزء من شجرة
- * ميجا الأساسية — دول مفاتيح تشغيل/إيقاف مستقلة (زي "امنع المستخدم ده من المساعد
- * الذكي") ومن المفروض قفلها لوحدها ميأثرش على باقي القائمة خالص. لو اعتبرناهم زي أي
- * قسم عادي، أول مرة مدير يقفل حاجة زي المساعد الذكي لمستخدم، هيختفي منه فجأة كل قسم
- * تاني لسه محدش لمسه — مفاجأة خطيرة مالهاش داعي. عشان كده مستثنيين من حساب "الدور
- * مهاجر" (اللي بيقفل باقي الأقسام)، لكن قفلهم هما نفسهم (لو حصل) لسه شغال عادي.
+ * ملحوظة مهمة (درس اتعلمناه على مرحلتين): "أدوات الذكاء الاصطناعي" و"تكليف شحنة" مش
+ * جزء من شجرة ميجا الأساسية — دول مفاتيح تشغيل/إيقاف مستقلة (زي "امنع المستخدم ده من
+ * المساعد الذكي"). اتحطوا برّه حساب "الدور مهاجر للأقسام الأساسية" عشان قفل واحدة
+ * منهم لوحدها ميأثرش على باقي القائمة خالص (لو اعتبرناهم زي أي قسم عادي، أول مرة مدير
+ * يقفل حاجة زي المساعد الذكي لمستخدم، هيختفي منه فجأة كل قسم تاني لسه محدش لمسه).
+ *
+ * لكن — لو الدور أصلاً بييتحكم فيه بالتفصيل (زي "مدير الإنتاج" اللي عنده صلاحيات
+ * مضبوطة في أقسام أساسية كتير)، أي أداة زيادة زي دي محدش فتحله فيها حاجة المفروض
+ * برضو تتقفل زيها بالظبط — مش تفضل مفتوحة بحجة إنها "مستثناة". الاستثناء بتاعها هو
+ * بس إنها متأثرش على تفعيل "وضع التقييد" لباقي الأقسام؛ أما تفعيل وضع التقييد عليها
+ * هي نفسها فبيتحدد بنفس حالة الدور العامة (coreMigrated) زي أي قسم تاني تمامًا.
  */
-import { PERMISSION_TREE } from "@shared/permission-tree";
-
-const NAV_COLLAPSE_EXEMPT_MODULES = new Set(["ai_tools", "import_costing"]);
+import { PERMISSION_TREE, CORE_MIGRATION_EXEMPT_MODULES, isCoreMigrated } from "@shared/permission-tree";
 
 /** ترتيب الأقسام هنا زي ما هو في client/src/config/erp-navigation.ts بالظبط. */
 const NAV_GROUP_TO_MODULE: Record<string, string> = {
@@ -96,23 +99,23 @@ export function entityTreeAllowsNavItem(
 ): boolean {
   if (!moduleKey) return true;
   const moduleTouched = Object.keys(entities).some((k) => k.startsWith(`${moduleKey}::`));
+  const coreMigrated = isCoreMigrated(Object.keys(entities));
 
-  if (NAV_COLLAPSE_EXEMPT_MODULES.has(moduleKey)) {
-    // موديول إضافي مستقل — قفله (لو حصل) بيأثر على نفسه بس، وعدم لمسه خالص يسيبه ظاهر
-    // زي ما هو من غير ما يأثر على أي قسم تاني.
-    if (!moduleTouched) return true;
+  if (CORE_MIGRATION_EXEMPT_MODULES.has(moduleKey)) {
+    if (!moduleTouched) {
+      // لو الدور مش بييتحكم فيه بالتفصيل خالص (لسه ما لمسش أي قسم أساسي)، سيب الأداة
+      // دي مفتوحة زي الافتراضي القديم — صفر تأثير على دور بريء تمامًا. لكن لو الدور
+      // فعلاً متحكم فيه بالتفصيل، أي أداة زيادة محدش فتحله فيها حاجة تتقفل زي أي قسم
+      // تاني بالظبط (نفس منطق "قسم محدش لمسه خالص ميظهرش").
+      return !coreMigrated;
+    }
     const entityKey = matchEntityKey(moduleKey, label);
     if (!entityKey) return true;
     const allowed = entities[`${moduleKey}::${entityKey}`];
     return Array.isArray(allowed) && allowed.length > 0;
   }
 
-  const roleMigrated = Object.keys(entities).some((k) => {
-    const mk = k.slice(0, k.indexOf("::"));
-    return !NAV_COLLAPSE_EXEMPT_MODULES.has(mk);
-  });
-  if (!roleMigrated) return true;
-
+  if (!coreMigrated) return true;
   if (isGroup) return moduleTouched;
   if (!moduleTouched) return true;
 
