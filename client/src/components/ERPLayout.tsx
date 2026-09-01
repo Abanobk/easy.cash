@@ -20,6 +20,8 @@ import { navIcon } from "@/config/erp-nav-icons";
 import SubscriptionStatusBar from "@/components/SubscriptionStatusBar";
 import SubscriptionHubButton from "@/components/SubscriptionHubButton";
 import { usePermissions } from "@/hooks/usePermissions";
+import { useEntityPermissions } from "@/hooks/useEntityPermission";
+import { moduleKeyForNavGroup, entityTreeAllowsNavItem } from "@/lib/entity-nav-filter";
 import { toast } from "sonner";
 
 interface NavItem {
@@ -33,11 +35,18 @@ interface NavItem {
 function filterNavByPermissions(
   items: NavItemConfig[],
   canAccessPath: (path?: string, featureKey?: string) => boolean,
+  entities: Record<string, string[]>,
+  parentModuleKey: string | null = null,
 ): NavItemConfig[] {
   const result: NavItemConfig[] = [];
   for (const item of items) {
-    if (item.children?.length) {
-      const children = filterNavByPermissions(item.children, canAccessPath);
+    const moduleKey = parentModuleKey ?? moduleKeyForNavGroup(item.label);
+    const isGroup = !!item.children?.length;
+
+    if (!entityTreeAllowsNavItem(entities, moduleKey, item.label, isGroup)) continue;
+
+    if (isGroup) {
+      const children = filterNavByPermissions(item.children!, canAccessPath, entities, moduleKey);
       if (children.length === 0) continue;
       result.push({ ...item, children });
       continue;
@@ -207,12 +216,14 @@ export default function ERPLayout({ children, title }: ERPLayoutProps) {
   });
   const saasUser = saasMe.data;
   const { canAccessPath, isLoading: permsLoading, bypass: permsBypass } = usePermissions();
+  const { entities: entityPerms, isLoading: entityPermsLoading } = useEntityPermissions();
 
   const navItems = useMemo(() => {
     if (permsLoading || permsBypass) return baseNavItems;
-    const filtered = filterNavByPermissions(ERP_NAVIGATION, canAccessPath);
+    if (entityPermsLoading) return baseNavItems;
+    const filtered = filterNavByPermissions(ERP_NAVIGATION, canAccessPath, entityPerms);
     return configToNav(filtered);
-  }, [permsLoading, permsBypass, canAccessPath]);
+  }, [permsLoading, permsBypass, canAccessPath, entityPerms, entityPermsLoading]);
 
   useEffect(() => {
     if (permsLoading || permsBypass || !tenantSlug) return;
