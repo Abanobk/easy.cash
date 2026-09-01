@@ -12,6 +12,7 @@ import {
   checks,
   customers,
   factoryDailyUploads,
+  items,
   opsInboxItems,
   suppliers,
 } from "../drizzle/schema";
@@ -64,6 +65,17 @@ function n(v: unknown) {
 
 function today() {
   return new Date().toISOString().slice(0, 10);
+}
+
+/**
+ * drizzle-orm بيرجّع عمود date() كـ JS Date object (مش نص) لأن الجدول مش معرَّف بـ{mode:"string"}.
+ * String(dateObj) بينادي .toString() مش .toISOString() فبيطلع "Tue Sep 01" (بلا سنة!) بدل
+ * "2026-09-01" — لازم نتعامل مع الحالتين هنا لأي قيمة تاريخ خارجة من قاعدة البيانات مباشرة
+ * (مش راجعة عن طريق tRPC/superjson اللي بيسلسل الـDate صح تلقائياً).
+ */
+function toDateStr(v: unknown): string {
+  if (v instanceof Date) return v.toISOString().slice(0, 10);
+  return String(v || "").slice(0, 10);
 }
 
 function parseJson<T>(raw: string | null | undefined, fallback: T): T {
@@ -282,7 +294,7 @@ function publicItem(row: typeof opsInboxItems.$inferSelect) {
     id: row.id,
     source: row.source,
     channelNote: row.channelNote,
-    workDate: row.workDate ? String(row.workDate).slice(0, 10) : null,
+    workDate: row.workDate ? toDateStr(row.workDate) : null,
     rawText: row.rawText,
     fileName: row.fileName,
     mimeType: row.mimeType,
@@ -523,7 +535,7 @@ export async function confirmOpsItem(
     } as unknown as Record<string, unknown>),
   );
 
-  const date = draft.date || String(row.workDate || "").slice(0, 10) || today();
+  const date = draft.date || (row.workDate ? toDateStr(row.workDate) : "") || today();
   const amount = draft.amount != null ? String(draft.amount) : "";
   let confirmedEntityType: string | null = null;
   let confirmedEntityId: number | null = null;
@@ -854,6 +866,8 @@ export async function listFactoryDaily(
       quantity: factoryDailyUploads.quantity,
       amount: factoryDailyUploads.amount,
       materialsUsed: factoryDailyUploads.materialsUsed,
+      postedEntityType: factoryDailyUploads.postedEntityType,
+      postedRef: factoryDailyUploads.postedRef,
     })
     .from(factoryDailyUploads)
     .where(tenantWhere(factoryDailyUploads, tenantId, filters.length ? and(...filters) : undefined))
@@ -862,7 +876,7 @@ export async function listFactoryDaily(
 
   return rows.map((r) => ({
     id: r.id,
-    workDate: String(r.workDate).slice(0, 10),
+    workDate: toDateStr(r.workDate),
     title: r.title,
     fileName: r.fileName,
     mimeType: r.mimeType,
@@ -878,6 +892,8 @@ export async function listFactoryDaily(
     materialsUsed: r.materialsUsed,
     createdAt: r.createdAt,
     hasFile: !!r.hasFile,
+    postedEntityType: r.postedEntityType,
+    postedRef: r.postedRef,
   }));
 }
 
@@ -905,6 +921,146 @@ export async function setFactoryDailyStatus(
   await db
     .update(factoryDailyUploads)
     .set({ status })
+    .where(tenantWhere(factoryDailyUploads, tenantId, eq(factoryDailyUploads.id, id)));
+  return { ok: true };
+}
+
+/** توحيد نص عربي/إنجليزي للمطابقة التقريبية (تشكيل، تطويل، أشكال الألف/الياء/التاء المربوطة) */
+function normalizeMatchKey(value: string) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[ً-ٰٟ]/g, "")
+    .replace(/ـ/g, "")
+    .replace(/[أإآٱ]/g, "ا")
+    .replace(/ى/g, "ي")
+    .replace(/ة/g, "ه")
+    .replace(/[\s\-_/\\]+/g, " ")
+    .trim();
+}
+
+export type MatchCandidate = { id: number; name: string; score: number };
+
+function rankCandidates<T extends { id: number; name: string | null }>(
+  rows: T[],
+  query: string,
+): MatchCandidate[] {
+  const key = normalizeMatchKey(query);
+  if (!key) return [];
+  const scored: MatchCandidate[] = [];
+  for (const r of rows) {
+    const name = normalizeMatchKey(r.name || "");
+    if (!name) continue;
+    let score = 0;
+    if (name === key) score = 100;
+    else if (name.includes(key) || key.includes(name)) score = 70;
+    else {
+      const a = new Set(key.split(" "));
+      const b = new Set(name.split(" "));
+      const common = [...a].filter((w) => b.has(w)).length;
+      if (common > 0) score = 30 + common * 10;
+    }
+    if (score > 0) scored.push({ id: r.id, name: r.name || "", score });
+  }
+  return scored.sort((a, b) => b.score - a.score).slice(0, 5);
+}
+
+/** يحاول يفصّل سطر "اسم الخامة: كمية" أو "اسم الخامة - كمية" لاسم ورقم؛ يرجّع الاسم كله لو مقدرش */
+function parseMaterialLine(line: string): { name: string; quantity: number | null } {
+  const m = line.match(/^(.+?)[\s]*[:\-–—][\s]*([\d.,]+)\s*$/) || line.match(/^(.+?)[\s]+([\d.,]+)\s*$/);
+  if (m) {
+    const qty = Number(m[2].replace(/,/g, ""));
+    if (Number.isFinite(qty)) return { name: m[1].trim(), quantity: qty };
+  }
+  return { name: line.trim(), quantity: null };
+}
+
+export type FactoryConvertPreview = {
+  id: number;
+  type: "purchase" | "sales" | "mixing" | "general";
+  workDate: string;
+  quantity: number | null;
+  amount: number | null;
+  itemDescription: string | null;
+  partyName: string | null;
+  party: { input: string; candidates: MatchCandidate[] } | null;
+  item: { input: string; candidates: MatchCandidate[] } | null;
+  materials: Array<{ input: string; quantity: number | null; candidates: MatchCandidate[] }>;
+};
+
+export async function getFactoryConvertPreview(
+  db: Db,
+  tenantId: number,
+  id: number,
+): Promise<FactoryConvertPreview> {
+  const [row] = await db
+    .select()
+    .from(factoryDailyUploads)
+    .where(tenantWhere(factoryDailyUploads, tenantId, eq(factoryDailyUploads.id, id)))
+    .limit(1);
+  if (!row) throw new Error("البيان غير موجود");
+  if (row.type === "general") {
+    throw new Error("بيان عام — لا يوجد تحويل تلقائي له");
+  }
+
+  const itemRows = await db
+    .select({ id: items.id, name: items.name })
+    .from(items)
+    .where(tenantWhere(items, tenantId, eq(items.isActive, true)));
+
+  let party: FactoryConvertPreview["party"] = null;
+  if (row.type === "purchase" || row.type === "sales") {
+    const partyRows = row.type === "purchase"
+      ? await db.select({ id: suppliers.id, name: suppliers.name }).from(suppliers).where(tenantWhere(suppliers, tenantId))
+      : await db.select({ id: customers.id, name: customers.name }).from(customers).where(tenantWhere(customers, tenantId));
+    party = { input: row.partyName || "", candidates: rankCandidates(partyRows, row.partyName || "") };
+  }
+
+  let item: FactoryConvertPreview["item"] = null;
+  const materials: FactoryConvertPreview["materials"] = [];
+  if (row.type === "purchase" || row.type === "sales" || row.type === "mixing") {
+    item = { input: row.itemDescription || "", candidates: rankCandidates(itemRows, row.itemDescription || "") };
+  }
+  if (row.type === "mixing" && row.materialsUsed) {
+    const lines = row.materialsUsed.split(/\n|,/).map((l) => l.trim()).filter(Boolean);
+    for (const line of lines) {
+      const parsed = parseMaterialLine(line);
+      materials.push({
+        input: parsed.name,
+        quantity: parsed.quantity,
+        candidates: rankCandidates(itemRows, parsed.name),
+      });
+    }
+  }
+
+  return {
+    id: row.id,
+    type: row.type,
+    workDate: toDateStr(row.workDate),
+    quantity: row.quantity != null ? Number(row.quantity) : null,
+    amount: row.amount != null ? Number(row.amount) : null,
+    itemDescription: row.itemDescription,
+    partyName: row.partyName,
+    party,
+    item,
+    materials,
+  };
+}
+
+export async function markFactoryDailyPosted(
+  db: Db,
+  tenantId: number,
+  id: number,
+  posted: { entityType: string; entityId: number; ref: string },
+) {
+  await db
+    .update(factoryDailyUploads)
+    .set({
+      status: "posted",
+      postedEntityType: posted.entityType,
+      postedEntityId: posted.entityId,
+      postedRef: posted.ref,
+    })
     .where(tenantWhere(factoryDailyUploads, tenantId, eq(factoryDailyUploads.id, id)));
   return { ok: true };
 }

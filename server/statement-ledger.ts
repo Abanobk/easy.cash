@@ -25,7 +25,15 @@ function parseAmount(v: unknown): number {
   return Number.isFinite(n) ? n : 0;
 }
 
+/**
+ * drizzle-orm بيرجّع عمود date() كـ JS Date object (مش نص) لأن أعمدة التاريخ في schema.ts
+ * معرّفة من غير {mode:"string"}. String(dateObj) بينادي .toString() مش .toISOString() فبيطلع
+ * "Sat Aug 01" (بلا سنة!) بدل "2026-08-01" — ده كان بيكسر مطابقة التواريخ في مطابقة الكشوف
+ * (لو الطرفين بيتكسروا لنفس الشكل الغلط لتاريخ واحد بيتطابقوا بالصدفة، لكن أي فرق أيام حقيقي
+ * أو حدود سنة بيتحسب غلط). لازم نتعامل مع الحالتين هنا.
+ */
 function dateKey(d: string | Date | null | undefined): string {
+  if (d instanceof Date) return d.toISOString().slice(0, 10);
   return String(d || "").slice(0, 10);
 }
 

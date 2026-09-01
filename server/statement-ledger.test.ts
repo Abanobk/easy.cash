@@ -59,4 +59,21 @@ describe("statement opening balance", () => {
     expect(ledger[0].credit).toBe(1500);
     expect(closingBalance).toBe(1500);
   });
+
+  it("formats a real Date object the same as its equivalent ISO string (drizzle date() columns return Date objects, not strings)", () => {
+    const asDateObject = buildSupplierLedger({
+      invoices: [{ number: "PI-2", date: new Date("2026-08-01T00:00:00.000Z"), total: "700" }],
+      cashTransactions: [],
+      bankTransactions: [],
+      returns: [],
+    });
+    const asIsoString = buildSupplierLedger({
+      invoices: [{ number: "PI-2", date: "2026-08-01", total: "700" }],
+      cashTransactions: [],
+      bankTransactions: [],
+      returns: [],
+    });
+    expect(asDateObject[0].date).toBe("2026-08-01");
+    expect(asDateObject[0].date).toBe(asIsoString[0].date);
+  });
 });

@@ -3,11 +3,13 @@ import { z } from "zod";
 import { getDb } from "./db";
 import {
   confirmOpsItem,
+  getFactoryConvertPreview,
   getFactoryDailyContent,
   getOpsInboxContent,
   ingestWhatsAppItem,
   listFactoryDaily,
   listOpsInbox,
+  markFactoryDailyPosted,
   reextractOpsItem,
   setFactoryDailyStatus,
   setOpsInboxStatus,
@@ -256,5 +258,37 @@ export const opsInboxRouter = router({
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "قاعدة البيانات غير متاحة" });
       return setFactoryDailyStatus(db, tenantId, input.id, input.status);
+    }),
+
+  /** اقتراحات مطابقة (مورد/عميل/صنف/خامات) قبل تحويل بيان المصنع لمستند رسمي — للمراجعة قبل الاعتماد */
+  factoryConvertPreview: protectedProcedure
+    .input(z.object({ id: z.number().int().positive() }))
+    .query(async ({ ctx, input }) => {
+      const tenantId = requireTenant(ctx.tenantId);
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "قاعدة البيانات غير متاحة" });
+      try {
+        return await getFactoryConvertPreview(db, tenantId, input.id);
+      } catch (e: unknown) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: e instanceof Error ? e.message : "فشل تجهيز المطابقة",
+        });
+      }
+    }),
+
+  /** يُستدعى بعد ما المحاسب يعتمد الفاتورة/أمر الإنتاج فعلياً (عبر الطلبات الحقيقية) — يربط البيان بالمستند الناتج */
+  factoryMarkPosted: protectedProcedure
+    .input(z.object({
+      id: z.number().int().positive(),
+      entityType: z.enum(["purchase_invoice", "sales_invoice", "production_order"]),
+      entityId: z.number().int().positive(),
+      ref: z.string().max(100),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const tenantId = requireTenant(ctx.tenantId);
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "قاعدة البيانات غير متاحة" });
+      return markFactoryDailyPosted(db, tenantId, input.id, input);
     }),
 });

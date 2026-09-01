@@ -31,6 +31,12 @@ function money(v: number) {
   return v.toLocaleString("en-US", { maximumFractionDigits: 2 });
 }
 
+/** drizzle بيرجّع عمود date() كـ Date object — String() عليه بينادي toString() مش toISOString() */
+function toDateStr(v: unknown): string {
+  if (v instanceof Date) return v.toISOString().slice(0, 10);
+  return String(v || "").slice(0, 10);
+}
+
 function push(out: AuditFinding[], finding: Omit<AuditFinding, "id"> & { id?: string }) {
   out.push({ id: finding.id || `${finding.category}-${out.length + 1}`, ...finding });
 }
@@ -182,8 +188,8 @@ export async function buildClosingChecklist(
   const readiness = await getFiscalYearCloseReadiness(db, tenantId, {
     id: fy.id,
     name: fy.name,
-    startDate: String(fy.startDate).slice(0, 10),
-    endDate: String(fy.endDate).slice(0, 10),
+    startDate: toDateStr(fy.startDate),
+    endDate: toDateStr(fy.endDate),
     status: fy.status,
   });
 
@@ -312,8 +318,8 @@ export async function buildLiquidityForecast(
     .from(checks)
     .where(tenantWhere(checks, tenantId, eq(checks.status, "pending")));
 
-  const bucket = (due: string | null | undefined, fallbackDate: string | null | undefined) => {
-    const d = String(due || fallbackDate || asOf).slice(0, 10);
+  const bucket = (due: unknown, fallbackDate: unknown) => {
+    const d = toDateStr(due) || toDateStr(fallbackDate) || asOf;
     if (d <= d30) return 30;
     if (d <= d60) return 60;
     if (d <= d90) return 90;

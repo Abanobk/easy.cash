@@ -31,6 +31,12 @@ function money(v: number) {
   return v.toLocaleString("en-US", { maximumFractionDigits: 2 });
 }
 
+/** drizzle بيرجّع عمود date() كـ Date object — String() عليه بينادي toString() مش toISOString() */
+function toDateStr(v: unknown): string {
+  if (v instanceof Date) return v.toISOString().slice(0, 10);
+  return String(v || "").slice(0, 10);
+}
+
 function push(out: AuditFinding[], finding: Omit<AuditFinding, "id"> & { id?: string }) {
   out.push({
     id: finding.id || `${finding.category}-${out.length + 1}`,
@@ -458,7 +464,7 @@ export async function collectAuditSamples(
       kind: "journal",
       label: `قيد ${row.number}`,
       amount,
-      meta: `${String(row.date).slice(0, 10)} · ${row.description || "بدون بيان"}`,
+      meta: `${toDateStr(row.date)} · ${row.description || "بدون بيان"}`,
       link: `/accounts/journal/${row.id}`,
     });
     if (amount >= policy.materialityEgp * 5) {
@@ -466,7 +472,7 @@ export async function collectAuditSamples(
         severity: "info",
         category: "عينة مراجعة",
         title: `قيد جوهري للمراجعة: ${row.number}`,
-        detail: `مبلغ ${money(amount)} ج بتاريخ ${String(row.date).slice(0, 10)} — ضمن أكبر القيود في الفترة.`,
+        detail: `مبلغ ${money(amount)} ج بتاريخ ${toDateStr(row.date)} — ضمن أكبر القيود في الفترة.`,
         recommendation: "راجع المستند الداعم والبيان والحسابات المستخدمة كعينة مراجعة رسمية.",
         link: `/accounts/journal/${row.id}`,
       });
@@ -527,7 +533,7 @@ export async function collectAuditSamples(
       kind: "bank",
       label: `${row.number} (${row.type})`,
       amount: n(row.amount),
-      meta: `${String(row.date).slice(0, 10)} · ${row.description || "—"}`,
+      meta: `${toDateStr(row.date)} · ${row.description || "—"}`,
       link: "/bank/transactions",
     });
   }

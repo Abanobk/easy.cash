@@ -169,6 +169,12 @@ function money(v: number) {
   return v.toLocaleString("en-US", { maximumFractionDigits: 2 });
 }
 
+/** drizzle بيرجّع عمود date() كـ Date object — String() عليه بينادي toString() مش toISOString() */
+function toDateStr(v: unknown): string {
+  if (v instanceof Date) return v.toISOString().slice(0, 10);
+  return String(v || "").slice(0, 10);
+}
+
 function push(
   out: AuditFinding[],
   finding: Omit<AuditFinding, "id"> & { id?: string },
@@ -226,7 +232,7 @@ async function auditJournals(db: Db, tenantId: number, out: AuditFinding[]) {
       severity: "critical",
       category: "قيود يومية",
       title: `قيد غير متوازن: ${row.number}`,
-      detail: `مدين ${money(debit)} ≠ دائن ${money(credit)} بتاريخ ${String(row.date).slice(0, 10)}.`,
+      detail: `مدين ${money(debit)} ≠ دائن ${money(credit)} بتاريخ ${toDateStr(row.date)}.`,
       recommendation: "افتح القيد وصحّح الأسطر فوراً؛ عدم التوازن يفسد ميزان المراجعة.",
       link: `/accounts/journal/${row.id}`,
     });
@@ -257,7 +263,7 @@ async function auditJournals(db: Db, tenantId: number, out: AuditFinding[]) {
       severity: "critical",
       category: "قيود يومية",
       title: `قيد مرحّل بلا أسطر: ${row.number}`,
-      detail: `بتاريخ ${String(row.date).slice(0, 10)} بدون أي أسطر مدينة/دائنة.`,
+      detail: `بتاريخ ${toDateStr(row.date)} بدون أي أسطر مدينة/دائنة.`,
       recommendation: "أضف أسطر القيد أو ألغِ ترحيله حتى لا يشوّه دفتر اليومية.",
       link: `/accounts/journal/${row.id}`,
     });
@@ -274,8 +280,8 @@ async function resolveAuditPeriod(db: Db, tenantId: number) {
 
   if (openFy) {
     return {
-      dateFrom: String(openFy.startDate).slice(0, 10),
-      dateTo: String(openFy.endDate).slice(0, 10),
+      dateFrom: toDateStr(openFy.startDate),
+      dateTo: toDateStr(openFy.endDate),
       periodLabel: `السنة المالية المفتوحة: ${openFy.name}`,
     };
   }

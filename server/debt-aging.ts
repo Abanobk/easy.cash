@@ -26,8 +26,15 @@ function emptyBuckets(): AgingBuckets {
   return { current: 0, days30: 0, days60: 0, days90: 0, over90: 0, total: 0 };
 }
 
+/**
+ * drizzle بيرجّع عمود date() كـ Date object مش نص. String(dateObj).slice(0,10) بيقص جزء من
+ * toString() ("Sat Aug 01") قبل ما توصل للسنة، وإعادة تحويله لـDate تاني بيدّي سنة افتراضية غلط
+ * (new Date("Sat Aug 01") = سنة 2001!) — يعني حساب أعمار الديون كان بيطلع غلط بعشرات السنين
+ * لأي تاريخ جاي من قاعدة البيانات مباشرة. لازم نستخدم toISOString() للـDate object.
+ */
 function dateOnly(d: unknown) {
-  return String(d).slice(0, 10);
+  if (d instanceof Date) return d.toISOString().slice(0, 10);
+  return String(d || "").slice(0, 10);
 }
 
 function agingDays(referenceDate: string, today = new Date()) {

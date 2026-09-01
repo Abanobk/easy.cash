@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "wouter";
 import ERPLayout from "@/components/ERPLayout";
 import PermissionGate from "@/components/PermissionGate";
@@ -10,7 +10,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { trpc } from "@/lib/trpc";
 import { tenantPath, useTenantSlug } from "@/lib/tenant";
 import { toast } from "sonner";
-import { Factory, Loader2, Upload, ShoppingCart, TrendingUp, Beaker, FileText } from "lucide-react";
+import { Factory, Loader2, Upload, ShoppingCart, TrendingUp, Beaker, FileText, ArrowLeftRight } from "lucide-react";
+import FactoryConvertDialog from "@/components/ops/FactoryConvertDialog";
 
 type EntryType = "general" | "purchase" | "sales" | "mixing";
 
@@ -48,11 +49,16 @@ function monthRange(ym: string) {
   return { from, to };
 }
 
+/** تاريخ ووقت الشغل بيتسجّل تلقائياً وقت الحفظ — العامل مش محتاج يدخله يدوي */
+function getWorkDate() {
+  return new Date().toISOString().slice(0, 10);
+}
+
 export default function FactoryDailyPage() {
   const tenantSlug = useTenantSlug();
   const fileRef = useRef<HTMLInputElement>(null);
-  const today = new Date().toISOString().slice(0, 10);
-  const [workDate, setWorkDate] = useState(today);
+  const today = getWorkDate();
+  const [now, setNow] = useState(() => new Date());
   const [entryType, setEntryType] = useState<EntryType>("general");
   const [title, setTitle] = useState("");
   const [notes, setNotes] = useState("");
@@ -67,6 +73,13 @@ export default function FactoryDailyPage() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [typeFilter, setTypeFilter] = useState("all");
   const [pendingFile, setPendingFile] = useState<{ fileName: string; mimeType: string; contentBase64: string } | null>(null);
+  const [convertRow, setConvertRow] = useState<{ id: number; type: "purchase" | "sales" | "mixing" | "general"; workDate: string } | null>(null);
+
+  useEffect(() => {
+    const t = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(t);
+  }, []);
+  const nowLabel = now.toLocaleString("ar-EG", { dateStyle: "medium", timeStyle: "medium" });
 
   const utils = trpc.useUtils();
   const listQuery = trpc.opsInbox.factoryList.useQuery({
@@ -125,7 +138,7 @@ export default function FactoryDailyPage() {
       mimeType: file.type || "application/octet-stream",
       contentBase64,
     });
-    if (!title.trim()) setTitle(`${TYPE_LABEL[entryType]} ${workDate} — ${file.name}`);
+    if (!title.trim()) setTitle(`${TYPE_LABEL[entryType]} ${getWorkDate()} — ${file.name}`);
   };
 
   const submit = () => {
@@ -145,6 +158,7 @@ export default function FactoryDailyPage() {
       toast.error("اكتب اسم المنتج/الخلطة");
       return;
     }
+    const workDate = getWorkDate();
     const autoTitle =
       entryType === "purchase" ? `شراء — ${partyName || itemDescription || workDate}`
       : entryType === "sales" ? `بيع — ${partyName || itemDescription || workDate}`
@@ -215,8 +229,10 @@ export default function FactoryDailyPage() {
 
             <div className="grid gap-3 md:grid-cols-2">
               <div>
-                <Label className="text-xs">تاريخ الشغل</Label>
-                <Input className="mt-1 h-9" type="date" value={workDate} onChange={(e) => setWorkDate(e.target.value)} />
+                <Label className="text-xs">تاريخ ووقت الشغل</Label>
+                <div className="mt-1 flex h-9 items-center rounded-md border border-slate-200 bg-slate-50 px-3 text-sm text-slate-600">
+                  {nowLabel} <span className="mr-1.5 text-slate-400 font-normal">(تلقائي وقت الحفظ)</span>
+                </div>
               </div>
               <div>
                 <Label className="text-xs">
@@ -346,6 +362,7 @@ export default function FactoryDailyPage() {
                     </div>
                     <p className="text-xs text-slate-500 mt-1">
                       {row.workDate} · {row.hasFile ? row.fileName : "بدون ملف"} · {row.status}
+                      {row.postedRef ? <span className="text-emerald-700"> · تم التحويل: {row.postedRef}</span> : null}
                     </p>
                     {(row.partyName || row.itemDescription || row.quantity != null || row.amount != null) && (
                       <p className="text-xs text-slate-600 mt-1">
@@ -363,6 +380,16 @@ export default function FactoryDailyPage() {
                       <Link href={tenantPath(tenantSlug, "/ops/whatsapp-inbox")}>
                         <Button size="sm" variant="outline" className="h-8 text-xs">مسودة وارد</Button>
                       </Link>
+                    ) : null}
+                    {row.type !== "general" && !row.postedRef ? (
+                      <Button
+                        size="sm"
+                        className="h-8 text-xs gap-1"
+                        onClick={() => setConvertRow({ id: row.id, type: row.type, workDate: String(row.workDate).slice(0, 10) })}
+                      >
+                        <ArrowLeftRight size={12} />
+                        {row.type === "mixing" ? "تحويل لأمر إنتاج" : "تحويل لفاتورة"}
+                      </Button>
                     ) : null}
                     <Button
                       size="sm"
@@ -389,6 +416,11 @@ export default function FactoryDailyPage() {
             </div>
           </section>
         </div>
+        <FactoryConvertDialog
+          row={convertRow}
+          onClose={() => setConvertRow(null)}
+          onPosted={() => setConvertRow(null)}
+        />
       </PermissionGate>
     </ERPLayout>
   );

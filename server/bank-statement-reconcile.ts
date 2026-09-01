@@ -28,6 +28,16 @@ function push(out: AuditFinding[], finding: Omit<AuditFinding, "id"> & { id?: st
   out.push({ id: finding.id || `${finding.category}-${out.length + 1}`, ...finding });
 }
 
+/**
+ * drizzle-orm بيرجّع عمود date() كـ JS Date object (مش نص) بدون {mode:"string"}. String(dateObj)
+ * بينادي .toString() مش .toISOString() فبيطلع "Sat Aug 01" (بلا سنة!) بدل "2026-08-01" —
+ * لازم نتعامل مع الحالتين لأي قيمة تاريخ خارجة من قاعدة البيانات مباشرة.
+ */
+function toDateStr(v: unknown): string {
+  if (v instanceof Date) return v.toISOString().slice(0, 10);
+  return String(v || "").slice(0, 10);
+}
+
 function findingKey(title: string, category?: string) {
   return `${category || ""}::${title}`.slice(0, 180);
 }
@@ -121,8 +131,8 @@ export async function reconcileBankStatementImport(
     .from(bankStatementLines)
     .where(tenantWhere(bankStatementLines, tenantId, eq(bankStatementLines.importId, importId)));
 
-  const from = String(imp.periodFrom || "").slice(0, 10);
-  const to = String(imp.periodTo || "").slice(0, 10);
+  const from = toDateStr(imp.periodFrom);
+  const to = toDateStr(imp.periodTo);
   const txns = await db
     .select()
     .from(bankTransactions)
@@ -144,7 +154,7 @@ export async function reconcileBankStatementImport(
     const isIn = t.type === "deposit" || t.type === "deposit_customer";
     return {
       id: t.id,
-      date: String(t.date).slice(0, 10),
+      date: toDateStr(t.date),
       amount,
       signed: isIn ? amount : -amount,
       ref: String(t.reference || t.number || ""),
@@ -158,7 +168,7 @@ export async function reconcileBankStatementImport(
     const credit = n(line.credit);
     const signed = credit > 0 ? credit : -debit;
     const abs = Math.abs(signed);
-    const date = String(line.txnDate).slice(0, 10);
+    const date = toDateStr(line.txnDate);
     const ref = String(line.reference || "").trim();
 
     let best: Cand | null = null;

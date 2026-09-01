@@ -1620,6 +1620,10 @@ export const factoryDailyUploads = mysqlTable("factory_daily_uploads", {
   amount: decimal("amount", { precision: 15, scale: 2 }),
   /** الخامات المستخدمة — خلاطات فقط */
   materialsUsed: text("materialsUsed"),
+  /** المستند الرسمي اللي اتحوّل له البيان (فاتورة شراء/بيع/أمر إنتاج) بعد المراجعة والاعتماد */
+  postedEntityType: varchar("postedEntityType", { length: 30 }),
+  postedEntityId: int("postedEntityId"),
+  postedRef: varchar("postedRef", { length: 100 }),
   createdBy: int("createdBy"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
