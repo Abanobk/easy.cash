@@ -3052,6 +3052,7 @@ const bankRouter = router({
 // ===================== REPORTS =====================
 const reportsRouter = router({
   inventory: protectedProcedure.query(async ({ ctx }) => {
+    await assertEntityAction(ctx, "reports", "legacyInventorySummary", "viewDoc");
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     return db.select({
@@ -3075,6 +3076,7 @@ const reportsRouter = router({
       );
   }),
   balanceSheet: protectedProcedure.query(async ({ ctx }) => {
+    await assertEntityAction(ctx, "reports", "legacyBalanceSheet", "viewDoc");
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     const allAccounts = await db.select().from(accounts).where(tenantWhere(accounts, ctx.tenantId, eq(accounts.isActive, true))).orderBy(accounts.code);
@@ -3084,6 +3086,7 @@ const reportsRouter = router({
     return { assets, liabilities, equity };
   }),
   incomeStatement: protectedProcedure.query(async ({ ctx }) => {
+    await assertEntityAction(ctx, "reports", "legacyIncomeStatement", "viewDoc");
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     const [totalRevenue] = await db.select({ total: sum(salesInvoices.total) }).from(salesInvoices).where(tenantWhere(salesInvoices, ctx.tenantId, eq(salesInvoices.status, "confirmed")));
@@ -3097,6 +3100,7 @@ const reportsRouter = router({
   analytics: protectedProcedure.input(z.object({
     months: z.number().default(6),
   })).query(async ({ ctx, input }) => {
+    await assertEntityAction(ctx, "reports", "salesAnalytics", "viewDoc");
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     const startDate = new Date();
@@ -3183,6 +3187,7 @@ const reportsRouter = router({
     startDate: z.string(),
     endDate: z.string(),
   })).query(async ({ ctx, input }) => {
+    await assertEntityAction(ctx, "reports", "taxReport", "viewDoc");
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 
@@ -3251,6 +3256,7 @@ const reportsRouter = router({
     expiryFrom: z.string().optional(),
     expiryTo: z.string().optional(),
   })).query(async ({ ctx, input }) => {
+    await assertEntityAction(ctx, "reports", "invreports-inventorysummary", "viewDoc");
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     const scope = await loadUserScopeFromCtx(db, ctx.saasUser);
@@ -3267,6 +3273,7 @@ const reportsRouter = router({
     itemId: z.number().optional(),
     search: z.string().optional(),
   })).query(async ({ ctx, input }) => {
+    await assertEntityAction(ctx, "reports", "invreports-itemstransferdetails", "viewDoc");
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     const scope = await loadUserScopeFromCtx(db, ctx.saasUser);
@@ -3283,6 +3290,7 @@ const reportsRouter = router({
     itemId: z.number().optional(),
     search: z.string().optional(),
   })).query(async ({ ctx, input }) => {
+    await assertEntityAction(ctx, "reports", "invreports-totalinventoryexportimportreport", "viewDoc");
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     const scope = await loadUserScopeFromCtx(db, ctx.saasUser);
@@ -3300,6 +3308,7 @@ const reportsRouter = router({
     itemId: z.number().optional(),
     search: z.string().optional(),
   })).query(async ({ ctx, input }) => {
+    await assertEntityAction(ctx, "reports", "invreports-inventorytransferdetailsreport", "viewDoc");
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     const scope = await loadUserScopeFromCtx(db, ctx.saasUser);
@@ -3320,6 +3329,7 @@ const reportsRouter = router({
     itemId: z.number().optional(),
     search: z.string().optional(),
   })).query(async ({ ctx, input }) => {
+    await assertEntityAction(ctx, "reports", "invreports-itemscosts", "viewDoc");
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     const scope = await loadUserScopeFromCtx(db, ctx.saasUser);
@@ -3332,6 +3342,7 @@ const reportsRouter = router({
     itemId: z.number().optional(),
     search: z.string().optional(),
   })).query(async ({ ctx, input }) => {
+    await assertEntityAction(ctx, "reports", "invreports-itemslist", "viewDoc");
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     return itemsListReport(db, { tenantId: ctx.tenantId, ...input });
@@ -3346,6 +3357,7 @@ const reportsRouter = router({
     itemId: z.number().optional(),
     search: z.string().optional(),
   })).query(async ({ ctx, input }) => {
+    await assertEntityAction(ctx, "reports", "invreports-itemssummary", "viewDoc");
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     const scope = await loadUserScopeFromCtx(db, ctx.saasUser);
@@ -3363,6 +3375,7 @@ const reportsRouter = router({
     itemId: z.number().optional(),
     search: z.string().optional(),
   })).query(async ({ ctx, input }) => {
+    await assertEntityAction(ctx, "reports", "invreports-incomeoutcomeitem", "viewDoc");
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     const scope = await loadUserScopeFromCtx(db, ctx.saasUser);
@@ -3379,6 +3392,7 @@ const reportsRouter = router({
     search: z.string().optional(),
     staleDays: z.number().default(90),
   })).query(async ({ ctx, input }) => {
+    await assertEntityAction(ctx, "reports", "invreports-stagnantitems", "viewDoc");
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     const scope = await loadUserScopeFromCtx(db, ctx.saasUser);
@@ -3394,6 +3408,7 @@ const reportsRouter = router({
     search: z.string().optional(),
     dateTo: z.string().optional(),
   })).query(async ({ ctx, input }) => {
+    await assertEntityAction(ctx, "reports", "invreports-itemaging", "viewDoc");
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     const scope = await loadUserScopeFromCtx(db, ctx.saasUser);
@@ -3424,6 +3439,7 @@ const reportsRouter = router({
     taxFilter: z.enum(["with", "without"]).optional(),
     discountFilter: z.enum(["with", "without"]).optional(),
   })).query(async ({ ctx, input }) => {
+    await assertEntityAction(ctx, "reports", input.slug, "viewDoc");
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     const scope = await loadUserScopeFromCtx(db, ctx.saasUser);
@@ -3449,6 +3465,7 @@ const reportsRouter = router({
     taxFilter: z.enum(["with", "without"]).optional(),
     discountFilter: z.enum(["with", "without"]).optional(),
   })).query(async ({ ctx, input }) => {
+    await assertEntityAction(ctx, "reports", input.kind === "purchases" ? "accountingreports-purchases" : "accountingreports-sales", "viewDoc");
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     const scope = await loadUserScopeFromCtx(db, ctx.saasUser);
@@ -3475,6 +3492,7 @@ const reportsRouter = router({
     paymentType: z.enum(["cash", "credit"]).optional(),
     search: z.string().optional(),
   })).query(async ({ ctx, input }) => {
+    await assertEntityAction(ctx, "reports", input.slug, "viewDoc");
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     const scope = await loadUserScopeFromCtx(db, ctx.saasUser);
@@ -3488,6 +3506,7 @@ const reportsRouter = router({
     dateTo: z.string().optional(),
     search: z.string().optional(),
   })).query(async ({ ctx, input }) => {
+    await assertEntityAction(ctx, "reports", input.slug, "viewDoc");
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     const { slug, ...filters } = input;
@@ -3499,6 +3518,7 @@ const reportsRouter = router({
     dateFrom: z.string().optional(),
     dateTo: z.string().optional(),
   })).query(async ({ ctx, input }) => {
+    await assertEntityAction(ctx, "reports", input.slug, "viewDoc");
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     const { slug, ...filters } = input;

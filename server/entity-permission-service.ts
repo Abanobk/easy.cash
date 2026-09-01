@@ -2,15 +2,16 @@
  * تنفيذ فعلي للشجرة التفصيلية (shared/permission-tree.ts) — بيتفعّل تدريجيًا شاشة بشاشة.
  *
  * القاعدة المهمة عشان الترقية متكسرش حد شغال حاليًا: لو الدور ده أصلاً معندوش أي صف
- * محفوظ لهذا العنصر بالذات في tenant_entity_permissions (يعني المدير لسه ما فتحش
- * "الصلاحيات التفصيلية" وظبطها له)، بنعتبره "مش متظبط" ومنقيدش حاجة — نسيب القرار
- * للنظام القديم (module × 4 أفعال) زي ما هو دايمًا. بس أول ما المدير يحفظ أي حاجة
- * لعنصر معيّن لدور معيّن، القائمة المحفوظة بتبقى هي المرجع الوحيد لهذا العنصر (أي فعل
- * مش موجود فيها = ممنوع)، حتى لو النظام القديم كان بيسمح بيه.
+ * محفوظ في القسم ده خالص (ولا عنصر واحد جواه) في tenant_entity_permissions، بنعتبر
+ * القسم كله "مش متظبط" ومنقيدش حاجة — نسيب القرار للنظام القديم (module × 4 أفعال)
+ * زي ما هو دايمًا. لكن أول ما المدير يظبط عنصر واحد جوه قسم معيّن لدور معيّن، أي عنصر
+ * تاني جواه القسم ده محدش لمسه يتقفل افتراضيًا بدل ما يفضل مفتوح (نفس القاعدة اللي
+ * القائمة الجانبية شغالة بيها فعلاً) — يعني القرار مش بس "هل العنصر ده بالذات متظبط"
+ * لوحده، لازم كمان "هل القسم ده كله متحكم فيه بالتفصيل". راجع isModuleTouchedForRole.
  *
  * استثناء واحد: موديولات إضافية خاصة بينا (CORE_MIGRATION_EXEMPT_MODULES — أدوات
  * الذكاء الاصطناعي وتكليف شحنة) بتتقفل هي نفسها افتراضيًا (مش تفضل مفتوحة) أول ما
- * الدور يبقى متحكم فيه بالتفصيل من قسم أساسي واحد على الأقل — راجع isRoleCoreMigrated.
+ * الدور يبقى متحكم فيه بالتفصيل من أي قسم أساسي واحد على الأقل — راجع isRoleCoreMigrated.
  */
 import { TRPCError } from "@trpc/server";
 import { and, eq, notInArray } from "drizzle-orm";
@@ -72,6 +73,31 @@ export async function isRoleCoreMigrated(tenantId: number, role: string): Promis
   return !!row;
 }
 
+/**
+ * true لو القسم ده بالذات (زي "reports" أو "contacts") فيه صف واحد على الأقل محفوظ
+ * لهذا الدور — أي عنصر تاني، مش بس هذا. بيستخدمها assertEntityAction عشان لو مدير
+ * فعّل بعض عناصر قسم بعينه بالتفصيل (زي "عميل" جوه "العملاء والموردين") من غير ما
+ * يلمس عنصر تاني جواه (زي "مورد")، العنصر اللي محدش لمسه يتقفل افتراضيًا بدل ما
+ * يفضل مفتوح — نفس القاعدة بالظبط اللي شغالة في القائمة الجانبية
+ * (client/src/lib/entity-nav-filter.ts) لكن هنا في نقطة التنفيذ الفعلية.
+ */
+export async function isModuleTouchedForRole(tenantId: number, role: string, moduleKey: string): Promise<boolean> {
+  const db = await getDb();
+  if (!db) return false;
+  const [row] = await db
+    .select({ id: tenantEntityPermissions.id })
+    .from(tenantEntityPermissions)
+    .where(
+      and(
+        eq(tenantEntityPermissions.tenantId, tenantId),
+        eq(tenantEntityPermissions.role, role),
+        eq(tenantEntityPermissions.moduleKey, moduleKey),
+      ),
+    )
+    .limit(1);
+  return !!row;
+}
+
 /** يرمي FORBIDDEN لو الدور ظابط العنصر ده صراحة والفعل مش موجود في القائمة المسموحة. */
 export async function assertEntityAction(
   ctx: EntityPermCtx,
@@ -83,23 +109,33 @@ export async function assertEntityAction(
   if (roleBypassesPermissions(ctx.saasUser.role)) return;
   if (!ctx.tenantId) return;
   const allowed = await getEntityAllowedActions(ctx.tenantId, ctx.saasUser.role, moduleKey, entityKey);
-  if (allowed === null) {
-    // العنصر ده لسه مش متظبط لهذا الدور. لو موديول إضافي (زي أدوات الذكاء الاصطناعي)
-    // والدور أصلاً متحكم فيه بالتفصيل من قسم أساسي، يتقفل افتراضيًا بدل ما يفضل مفتوح.
-    if (CORE_MIGRATION_EXEMPT_MODULES.has(moduleKey) && await isRoleCoreMigrated(ctx.tenantId, ctx.saasUser.role)) {
+  if (allowed !== null) {
+    if (!allowed.includes(action)) {
       throw new TRPCError({
         code: "FORBIDDEN",
         message: `لا تملك صلاحية "${PERM_ACTION_LABELS[action]}" على هذا العنصر`,
       });
     }
-    return; // سلوك قديم زي ما هو
+    return;
   }
-  if (!allowed.includes(action)) {
-    throw new TRPCError({
-      code: "FORBIDDEN",
-      message: `لا تملك صلاحية "${PERM_ACTION_LABELS[action]}" على هذا العنصر`,
-    });
+
+  // العنصر ده نفسه معندوش صف محفوظ. نقرر نقيّده افتراضيًا (بدل ما يفضل مفتوح) في حالتين:
+  const denyMessage = () => new TRPCError({
+    code: "FORBIDDEN",
+    message: `لا تملك صلاحية "${PERM_ACTION_LABELS[action]}" على هذا العنصر`,
+  });
+
+  if (CORE_MIGRATION_EXEMPT_MODULES.has(moduleKey)) {
+    // (1) موديول إضافي (أدوات الذكاء الاصطناعي/تكليف شحنة) والدور أصلاً متحكم فيه
+    //     بالتفصيل من قسم أساسي واحد على الأقل.
+    if (await isRoleCoreMigrated(ctx.tenantId, ctx.saasUser.role)) throw denyMessage();
+    return;
   }
+
+  // (2) القسم ده بالذات فيه عنصر تاني متظبط للدور ده (يعني المدير بيتحكم في القسم ده
+  //     بالتفصيل فعلاً) — أي عنصر جواه محدش لمسه يتقفل زيه بالظبط، مش يفضل مفتوح.
+  if (await isModuleTouchedForRole(ctx.tenantId, ctx.saasUser.role, moduleKey)) throw denyMessage();
+  return; // القسم ده كله لسه محدش لمسه خالص لهذا الدور — سلوك قديم زي ما هو
 }
 
 /**
@@ -203,6 +239,21 @@ const STATIC_PATH_ENTITY: Record<string, PathEntityResolution> = {
   "production.update": { moduleKey: "production", entityKeys: ["productionOrder"] },
   "production.delete": { moduleKey: "production", entityKeys: ["productionOrder"] },
   "production.updateStatus": { moduleKey: "production", entityKeys: ["productionOrder"] },
+  "reports.inventory": { moduleKey: "reports", entityKeys: ["legacyInventorySummary"] },
+  "reports.balanceSheet": { moduleKey: "reports", entityKeys: ["legacyBalanceSheet"] },
+  "reports.incomeStatement": { moduleKey: "reports", entityKeys: ["legacyIncomeStatement"] },
+  "reports.analytics": { moduleKey: "reports", entityKeys: ["salesAnalytics"] },
+  "reports.tax": { moduleKey: "reports", entityKeys: ["taxReport"] },
+  "reports.inventoryStocktake": { moduleKey: "reports", entityKeys: ["invreports-inventorysummary"] },
+  "reports.inventoryItemMovements": { moduleKey: "reports", entityKeys: ["invreports-itemstransferdetails"] },
+  "reports.inventoryWarehouseInOut": { moduleKey: "reports", entityKeys: ["invreports-totalinventoryexportimportreport"] },
+  "reports.inventoryWarehouseMovements": { moduleKey: "reports", entityKeys: ["invreports-inventorytransferdetailsreport"] },
+  "reports.inventoryItemCosts": { moduleKey: "reports", entityKeys: ["invreports-itemscosts"] },
+  "reports.inventoryItemsList": { moduleKey: "reports", entityKeys: ["invreports-itemslist"] },
+  "reports.inventoryItemSummary": { moduleKey: "reports", entityKeys: ["invreports-itemssummary"] },
+  "reports.inventoryItemInOut": { moduleKey: "reports", entityKeys: ["invreports-incomeoutcomeitem"] },
+  "reports.inventoryStagnantItems": { moduleKey: "reports", entityKeys: ["invreports-stagnantitems"] },
+  "reports.inventoryItemAging": { moduleKey: "reports", entityKeys: ["invreports-itemaging"] },
   "importCosting.list": { moduleKey: "import_costing", entityKeys: ["shipmentCosting"] },
   "importCosting.get": { moduleKey: "import_costing", entityKeys: ["shipmentCosting"] },
   "importCosting.create": { moduleKey: "import_costing", entityKeys: ["shipmentCosting"] },
@@ -261,6 +312,19 @@ export function resolveEntityKeysForPath(path: string, rawInput: unknown): PathE
   if (path === "bank.checks.create") {
     const key = input?.type === "incoming" ? "checkIn" : "checkOut";
     return { moduleKey: "bank", entityKeys: [key] };
+  }
+  if (
+    path === "reports.accountingBySlug" || path === "reports.finalBySlug" ||
+    path === "reports.hrBySlug" || path === "reports.assetsBySlug"
+  ) {
+    if (typeof input?.slug === "string" && input.slug) {
+      return { moduleKey: "reports", entityKeys: [input.slug] };
+    }
+    return null;
+  }
+  if (path === "reports.purchasesSalesDetail") {
+    const key = input?.kind === "purchases" ? "accountingreports-purchases" : "accountingreports-sales";
+    return { moduleKey: "reports", entityKeys: [key] };
   }
   return null;
 }
