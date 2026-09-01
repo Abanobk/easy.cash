@@ -77,7 +77,9 @@ export default function AccountingAuditorPage() {
   const [bankAccountId, setBankAccountId] = useState<string>("");
   const [stmtKind, setStmtKind] = useState<"customer" | "supplier" | "customs" | "tax" | "other">("customer");
   const [stmtTitle, setStmtTitle] = useState("");
+  const [stmtPartyId, setStmtPartyId] = useState("");
   const [detailImportId, setDetailImportId] = useState<number | null>(null);
+  const [partyDetailImportId, setPartyDetailImportId] = useState<number | null>(null);
   const bankFileRef = useRef<HTMLInputElement>(null);
   const otherFileRef = useRef<HTMLInputElement>(null);
 
@@ -85,9 +87,15 @@ export default function AccountingAuditorPage() {
   const policyQuery = trpc.accountingAuditor.getPolicy.useQuery();
   const banksQuery = trpc.accountingAuditor.bankAccounts.useQuery();
   const uploadsQuery = trpc.accountingAuditor.listUploads.useQuery();
+  const customersQuery = trpc.customers.list.useQuery({ limit: 200 });
+  const suppliersQuery = trpc.suppliers.list.useQuery({ limit: 200 });
   const detailQuery = trpc.accountingAuditor.bankStatementDetail.useQuery(
     { importId: detailImportId || 0 },
     { enabled: !!detailImportId },
+  );
+  const partyDetailQuery = trpc.accountingAuditor.partyStatementDetail.useQuery(
+    { importId: partyDetailImportId || 0 },
+    { enabled: !!partyDetailImportId },
   );
 
   const savePolicyMut = trpc.accountingAuditor.savePolicy.useMutation({
@@ -108,10 +116,16 @@ export default function AccountingAuditorPage() {
   });
 
   const uploadOtherMut = trpc.accountingAuditor.uploadStatement.useMutation({
-    onSuccess: () => {
-      toast.success("تم رفع الكشف للمراجع");
+    onSuccess: (r: any) => {
+      if (r && typeof r.matchedCount === "number") {
+        toast.success(`تم رفع الكشف ومطابقته: مطابق ${r.matchedCount} من ${r.lineCount} · حركات عندنا بدون مقابل ${r.systemOnlyCount ?? 0}`);
+        setPartyDetailImportId(r.importId);
+      } else {
+        toast.success("تم رفع الكشف للمراجع");
+      }
       utils.accountingAuditor.listUploads.invalidate();
       setStmtTitle("");
+      setStmtPartyId("");
     },
     onError: (e) => toast.error(e.message),
   });
@@ -152,13 +166,20 @@ export default function AccountingAuditorPage() {
     });
   };
 
+  const isPartyKind = stmtKind === "customer" || stmtKind === "supplier";
+
   const onOtherFile = async (file?: File | null) => {
     if (!file) return;
+    if (isPartyKind && !stmtPartyId) {
+      toast.error(stmtKind === "customer" ? "اختر العميل أولاً" : "اختر المورد أولاً");
+      return;
+    }
     const contentBase64 = await readFileAsBase64(file);
     uploadOtherMut.mutate({
       kind: stmtKind,
       title: stmtTitle.trim() || file.name,
       fileName: file.name,
+      partyId: isPartyKind && stmtPartyId ? Number(stmtPartyId) : undefined,
       contentBase64,
     });
   };
@@ -303,10 +324,15 @@ export default function AccountingAuditorPage() {
 
               <div className="rounded-2xl border border-slate-200 bg-white p-5 space-y-3">
                 <h3 className="text-sm font-semibold text-slate-800">كشف عميل / مورد / جمارك / ضريبة</h3>
+                {isPartyKind ? (
+                  <p className="text-xs text-slate-500">
+                    اختيار العميل/المورد بيفعّل مطابقة حقيقية لكشفه مع دفتره في البرنامج — مش مجرد أرشفة.
+                  </p>
+                ) : null}
                 <div className="grid gap-3 md:grid-cols-3">
                   <div>
                     <Label className="text-xs">النوع</Label>
-                    <Select value={stmtKind} onValueChange={(v) => setStmtKind(v as typeof stmtKind)}>
+                    <Select value={stmtKind} onValueChange={(v) => { setStmtKind(v as typeof stmtKind); setStmtPartyId(""); }}>
                       <SelectTrigger className="mt-1 h-9"><SelectValue /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="customer">عميل</SelectItem>
@@ -317,7 +343,20 @@ export default function AccountingAuditorPage() {
                       </SelectContent>
                     </Select>
                   </div>
-                  <div className="md:col-span-2">
+                  {isPartyKind ? (
+                    <div>
+                      <Label className="text-xs">{stmtKind === "customer" ? "العميل" : "المورد"}</Label>
+                      <Select value={stmtPartyId} onValueChange={setStmtPartyId}>
+                        <SelectTrigger className="mt-1 h-9"><SelectValue placeholder={stmtKind === "customer" ? "اختر عميل" : "اختر مورد"} /></SelectTrigger>
+                        <SelectContent>
+                          {((stmtKind === "customer" ? customersQuery.data?.rows : suppliersQuery.data?.rows) || []).map((p: { id: number; name: string }) => (
+                            <SelectItem key={p.id} value={String(p.id)}>{p.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  ) : null}
+                  <div className={isPartyKind ? "" : "md:col-span-2"}>
                     <Label className="text-xs">عنوان</Label>
                     <Input className="mt-1 h-9" value={stmtTitle} onChange={(e) => setStmtTitle(e.target.value)} placeholder="مثال: كشف عميل أحمد — أغسطس" />
                   </div>
@@ -332,6 +371,7 @@ export default function AccountingAuditorPage() {
                     />
                   </div>
                 </div>
+                {uploadOtherMut.isPending ? <p className="text-xs text-slate-500">جاري قراءة الملف{isPartyKind ? " والمطابقة" : ""}…</p> : null}
               </div>
 
               <div className="rounded-2xl border border-slate-200 bg-white p-5">
@@ -346,12 +386,23 @@ export default function AccountingAuditorPage() {
                       <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => setDetailImportId(b.id)}>عرض الأسطر</Button>
                     </div>
                   ))}
-                  {(uploadsQuery.data?.others || []).map((o) => (
-                    <div key={o.id} className="border-b border-slate-100 pb-2">
-                      <p className="font-medium">{o.title}</p>
-                      <p className="text-xs text-slate-500">{o.kind} · {o.fileName}</p>
-                    </div>
-                  ))}
+                  {(uploadsQuery.data?.others || []).map((o: any) => {
+                    const isParty = o.kind === "customer" || o.kind === "supplier";
+                    return (
+                      <div key={o.id} className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-2">
+                        <div>
+                          <p className="font-medium">{o.title}</p>
+                          <p className="text-xs text-slate-500">
+                            {o.kind === "customer" ? "عميل" : o.kind === "supplier" ? "مورد" : o.kind} · {o.partyName || o.fileName}
+                            {isParty ? ` · مطابق ${o.matchedCount}/${o.matchedCount + o.unmatchedCount} · بدون مقابل عندنا ${o.systemOnlyCount}` : null}
+                          </p>
+                        </div>
+                        {isParty ? (
+                          <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => setPartyDetailImportId(o.id)}>عرض الأسطر</Button>
+                        ) : null}
+                      </div>
+                    );
+                  })}
                   {!uploadsQuery.data?.banks?.length && !uploadsQuery.data?.others?.length ? (
                     <p className="text-xs text-slate-500">لا كشوف بعد — ارفع كشف بنك للبدء.</p>
                   ) : null}
@@ -379,6 +430,38 @@ export default function AccountingAuditorPage() {
                           <td className="p-2 tabular-nums">{Number(l.debit || 0).toLocaleString("en-US")}</td>
                           <td className="p-2 tabular-nums">{Number(l.credit || 0).toLocaleString("en-US")}</td>
                           <td className="p-2">{l.matchStatus === "matched" ? "مطابق" : "غير مطابق"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : null}
+
+              {partyDetailQuery.data ? (
+                <div className="rounded-2xl border border-slate-200 bg-white p-5 overflow-x-auto">
+                  <h3 className="mb-3 text-sm font-semibold">
+                    تفاصيل مطابقة كشف {(partyDetailQuery.data.import as any).partyName || "الطرف"} #{partyDetailQuery.data.import.id}
+                  </h3>
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="text-slate-500">
+                        <th className="p-2 text-right">تاريخ</th>
+                        <th className="p-2 text-right">بيان</th>
+                        <th className="p-2 text-right">مدين</th>
+                        <th className="p-2 text-right">دائن</th>
+                        <th className="p-2 text-right">الحالة</th>
+                        <th className="p-2 text-right">مطابق مع</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {partyDetailQuery.data.lines.map((l: any) => (
+                        <tr key={l.id} className="border-t border-slate-100">
+                          <td className="p-2">{String(l.txnDate).slice(0, 10)}</td>
+                          <td className="p-2">{l.description}</td>
+                          <td className="p-2 tabular-nums">{Number(l.debit || 0).toLocaleString("en-US")}</td>
+                          <td className="p-2 tabular-nums">{Number(l.credit || 0).toLocaleString("en-US")}</td>
+                          <td className="p-2">{l.matchStatus === "matched" ? "مطابق" : "غير مطابق"}</td>
+                          <td className="p-2 text-slate-500">{l.matchedDocType ? `${l.matchedDocType} ${l.matchedDocNumber || ""}` : "—"}</td>
                         </tr>
                       ))}
                     </tbody>

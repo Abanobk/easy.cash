@@ -248,7 +248,7 @@ export const importCostingRouter = router({
         .from(importCostShipments)
         .where(tenantWhere(importCostShipments, ctx.tenantId));
       const number = `IC-${String(cnt.count + 1).padStart(5, "0")}`;
-      const result = await db.insert(importCostShipments).values(
+      const [result] = await db.insert(importCostShipments).values(
         withTenantId(ctx.tenantId, { number, ...headerValues(input.header) }) as any,
       );
       const id = Number((result as { insertId?: number }).insertId ?? 0);
@@ -329,7 +329,7 @@ export const importCostingRouter = router({
       .where(tenantWhere(importCostShipments, ctx.tenantId));
     const number = `IC-${String(cnt.count + 1).padStart(5, "0")}`;
     const { id: _id, createdAt: _c, updatedAt: _u, number: _n, ...rest } = row;
-    const result = await db.insert(importCostShipments).values(
+    const [result] = await db.insert(importCostShipments).values(
       withTenantId(ctx.tenantId, {
         ...rest,
         number,

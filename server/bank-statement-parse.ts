@@ -286,8 +286,13 @@ async function parseBankTextWithAi(text: string): Promise<ParsedBankLine[]> {
   }
 }
 
-function parseSpreadsheet(buf: Buffer): ParsedBankLine[] {
-  const wb = XLSX.read(buf, { type: "buffer", cellDates: true });
+function parseSpreadsheet(buf: Buffer, fileName = ""): ParsedBankLine[] {
+  // CSV/TXT نص خالص — لو اتقرا كـ buffer بدون تحديد الترميز، مكتبة XLSX أحياناً بتفكّه
+  // كـ latin1 وتبوّظ أي عربي (أو أي حرف مش ASCII) في البيان. اقرأه كنص UTF-8 صريح بدل كده.
+  const ext = extOf(fileName);
+  const wb = ext === "csv" || ext === "txt" || ext === "text"
+    ? XLSX.read(buf.toString("utf8"), { type: "string", cellDates: true })
+    : XLSX.read(buf, { type: "buffer", cellDates: true });
   const sheet = wb.Sheets[wb.SheetNames[0]];
   const rows = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, defval: "" }) as unknown[][];
   if (!rows.length) return [];
@@ -393,7 +398,7 @@ export async function parseBankStatementFile(opts: {
     return parseBankStatementText(buf.toString("utf8"));
   }
 
-  return parseSpreadsheet(buf);
+  return parseSpreadsheet(buf, opts.fileName);
 }
 
 export function daysBetween(a: string, b: string) {

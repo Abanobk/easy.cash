@@ -292,7 +292,7 @@ export async function uploadDocumentAttachment(
   });
   const compare = compareExtracted(system, extracted, kind);
 
-  const insertResult = await db.insert(documentAttachments).values({
+  const [insertResult] = await db.insert(documentAttachments).values({
     tenantId,
     entityType: input.entityType,
     entityId: input.entityId,

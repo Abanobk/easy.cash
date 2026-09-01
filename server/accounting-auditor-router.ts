@@ -17,6 +17,7 @@ import {
   saveGenericStatementUpload,
   upsertFindingClosure,
 } from "./bank-statement-reconcile";
+import { getPartyStatementDetail, importPartyStatement } from "./party-statement-reconcile";
 import { bankAccounts } from "../drizzle/schema";
 import { getDb } from "./db";
 import { ollamaChat } from "./ollama";
@@ -182,6 +183,9 @@ export const accountingAuditorRouter = router({
     title: z.string().min(1).max(255),
     fileName: z.string().min(1).max(255),
     partyName: z.string().max(255).optional(),
+    /** لعميل/مورد: لو اخترت الطرف من القائمة، هنعمل مطابقة حقيقية بدفتره بدل تخزين مرجعي بس */
+    partyId: z.number().int().positive().optional(),
+    closingBalance: z.number().optional(),
     periodFrom: z.string().optional(),
     periodTo: z.string().optional(),
     contentBase64: z.string().optional(),
@@ -191,10 +195,33 @@ export const accountingAuditorRouter = router({
     const tenantId = requireTenant(ctx.tenantId);
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "قاعدة البيانات غير متاحة" });
+
+    if ((input.kind === "customer" || input.kind === "supplier") && input.partyId && input.contentBase64) {
+      return importPartyStatement(db, tenantId, {
+        kind: input.kind,
+        partyId: input.partyId,
+        title: input.title,
+        fileName: input.fileName,
+        contentBase64: input.contentBase64,
+        closingBalance: input.closingBalance,
+        createdBy: ctx.user?.id || ctx.saasUser?.id,
+      });
+    }
+
     return saveGenericStatementUpload(db, tenantId, {
       ...input,
       createdBy: ctx.user?.id || ctx.saasUser?.id,
     });
+  }),
+
+  partyStatementDetail: protectedProcedure.input(z.object({
+    importId: z.number().int().positive(),
+  })).query(async ({ ctx, input }) => {
+    await assertEntityAction(ctx, "ai_tools", "accountingAuditor", "viewDoc");
+    const tenantId = requireTenant(ctx.tenantId);
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "قاعدة البيانات غير متاحة" });
+    return getPartyStatementDetail(db, tenantId, input.importId);
   }),
 
   listUploads: protectedProcedure.query(async ({ ctx }) => {

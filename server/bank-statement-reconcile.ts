@@ -66,7 +66,7 @@ export async function importBankStatement(
   const periodFrom = dates[0];
   const periodTo = dates[dates.length - 1];
 
-  const insertResult = await db.insert(bankStatementImports).values({
+  const [insertResult] = await db.insert(bankStatementImports).values({
     tenantId,
     bankAccountId: input.bankAccountId,
     fileName: input.fileName.slice(0, 255),
@@ -337,7 +337,7 @@ export async function saveGenericStatementUpload(
     }
   }
 
-  const result = await db.insert(auditStatementUploads).values({
+  const [result] = await db.insert(auditStatementUploads).values({
     tenantId,
     kind: input.kind.slice(0, 40),
     title: input.title.slice(0, 255),
@@ -421,7 +421,7 @@ export async function upsertFindingClosure(
     await db.update(auditFindingClosures).set(payload).where(eq(auditFindingClosures.id, existing.id));
     return { id: existing.id, ...payload };
   }
-  const result = await db.insert(auditFindingClosures).values({ ...payload, tenantId });
+  const [result] = await db.insert(auditFindingClosures).values({ ...payload, tenantId });
   return { id: Number((result as { insertId?: number }).insertId ?? 0), ...payload };
 }
 

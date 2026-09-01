@@ -1488,7 +1488,12 @@ export const bankStatementLines = mysqlTable("bank_statement_lines", {
   matchNote: varchar("matchNote", { length: 255 }),
 });
 
-/** كشوف مرفوعة للمراجع (عملاء/موردين/جمارك/عام) */
+/**
+ * كشوف مرفوعة للمراجع (عملاء/موردين/جمارك/عام).
+ * عميل/مورد فقط: بيتقارن فعلياً مع دفتر أستاذ الطرف (فواتير + نقدية + بنك + مردودات) —
+ * customerId/supplierId + matchedCount/unmatchedCount/reconcileStatus بتتملى وقتها.
+ * جمارك/ضريبة/عام: تخزين مرجعي بس، بدون مطابقة آلية (شكل كل مستند مختلف جداً عن التاني).
+ */
 export const auditStatementUploads = mysqlTable("audit_statement_uploads", {
   id: int("id").autoincrement().primaryKey(),
   tenantId: int("tenantId").notNull().default(1),
@@ -1496,12 +1501,38 @@ export const auditStatementUploads = mysqlTable("audit_statement_uploads", {
   title: varchar("title", { length: 255 }).notNull(),
   fileName: varchar("fileName", { length: 255 }).notNull(),
   partyName: varchar("partyName", { length: 255 }),
+  customerId: int("customerId"),
+  supplierId: int("supplierId"),
   periodFrom: date("periodFrom"),
   periodTo: date("periodTo"),
+  closingBalance: decimal("closingBalance", { precision: 15, scale: 2 }),
+  lineCount: int("lineCount").default(0).notNull(),
+  matchedCount: int("matchedCount").default(0).notNull(),
+  unmatchedCount: int("unmatchedCount").default(0).notNull(),
+  systemOnlyCount: int("systemOnlyCount").default(0).notNull(),
+  reconcileStatus: varchar("reconcileStatus", { length: 32 }),
   rawText: text("rawText"),
   summaryJson: text("summaryJson"),
   createdBy: int("createdBy"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+/** أسطر كشف العميل/المورد المرفوع + حالة مطابقتها بدفتر الطرف في البرنامج */
+export const auditStatementLines = mysqlTable("audit_statement_lines", {
+  id: int("id").autoincrement().primaryKey(),
+  tenantId: int("tenantId").notNull().default(1),
+  importId: int("importId").notNull(),
+  lineNo: int("lineNo").notNull().default(1),
+  txnDate: date("txnDate").notNull(),
+  description: text("description"),
+  reference: varchar("reference", { length: 120 }),
+  debit: decimal("debit", { precision: 15, scale: 2 }).default("0"),
+  credit: decimal("credit", { precision: 15, scale: 2 }).default("0"),
+  balance: decimal("balance", { precision: 15, scale: 2 }),
+  matchStatus: varchar("matchStatus", { length: 32 }).default("unmatched").notNull(),
+  matchedDocType: varchar("matchedDocType", { length: 40 }),
+  matchedDocNumber: varchar("matchedDocNumber", { length: 50 }),
+  matchNote: varchar("matchNote", { length: 255 }),
 });
 
 /** متابعة إغلاق ملاحظات المراجع */

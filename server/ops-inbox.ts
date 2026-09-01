@@ -354,7 +354,7 @@ export async function ingestWhatsAppItem(
   draft = await enrichDraft(db, tenantId, draft);
   const workDate = input.workDate || draft.date || today();
 
-  const insertResult = await db.insert(opsInboxItems).values({
+  const [insertResult] = await db.insert(opsInboxItems).values({
     tenantId,
     source: "whatsapp",
     channelNote: input.channelNote || null,
@@ -612,7 +612,7 @@ export async function confirmOpsItem(
       .from(cashTransactions)
       .where(tenantWhere(cashTransactions, tenantId));
     const number = `CT-${String(countResult.count + 1).padStart(5, "0")}`;
-    const insertResult = await db.insert(cashTransactions).values(
+    const [insertResult] = await db.insert(cashTransactions).values(
       withTenantId(tenantId, {
         number,
         type: "receive_customer",
@@ -655,7 +655,7 @@ export async function confirmOpsItem(
       .from(bankTransactions)
       .where(tenantWhere(bankTransactions, tenantId));
     const number = `BT-${String(countResult.count + 1).padStart(5, "0")}`;
-    const insertResult = await db.insert(bankTransactions).values(
+    const [insertResult] = await db.insert(bankTransactions).values(
       withTenantId(tenantId, {
         number,
         type,
@@ -753,7 +753,7 @@ export async function uploadFactoryDaily(
   if (contentBase64.length > MAX_BASE64) throw new Error("حجم الملف كبير — الحد ~5 ميجابايت");
   const fileName = input.fileName?.trim() || "بدون ملف مرفق";
 
-  const insertResult = await db.insert(factoryDailyUploads).values({
+  const [insertResult] = await db.insert(factoryDailyUploads).values({
     tenantId,
     workDate: input.workDate as any,
     title: input.title.slice(0, 255) || fileName,
@@ -796,7 +796,7 @@ export async function uploadFactoryDaily(
       }
     }
     draft = await enrichDraft(db, tenantId, { ...draft, date: draft.date || input.workDate });
-    const inboxInsert = await db.insert(opsInboxItems).values({
+    const [inboxInsert] = await db.insert(opsInboxItems).values({
       tenantId,
       source: "factory",
       channelNote: "شغل المصنع اليومي",

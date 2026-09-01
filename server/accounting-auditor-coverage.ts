@@ -17,6 +17,7 @@ import {
 import type { AuditFinding } from "./accounting-auditor";
 import type { AuditPolicy } from "./audit-policy";
 import { auditUploadedBankStatements } from "./bank-statement-reconcile";
+import { auditUploadedPartyStatements } from "./party-statement-reconcile";
 import { auditDocumentAttachments } from "./document-attachments";
 import { getFiscalYearCloseReadiness } from "./fiscal-year-closing";
 import { tenantWhere } from "./tenant-scope";
@@ -412,6 +413,7 @@ export async function runCoverageAudits(
 ): Promise<CoverageExtras> {
   await auditDocumentTrail(db, tenantId, out);
   await auditUploadedBankStatements(db, tenantId, out, policy.materialityEgp);
+  await auditUploadedPartyStatements(db, tenantId, out, policy.materialityEgp);
   await auditDocumentAttachments(db, tenantId, out, { materialityEgp: policy.materialityEgp });
   const closingChecklist = await buildClosingChecklist(db, tenantId, out, policy);
   const liquidity = await buildLiquidityForecast(db, tenantId, out, policy);
