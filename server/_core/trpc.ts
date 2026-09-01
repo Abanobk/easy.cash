@@ -34,7 +34,7 @@ export const protectedProcedure = t.procedure.use(async (opts) => {
 
   if (ctx.saasUser) {
     const { assertTrpcPermission } = await import("../permission-middleware");
-    await assertTrpcPermission(ctx.saasUser, path);
+    await assertTrpcPermission(ctx.saasUser, path, getRawInput);
   }
 
   const nextCtx = {

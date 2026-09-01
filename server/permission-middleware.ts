@@ -87,12 +87,26 @@ export function resolveTrpcPermission(path: string): { module: PermissionModule;
 export async function assertTrpcPermission(
   saasUser: { id: number; role: string; tenantId: number | null } | null,
   path: string,
+  getRawInput?: () => Promise<unknown>,
 ) {
   if (!saasUser?.tenantId) return;
   if (roleBypassesPermissions(saasUser.role)) return;
 
   const rule = resolveTrpcPermission(path);
   if (!rule) return;
+
+  // لو الشجرة التفصيلية متظبطة صراحة للعنصر بتاع الـpath ده لهذا الدور، سيبها هي
+  // المرجع الوحيد وسيب الفحص القديم (اللي هنا) — عشان صلاحية أدق سمحت بيها الشجرة
+  // متتمنعش بالغلط من القاعدة القديمة الأخشن (قسم × 4 أفعال عامة).
+  if (getRawInput) {
+    try {
+      const { shouldDeferToEntityTree } = await import("./entity-permission-service");
+      const raw = await getRawInput();
+      if (await shouldDeferToEntityTree(saasUser.tenantId, saasUser.role, path, raw)) return;
+    } catch {
+      // فشل قراءة الإدخال أو الفحص الجديد — كمّل بالفحص القديم زي ما هو، أضمن.
+    }
+  }
 
   const perms = await getEffectivePermissions({
     userId: saasUser.id,
