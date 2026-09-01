@@ -2416,8 +2416,7 @@ const hrRouter = router({
   }),
   advances: router({
     list: protectedProcedure.query(async ({ ctx }) => {
-      // ملاحظة: عنصر "معاملات الموظفين" في الشجرة معرّف بحزمة ما فيهاش "إضافة/اعتماد" أصلًا
-      // (زي ما ميجا عارضاها في اللقطة) — مش هنقيّد هنا لحد ما نراجع الحزمة المناسبة فعليًا.
+      await assertEntityAction(ctx, "hr", "employeeTransactions", "viewDocList");
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       return db.select({
@@ -2438,12 +2437,14 @@ const hrRouter = router({
       date: z.string(),
       reason: z.string().optional(),
     })).mutation(async ({ ctx, input }) => {
+      await assertEntityAction(ctx, "hr", "employeeTransactions", "add");
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       await db.insert(salaryAdvances).values(withTenantId(ctx.tenantId, input) as any);
       return { success: true };
     }),
     approve: protectedProcedure.input(z.number()).mutation(async ({ ctx, input }) => {
+      await assertEntityAction(ctx, "hr", "employeeTransactions", "approve");
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       await db.update(salaryAdvances).set({ status: "approved" } as any).where(tenantWhere(salaryAdvances, ctx.tenantId, eq(salaryAdvances.id, input)));
@@ -4152,6 +4153,7 @@ const settingsRouter = router({
   }),
   approvals: router({
     list: protectedProcedure.query(async ({ ctx }) => {
+      await assertEntityAction(ctx, "settings", "pendingDocs", "viewDocList");
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       const { listPendingApprovals } = await import("./document-approval");
@@ -4160,8 +4162,20 @@ const settingsRouter = router({
     approve: protectedProcedure.input(z.number()).mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      const { resolveDocumentApproval } = await import("./document-approval");
+      const { getDocumentApprovalById, resolveDocumentApproval } = await import("./document-approval");
       const { finalizeSalesInvoice, finalizePurchaseInvoice, finalizeJournalEntry } = await import("./invoice-approval");
+      // اعتماد أي مستند معلّق يخضع لصلاحية "اعتماد" المستند الحقيقي نفسه، مش لصلاحية عامة منفصلة
+      const pending = await getDocumentApprovalById(db, ctx.tenantId, input);
+      if (!pending) throw new TRPCError({ code: "NOT_FOUND", message: "طلب الاعتماد غير موجود" });
+      if (pending.documentType === "sales_invoice") {
+        const [inv] = await db.select({ paymentType: salesInvoices.paymentType }).from(salesInvoices)
+          .where(tenantWhere(salesInvoices, ctx.tenantId, eq(salesInvoices.id, pending.documentId)));
+        await assertEntityAction(ctx, "sales", inv?.paymentType === "cash" ? "cashSaleInvoice" : "saleInvoice", "approve");
+      } else if (pending.documentType === "purchase_invoice") {
+        await assertEntityAction(ctx, "purchases", "purchaseInvoice", "approve");
+      } else if (pending.documentType === "journal_entry") {
+        await assertEntityAction(ctx, "accounts", "journalEntry", "approve");
+      }
       const row = await resolveDocumentApproval(db, ctx.tenantId, input, ctx.user?.id, "approved");
       if (row.documentType === "sales_invoice") {
         await finalizeSalesInvoice(db, ctx.tenantId, ctx.user?.id, row.documentId);
@@ -4175,7 +4189,18 @@ const settingsRouter = router({
     reject: protectedProcedure.input(z.object({ id: z.number(), notes: z.string().optional() })).mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      const { resolveDocumentApproval } = await import("./document-approval");
+      const { getDocumentApprovalById, resolveDocumentApproval } = await import("./document-approval");
+      const pending = await getDocumentApprovalById(db, ctx.tenantId, input.id);
+      if (!pending) throw new TRPCError({ code: "NOT_FOUND", message: "طلب الاعتماد غير موجود" });
+      if (pending.documentType === "sales_invoice") {
+        const [inv] = await db.select({ paymentType: salesInvoices.paymentType }).from(salesInvoices)
+          .where(tenantWhere(salesInvoices, ctx.tenantId, eq(salesInvoices.id, pending.documentId)));
+        await assertEntityAction(ctx, "sales", inv?.paymentType === "cash" ? "cashSaleInvoice" : "saleInvoice", "deleteCancel");
+      } else if (pending.documentType === "purchase_invoice") {
+        await assertEntityAction(ctx, "purchases", "purchaseInvoice", "deleteCancel");
+      } else if (pending.documentType === "journal_entry") {
+        await assertEntityAction(ctx, "accounts", "journalEntry", "deleteCancel");
+      }
       const row = await resolveDocumentApproval(db, ctx.tenantId, input.id, ctx.user?.id, "rejected", input.notes);
       if (row.documentType === "sales_invoice") {
         await db.update(salesInvoices).set({ status: "cancelled" } as any)
@@ -4190,6 +4215,7 @@ const settingsRouter = router({
       return { success: true };
     }),
     runDepreciation: protectedProcedure.input(z.object({ period: z.string().regex(/^\d{4}-\d{2}$/) })).mutation(async ({ ctx, input }) => {
+      await assertEntityAction(ctx, "assets", "assets", "add");
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       const { postMonthlyDepreciation } = await import("./asset-depreciation");

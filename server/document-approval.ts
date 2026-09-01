@@ -31,6 +31,14 @@ export async function listPendingApprovals(db: Db, tenantId: number, limit = 100
     .limit(limit);
 }
 
+export async function getDocumentApprovalById(db: Db, tenantId: number, approvalId: number) {
+  const [row] = await db
+    .select()
+    .from(documentApprovals)
+    .where(tenantWhere(documentApprovals, tenantId, eq(documentApprovals.id, approvalId)));
+  return row ?? null;
+}
+
 export async function resolveDocumentApproval(
   db: Db,
   tenantId: number,
