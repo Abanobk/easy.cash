@@ -2,6 +2,7 @@ import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { eq } from "drizzle-orm";
 import { buildAssistantCalcReference } from "./assistant-calc-knowledge";
+import { buildAdvancedAuditKnowledge } from "./assistant-audit-advanced-knowledge";
 import {
   buildAccountingAuditReport,
   findingsPromptBlock,
@@ -67,8 +68,19 @@ async function buildAiNarrative(findingsText: string, userName?: string): Promis
 10) خطة تصحيح (اليوم / الأسبوع / متابعة)
 11) خاتمة للإدارة
 
+استخدم المرجع المتقدم أدناه لتعميق حكمك المهني، بدون اختراع أرقام غير موجودة في نتائج الفحص:
+- في بند 5 (مقارنة الفترات والهوامش): وظّف النسب المتقدمة (سيولة، دورة تحويل نقدي، دوران أصول)
+  إذا سمحت البيانات المتاحة، لا تكتفِ بالهامش المجمل/الصافي فقط.
+- في بند 8 (الملاحظات المتكررة): لو ظهر نمط يطابق أكثر من علامة من علامات التلاعب في المرجع
+  المتقدم، اذكره صراحة كخطر رقابي يستحق متابعة، دون اتهام قاطع.
+- في بند 9 (عينات المراجعة): بيّن أساس اختيار العينة (خطورة/عشوائي منتظم/حكمي) حسب منهجية
+  المرجع المتقدم، مش مجرد سرد أرقام.
+
 --- مرجع مكتب المحاسبة والصيغ ---
-${buildAssistantCalcReference()}`,
+${buildAssistantCalcReference()}
+
+--- مرجع متقدم: معايير، كشف تلاعب، منهجية عينات، نسب مالية، رقابة داخلية ---
+${buildAdvancedAuditKnowledge()}`,
         },
         {
           role: "user",
