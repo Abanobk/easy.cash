@@ -22,6 +22,7 @@ import { getDb } from "./db";
 import { ollamaChat } from "./ollama";
 import { tenantWhere } from "./tenant-scope";
 import { protectedProcedure, router } from "./_core/trpc";
+import { assertEntityAction } from "./entity-permission-service";
 
 const policyInput = z.object({
   targetGrossMarginPct: z.number().min(0).max(100),
@@ -88,6 +89,7 @@ function requireTenant(tenantId?: number | null) {
 
 export const accountingAuditorRouter = router({
   getPolicy: protectedProcedure.query(async ({ ctx }) => {
+    await assertEntityAction(ctx, "ai_tools", "accountingAuditor", "viewDoc");
     const tenantId = requireTenant(ctx.tenantId);
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "قاعدة البيانات غير متاحة" });
@@ -99,6 +101,7 @@ export const accountingAuditorRouter = router({
   }),
 
   savePolicy: protectedProcedure.input(policyInput).mutation(async ({ ctx, input }) => {
+    await assertEntityAction(ctx, "ai_tools", "accountingAuditor", "edit");
     const tenantId = requireTenant(ctx.tenantId);
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "قاعدة البيانات غير متاحة" });
@@ -106,6 +109,7 @@ export const accountingAuditorRouter = router({
   }),
 
   bankAccounts: protectedProcedure.query(async ({ ctx }) => {
+    await assertEntityAction(ctx, "ai_tools", "accountingAuditor", "viewDoc");
     const tenantId = requireTenant(ctx.tenantId);
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "قاعدة البيانات غير متاحة" });
@@ -120,6 +124,7 @@ export const accountingAuditorRouter = router({
     closingBalance: z.number().optional(),
     notes: z.string().max(2000).optional(),
   })).mutation(async ({ ctx, input }) => {
+    await assertEntityAction(ctx, "ai_tools", "accountingAuditor", "add");
     const tenantId = requireTenant(ctx.tenantId);
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "قاعدة البيانات غير متاحة" });
@@ -136,6 +141,7 @@ export const accountingAuditorRouter = router({
   reReconcileBankStatement: protectedProcedure.input(z.object({
     importId: z.number().int().positive(),
   })).mutation(async ({ ctx, input }) => {
+    await assertEntityAction(ctx, "ai_tools", "accountingAuditor", "edit");
     const tenantId = requireTenant(ctx.tenantId);
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "قاعدة البيانات غير متاحة" });
@@ -145,6 +151,7 @@ export const accountingAuditorRouter = router({
   bankStatementDetail: protectedProcedure.input(z.object({
     importId: z.number().int().positive(),
   })).query(async ({ ctx, input }) => {
+    await assertEntityAction(ctx, "ai_tools", "accountingAuditor", "viewDoc");
     const tenantId = requireTenant(ctx.tenantId);
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "قاعدة البيانات غير متاحة" });
@@ -161,6 +168,7 @@ export const accountingAuditorRouter = router({
     contentBase64: z.string().optional(),
     textContent: z.string().max(200000).optional(),
   })).mutation(async ({ ctx, input }) => {
+    await assertEntityAction(ctx, "ai_tools", "accountingAuditor", "add");
     const tenantId = requireTenant(ctx.tenantId);
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "قاعدة البيانات غير متاحة" });
@@ -171,6 +179,7 @@ export const accountingAuditorRouter = router({
   }),
 
   listUploads: protectedProcedure.query(async ({ ctx }) => {
+    await assertEntityAction(ctx, "ai_tools", "accountingAuditor", "viewDocList");
     const tenantId = requireTenant(ctx.tenantId);
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "قاعدة البيانات غير متاحة" });
@@ -182,6 +191,7 @@ export const accountingAuditorRouter = router({
   }),
 
   listClosures: protectedProcedure.query(async ({ ctx }) => {
+    await assertEntityAction(ctx, "ai_tools", "accountingAuditor", "viewDocList");
     const tenantId = requireTenant(ctx.tenantId);
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "قاعدة البيانات غير متاحة" });
@@ -199,6 +209,7 @@ export const accountingAuditorRouter = router({
     status: z.enum(["open", "closed", "accepted_risk"]),
     resolutionNote: z.string().max(2000).optional(),
   })).mutation(async ({ ctx, input }) => {
+    await assertEntityAction(ctx, "ai_tools", "accountingAuditor", "edit");
     const tenantId = requireTenant(ctx.tenantId);
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "قاعدة البيانات غير متاحة" });
@@ -213,6 +224,7 @@ export const accountingAuditorRouter = router({
       withAi: z.boolean().optional().default(true),
     }).optional())
     .mutation(async ({ ctx, input }) => {
+      await assertEntityAction(ctx, "ai_tools", "accountingAuditor", "add");
       const tenantId = requireTenant(ctx.tenantId);
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "قاعدة البيانات غير متاحة" });
@@ -232,6 +244,7 @@ export const accountingAuditorRouter = router({
     }),
 
   latestSnapshot: protectedProcedure.query(async ({ ctx }) => {
+    await assertEntityAction(ctx, "ai_tools", "accountingAuditor", "viewDoc");
     const tenantId = requireTenant(ctx.tenantId);
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "قاعدة البيانات غير متاحة" });

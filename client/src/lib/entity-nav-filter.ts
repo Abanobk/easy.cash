@@ -3,16 +3,25 @@
  * النظام القديم (canAccessPath) الموجودة أصلاً — مش بدل منها.
  *
  * القاعدة الأهم عشان محدش يتفاجئ: بنطبّق القيود دي بس لو الدور "مهاجر" فعليًا للنظام
- * الجديد (يعني عنده ولو صف واحد محفوظ في أي قسم). أي دور لسه ما لمسش الشجرة التفصيلية
- * خالص يفضل شغال بالنظام القديم 100% زي ما هو — صفر تأثير عليه.
+ * الجديد (يعني عنده ولو صف واحد محفوظ في أي قسم "أساسي"). أي دور لسه ما لمسش الشجرة
+ * التفصيلية خالص يفضل شغال بالنظام القديم 100% زي ما هو — صفر تأثير عليه.
  *
  * لما يبقى الدور مهاجر:
  * - قسم رئيسي (زي "اعدادات عامة") محدش فتحله ولا عنصر واحد جواه → يتشال من القايمة خالص.
  * - قسم فيه عناصر متظبطة → يفضل ظاهر، لكن كل عنصر جواه بيتحقق بمطابقة اسمه بأقرب عنصر في
  *   الشجرة لنفس القسم؛ لو العنصر متظبط وأفعاله فاضية (أو مش متظبط خالص) يتشال، ولو العنصر
  *   مش متعرف عليه (فشلت المطابقة) يفضل ظاهر (أضمن — نتجنب إخفاء شاشة حقيقية بالغلط).
+ *
+ * ملحوظة مهمة (درس اتعلمناه): "أدوات الذكاء الاصطناعي" و"تكليف شحنة" مش جزء من شجرة
+ * ميجا الأساسية — دول مفاتيح تشغيل/إيقاف مستقلة (زي "امنع المستخدم ده من المساعد
+ * الذكي") ومن المفروض قفلها لوحدها ميأثرش على باقي القائمة خالص. لو اعتبرناهم زي أي
+ * قسم عادي، أول مرة مدير يقفل حاجة زي المساعد الذكي لمستخدم، هيختفي منه فجأة كل قسم
+ * تاني لسه محدش لمسه — مفاجأة خطيرة مالهاش داعي. عشان كده مستثنيين من حساب "الدور
+ * مهاجر" (اللي بيقفل باقي الأقسام)، لكن قفلهم هما نفسهم (لو حصل) لسه شغال عادي.
  */
 import { PERMISSION_TREE } from "@shared/permission-tree";
+
+const NAV_COLLAPSE_EXEMPT_MODULES = new Set(["ai_tools", "import_costing"]);
 
 /** ترتيب الأقسام هنا زي ما هو في client/src/config/erp-navigation.ts بالظبط. */
 const NAV_GROUP_TO_MODULE: Record<string, string> = {
@@ -36,6 +45,7 @@ const NAV_GROUP_TO_MODULE: Record<string, string> = {
   "الأقساط": "installments",
   "التقارير": "reports",
   "الصلاحيات": "security",
+  "تكليف شحنة": "import_costing",
 };
 
 function normalizeLabel(s: string): string {
@@ -85,10 +95,24 @@ export function entityTreeAllowsNavItem(
   isGroup: boolean,
 ): boolean {
   if (!moduleKey) return true;
-  const roleMigrated = Object.keys(entities).length > 0;
+  const moduleTouched = Object.keys(entities).some((k) => k.startsWith(`${moduleKey}::`));
+
+  if (NAV_COLLAPSE_EXEMPT_MODULES.has(moduleKey)) {
+    // موديول إضافي مستقل — قفله (لو حصل) بيأثر على نفسه بس، وعدم لمسه خالص يسيبه ظاهر
+    // زي ما هو من غير ما يأثر على أي قسم تاني.
+    if (!moduleTouched) return true;
+    const entityKey = matchEntityKey(moduleKey, label);
+    if (!entityKey) return true;
+    const allowed = entities[`${moduleKey}::${entityKey}`];
+    return Array.isArray(allowed) && allowed.length > 0;
+  }
+
+  const roleMigrated = Object.keys(entities).some((k) => {
+    const mk = k.slice(0, k.indexOf("::"));
+    return !NAV_COLLAPSE_EXEMPT_MODULES.has(mk);
+  });
   if (!roleMigrated) return true;
 
-  const moduleTouched = Object.keys(entities).some((k) => k.startsWith(`${moduleKey}::`));
   if (isGroup) return moduleTouched;
   if (!moduleTouched) return true;
 

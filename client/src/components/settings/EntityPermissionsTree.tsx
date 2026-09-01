@@ -18,7 +18,7 @@ import {
   AlertCircle, Check, ChevronDown, ChevronLeft, Save, Search, Maximize2, Minimize2,
   Settings2, Users, Briefcase, Warehouse, ShoppingBag, ShoppingCart, MapPin, Banknote,
   Landmark, Calculator, Building2, Factory, Target, HandCoins, CalendarClock, Receipt,
-  BarChart3, ShieldCheck, Layers,
+  BarChart3, ShieldCheck, Layers, Container, Sparkles,
 } from "lucide-react";
 
 type TreeEntity = {
@@ -26,6 +26,8 @@ type TreeEntity = {
   label: string;
   availableActions: PermActionKey[];
   allowedActions: PermActionKey[];
+  /** ليه صف محفوظ فعليًا (حتى لو أفعاله فاضية = مقفول عمدًا) — مختلف عن "لسه محدش لمسه". */
+  configured: boolean;
 };
 type TreeModule = { key: string; label: string; entities: TreeEntity[] };
 
@@ -52,6 +54,8 @@ const MODULE_ICONS: Record<string, React.ComponentType<{ size?: number; classNam
   receivables: Receipt,
   reports: BarChart3,
   security: ShieldCheck,
+  import_costing: Container,
+  ai_tools: Sparkles,
 };
 
 /** ألوان كل فئة أفعال — نفس اللون بيتكرر على الشِب النشط والنقطة في الدليل */
@@ -122,6 +126,7 @@ function AllToggle({
 export default function EntityPermissionsTree() {
   const [role, setRole] = useState<string>("accountant");
   const [draft, setDraft] = useState<DraftMap | null>(null);
+  const [touchedKeys, setTouchedKeys] = useState<Set<string>>(new Set());
   const [openModules, setOpenModules] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState("");
 
@@ -133,6 +138,7 @@ export default function EntityPermissionsTree() {
     if (!editableRoles.some((r) => r.roleKey === role)) {
       setRole(editableRoles[0].roleKey);
       setDraft(null);
+      setTouchedKeys(new Set());
     }
   }, [editableRoles, role]);
 
@@ -146,6 +152,7 @@ export default function EntityPermissionsTree() {
       toast.success("تم حفظ الصلاحيات التفصيلية");
       treeQuery.refetch();
       setDraft(null);
+      setTouchedKeys(new Set());
     },
     onError: (e) => toast.error(e.message),
   });
@@ -160,6 +167,17 @@ export default function EntityPermissionsTree() {
       }
     }
     return map;
+  }, [tree]);
+
+  /** عناصر ليها صف محفوظ فعليًا على السيرفر أصلاً (حتى لو أفعالها فاضية = مقفولة عمدًا). */
+  const configuredKeys: Set<string> = useMemo(() => {
+    const set = new Set<string>();
+    for (const m of tree) {
+      for (const e of m.entities) {
+        if (e.configured) set.add(`${m.key}::${e.key}`);
+      }
+    }
+    return set;
   }, [tree]);
 
   const current = draft ?? baseMap;
@@ -195,25 +213,39 @@ export default function EntityPermissionsTree() {
   const expandAll = () => setOpenModules(new Set(filteredTree.map((m) => m.key)));
   const collapseAll = () => setOpenModules(new Set());
 
+  const markTouched = (ids: string[]) => {
+    setTouchedKeys((prev) => {
+      const next = new Set(prev);
+      for (const id of ids) next.add(id);
+      return next;
+    });
+  };
+
   const toggleAction = (moduleKey: string, entityKey: string, action: PermActionKey) => {
     const id = `${moduleKey}::${entityKey}`;
     const cur = current[id] || [];
     const has = cur.includes(action);
     const next = has ? cur.filter((a) => a !== action) : [...cur, action];
     setDraft({ ...current, [id]: next });
+    markTouched([id]);
   };
 
   const setEntityAll = (moduleKey: string, entity: TreeEntity, on: boolean) => {
     const id = `${moduleKey}::${entity.key}`;
     setDraft({ ...current, [id]: on ? [...entity.availableActions] : [] });
+    markTouched([id]);
   };
 
   const setModuleAll = (m: TreeModule, on: boolean) => {
     const next = { ...current };
+    const ids: string[] = [];
     for (const e of m.entities) {
-      next[`${m.key}::${e.key}`] = on ? [...e.availableActions] : [];
+      const id = `${m.key}::${e.key}`;
+      next[id] = on ? [...e.availableActions] : [];
+      ids.push(id);
     }
     setDraft(next);
+    markTouched(ids);
   };
 
   const totalAllowed = useMemo(
@@ -223,12 +255,16 @@ export default function EntityPermissionsTree() {
 
   const save = () => {
     if (!role) return;
+    // بنبعت بس العناصر اللي إما متظبطة أصلاً أو المستخدم لمسها في الجلسة دي — مش الشجرة
+    // كلها كل مرة. لو بعتنا كل حاجة، أي حفظ أول مرة كان هيخلي كل الأقسام "متظبطة"
+    // فجأة (حتى الفاضية) ويقفل نفس اللحظة كل حاجة تانية في السايد بار للدور ده.
+    const idsToSend = new Set<string>([...configuredKeys, ...touchedKeys]);
     const entities: { moduleKey: string; entityKey: string; allowedActions: string[] }[] = [];
-    for (const m of tree) {
-      for (const e of m.entities) {
-        const allowed = current[`${m.key}::${e.key}`] || [];
-        entities.push({ moduleKey: m.key, entityKey: e.key, allowedActions: allowed });
-      }
+    for (const id of idsToSend) {
+      const sep = id.indexOf("::");
+      const moduleKey = id.slice(0, sep);
+      const entityKey = id.slice(sep + 2);
+      entities.push({ moduleKey, entityKey, allowedActions: current[id] || [] });
     }
     saveMut.mutate({ role, entities });
   };

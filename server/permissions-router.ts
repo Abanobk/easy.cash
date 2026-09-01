@@ -330,12 +330,19 @@ export const permissionsRouter = router({
       const tree = PERMISSION_TREE_RESOLVED.map((m) => ({
         key: m.key,
         label: m.label,
-        entities: m.entities.map((e) => ({
-          key: e.key,
-          label: e.label,
-          availableActions: e.actions,
-          allowedActions: saved.get(`${m.key}::${e.key}`) || [],
-        })),
+        entities: m.entities.map((e) => {
+          const id = `${m.key}::${e.key}`;
+          return {
+            key: e.key,
+            label: e.label,
+            availableActions: e.actions,
+            allowedActions: saved.get(id) || [],
+            // العنصر ده له صف محفوظ فعليًا (حتى لو أفعاله فاضية = مقفول تمامًا) —
+            // مختلف عن "لسه محدش لمسه خالص". الواجهة محتاجة تفرّق بينهم عشان الحفظ
+            // متبعتش كل عنصر في الشجرة كل مرة (كان بيلغي أي عنصر مقفول عمدًا فاضي).
+            configured: saved.has(id),
+          };
+        }),
       }));
       return { role: input.role, tree };
     }),
@@ -355,12 +362,17 @@ export const permissionsRouter = router({
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 
+      // ملحوظة مهمة: بنحفظ العنصر حتى لو قائمة أفعاله بقت فاضية (يعني "مقفول تمامًا"
+      // عمدًا) — دي مختلفة عن "العنصر ده أصلاً مش موجود في الطلب" (يعني الواجهة
+      // ما بعتتوش لأن المستخدم لسه ما لمسهوش، فيفضل زي ما هو أو يتشال لو كان متظبط
+      // قبل كده). الواجهة (EntityPermissionsTree.tsx) بترسل بس العناصر اللي إما متظبطة
+      // من الأول أو المستخدم لمسها في الجلسة دي — مش الشجرة كلها كل مرة.
       const rowsToInsert: Array<{ moduleKey: string; entityKey: string; allowedActions: string[] }> = [];
       for (const e of input.entities) {
         const valid = findEntityActions(e.moduleKey, e.entityKey);
         if (!valid) continue; // عنصر غير معروف في الشجرة — يتجاهل بدل ما يفشل الحفظ كله
         const allowed = e.allowedActions.filter((a) => (valid as string[]).includes(a));
-        if (allowed.length > 0) rowsToInsert.push({ moduleKey: e.moduleKey, entityKey: e.entityKey, allowedActions: allowed });
+        rowsToInsert.push({ moduleKey: e.moduleKey, entityKey: e.entityKey, allowedActions: allowed });
       }
 
       await db.delete(tenantEntityPermissions).where(

@@ -20,7 +20,7 @@ import { navIcon } from "@/config/erp-nav-icons";
 import SubscriptionStatusBar from "@/components/SubscriptionStatusBar";
 import SubscriptionHubButton from "@/components/SubscriptionHubButton";
 import { usePermissions } from "@/hooks/usePermissions";
-import { useEntityPermissions } from "@/hooks/useEntityPermission";
+import { useEntityPermissions, useEntityAllowed } from "@/hooks/useEntityPermission";
 import { moduleKeyForNavGroup, entityTreeAllowsNavItem } from "@/lib/entity-nav-filter";
 import { toast } from "sonner";
 
@@ -40,12 +40,17 @@ function filterNavByPermissions(
 ): NavItemConfig[] {
   const result: NavItemConfig[] = [];
   for (const item of items) {
-    const moduleKey = parentModuleKey ?? moduleKeyForNavGroup(item.label);
-    const isGroup = !!item.children?.length;
+    const isTopLevel = parentModuleKey === null;
+    const moduleKey = isTopLevel ? moduleKeyForNavGroup(item.label) : parentModuleKey;
+    const hasChildren = !!item.children?.length;
 
-    if (!entityTreeAllowsNavItem(entities, moduleKey, item.label, isGroup)) continue;
+    // القسم الرئيسي كله — سواء ليه عناصر فرعية (زي "اعدادات عامة") أو شاشة واحدة بس
+    // بتمثّل قسم كامل (زي "تكليف شحنة") — يتشال خالص لو محدش لمسه في الشجرة خالص.
+    if (isTopLevel && moduleKey && !entityTreeAllowsNavItem(entities, moduleKey, item.label, true)) {
+      continue;
+    }
 
-    if (isGroup) {
+    if (hasChildren) {
       const children = filterNavByPermissions(item.children!, canAccessPath, entities, moduleKey);
       if (children.length === 0) continue;
       result.push({ ...item, children });
@@ -55,9 +60,10 @@ function filterNavByPermissions(
       result.push(item);
       continue;
     }
-    if (canAccessPath(item.path, item.featureKey)) {
-      result.push(item);
-    }
+    if (!canAccessPath(item.path, item.featureKey)) continue;
+    // عنصر فرعي جوه قسم متظبط جزئيًا — يتحقق بمطابقة اسمه بأقرب عنصر في الشجرة.
+    if (!isTopLevel && moduleKey && !entityTreeAllowsNavItem(entities, moduleKey, item.label, false)) continue;
+    result.push(item);
   }
   return result;
 }
@@ -217,6 +223,7 @@ export default function ERPLayout({ children, title }: ERPLayoutProps) {
   const saasUser = saasMe.data;
   const { canAccessPath, isLoading: permsLoading, bypass: permsBypass } = usePermissions();
   const { entities: entityPerms, isLoading: entityPermsLoading } = useEntityPermissions();
+  const canUseAccountingAuditor = useEntityAllowed("ai_tools", "accountingAuditor", "viewDoc");
 
   const navItems = useMemo(() => {
     if (permsLoading || permsBypass) return baseNavItems;
@@ -406,12 +413,14 @@ export default function ERPLayout({ children, title }: ERPLayoutProps) {
             </div>
 
             {/* مراجع الحسابات الذكي — بدل الكاشير غير الشغّال */}
-            <Link href={tenantPath(tenantSlug, "/accounting-auditor")}>
-              <Button variant="outline" size="sm" className="flex gap-1.5 text-sm font-bold border-emerald-300 text-emerald-900 hover:bg-emerald-50 px-2.5 sm:px-3 h-9">
-                <Scale size={16} />
-                <span className="hidden sm:inline">مراجع الحسابات</span>
-              </Button>
-            </Link>
+            {canUseAccountingAuditor && (
+              <Link href={tenantPath(tenantSlug, "/accounting-auditor")}>
+                <Button variant="outline" size="sm" className="flex gap-1.5 text-sm font-bold border-emerald-300 text-emerald-900 hover:bg-emerald-50 px-2.5 sm:px-3 h-9">
+                  <Scale size={16} />
+                  <span className="hidden sm:inline">مراجع الحسابات</span>
+                </Button>
+              </Link>
+            )}
 
             {/* Notifications */}
             <Link href={tenantPath(tenantSlug, "/notifications")}>

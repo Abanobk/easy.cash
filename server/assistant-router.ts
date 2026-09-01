@@ -3,6 +3,7 @@ import { z } from "zod";
 import { runAssistantChat } from "./assistant-service";
 import { getOllamaConfig, ollamaHealthCheck } from "./ollama";
 import { protectedProcedure, router } from "./_core/trpc";
+import { assertEntityAction } from "./entity-permission-service";
 
 export const assistantRouter = router({
   status: protectedProcedure.query(async ({ ctx }) => {
@@ -37,6 +38,7 @@ export const assistantRouter = router({
       screenSummary: z.string().max(8000).optional(),
     }).optional(),
   })).mutation(async ({ ctx, input }) => {
+    await assertEntityAction(ctx, "ai_tools", "assistant", "viewDoc");
     if (ctx.saasUser?.role === "superadmin" && !ctx.tenantSlug) {
       throw new TRPCError({
         code: "BAD_REQUEST",

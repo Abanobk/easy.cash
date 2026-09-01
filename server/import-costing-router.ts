@@ -9,6 +9,7 @@ import { protectedProcedure, router } from "./_core/trpc";
 import { getDb } from "./db";
 import { importCostLines, importCostShipments } from "../drizzle/schema";
 import { tenantWhere, withTenantId } from "./tenant-scope";
+import { assertEntityAction } from "./entity-permission-service";
 import {
   ALLOC_LABELS,
   computeImportCost,
@@ -148,6 +149,7 @@ export const importCostingRouter = router({
   list: protectedProcedure
     .input(z.object({ page: z.number().default(1), limit: z.number().default(20) }).optional())
     .query(async ({ ctx, input }) => {
+      await assertEntityAction(ctx, "import_costing", "shipmentCosting", "viewDocList");
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       const page = input?.page ?? 1;
@@ -204,6 +206,7 @@ export const importCostingRouter = router({
     }),
 
   get: protectedProcedure.input(z.number()).query(async ({ ctx, input }) => {
+    await assertEntityAction(ctx, "import_costing", "shipmentCosting", "viewDoc");
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     const [row] = await db
@@ -237,6 +240,7 @@ export const importCostingRouter = router({
   create: protectedProcedure
     .input(z.object({ header: headerZ, lines: z.array(lineZ) }))
     .mutation(async ({ ctx, input }) => {
+      await assertEntityAction(ctx, "import_costing", "shipmentCosting", "add");
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       const [cnt] = await db
@@ -270,6 +274,7 @@ export const importCostingRouter = router({
   update: protectedProcedure
     .input(z.object({ id: z.number(), header: headerZ, lines: z.array(lineZ) }))
     .mutation(async ({ ctx, input }) => {
+      await assertEntityAction(ctx, "import_costing", "shipmentCosting", "edit");
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       const [row] = await db
@@ -305,6 +310,7 @@ export const importCostingRouter = router({
     }),
 
   createDuplicate: protectedProcedure.input(z.number()).mutation(async ({ ctx, input }) => {
+    await assertEntityAction(ctx, "import_costing", "shipmentCosting", "add");
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     const [row] = await db
@@ -351,6 +357,7 @@ export const importCostingRouter = router({
   }),
 
   delete: protectedProcedure.input(z.number()).mutation(async ({ ctx, input }) => {
+    await assertEntityAction(ctx, "import_costing", "shipmentCosting", "deleteCancel");
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     await db

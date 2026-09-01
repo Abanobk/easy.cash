@@ -471,6 +471,27 @@ export const PERMISSION_TREE: PermModule[] = [
       { key: "editMyData", label: "تعديل بياناتي", bundle: "SELF_EDIT" },
     ],
   },
+  {
+    key: "import_costing",
+    label: "تكليف شحنة",
+    entities: [
+      { key: "shipmentCosting", label: "تكليف شحنة", bundle: "BASIC4_BRANCH", extra: ["viewDocList"] },
+    ],
+  },
+  /**
+   * أدوات ذكاء اصطناعي خاصة ببرنامجنا (مش جزء من شاشات ميجا كاش الأصلية) — بتحتاج
+   * صلاحية مستقلة لأنها بتوصل لبيانات حساسة (مساعد محادثة بيشوف ملخص أي شاشة مفتوحة،
+   * ومراجع حسابات ذكي بيحلل الأرقام المالية كلها). العنصر مش متظبط = يفضل شغال للكل
+   * زي دلوقتي (سلوك افتراضي آمن رجعيًا)؛ المدير يقدر يقفله لمستخدمين معينين لما يحتاج.
+   */
+  {
+    key: "ai_tools",
+    label: "أدوات الذكاء الاصطناعي",
+    entities: [
+      { key: "assistant", label: "المساعد الذكي (شات)", bundle: "REPORT" },
+      { key: "accountingAuditor", label: "مراجع الحسابات الذكي", bundle: "BASIC4", extra: ["viewDocList"] },
+    ],
+  },
 ];
 
 /** كل عناصر الشجرة مع أفعالها المحسوبة — الشكل الجاهز للواجهة والحفظ. */
