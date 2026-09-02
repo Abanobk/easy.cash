@@ -2843,7 +2843,11 @@ const accountsRouter = router({
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       return db.select().from(taxes).where(tenantWhere(taxes, ctx.tenantId)).orderBy(taxes.name);
     }),
-    create: protectedProcedure.input(z.object({ name: z.string().min(1), rate: z.string() })).mutation(async ({ ctx, input }) => {
+    create: protectedProcedure.input(z.object({
+      name: z.string().min(1),
+      rate: z.string(),
+      glAccountId: z.number().optional(),
+    })).mutation(async ({ ctx, input }) => {
       await assertEntityAction(ctx, "accounts", "taxes", "add");
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
