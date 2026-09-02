@@ -360,6 +360,39 @@ export async function createPostedJournalDirect(
   return createPostedJournal(db, tenantId, createdBy, opts);
 }
 
+/** ضريبة أو مصروف مضاف على مستوى الفاتورة — كل سطر بحسابه المحاسبي الخاص */
+type InvoiceTaxLine = { amount: string; glAccountId?: number | null; name?: string };
+type InvoiceExpenseLine = {
+  amount: string;
+  creditAccountId: number;
+  currencyCode?: string;
+  exchangeRate?: string;
+  notes?: string | null;
+};
+
+/** يبني أرجل التسوية (نقدي/بنكي/آجل) بحيث يتوازى مجموعها مع total دائمًا */
+async function buildSettlementLegs(
+  db: Db,
+  tenantId: number,
+  total: number,
+  onAccountFallback: number,
+  opts: { paymentType: "cash" | "credit"; cashAmount?: string; bankAmount?: string; bankAccountId?: number | null },
+) {
+  const cashPortion = opts.cashAmount !== undefined ? num(opts.cashAmount) : (opts.paymentType === "cash" ? total : 0);
+  const bankPortion = opts.bankAmount !== undefined ? num(opts.bankAmount) : 0;
+  const onAccountPortion = Math.max(0, Math.round((total - cashPortion - bankPortion) * 100) / 100);
+  const map = await resolveAccountMap(db, tenantId);
+  const legs: Array<{ accountId: number; amount: number }> = [];
+  if (cashPortion > 0) legs.push({ accountId: map.cash, amount: cashPortion });
+  if (bankPortion > 0) {
+    const bankGl = await resolveBankGlAccountId(db, tenantId, opts.bankAccountId, map.cash);
+    legs.push({ accountId: bankGl, amount: bankPortion });
+  }
+  if (onAccountPortion > 0) legs.push({ accountId: onAccountFallback, amount: onAccountPortion });
+  if (!legs.length) legs.push({ accountId: onAccountFallback, amount: 0 });
+  return legs;
+}
+
 export async function postSalesInvoiceJournal(
   db: Db,
   tenantId: number,
@@ -374,29 +407,50 @@ export async function postSalesInvoiceJournal(
     total: string;
     costCenterId?: number;
     customerName?: string;
+    cashAmount?: string;
+    bankAmount?: string;
+    bankAccountId?: number | null;
+    taxes?: InvoiceTaxLine[];
+    expenses?: InvoiceExpenseLine[];
   },
 ) {
   const map = await resolveAccountMap(db, tenantId);
   const total = num(inv.total);
   const tax = num(inv.tax);
   const revenue = Math.max(0, num(inv.subtotal) - num(inv.discount));
-  const debitAccount = inv.paymentType === "cash" ? map.cash : map.customers;
-  const lines: JournalLineInput[] = [
-    {
-      accountId: debitAccount,
-      debit: money(total),
+  const lines: JournalLineInput[] = [];
+
+  const settlementLegs = await buildSettlementLegs(db, tenantId, total, map.customers, inv);
+  for (const leg of settlementLegs) {
+    lines.push({
+      accountId: leg.accountId,
+      debit: money(leg.amount),
       credit: "0.00",
       description: inv.customerName ? `عميل: ${inv.customerName}` : undefined,
       costCenterId: inv.costCenterId,
-    },
-    {
-      accountId: map.sales,
-      debit: "0.00",
-      credit: money(revenue),
-      costCenterId: inv.costCenterId,
-    },
-  ];
-  if (tax > 0) {
+    });
+  }
+
+  lines.push({
+    accountId: map.sales,
+    debit: "0.00",
+    credit: money(revenue),
+    costCenterId: inv.costCenterId,
+  });
+
+  if (inv.taxes?.length) {
+    for (const t of inv.taxes) {
+      const amt = num(t.amount);
+      if (amt <= 0) continue;
+      lines.push({
+        accountId: t.glAccountId ?? map.vat,
+        debit: "0.00",
+        credit: money(amt),
+        description: t.name ? `ضريبة: ${t.name}` : "ضريبة المبيعات",
+        costCenterId: inv.costCenterId,
+      });
+    }
+  } else if (tax > 0) {
     lines.push({
       accountId: map.vat,
       debit: "0.00",
@@ -404,6 +458,27 @@ export async function postSalesInvoiceJournal(
       description: "ضريبة المبيعات",
       costCenterId: inv.costCenterId,
     });
+  }
+
+  if (inv.expenses?.length) {
+    for (const exp of inv.expenses) {
+      const rate = exp.exchangeRate ? num(exp.exchangeRate) : 1;
+      const amtEgp = num(exp.amount) * (rate || 1);
+      if (amtEgp <= 0) continue;
+      lines.push({
+        accountId: map.generalExpense,
+        debit: money(amtEgp),
+        credit: "0.00",
+        description: exp.notes || "مصروفات على الفاتورة",
+        costCenterId: inv.costCenterId,
+      });
+      lines.push({
+        accountId: exp.creditAccountId,
+        debit: "0.00",
+        credit: money(amtEgp),
+        costCenterId: inv.costCenterId,
+      });
+    }
   }
 
   return createPostedJournal(db, tenantId, createdBy, {
@@ -428,13 +503,17 @@ export async function postPurchaseInvoiceJournal(
     total: string;
     costCenterId?: number;
     supplierName?: string;
+    cashAmount?: string;
+    bankAmount?: string;
+    bankAccountId?: number | null;
+    taxes?: InvoiceTaxLine[];
+    expenses?: InvoiceExpenseLine[];
   },
 ) {
   const map = await resolveAccountMap(db, tenantId);
   const total = num(inv.total);
   const tax = num(inv.tax);
   const netPurchase = Math.max(0, num(inv.subtotal) - num(inv.discount));
-  const creditAccount = inv.paymentType === "cash" ? map.cash : map.suppliers;
 
   const lines: JournalLineInput[] = [
     {
@@ -445,7 +524,20 @@ export async function postPurchaseInvoiceJournal(
       costCenterId: inv.costCenterId,
     },
   ];
-  if (tax > 0) {
+
+  if (inv.taxes?.length) {
+    for (const t of inv.taxes) {
+      const amt = num(t.amount);
+      if (amt <= 0) continue;
+      lines.push({
+        accountId: t.glAccountId ?? map.vat,
+        debit: money(amt),
+        credit: "0.00",
+        description: t.name ? `ضريبة: ${t.name}` : "ضريبة المشتريات",
+        costCenterId: inv.costCenterId,
+      });
+    }
+  } else if (tax > 0) {
     lines.push({
       accountId: map.vat,
       debit: money(tax),
@@ -454,12 +546,38 @@ export async function postPurchaseInvoiceJournal(
       costCenterId: inv.costCenterId,
     });
   }
-  lines.push({
-    accountId: creditAccount,
-    debit: "0.00",
-    credit: money(total),
-    costCenterId: inv.costCenterId,
-  });
+
+  if (inv.expenses?.length) {
+    for (const exp of inv.expenses) {
+      const rate = exp.exchangeRate ? num(exp.exchangeRate) : 1;
+      const amtEgp = num(exp.amount) * (rate || 1);
+      if (amtEgp <= 0) continue;
+      // مصروفات المشتريات (نولون/جمارك...) تُرسمل على تكلفة المخزون
+      lines.push({
+        accountId: map.inventory,
+        debit: money(amtEgp),
+        credit: "0.00",
+        description: exp.notes || "مصروفات على فاتورة الشراء",
+        costCenterId: inv.costCenterId,
+      });
+      lines.push({
+        accountId: exp.creditAccountId,
+        debit: "0.00",
+        credit: money(amtEgp),
+        costCenterId: inv.costCenterId,
+      });
+    }
+  }
+
+  const settlementLegs = await buildSettlementLegs(db, tenantId, total, map.suppliers, inv);
+  for (const leg of settlementLegs) {
+    lines.push({
+      accountId: leg.accountId,
+      debit: "0.00",
+      credit: money(leg.amount),
+      costCenterId: inv.costCenterId,
+    });
+  }
 
   return createPostedJournal(db, tenantId, createdBy, {
     date: inv.date,

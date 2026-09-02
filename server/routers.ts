@@ -9,6 +9,9 @@ import {
   departments, jobTitles, accounts, cashTransactions, bankTransactions,
   bankAccounts, checks, journalEntries, journalEntryLines,
   purchaseInvoiceItems, salesInvoiceItems, purchaseOrders, salesOrders,
+  purchaseInvoiceItemBatches, salesInvoiceItemBatches,
+  purchaseInvoiceTaxes, salesInvoiceTaxes,
+  purchaseInvoiceExpenses, salesInvoiceExpenses,
   purchaseOrderItems, salesOrderItems, purchaseReturns, salesReturns,
   purchaseReturnItems, salesReturnItems, attendance, payroll, salaryAdvances,
   fixedAssets, costCenters, loans, installments, notifications,
@@ -1233,6 +1236,11 @@ const purchasesRouter = router({
       branchId: z.number().optional(),
       costCenterId: z.number().optional(),
       paymentType: z.enum(["cash", "credit"]).default("cash"),
+      cashAmount: z.string().optional(),
+      bankAmount: z.string().optional(),
+      bankAccountId: z.number().optional(),
+      receiptType: z.enum(["full", "partial"]).default("full"),
+      approveNow: z.boolean().optional(),
       currencyCode: z.string().default("EGP"),
       exchangeRate: z.string().default("1"),
       foreignTotal: z.string().optional(),
@@ -1241,17 +1249,43 @@ const purchasesRouter = router({
       tax: z.string().default("0"),
       total: z.string(),
       notes: z.string().optional(),
+      taxes: z.array(z.object({
+        taxId: z.number().optional(),
+        name: z.string().optional(),
+        rate: z.string().optional(),
+        amount: z.string(),
+        glAccountId: z.number().optional(),
+      })).optional(),
+      expenses: z.array(z.object({
+        currencyCode: z.string().default("EGP"),
+        exchangeRate: z.string().default("1"),
+        amount: z.string(),
+        creditAccountId: z.number(),
+        notes: z.string().optional(),
+      })).optional(),
       items: z.array(z.object({
         itemId: z.number(),
         quantity: z.string(),
         price: z.string(),
         discount: z.string().default("0"),
         tax: z.string().default("0"),
+        taxId: z.number().optional(),
+        tax2: z.string().default("0"),
+        tax2Id: z.number().optional(),
+        tax3: z.string().default("0"),
+        tax3Id: z.number().optional(),
         total: z.string(),
+        warehouseId: z.number().optional(),
         batchId: z.number().optional(),
         batchNumber: z.string().optional(),
         expiryDate: z.string().optional(),
         serialNumbers: z.string().optional(),
+        batches: z.array(z.object({
+          batchId: z.number().optional(),
+          batchNumber: z.string().optional(),
+          expiryDate: z.string().optional(),
+          quantity: z.string(),
+        })).optional(),
       })),
     })).mutation(async ({ ctx, input }) => {
       await assertEntityAction(ctx, "purchases", "purchaseInvoice", "add");
@@ -1265,10 +1299,17 @@ const purchasesRouter = router({
       const number = `PI-${String(countResult.count + 1).padStart(5, "0")}`;
       const isCash = input.paymentType === "cash";
       const { companyRequiresApproval, userBypassesApproval, queueDocumentApproval } = await import("./document-approval");
-      const needsApproval =
+      let needsApproval =
         !isCash &&
         (await companyRequiresApproval(db, ctx.tenantId)) &&
         !userBypassesApproval(ctx.saasUser?.role ?? "user");
+      if (needsApproval && input.approveNow) {
+        await assertEntityAction(ctx, "purchases", "purchaseInvoice", "approve");
+        needsApproval = false;
+      }
+      const settledCash = input.cashAmount ?? (isCash ? input.total : "0");
+      const settledBank = input.bankAmount ?? "0";
+      const paidTotal = Math.min(Number(input.total), Number(settledCash) + Number(settledBank));
 
       const [result] = await db.insert(purchaseInvoices).values(withTenantId(ctx.tenantId, {
         number,
@@ -1279,52 +1320,100 @@ const purchasesRouter = router({
         branchId: input.branchId,
         costCenterId: input.costCenterId,
         paymentType: input.paymentType,
+        cashAmount: settledCash,
+        bankAmount: settledBank,
+        bankAccountId: input.bankAccountId,
+        receiptType: input.receiptType,
         subtotal: input.subtotal,
         discount: input.discount,
         tax: input.tax,
         total: input.total,
-        paid: isCash ? input.total : "0",
-        remaining: isCash ? "0" : input.total,
+        paid: isCash ? input.total : String(paidTotal),
+        remaining: isCash ? "0" : String(Math.max(0, Number(input.total) - paidTotal)),
         currencyCode: input.currencyCode,
         exchangeRate: input.exchangeRate,
         foreignTotal: input.foreignTotal,
         notes: input.notes,
         createdBy: ctx.user.id,
-        status: needsApproval ? "draft" : (isCash ? "paid" : "confirmed"),
+        status: needsApproval ? "draft" : (isCash ? "paid" : (paidTotal > 0 ? "partial" : "confirmed")),
       }) as any);
       const invId = (result as any).insertId;
       for (const item of input.items) {
-        await db.insert(purchaseInvoiceItems).values(withTenantId(ctx.tenantId, { invoiceId: invId, ...item }) as any);
+        const { batches, ...itemRow } = item;
+        const [itemResult] = await db.insert(purchaseInvoiceItems).values(withTenantId(ctx.tenantId, { invoiceId: invId, ...itemRow }) as any);
+        const invoiceItemId = (itemResult as any).insertId;
+        const lineWarehouseId = item.warehouseId ?? input.warehouseId;
         if (!needsApproval) {
           const { applyStockMovement } = await import("./inventory-stock");
-          await applyStockMovement(db, ctx.tenantId, {
-            itemId: item.itemId,
-            quantity: item.quantity,
-            direction: "in",
-            warehouseId: input.warehouseId,
-            batchId: item.batchId,
-            batchNumber: item.batchNumber,
-            expiryDate: item.expiryDate,
-          });
           const { updateAverageCostAfterPurchase } = await import("./inventory-cost");
+          if (batches?.length) {
+            for (const b of batches) {
+              await db.insert(purchaseInvoiceItemBatches).values(withTenantId(ctx.tenantId, {
+                invoiceItemId,
+                batchId: b.batchId,
+                batchNumber: b.batchNumber,
+                expiryDate: b.expiryDate as any,
+                quantity: b.quantity,
+              }) as any);
+              await applyStockMovement(db, ctx.tenantId, {
+                itemId: item.itemId,
+                quantity: b.quantity,
+                direction: "in",
+                warehouseId: lineWarehouseId,
+                batchId: b.batchId,
+                batchNumber: b.batchNumber,
+                expiryDate: b.expiryDate,
+              });
+            }
+          } else {
+            await applyStockMovement(db, ctx.tenantId, {
+              itemId: item.itemId,
+              quantity: item.quantity,
+              direction: "in",
+              warehouseId: lineWarehouseId,
+              batchId: item.batchId,
+              batchNumber: item.batchNumber,
+              expiryDate: item.expiryDate,
+            });
+          }
           await updateAverageCostAfterPurchase(
             db,
             ctx.tenantId,
             item.itemId,
             Number(item.quantity),
             Number(item.price),
-            input.warehouseId,
+            lineWarehouseId,
           );
           if (item.serialNumbers) {
             const { registerPurchaseSerials } = await import("./inventory-serials");
             await registerPurchaseSerials(db, ctx.tenantId, {
               itemId: item.itemId,
-              warehouseId: input.warehouseId,
+              warehouseId: lineWarehouseId,
               purchaseInvoiceId: invId,
               serialNumbers: item.serialNumbers,
             });
           }
+        } else if (batches?.length) {
+          for (const b of batches) {
+            await db.insert(purchaseInvoiceItemBatches).values(withTenantId(ctx.tenantId, {
+              invoiceItemId,
+              batchId: b.batchId,
+              batchNumber: b.batchNumber,
+              expiryDate: b.expiryDate as any,
+              quantity: b.quantity,
+            }) as any);
+          }
         }
+      }
+      for (const t of input.taxes ?? []) {
+        await db.insert(purchaseInvoiceTaxes).values(withTenantId(ctx.tenantId, {
+          invoiceId: invId, taxId: t.taxId, name: t.name, rate: t.rate ?? "0", amount: t.amount, glAccountId: t.glAccountId,
+        }) as any);
+      }
+      for (const e of input.expenses ?? []) {
+        await db.insert(purchaseInvoiceExpenses).values(withTenantId(ctx.tenantId, {
+          invoiceId: invId, currencyCode: e.currencyCode, exchangeRate: e.exchangeRate, amount: e.amount, creditAccountId: e.creditAccountId, notes: e.notes,
+        }) as any);
       }
       if (needsApproval) {
         await queueDocumentApproval(db, ctx.tenantId, {
@@ -1347,11 +1436,37 @@ const purchasesRouter = router({
         total: input.total,
         costCenterId: input.costCenterId,
         supplierName: supplier?.name,
+        cashAmount: settledCash,
+        bankAmount: settledBank,
+        bankAccountId: input.bankAccountId,
+        taxes: input.taxes,
+        expenses: input.expenses,
       });
-      if (!isCash) {
+      if (!isCash || paidTotal < Number(input.total)) {
         await recalculateSupplierBalance(db, ctx.tenantId, input.supplierId);
       }
       return { success: true, id: invId, number };
+    }),
+    lastPriceFromSupplier: protectedProcedure.input(z.object({
+      supplierId: z.number(),
+      itemId: z.number(),
+    })).query(async ({ ctx, input }) => {
+      await assertEntityAction(ctx, "purchases", "purchaseInvoice", "viewDocList");
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const [row] = await db.select({
+        price: purchaseInvoiceItems.price,
+        date: purchaseInvoices.date,
+        number: purchaseInvoices.number,
+      }).from(purchaseInvoiceItems)
+        .innerJoin(purchaseInvoices, eq(purchaseInvoiceItems.invoiceId, purchaseInvoices.id))
+        .where(tenantWhere(purchaseInvoiceItems, ctx.tenantId, and(
+          eq(purchaseInvoices.supplierId, input.supplierId),
+          eq(purchaseInvoiceItems.itemId, input.itemId),
+        )))
+        .orderBy(desc(purchaseInvoices.date), desc(purchaseInvoices.id))
+        .limit(1);
+      return row ?? null;
     }),
   }),
   orders: router({
@@ -1741,16 +1856,46 @@ const salesRouter = router({
       tax: z.string().default("0"),
       total: z.string(),
       notes: z.string().optional(),
+      cashAmount: z.string().optional(),
+      bankAmount: z.string().optional(),
+      bankAccountId: z.number().optional(),
+      approveNow: z.boolean().optional(),
+      taxes: z.array(z.object({
+        taxId: z.number().optional(),
+        name: z.string().optional(),
+        rate: z.string().optional(),
+        amount: z.string(),
+        glAccountId: z.number().optional(),
+      })).optional(),
+      expenses: z.array(z.object({
+        currencyCode: z.string().default("EGP"),
+        exchangeRate: z.string().default("1"),
+        amount: z.string(),
+        creditAccountId: z.number(),
+        notes: z.string().optional(),
+      })).optional(),
       items: z.array(z.object({
         itemId: z.number(),
         quantity: z.string(),
         price: z.string(),
         discount: z.string().default("0"),
         tax: z.string().default("0"),
+        taxId: z.number().optional(),
+        tax2: z.string().default("0"),
+        tax2Id: z.number().optional(),
+        tax3: z.string().default("0"),
+        tax3Id: z.number().optional(),
         total: z.string(),
+        warehouseId: z.number().optional(),
         batchId: z.number().optional(),
         batchNumber: z.string().optional(),
         serialNumbers: z.string().optional(),
+        batches: z.array(z.object({
+          batchId: z.number().optional(),
+          batchNumber: z.string().optional(),
+          expiryDate: z.string().optional(),
+          quantity: z.string(),
+        })).optional(),
       })),
     })).mutation(async ({ ctx, input }) => {
       await assertEntityAction(ctx, "sales", input.paymentType === "cash" ? "cashSaleInvoice" : "saleInvoice", "add");
@@ -1774,10 +1919,17 @@ const salesRouter = router({
         await assertCustomerCreditLimit(db, ctx.tenantId, input.customerId, input.total);
       }
       const { companyRequiresApproval, userBypassesApproval, queueDocumentApproval } = await import("./document-approval");
-      const needsApproval =
+      let needsApproval =
         !isCash &&
         (await companyRequiresApproval(db, ctx.tenantId)) &&
         !userBypassesApproval(ctx.saasUser?.role ?? "user");
+      if (needsApproval && input.approveNow) {
+        await assertEntityAction(ctx, "sales", "saleInvoice", "approve");
+        needsApproval = false;
+      }
+      const settledCash = input.cashAmount ?? (isCash ? input.total : "0");
+      const settledBank = input.bankAmount ?? "0";
+      const paidTotal = Math.min(Number(input.total), Number(settledCash) + Number(settledBank));
 
       const [result] = await db.insert(salesInvoices).values(withTenantId(ctx.tenantId, {
         number,
@@ -1786,12 +1938,15 @@ const salesRouter = router({
         dueDate: input.dueDate as any,
         warehouseId: input.warehouseId,
         paymentType: input.paymentType,
+        cashAmount: settledCash,
+        bankAmount: settledBank,
+        bankAccountId: input.bankAccountId,
         subtotal: input.subtotal,
         discount: input.discount,
         tax: input.tax,
         total: input.total,
-        paid: isCash ? input.total : "0",
-        remaining: isCash ? "0" : input.total,
+        paid: isCash ? input.total : String(paidTotal),
+        remaining: isCash ? "0" : String(Math.max(0, Number(input.total) - paidTotal)),
         salesRepId: customer?.salesRepId ?? undefined,
         branchId: resolvedBranchId,
         costCenterId: input.costCenterId,
@@ -1800,30 +1955,72 @@ const salesRouter = router({
         foreignTotal: input.foreignTotal,
         notes: input.notes,
         createdBy: ctx.user.id,
-        status: needsApproval ? "draft" : (isCash ? "paid" : "confirmed"),
+        status: needsApproval ? "draft" : (isCash ? "paid" : (paidTotal > 0 ? "partial" : "confirmed")),
       }) as any);
       const invId = (result as any).insertId;
       for (const item of input.items) {
-        await db.insert(salesInvoiceItems).values(withTenantId(ctx.tenantId, { invoiceId: invId, ...item }) as any);
+        const { batches, ...itemRow } = item;
+        const [itemResult] = await db.insert(salesInvoiceItems).values(withTenantId(ctx.tenantId, { invoiceId: invId, ...itemRow }) as any);
+        const invoiceItemId = (itemResult as any).insertId;
+        const lineWarehouseId = item.warehouseId ?? input.warehouseId;
         if (!needsApproval) {
           const { applyStockMovement } = await import("./inventory-stock");
-          await applyStockMovement(db, ctx.tenantId, {
-            itemId: item.itemId,
-            quantity: item.quantity,
-            direction: "out",
-            warehouseId: input.warehouseId,
-            batchId: item.batchId,
-          });
+          if (batches?.length) {
+            for (const b of batches) {
+              await db.insert(salesInvoiceItemBatches).values(withTenantId(ctx.tenantId, {
+                invoiceItemId,
+                batchId: b.batchId,
+                batchNumber: b.batchNumber,
+                expiryDate: b.expiryDate as any,
+                quantity: b.quantity,
+              }) as any);
+              await applyStockMovement(db, ctx.tenantId, {
+                itemId: item.itemId,
+                quantity: b.quantity,
+                direction: "out",
+                warehouseId: lineWarehouseId,
+                batchId: b.batchId,
+              });
+            }
+          } else {
+            await applyStockMovement(db, ctx.tenantId, {
+              itemId: item.itemId,
+              quantity: item.quantity,
+              direction: "out",
+              warehouseId: lineWarehouseId,
+              batchId: item.batchId,
+            });
+          }
           if (item.serialNumbers) {
             const { assignSalesSerials } = await import("./inventory-serials");
             await assignSalesSerials(db, ctx.tenantId, {
               itemId: item.itemId,
-              warehouseId: input.warehouseId,
+              warehouseId: lineWarehouseId,
               salesInvoiceId: invId,
               serialNumbers: item.serialNumbers,
             });
           }
+        } else if (batches?.length) {
+          for (const b of batches) {
+            await db.insert(salesInvoiceItemBatches).values(withTenantId(ctx.tenantId, {
+              invoiceItemId,
+              batchId: b.batchId,
+              batchNumber: b.batchNumber,
+              expiryDate: b.expiryDate as any,
+              quantity: b.quantity,
+            }) as any);
+          }
         }
+      }
+      for (const t of input.taxes ?? []) {
+        await db.insert(salesInvoiceTaxes).values(withTenantId(ctx.tenantId, {
+          invoiceId: invId, taxId: t.taxId, name: t.name, rate: t.rate ?? "0", amount: t.amount, glAccountId: t.glAccountId,
+        }) as any);
+      }
+      for (const e of input.expenses ?? []) {
+        await db.insert(salesInvoiceExpenses).values(withTenantId(ctx.tenantId, {
+          invoiceId: invId, currencyCode: e.currencyCode, exchangeRate: e.exchangeRate, amount: e.amount, creditAccountId: e.creditAccountId, notes: e.notes,
+        }) as any);
       }
       if (needsApproval) {
         await queueDocumentApproval(db, ctx.tenantId, {
@@ -1844,6 +2041,11 @@ const salesRouter = router({
         total: input.total,
         costCenterId: input.costCenterId,
         customerName: customer?.name,
+        cashAmount: settledCash,
+        bankAmount: settledBank,
+        bankAccountId: input.bankAccountId,
+        taxes: input.taxes,
+        expenses: input.expenses,
       });
       await postSalesCogsJournal(db, ctx.tenantId, ctx.user.id, {
         number,
@@ -1851,10 +2053,31 @@ const salesRouter = router({
         costCenterId: input.costCenterId,
         items: input.items.map((it) => ({ itemId: it.itemId, quantity: it.quantity })),
       });
-      if (!isCash) {
+      if (!isCash || paidTotal < Number(input.total)) {
         await recalculateCustomerBalance(db, ctx.tenantId, input.customerId);
       }
       return { success: true, id: invId, number };
+    }),
+    lastPriceToCustomer: protectedProcedure.input(z.object({
+      customerId: z.number(),
+      itemId: z.number(),
+    })).query(async ({ ctx, input }) => {
+      await assertEntityAction(ctx, "sales", "saleInvoice", "viewDocList");
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const [row] = await db.select({
+        price: salesInvoiceItems.price,
+        date: salesInvoices.date,
+        number: salesInvoices.number,
+      }).from(salesInvoiceItems)
+        .innerJoin(salesInvoices, eq(salesInvoiceItems.invoiceId, salesInvoices.id))
+        .where(tenantWhere(salesInvoiceItems, ctx.tenantId, and(
+          eq(salesInvoices.customerId, input.customerId),
+          eq(salesInvoiceItems.itemId, input.itemId),
+        )))
+        .orderBy(desc(salesInvoices.date), desc(salesInvoices.id))
+        .limit(1);
+      return row ?? null;
     }),
   }),
   orders: router({

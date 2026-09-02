@@ -209,6 +209,8 @@ export const taxes = mysqlTable("taxes", {
   name: varchar("name", { length: 255 }).notNull(),
   rate: decimal("rate", { precision: 5, scale: 2 }).notNull(),
   isActive: boolean("isActive").default(true),
+  /** الحساب الدائن الذي تترحّل إليه هذه الضريبة — لو فاضي يترحّل على حساب الضريبة الافتراضي */
+  glAccountId: int("glAccountId"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
 
@@ -271,6 +273,12 @@ export const purchaseInvoices = mysqlTable("purchase_invoices", {
   dueDate: date("dueDate"),
   warehouseId: int("warehouseId"),
   paymentType: mysqlEnum("paymentType", ["cash", "credit"]).default("cash"),
+  /** جزء السداد النقدي وقت الإنشاء (فواتير نقدية أو دفعة مقدمة على الآجل) */
+  cashAmount: decimal("cashAmount", { precision: 15, scale: 2 }).default("0"),
+  /** جزء السداد عن طريق البنك المحدد في bankAccountId */
+  bankAmount: decimal("bankAmount", { precision: 15, scale: 2 }).default("0"),
+  bankAccountId: int("bankAccountId"),
+  receiptType: mysqlEnum("receiptType", ["full", "partial"]).default("full"),
   subtotal: decimal("subtotal", { precision: 15, scale: 2 }).default("0"),
   discount: decimal("discount", { precision: 15, scale: 2 }).default("0"),
   tax: decimal("tax", { precision: 15, scale: 2 }).default("0"),
@@ -294,12 +302,52 @@ export const purchaseInvoiceItems = mysqlTable("purchase_invoice_items", {
   tenantId: int("tenantId").notNull().default(1),
   invoiceId: int("invoiceId").notNull(),
   itemId: int("itemId").notNull(),
+  /** مخزن مختلف لهذا البند تحديدًا — لو فاضي يُستخدم مخزن رأس الفاتورة */
+  warehouseId: int("warehouseId"),
   quantity: decimal("quantity", { precision: 15, scale: 3 }).notNull(),
   price: decimal("price", { precision: 15, scale: 2 }).notNull(),
   discount: decimal("discount", { precision: 5, scale: 2 }).default("0"),
   tax: decimal("tax", { precision: 5, scale: 2 }).default("0"),
+  taxId: int("taxId"),
+  tax2: decimal("tax2", { precision: 5, scale: 2 }).default("0"),
+  tax2Id: int("tax2Id"),
+  tax3: decimal("tax3", { precision: 5, scale: 2 }).default("0"),
+  tax3Id: int("tax3Id"),
   total: decimal("total", { precision: 15, scale: 2 }).notNull(),
   batchId: int("batchId"),
+});
+
+export const purchaseInvoiceItemBatches = mysqlTable("purchase_invoice_item_batches", {
+  id: int("id").autoincrement().primaryKey(),
+  tenantId: int("tenantId").notNull().default(1),
+  invoiceItemId: int("invoiceItemId").notNull(),
+  batchId: int("batchId"),
+  batchNumber: varchar("batchNumber", { length: 100 }),
+  expiryDate: date("expiryDate"),
+  quantity: decimal("quantity", { precision: 15, scale: 3 }).notNull(),
+});
+
+export const purchaseInvoiceTaxes = mysqlTable("purchase_invoice_taxes", {
+  id: int("id").autoincrement().primaryKey(),
+  tenantId: int("tenantId").notNull().default(1),
+  invoiceId: int("invoiceId").notNull(),
+  taxId: int("taxId"),
+  name: varchar("name", { length: 255 }),
+  rate: decimal("rate", { precision: 5, scale: 2 }).default("0"),
+  amount: decimal("amount", { precision: 15, scale: 2 }).notNull(),
+  /** لقطة من taxes.glAccountId وقت الإدخال — يترحّل عليه القيد حتى لو اتغيّر الحساب لاحقًا */
+  glAccountId: int("glAccountId"),
+});
+
+export const purchaseInvoiceExpenses = mysqlTable("purchase_invoice_expenses", {
+  id: int("id").autoincrement().primaryKey(),
+  tenantId: int("tenantId").notNull().default(1),
+  invoiceId: int("invoiceId").notNull(),
+  currencyCode: varchar("currencyCode", { length: 10 }).default("EGP"),
+  exchangeRate: decimal("exchangeRate", { precision: 15, scale: 6 }).default("1"),
+  amount: decimal("amount", { precision: 15, scale: 2 }).notNull(),
+  creditAccountId: int("creditAccountId").notNull(),
+  notes: text("notes"),
 });
 
 // ===================== PURCHASE RETURNS =====================
@@ -376,6 +424,11 @@ export const salesInvoices = mysqlTable("sales_invoices", {
   dueDate: date("dueDate"),
   warehouseId: int("warehouseId"),
   paymentType: mysqlEnum("paymentType", ["cash", "credit"]).default("cash"),
+  /** جزء السداد النقدي وقت الإنشاء */
+  cashAmount: decimal("cashAmount", { precision: 15, scale: 2 }).default("0"),
+  /** جزء السداد عن طريق البنك المحدد في bankAccountId */
+  bankAmount: decimal("bankAmount", { precision: 15, scale: 2 }).default("0"),
+  bankAccountId: int("bankAccountId"),
   subtotal: decimal("subtotal", { precision: 15, scale: 2 }).default("0"),
   discount: decimal("discount", { precision: 15, scale: 2 }).default("0"),
   tax: decimal("tax", { precision: 15, scale: 2 }).default("0"),
@@ -405,12 +458,52 @@ export const salesInvoiceItems = mysqlTable("sales_invoice_items", {
   tenantId: int("tenantId").notNull().default(1),
   invoiceId: int("invoiceId").notNull(),
   itemId: int("itemId").notNull(),
+  /** مخزن مختلف لهذا البند تحديدًا — لو فاضي يُستخدم مخزن رأس الفاتورة */
+  warehouseId: int("warehouseId"),
   quantity: decimal("quantity", { precision: 15, scale: 3 }).notNull(),
   price: decimal("price", { precision: 15, scale: 2 }).notNull(),
   discount: decimal("discount", { precision: 5, scale: 2 }).default("0"),
   tax: decimal("tax", { precision: 5, scale: 2 }).default("0"),
+  taxId: int("taxId"),
+  tax2: decimal("tax2", { precision: 5, scale: 2 }).default("0"),
+  tax2Id: int("tax2Id"),
+  tax3: decimal("tax3", { precision: 5, scale: 2 }).default("0"),
+  tax3Id: int("tax3Id"),
   total: decimal("total", { precision: 15, scale: 2 }).notNull(),
   batchId: int("batchId"),
+});
+
+export const salesInvoiceItemBatches = mysqlTable("sales_invoice_item_batches", {
+  id: int("id").autoincrement().primaryKey(),
+  tenantId: int("tenantId").notNull().default(1),
+  invoiceItemId: int("invoiceItemId").notNull(),
+  batchId: int("batchId"),
+  batchNumber: varchar("batchNumber", { length: 100 }),
+  expiryDate: date("expiryDate"),
+  quantity: decimal("quantity", { precision: 15, scale: 3 }).notNull(),
+});
+
+export const salesInvoiceTaxes = mysqlTable("sales_invoice_taxes", {
+  id: int("id").autoincrement().primaryKey(),
+  tenantId: int("tenantId").notNull().default(1),
+  invoiceId: int("invoiceId").notNull(),
+  taxId: int("taxId"),
+  name: varchar("name", { length: 255 }),
+  rate: decimal("rate", { precision: 5, scale: 2 }).default("0"),
+  amount: decimal("amount", { precision: 15, scale: 2 }).notNull(),
+  /** لقطة من taxes.glAccountId وقت الإدخال — يترحّل عليه القيد حتى لو اتغيّر الحساب لاحقًا */
+  glAccountId: int("glAccountId"),
+});
+
+export const salesInvoiceExpenses = mysqlTable("sales_invoice_expenses", {
+  id: int("id").autoincrement().primaryKey(),
+  tenantId: int("tenantId").notNull().default(1),
+  invoiceId: int("invoiceId").notNull(),
+  currencyCode: varchar("currencyCode", { length: 10 }).default("EGP"),
+  exchangeRate: decimal("exchangeRate", { precision: 15, scale: 6 }).default("1"),
+  amount: decimal("amount", { precision: 15, scale: 2 }).notNull(),
+  creditAccountId: int("creditAccountId").notNull(),
+  notes: text("notes"),
 });
 
 // ===================== SALES RETURNS =====================
