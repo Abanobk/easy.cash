@@ -120,3 +120,4 @@ mega-kam-backup/**
 !mega-kam-backup/MIGRATION.md
 !mega-kam-backup/sample-fixture/
 !mega-kam-backup/sample-fixture/**
+backups/

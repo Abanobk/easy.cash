@@ -1222,6 +1222,9 @@ const purchasesRouter = router({
       amount: z.string(),
       date: z.string(),
       description: z.string().optional(),
+      cashAmount: z.string().optional(),
+      bankAmount: z.string().optional(),
+      bankAccountId: z.number().optional(),
     })).mutation(async ({ ctx, input }) => {
       await assertEntityAction(ctx, "purchases", "purchaseInvoice", "edit");
       const db = await getDb();
@@ -1806,6 +1809,9 @@ const salesRouter = router({
       amount: z.string(),
       date: z.string(),
       description: z.string().optional(),
+      cashAmount: z.string().optional(),
+      bankAmount: z.string().optional(),
+      bankAccountId: z.number().optional(),
     })).mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });

@@ -596,9 +596,9 @@ export default function PurchaseInvoices() {
         invoiceNumber={paymentRow?.number || ""}
         remaining={Number(paymentRow?.remaining || 0)}
         isLoading={payMut.isPending}
-        onSubmit={(amount, date) => {
+        onSubmit={(amount, date, _receipt, split) => {
           if (!paymentRow) return;
-          payMut.mutate({ invoiceId: paymentRow.id, amount, date });
+          payMut.mutate({ invoiceId: paymentRow.id, amount, date, cashAmount: split?.cashAmount, bankAmount: split?.bankAmount, bankAccountId: split?.bankAccountId });
         }}
       />
     </ERPLayout>

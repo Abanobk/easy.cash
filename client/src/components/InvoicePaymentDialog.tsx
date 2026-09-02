@@ -3,6 +3,8 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { trpc } from "@/lib/trpc";
 
 export type PaymentReceiptFile = {
   fileName: string;
@@ -10,6 +12,8 @@ export type PaymentReceiptFile = {
   contentBase64: string;
   file: File;
 };
+
+export type PaymentSplit = { cashAmount: string; bankAmount: string; bankAccountId?: number };
 
 type InvoicePaymentDialogProps = {
   open: boolean;
@@ -19,7 +23,7 @@ type InvoicePaymentDialogProps = {
   partyName?: string;
   invoiceNumber: string;
   remaining: number;
-  onSubmit: (amount: string, date: string, receipt?: PaymentReceiptFile) => void;
+  onSubmit: (amount: string, date: string, receipt?: PaymentReceiptFile, split?: PaymentSplit) => void;
   isLoading?: boolean;
 };
 
@@ -50,7 +54,10 @@ export function InvoicePaymentDialog({
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
   const [receiptName, setReceiptName] = useState("");
   const [receipt, setReceipt] = useState<PaymentReceiptFile | undefined>();
+  const [bankAmount, setBankAmount] = useState("0");
+  const [bankAccountId, setBankAccountId] = useState<number | undefined>(undefined);
   const fileRef = useRef<HTMLInputElement>(null);
+  const { data: bankAccounts } = trpc.bank.accounts.list.useQuery(undefined, { enabled: open });
 
   useEffect(() => {
     if (open) {
@@ -58,8 +65,12 @@ export function InvoicePaymentDialog({
       setDate(new Date().toISOString().split("T")[0]);
       setReceipt(undefined);
       setReceiptName("");
+      setBankAmount("0");
+      setBankAccountId(undefined);
     }
   }, [open, remaining]);
+
+  const cashAmount = Math.max(0, (Number(amount) || 0) - (Number(bankAmount) || 0));
 
   return (
     <Dialog open={open} onOpenChange={(isOpen) => { if (!isOpen) onClose(); }}>
@@ -81,6 +92,25 @@ export function InvoicePaymentDialog({
             <Label className="text-xs">التاريخ</Label>
             <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="h-9" />
           </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label className="text-xs">منه بنكي (اختياري)</Label>
+              <Input type="number" min="0" step="0.01" value={bankAmount} onChange={(e) => setBankAmount(e.target.value)} className="h-9" />
+            </div>
+            <div>
+              <Label className="text-xs">حساب البنك</Label>
+              <Select value={bankAccountId?.toString() || "none"} onValueChange={(v) => setBankAccountId(v === "none" ? undefined : Number(v))}>
+                <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="اختر البنك" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">بدون</SelectItem>
+                  {bankAccounts?.map((b) => <SelectItem key={b.id} value={b.id.toString()}>{b.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          {Number(bankAmount) > 0 && (
+            <p className="text-[11px] text-slate-500">نقدي: {cashAmount.toLocaleString("en-US", { minimumFractionDigits: 2 })} + بنكي: {(Number(bankAmount) || 0).toLocaleString("en-US", { minimumFractionDigits: 2 })} = {(Number(amount) || 0).toLocaleString("en-US", { minimumFractionDigits: 2 })}</p>
+          )}
           <div>
             <Label className="text-xs">صورة/PDF الإيصال (اختياري)</Label>
             <Input
@@ -115,8 +145,8 @@ export function InvoicePaymentDialog({
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>إلغاء</Button>
           <Button
-            onClick={() => onSubmit(amount, date, receipt)}
-            disabled={isLoading || !amount || Number(amount) <= 0}
+            onClick={() => onSubmit(amount, date, receipt, { cashAmount: String(cashAmount), bankAmount, bankAccountId })}
+            disabled={isLoading || !amount || Number(amount) <= 0 || (Number(bankAmount) > 0 && !bankAccountId)}
             className="bg-green-600 hover:bg-green-700 text-white"
           >
             {isLoading ? "جاري الحفظ..." : "تأكيد"}

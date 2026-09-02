@@ -22,7 +22,8 @@ import { InvoiceTaxList, type InvoiceTaxLine } from "@/components/invoices/Invoi
 import { InvoiceExpenseList, type InvoiceExpenseLine } from "@/components/invoices/InvoiceExpenseList";
 import { PaymentSettlementBlock, type Settlement } from "@/components/invoices/PaymentSettlementBlock";
 import { findItemByScan } from "@/lib/barcode";
-import { printInvoiceQuick } from "@/lib/print-invoice-quick";
+import { printInvoiceQuick, printWarehouseNote } from "@/lib/print-invoice-quick";
+import { Copy } from "lucide-react";
 
 interface InvoiceItem {
   itemId: number;
@@ -120,10 +121,12 @@ export default function SalesInvoices() {
   const [settlement, setSettlement] = useState<Settlement>(emptySettlement);
   const [printAfterSave, setPrintAfterSave] = useState(false);
   const [printAfterApprove, setPrintAfterApprove] = useState(false);
+  const [printNote, setPrintNote] = useState(false);
   const [lastApproveNow, setLastApproveNow] = useState(false);
   const [barcode, setBarcode] = useState("");
   const [quickAdd, setQuickAdd] = useState<{ kind: "item" | "customer"; rowIdx?: number } | null>(null);
   const [paymentRow, setPaymentRow] = useState<any | null>(null);
+  const [duplicating, setDuplicating] = useState(false);
 
   useEffect(() => {
     if (isCashMode) {
@@ -152,6 +155,7 @@ export default function SalesInvoices() {
       toast.success(res.pendingApproval ? `تم الحفظ ${res.number} — بانتظار الاعتماد` : `تم إنشاء الفاتورة ${res.number}`);
       const shouldPrint = !res.pendingApproval && (lastApproveNow ? printAfterApprove : printAfterSave);
       if (shouldPrint) firePrint(res.number);
+      if (printNote && !res.pendingApproval) fireWarehouseNote(res.number);
       refetch();
       setShowForm(false);
       resetForm();
@@ -171,7 +175,7 @@ export default function SalesInvoices() {
     setForm({ ...emptyForm, paymentType: "cash" });
     setInvoiceItems([]);
     setInvoiceTaxes([]); setInvoiceExpenses([]); setSettlement(emptySettlement);
-    setPrintAfterSave(false); setPrintAfterApprove(false); setBarcode("");
+    setPrintAfterSave(false); setPrintAfterApprove(false); setPrintNote(false); setBarcode("");
   };
 
   const firePrint = (number: string) => {
@@ -183,9 +187,61 @@ export default function SalesInvoices() {
     });
   };
 
+  const fireWarehouseNote = (number: string) => {
+    printWarehouseNote({
+      title: "إذن صرف مخزن", number, date: form.date, partyLabel: "العميل",
+      partyName: customers?.rows.find((c) => c.id === form.customerId)?.name || "",
+      lines: invoiceItems.map((i) => ({
+        name: i.itemName, quantity: Number(i.quantity), unit: i.itemUnit,
+        warehouseName: warehouses?.find((w) => w.id === (i.warehouseId ?? form.warehouseId))?.name,
+      })),
+    });
+  };
+
   const openNewForm = () => {
     resetForm();
     setShowForm(true);
+  };
+
+  /** نسخ فاتورة موجودة كنقطة بداية لفاتورة جديدة — زي "نسخ" في ميجا كاش (نفس فكرة فواتير الشراء) */
+  const handleDuplicate = async (invoiceId: number) => {
+    setDuplicating(true);
+    try {
+      const inv = await utils.sales.invoices.byId.fetch(invoiceId);
+      setForm({
+        customerId: inv.customerId,
+        date: new Date().toISOString().split("T")[0],
+        dueDate: "",
+        warehouseId: inv.warehouseId ?? undefined,
+        branchId: inv.branchId ?? undefined,
+        costCenterId: inv.costCenterId ?? undefined,
+        paymentType: isCashMode ? "cash" : ((inv.paymentType as "cash" | "credit") || "cash"),
+        currencyCode: inv.currencyCode || "EGP",
+        exchangeRate: inv.exchangeRate?.toString() || "1",
+        notes: `نسخة من الفاتورة ${inv.number}`,
+      });
+      setInvoiceItems(inv.items.map((i) => ({
+        itemId: i.itemId,
+        itemName: i.itemName || "",
+        itemUnit: i.itemUnit || "",
+        quantity: i.quantity?.toString() || "1",
+        price: i.price?.toString() || "0",
+        discount: i.discount?.toString() || "0",
+        tax: i.tax?.toString() || "0",
+        tax2: "0",
+        tax3: "0",
+        total: i.total?.toString() || "0",
+        serialNumbers: "",
+        batchId: undefined,
+        warehouseId: undefined,
+      })));
+      setShowForm(true);
+      toast.success(`تم نسخ الفاتورة ${inv.number} — راجع البيانات واحفظ`);
+    } catch (e: any) {
+      toast.error(e?.message || "فشل نسخ الفاتورة");
+    } finally {
+      setDuplicating(false);
+    }
   };
 
   const addItem = () => {
@@ -605,6 +661,7 @@ export default function SalesInvoices() {
               <div className="flex flex-wrap gap-4 border-t border-slate-100 pt-3">
                 <label className="flex items-center gap-2 text-xs text-slate-600"><Checkbox checked={printAfterSave} onCheckedChange={(v) => setPrintAfterSave(!!v)} />طباعة بعد الحفظ</label>
                 <label className="flex items-center gap-2 text-xs text-slate-600"><Checkbox checked={printAfterApprove} onCheckedChange={(v) => setPrintAfterApprove(!!v)} />طباعة بعد الاعتماد</label>
+                <label className="flex items-center gap-2 text-xs text-slate-600"><Checkbox checked={printNote} onCheckedChange={(v) => setPrintNote(!!v)} />طباعة إذن صرف مخزن مع الفاتورة</label>
               </div>
             </CardContent>
           </Card>
@@ -676,6 +733,18 @@ export default function SalesInvoices() {
             <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-blue-600 hover:bg-blue-50" onClick={() => navigate(`/sales/invoices/${row.id}`)}>
               <Eye size={13} />
             </Button>
+            <PermissionGate module="sales" action="create">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 w-7 p-0 text-slate-600 hover:bg-slate-100"
+                title="نسخ لفاتورة جديدة"
+                disabled={duplicating}
+                onClick={() => void handleDuplicate(row.id)}
+              >
+                <Copy size={13} />
+              </Button>
+            </PermissionGate>
             <InvoicePrintButton
               invoiceId={row.id}
               type="sale"
@@ -703,9 +772,9 @@ export default function SalesInvoices() {
         invoiceNumber={paymentRow?.number || ""}
         remaining={Number(paymentRow?.remaining || 0)}
         isLoading={payMut.isPending}
-        onSubmit={(amount, date) => {
+        onSubmit={(amount, date, _receipt, split) => {
           if (!paymentRow) return;
-          payMut.mutate({ invoiceId: paymentRow.id, amount, date });
+          payMut.mutate({ invoiceId: paymentRow.id, amount, date, cashAmount: split?.cashAmount, bankAmount: split?.bankAmount, bankAccountId: split?.bankAccountId });
         }}
       />
     </ERPLayout>
