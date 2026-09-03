@@ -11,33 +11,53 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { Plus, ClipboardList, CheckCircle, Trash2, FileText } from "lucide-react";
+import { Plus, ClipboardList, CheckCircle, Trash2, FileText, Pencil, Undo2 } from "lucide-react";
 import { toast } from "sonner";
 import { AddActionButton } from "@/components/AddActionButton";
 import PermissionGate from "@/components/PermissionGate";
+import EntityPermissionGate from "@/components/EntityPermissionGate";
 import { useWarehouseOptions } from "@/hooks/useEntityOptions";
 
 export default function SalesOrders() {
   const [open, setOpen] = useState(false);
+  const [editId, setEditId] = useState<number | null>(null);
   const [form, setForm] = useState({ customerId: "", warehouseId: "", date: new Date().toISOString().split("T")[0], notes: "", expectedDate: "" });
   const [items, setItems] = useState<{ itemId: string; quantity: string; unitPrice: string; notes: string }[]>([
     { itemId: "", quantity: "1", unitPrice: "0", notes: "" }
   ]);
 
+  const utils = trpc.useUtils();
   const { data, refetch } = trpc.sales.orders.list.useQuery({ page: 1, limit: 50 });
   const { data: customers } = trpc.customers.list.useQuery({ page: 1, limit: 200 });
   const { data: itemsList } = trpc.items.list.useQuery({ page: 1, limit: 200 });
   const warehouses = useWarehouseOptions();
   const createMut = trpc.sales.orders.create.useMutation({ onSuccess: () => { toast.success("تم إنشاء طلب البيع"); refetch(); setOpen(false); resetForm(); } });
+  const updateMut = trpc.sales.orders.update.useMutation({ onSuccess: () => { toast.success("تم حفظ التعديلات"); refetch(); setOpen(false); resetForm(); }, onError: (e) => toast.error(e.message) });
   const approveMut = trpc.sales.orders.approve.useMutation({ onSuccess: () => { toast.success("تم اعتماد الطلب"); refetch(); } });
+  const unapproveMut = trpc.sales.orders.unapprove.useMutation({ onSuccess: () => { toast.success("تم فك الاعتماد"); refetch(); }, onError: (e) => toast.error(e.message) });
   const convertMut = trpc.sales.orders.convertToInvoice.useMutation({
     onSuccess: (res) => { toast.success(`تم إنشاء الفاتورة ${res.number}`); refetch(); },
     onError: (e) => toast.error(e.message),
   });
 
   const resetForm = () => {
+    setEditId(null);
     setForm({ customerId: "", warehouseId: "", date: new Date().toISOString().split("T")[0], notes: "", expectedDate: "" });
     setItems([{ itemId: "", quantity: "1", unitPrice: "0", notes: "" }]);
+  };
+
+  const openEdit = async (id: number) => {
+    const o = await utils.sales.orders.byId.fetch(id);
+    setEditId(id);
+    setForm({
+      customerId: String(o.customerId),
+      warehouseId: o.warehouseId ? String(o.warehouseId) : "",
+      date: o.date ? new Date(o.date).toISOString().split("T")[0] : new Date().toISOString().split("T")[0],
+      notes: o.notes || "",
+      expectedDate: o.expectedDate ? new Date(o.expectedDate).toISOString().split("T")[0] : "",
+    });
+    setItems(o.items.map((i: any) => ({ itemId: String(i.itemId), quantity: String(i.quantity), unitPrice: String(i.price), notes: "" })));
+    setOpen(true);
   };
 
   const addItem = () => setItems(prev => [...prev, { itemId: "", quantity: "1", unitPrice: "0", notes: "" }]);
@@ -48,14 +68,16 @@ export default function SalesOrders() {
   const handleSubmit = () => {
     if (!form.customerId) return toast.error("يجب اختيار العميل");
     if (items.some(it => !it.itemId)) return toast.error("يجب اختيار الصنف في كل بند");
-    createMut.mutate({
+    const payload = {
       customerId: Number(form.customerId),
       warehouseId: form.warehouseId ? Number(form.warehouseId) : undefined,
       date: form.date,
       expectedDate: form.expectedDate || undefined,
       notes: form.notes,
       items: items.map(it => ({ itemId: Number(it.itemId), quantity: it.quantity, unitPrice: it.unitPrice, notes: it.notes })),
-    });
+    };
+    if (editId) updateMut.mutate({ ...payload, id: editId });
+    else createMut.mutate(payload);
   };
 
   const statusLabel = (s: string) => ({ draft: "مسودة", confirmed: "معتمد", delivered: "مُحوَّل لفاتورة", cancelled: "ملغي" }[s] || s);
@@ -101,11 +123,25 @@ export default function SalesOrders() {
                   <TableCell><Badge variant={statusColor(row.status)} className="text-xs">{statusLabel(row.status)}</Badge></TableCell>
                   <TableCell>
                     {row.status === "draft" && (
-                      <PermissionGate module="sales" action="edit">
-                        <Button variant="ghost" size="sm" className="h-7 text-xs text-green-600 hover:bg-green-50 gap-1" onClick={() => approveMut.mutate(row.id)}>
-                          <CheckCircle size={12} /> اعتماد
+                      <>
+                        <PermissionGate module="sales" action="edit">
+                          <Button variant="ghost" size="sm" className="h-7 text-xs text-slate-600 hover:bg-slate-100 gap-1" onClick={() => void openEdit(row.id)}>
+                            <Pencil size={12} /> تعديل
+                          </Button>
+                        </PermissionGate>
+                        <PermissionGate module="sales" action="edit">
+                          <Button variant="ghost" size="sm" className="h-7 text-xs text-green-600 hover:bg-green-50 gap-1" onClick={() => approveMut.mutate(row.id)}>
+                            <CheckCircle size={12} /> اعتماد
+                          </Button>
+                        </PermissionGate>
+                      </>
+                    )}
+                    {row.status === "confirmed" && (
+                      <EntityPermissionGate moduleKey="sales" entityKey="saleOrder" action="unapprove">
+                        <Button variant="ghost" size="sm" className="h-7 text-xs text-amber-700 hover:bg-amber-50 gap-1" disabled={unapproveMut.isPending} onClick={() => unapproveMut.mutate(row.id)}>
+                          <Undo2 size={12} /> فك اعتماد
                         </Button>
-                      </PermissionGate>
+                      </EntityPermissionGate>
                     )}
                     {row.status !== "delivered" && row.status !== "cancelled" && (
                       <PermissionGate module="sales" action="create">
@@ -124,7 +160,7 @@ export default function SalesOrders() {
 
       <Dialog open={open} onOpenChange={v => { setOpen(v); if (!v) resetForm(); }}>
         <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto" dir="rtl">
-          <DialogHeader><DialogTitle>طلب بيع جديد</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>{editId ? "تعديل طلب بيع" : "طلب بيع جديد"}</DialogTitle></DialogHeader>
           <div className="grid gap-4 py-2">
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
@@ -201,7 +237,7 @@ export default function SalesOrders() {
           </div>
           <DialogFooter className="gap-2">
             <Button variant="outline" size="sm" onClick={() => { setOpen(false); resetForm(); }}>إلغاء</Button>
-            <Button size="sm" className="bg-green-600 hover:bg-green-700 text-white" onClick={handleSubmit} disabled={createMut.isPending}>حفظ الطلب</Button>
+            <Button size="sm" className="bg-green-600 hover:bg-green-700 text-white" onClick={handleSubmit} disabled={createMut.isPending || updateMut.isPending}>{editId ? "حفظ التعديلات" : "حفظ الطلب"}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

@@ -6,6 +6,7 @@ import {
   productionOrders,
 } from "../drizzle/schema";
 import {
+  cancelPostedJournalByReference,
   postProductionCompletionJournal,
   postProductionWipJournal,
 } from "./auto-journal";
@@ -191,6 +192,36 @@ export async function startProductionOrder(
     .where(tenantWhere(productionOrders, tenantId, eq(productionOrders.id, orderId)));
 
   return { success: true as const, wipCost: materialCost };
+}
+
+/** فك اعتماد: إلغاء قيد WIP (لم تتحرك أي كمية مخزنية عند البدء أصلاً) والرجوع لمسودة */
+export async function unapproveProductionOrder(
+  db: Db,
+  tenantId: number,
+  orderId: number,
+) {
+  const [order] = await db
+    .select()
+    .from(productionOrders)
+    .where(tenantWhere(productionOrders, tenantId, eq(productionOrders.id, orderId)));
+  if (!order) throw new Error("أمر التشغيل غير موجود");
+  if (order.status !== "in_progress") throw new Error("الأمر ليس معتمداً أصلاً");
+
+  // نفس صيغة المرجع المستخدمة في postProductionWipJournal — مش رقم الأمر نفسه
+  await cancelPostedJournalByReference(db, tenantId, `PROD-WIP-${order.id}`);
+
+  await db
+    .update(productionOrders)
+    .set({
+      status: "draft",
+      wipCostAmount: "0",
+      wipJournalId: null,
+      approvedBy: null,
+      approvedAt: null,
+    } as any)
+    .where(tenantWhere(productionOrders, tenantId, eq(productionOrders.id, orderId)));
+
+  return { success: true as const };
 }
 
 /** إتمام أمر تشغيل: صرف مواد خام وإضافة المنتج التام + قيد إقفال WIP + متوسط تكلفة */

@@ -1612,6 +1612,62 @@ const purchasesRouter = router({
       await db.update(purchaseOrders).set({ status: "confirmed" } as any).where(tenantWhere(purchaseOrders, ctx.tenantId, eq(purchaseOrders.id, input)));
       return { success: true };
     }),
+    unapprove: protectedProcedure.input(z.number()).mutation(async ({ ctx, input }) => {
+      await assertEntityAction(ctx, "purchases", "purchaseOrder", "unapprove");
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const [order] = await db.select().from(purchaseOrders).where(tenantWhere(purchaseOrders, ctx.tenantId, eq(purchaseOrders.id, input)));
+      if (!order) throw new TRPCError({ code: "NOT_FOUND" });
+      if (order.status !== "confirmed") throw new TRPCError({ code: "BAD_REQUEST", message: "الأمر ليس معتمداً أصلاً" });
+      const orderLines = await db.select({ convertedQuantity: purchaseOrderItems.convertedQuantity })
+        .from(purchaseOrderItems).where(tenantWhere(purchaseOrderItems, ctx.tenantId, eq(purchaseOrderItems.orderId, input)));
+      if (orderLines.some((l) => Number(l.convertedQuantity ?? 0) > 0.0001)) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "لا يمكن فك اعتماد أمر تم تحويل جزء منه لفاتورة بالفعل" });
+      }
+      await db.update(purchaseOrders).set({ status: "draft" } as any).where(tenantWhere(purchaseOrders, ctx.tenantId, eq(purchaseOrders.id, input)));
+      return { success: true };
+    }),
+    update: protectedProcedure.input(z.object({
+      id: z.number(),
+      supplierId: z.number(),
+      date: z.string(),
+      expectedDate: z.string().optional(),
+      warehouseId: z.number().optional(),
+      notes: z.string().optional(),
+      items: z.array(z.object({
+        itemId: z.number(),
+        quantity: z.string(),
+        unitPrice: z.string(),
+        notes: z.string().optional(),
+      })),
+    })).mutation(async ({ ctx, input }) => {
+      await assertEntityAction(ctx, "purchases", "purchaseOrder", "edit");
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const [order] = await db.select().from(purchaseOrders).where(tenantWhere(purchaseOrders, ctx.tenantId, eq(purchaseOrders.id, input.id)));
+      if (!order) throw new TRPCError({ code: "NOT_FOUND" });
+      if (order.status !== "draft") throw new TRPCError({ code: "BAD_REQUEST", message: "لا يمكن تعديل أمر غير معلق — فك الاعتماد أولاً" });
+      await assertDateNotInClosedPeriod(db, ctx.tenantId, input.date);
+      const scope = await loadUserScopeFromCtx(db, ctx.saasUser);
+      assertWarehouseAccess(scope, input.warehouseId);
+      const total = input.items.reduce((s, it) => s + (Number(it.quantity) * Number(it.unitPrice)), 0);
+      await db.update(purchaseOrders).set({
+        supplierId: input.supplierId,
+        date: input.date as any,
+        expectedDate: input.expectedDate as any,
+        warehouseId: input.warehouseId,
+        total: String(total),
+        notes: input.notes,
+      } as any).where(tenantWhere(purchaseOrders, ctx.tenantId, eq(purchaseOrders.id, input.id)));
+      await db.delete(purchaseOrderItems).where(tenantWhere(purchaseOrderItems, ctx.tenantId, eq(purchaseOrderItems.orderId, input.id)));
+      for (const item of input.items) {
+        await db.insert(purchaseOrderItems).values(withTenantId(ctx.tenantId, {
+          orderId: input.id, itemId: item.itemId, quantity: item.quantity, price: item.unitPrice,
+          discount: "0", tax: "0", total: String(Number(item.quantity) * Number(item.unitPrice)),
+        }) as any);
+      }
+      return { success: true };
+    }),
     convertToInvoice: protectedProcedure.input(z.object({
       orderId: z.number(),
       paymentType: z.enum(["cash", "credit"]).optional(),
@@ -2250,6 +2306,61 @@ const salesRouter = router({
       await db.update(salesOrders).set({ status: "confirmed" } as any).where(tenantWhere(salesOrders, ctx.tenantId, eq(salesOrders.id, input)));
       return { success: true };
     }),
+    unapprove: protectedProcedure.input(z.number()).mutation(async ({ ctx, input }) => {
+      await assertEntityAction(ctx, "sales", "saleOrder", "unapprove");
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const [order] = await db.select().from(salesOrders).where(tenantWhere(salesOrders, ctx.tenantId, eq(salesOrders.id, input)));
+      if (!order) throw new TRPCError({ code: "NOT_FOUND" });
+      if (order.status !== "confirmed") throw new TRPCError({ code: "BAD_REQUEST", message: "الطلب ليس معتمداً أصلاً" });
+      if (order.convertedInvoiceId) throw new TRPCError({ code: "BAD_REQUEST", message: "لا يمكن فك اعتماد طلب تم تحويله لفاتورة بالفعل" });
+      await db.update(salesOrders).set({ status: "draft" } as any).where(tenantWhere(salesOrders, ctx.tenantId, eq(salesOrders.id, input)));
+      return { success: true };
+    }),
+    update: protectedProcedure.input(z.object({
+      id: z.number(),
+      customerId: z.number(),
+      date: z.string(),
+      expectedDate: z.string().optional(),
+      warehouseId: z.number().optional(),
+      notes: z.string().optional(),
+      items: z.array(z.object({
+        itemId: z.number(),
+        quantity: z.string(),
+        unitPrice: z.string(),
+        notes: z.string().optional(),
+      })),
+    })).mutation(async ({ ctx, input }) => {
+      await assertEntityAction(ctx, "sales", "saleOrder", "edit");
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const [order] = await db.select().from(salesOrders).where(tenantWhere(salesOrders, ctx.tenantId, eq(salesOrders.id, input.id)));
+      if (!order) throw new TRPCError({ code: "NOT_FOUND" });
+      if (order.status !== "draft") throw new TRPCError({ code: "BAD_REQUEST", message: "لا يمكن تعديل طلب غير معلق — فك الاعتماد أولاً" });
+      await assertDateNotInClosedPeriod(db, ctx.tenantId, input.date);
+      const scope = await loadUserScopeFromCtx(db, ctx.saasUser);
+      const [customer] = await db.select({ branchId: customers.branchId }).from(customers)
+        .where(tenantWhere(customers, ctx.tenantId, eq(customers.id, input.customerId)));
+      if (customer) assertEntityBranchAccess(scope, customer.branchId);
+      assertWarehouseAccess(scope, input.warehouseId);
+      const total = input.items.reduce((s, it) => s + (Number(it.quantity) * Number(it.unitPrice)), 0);
+      await db.update(salesOrders).set({
+        customerId: input.customerId,
+        date: input.date as any,
+        expectedDate: input.expectedDate as any,
+        warehouseId: input.warehouseId,
+        total: String(total),
+        notes: input.notes,
+      } as any).where(tenantWhere(salesOrders, ctx.tenantId, eq(salesOrders.id, input.id)));
+      await db.delete(salesOrderItems).where(tenantWhere(salesOrderItems, ctx.tenantId, eq(salesOrderItems.orderId, input.id)));
+      for (const item of input.items) {
+        await db.insert(salesOrderItems).values(withTenantId(ctx.tenantId, {
+          orderId: input.id, itemId: item.itemId, quantity: item.quantity, price: item.unitPrice,
+          discount: "0", tax: "0", total: String(Number(item.quantity) * Number(item.unitPrice)),
+        }) as any);
+      }
+      return { success: true };
+    }),
     convertToInvoice: protectedProcedure.input(z.object({
       orderId: z.number(),
       paymentType: z.enum(["cash", "credit"]).optional(),
@@ -2870,6 +2981,20 @@ const accountsRouter = router({
         return { success: true, id: entryId, number, pendingApproval: true };
       }
       return { success: true, id: entryId, number };
+    }),
+    unapprove: protectedProcedure.input(z.number()).mutation(async ({ ctx, input }) => {
+      await assertEntityAction(ctx, "accounts", "journalEntry", "unapprove");
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const [entry] = await db.select().from(journalEntries).where(tenantWhere(journalEntries, ctx.tenantId, eq(journalEntries.id, input)));
+      if (!entry) throw new TRPCError({ code: "NOT_FOUND" });
+      if (entry.status !== "posted") throw new TRPCError({ code: "BAD_REQUEST", message: "القيد ليس معتمداً أصلاً" });
+      if (entry.reference?.trim()) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "هذا القيد تلقائي وتابع لمستند آخر — فك اعتماد المستند نفسه بدل القيد" });
+      }
+      await assertDateNotInClosedPeriod(db, ctx.tenantId, toDateStr(entry.date));
+      await db.update(journalEntries).set({ status: "draft" } as any).where(tenantWhere(journalEntries, ctx.tenantId, eq(journalEntries.id, input)));
+      return { success: true };
     }),
   }),
   taxes: router({
@@ -5214,9 +5339,13 @@ const productionRouter = router({
     status: z.enum(["draft", "in_progress", "completed", "cancelled"]),
   })).mutation(async ({ ctx, input }) => {
     // "اعتماد" أمر الإنتاج في واجهتنا هو تحديدًا الانتقال draft → in_progress (زي ما اسم الزرار
-    // في الواجهة نفسه)؛ الإلغاء دايمًا تحت "حذف / إلغاء"؛ باقي الانتقالات تحت "تعديل".
+    // في الواجهة نفسه)؛ الإلغاء دايمًا تحت "حذف / إلغاء"؛ الرجوع لمسودة (فك اعتماد) تحت "unapprove"؛
+    // باقي الانتقالات تحت "تعديل".
     const actionForStatus: PermActionKey =
-      input.status === "in_progress" ? "approve" : input.status === "cancelled" ? "deleteCancel" : "edit";
+      input.status === "in_progress" ? "approve"
+        : input.status === "cancelled" ? "deleteCancel"
+          : input.status === "draft" ? "unapprove"
+            : "edit";
     await assertEntityAction(ctx, "production", "productionOrder", actionForStatus);
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
@@ -5235,6 +5364,11 @@ const productionRouter = router({
         const { cancelProductionOrder } = await import("./production-service");
         const r = await cancelProductionOrder(db, ctx.tenantId, input.id);
         return { success: true, note: r.note };
+      }
+      if (input.status === "draft") {
+        const { unapproveProductionOrder } = await import("./production-service");
+        await unapproveProductionOrder(db, ctx.tenantId, input.id);
+        return { success: true };
       }
       await db.update(productionOrders).set({ status: input.status }).where(
         tenantWhere(productionOrders, ctx.tenantId, eq(productionOrders.id, input.id)),

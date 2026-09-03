@@ -4,8 +4,10 @@ import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { ArrowRight, Loader2 } from "lucide-react";
+import { ArrowRight, Loader2, Undo2 } from "lucide-react";
+import { toast } from "sonner";
 import { tenantPath, useTenantSlug } from "@/lib/tenant";
+import EntityPermissionGate from "@/components/EntityPermissionGate";
 
 export default function JournalEntryDetail() {
   const params = useParams<{ id: string }>();
@@ -13,7 +15,12 @@ export default function JournalEntryDetail() {
   const tenantSlug = useTenantSlug();
   const id = parseInt(params.id || "0", 10);
 
+  const utils = trpc.useUtils();
   const { data, isLoading } = trpc.accounts.journal.byId.useQuery(id, { enabled: id > 0 });
+  const unapproveMut = trpc.accounts.journal.unapprove.useMutation({
+    onSuccess: () => { toast.success("تم فك الاعتماد"); utils.accounts.journal.byId.invalidate(id); },
+    onError: (e) => toast.error(e.message),
+  });
 
   const entry = data?.entry;
   const lines = data?.lines || [];
@@ -39,8 +46,19 @@ export default function JournalEntryDetail() {
         ) : (
           <>
             <Card className="border-0 shadow-sm">
-              <CardHeader className="pb-2">
+              <CardHeader className="pb-2 flex flex-row items-center justify-between">
                 <CardTitle className="text-base">قيد رقم {entry.number}</CardTitle>
+                {entry.status === "posted" && !entry.reference && (
+                  <EntityPermissionGate moduleKey="accounts" entityKey="journalEntry" action="unapprove">
+                    <Button
+                      variant="outline" size="sm" className="h-8 text-xs text-amber-700 border-amber-300 hover:bg-amber-50 gap-1"
+                      disabled={unapproveMut.isPending}
+                      onClick={() => unapproveMut.mutate(id)}
+                    >
+                      <Undo2 size={13} /> فك اعتماد
+                    </Button>
+                  </EntityPermissionGate>
+                )}
               </CardHeader>
               <CardContent className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                 <div><span className="text-slate-500">التاريخ: </span>{entry.date ? new Date(entry.date).toLocaleDateString("en-GB") : "—"}</div>

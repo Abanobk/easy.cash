@@ -705,15 +705,24 @@ export default function Production() {
                       </PermissionGate>
                     )}
                     {detailQ.data.status === "in_progress" && (
-                      <PermissionGate module="production" action="edit">
-                        <EntityPermissionGate moduleKey="production" entityKey="productionOrder" action="edit">
-                          <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 font-extrabold"
+                      <>
+                        <PermissionGate module="production" action="edit">
+                          <EntityPermissionGate moduleKey="production" entityKey="productionOrder" action="edit">
+                            <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 font-extrabold"
+                              disabled={statusMut.isPending}
+                              onClick={() => statusMut.mutate({ id: viewId, status: "completed" })}>
+                              إتمام / استلام الإنتاج التام
+                            </Button>
+                          </EntityPermissionGate>
+                        </PermissionGate>
+                        <EntityPermissionGate moduleKey="production" entityKey="productionOrder" action="unapprove">
+                          <Button size="sm" variant="outline" className="text-amber-700 border-amber-300 hover:bg-amber-50"
                             disabled={statusMut.isPending}
-                            onClick={() => statusMut.mutate({ id: viewId, status: "completed" })}>
-                            إتمام / استلام الإنتاج التام
+                            onClick={() => statusMut.mutate({ id: viewId, status: "draft" })}>
+                            فك اعتماد
                           </Button>
                         </EntityPermissionGate>
-                      </PermissionGate>
+                      </>
                     )}
                     {(detailQ.data.status === "draft" || detailQ.data.status === "cancelled") && (
                       // السيرفر بيسمح بحذف المسودات والملغاة — الزر كان ظاهر للمسودات بس
