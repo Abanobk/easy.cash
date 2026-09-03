@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useParams, useLocation, Link } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
@@ -5,11 +6,20 @@ import { ArrowRight, ShoppingCart, CheckCircle, FileText, XCircle } from "lucide
 import ERPLayout from "@/components/ERPLayout";
 import PermissionGate from "@/components/PermissionGate";
 import { toast } from "sonner";
+import { ConvertOrderDialog } from "@/components/purchases/ConvertOrderDialog";
+
+/** superjson بيرجّع أعمدة التاريخ ككائن Date حقيقي على الكلاينت كمان — String(x).slice(0,10) بيفقد السنة */
+function toDateStr(v: unknown): string {
+  if (!v) return "—";
+  if (v instanceof Date) return v.toISOString().slice(0, 10);
+  return String(v).slice(0, 10);
+}
 
 const statusMap: Record<string, { label: string; color: string }> = {
   draft: { label: "مسودة", color: "bg-gray-100 text-gray-700" },
   confirmed: { label: "معتمد", color: "bg-blue-100 text-blue-700" },
-  received: { label: "مُحوَّل لفاتورة", color: "bg-green-100 text-green-700" },
+  partial: { label: "مستلم جزئياً", color: "bg-amber-100 text-amber-700" },
+  received: { label: "مُحوَّل لفاتورة بالكامل", color: "bg-green-100 text-green-700" },
   cancelled: { label: "ملغي", color: "bg-red-100 text-red-700" },
 };
 
@@ -17,17 +27,11 @@ export default function PurchaseOrderDetail() {
   const params = useParams<{ id: string }>();
   const [, navigate] = useLocation();
   const id = parseInt(params.id || "0");
+  const [convertOpen, setConvertOpen] = useState(false);
 
   const { data: order, isLoading, refetch } = trpc.purchases.orders.byId.useQuery(id, { enabled: !!id });
   const approveMut = trpc.purchases.orders.approve.useMutation({
     onSuccess: () => { toast.success("تم اعتماد الطلب"); refetch(); },
-    onError: (e) => toast.error(e.message),
-  });
-  const convertMut = trpc.purchases.orders.convertToInvoice.useMutation({
-    onSuccess: (res) => {
-      toast.success(`تم إنشاء الفاتورة ${res.number}`);
-      refetch();
-    },
     onError: (e) => toast.error(e.message),
   });
   const cancelMut = trpc.purchases.orders.cancel.useMutation({
@@ -58,8 +62,8 @@ export default function PurchaseOrderDetail() {
   const o = order as any;
   const statusInfo = statusMap[o.status] || { label: o.status, color: "bg-gray-100 text-gray-700" };
   const canApprove = o.status === "draft";
-  const canConvert = o.status !== "received" && o.status !== "cancelled" && !o.convertedInvoiceId;
-  const canCancel = o.status !== "received" && o.status !== "cancelled" && !o.convertedInvoiceId;
+  const canConvert = o.status !== "received" && o.status !== "cancelled";
+  const canCancel = o.status === "draft" || o.status === "confirmed";
 
   return (
     <ERPLayout title={`طلب شراء - ${o.number}`}>
@@ -84,7 +88,7 @@ export default function PurchaseOrderDetail() {
             )}
             {canConvert && (
               <PermissionGate module="purchases" action="create">
-                <Button size="sm" className="bg-green-600 gap-1" onClick={() => convertMut.mutate({ orderId: id })} disabled={convertMut.isPending}>
+                <Button size="sm" className="bg-green-600 gap-1" onClick={() => setConvertOpen(true)}>
                   <FileText size={14} /> تحويل لفاتورة
                 </Button>
               </PermissionGate>
@@ -95,13 +99,6 @@ export default function PurchaseOrderDetail() {
                   <XCircle size={14} /> إلغاء
                 </Button>
               </PermissionGate>
-            )}
-            {o.convertedInvoice && (
-              <Link href={`/purchases/invoices/${o.convertedInvoice.id}`}>
-                <Button size="sm" variant="outline" className="gap-1">
-                  <FileText size={14} /> الفاتورة {o.convertedInvoice.number}
-                </Button>
-              </Link>
             )}
           </div>
         </div>
@@ -114,8 +111,8 @@ export default function PurchaseOrderDetail() {
           </div>
           <div className="bg-white rounded-lg border p-4 space-y-2">
             <h3 className="text-sm font-semibold text-slate-700">بيانات الطلب</h3>
-            <p className="text-sm"><span className="text-slate-500">التاريخ:</span> {o.date ? String(o.date).slice(0, 10) : "—"}</p>
-            <p className="text-sm"><span className="text-slate-500">الاستلام المتوقع:</span> {o.expectedDate ? String(o.expectedDate).slice(0, 10) : "—"}</p>
+            <p className="text-sm"><span className="text-slate-500">التاريخ:</span> {toDateStr(o.date)}</p>
+            <p className="text-sm"><span className="text-slate-500">الاستلام المتوقع:</span> {toDateStr(o.expectedDate)}</p>
             {o.warehouseName && <p className="text-sm"><span className="text-slate-500">المخزن:</span> {o.warehouseName}</p>}
           </div>
         </div>
@@ -133,6 +130,8 @@ export default function PurchaseOrderDetail() {
                 <th className="px-3 py-2 text-right">الكود</th>
                 <th className="px-3 py-2 text-right">الصنف</th>
                 <th className="px-3 py-2 text-right">الكمية</th>
+                <th className="px-3 py-2 text-right">تم تحويله</th>
+                <th className="px-3 py-2 text-right">المتبقي</th>
                 <th className="px-3 py-2 text-right">السعر</th>
                 <th className="px-3 py-2 text-right">الإجمالي</th>
               </tr>
@@ -143,6 +142,8 @@ export default function PurchaseOrderDetail() {
                   <td className="px-3 py-2 text-slate-500">{it.itemCode || "—"}</td>
                   <td className="px-3 py-2">{it.itemName}</td>
                   <td className="px-3 py-2">{Number(it.quantity).toLocaleString("en-US")} {it.itemUnit || ""}</td>
+                  <td className="px-3 py-2 text-slate-500">{Number(it.convertedQuantity || 0).toLocaleString("en-US")}</td>
+                  <td className="px-3 py-2 font-medium text-blue-700">{Number(it.remaining ?? it.quantity).toLocaleString("en-US")}</td>
                   <td className="px-3 py-2">{Number(it.price).toLocaleString("en-US")} ج.م</td>
                   <td className="px-3 py-2 font-medium">{Number(it.total).toLocaleString("en-US")} ج.م</td>
                 </tr>
@@ -150,6 +151,21 @@ export default function PurchaseOrderDetail() {
             </tbody>
           </table>
         </div>
+
+        {o.linkedInvoices?.length > 0 && (
+          <div className="bg-white rounded-lg border p-4 mb-6">
+            <h3 className="text-sm font-semibold text-slate-700 mb-3">الفواتير المحوّلة من هذا الأمر</h3>
+            <div className="flex flex-wrap gap-2">
+              {o.linkedInvoices.map((inv: any) => (
+                <Link key={inv.id} href={`/purchases/invoices/${inv.id}`}>
+                  <Button size="sm" variant="outline" className="gap-1">
+                    <FileText size={13} /> {inv.number} — {Number(inv.total).toLocaleString("en-US")} ج.م
+                  </Button>
+                </Link>
+              ))}
+            </div>
+          </div>
+        )}
 
         <div className="bg-white rounded-lg border p-4 flex justify-end">
           <div className="text-left space-y-1 min-w-[200px]">
@@ -160,6 +176,12 @@ export default function PurchaseOrderDetail() {
           </div>
         </div>
       </div>
+
+      <ConvertOrderDialog
+        orderId={convertOpen ? id : null}
+        onClose={() => setConvertOpen(false)}
+        onConverted={() => { setConvertOpen(false); refetch(); }}
+      />
     </ERPLayout>
   );
 }

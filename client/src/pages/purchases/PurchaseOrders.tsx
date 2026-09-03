@@ -16,9 +16,11 @@ import { toast } from "sonner";
 import { AddActionButton } from "@/components/AddActionButton";
 import PermissionGate from "@/components/PermissionGate";
 import { useWarehouseOptions } from "@/hooks/useEntityOptions";
+import { ConvertOrderDialog } from "@/components/purchases/ConvertOrderDialog";
 
 export default function PurchaseOrders() {
   const [open, setOpen] = useState(false);
+  const [convertOrderId, setConvertOrderId] = useState<number | null>(null);
   const [form, setForm] = useState({ supplierId: "", warehouseId: "", date: new Date().toISOString().split("T")[0], notes: "", expectedDate: "" });
   const [items, setItems] = useState<{ itemId: string; quantity: string; unitPrice: string; notes: string }[]>([
     { itemId: "", quantity: "1", unitPrice: "0", notes: "" }
@@ -30,10 +32,6 @@ export default function PurchaseOrders() {
   const warehouses = useWarehouseOptions();
   const createMut = trpc.purchases.orders.create.useMutation({ onSuccess: () => { toast.success("تم إنشاء طلب الشراء"); refetch(); setOpen(false); resetForm(); } });
   const approveMut = trpc.purchases.orders.approve.useMutation({ onSuccess: () => { toast.success("تم اعتماد الطلب"); refetch(); } });
-  const convertMut = trpc.purchases.orders.convertToInvoice.useMutation({
-    onSuccess: (res) => { toast.success(`تم إنشاء الفاتورة ${res.number}`); refetch(); },
-    onError: (e) => toast.error(e.message),
-  });
 
   const resetForm = () => {
     setForm({ supplierId: "", warehouseId: "", date: new Date().toISOString().split("T")[0], notes: "", expectedDate: "" });
@@ -59,8 +57,8 @@ export default function PurchaseOrders() {
     });
   };
 
-  const statusLabel = (s: string) => ({ draft: "مسودة", confirmed: "معتمد", received: "مُحوَّل لفاتورة", cancelled: "ملغي" }[s] || s);
-  const statusColor = (s: string) => ({ draft: "outline", confirmed: "default", received: "secondary", cancelled: "destructive" }[s] || "outline") as any;
+  const statusLabel = (s: string) => ({ draft: "مسودة", confirmed: "معتمد", partial: "مستلم جزئياً", received: "مُحوَّل لفاتورة بالكامل", cancelled: "ملغي" }[s] || s);
+  const statusColor = (s: string) => ({ draft: "outline", confirmed: "default", partial: "secondary", received: "secondary", cancelled: "destructive" }[s] || "outline") as any;
 
   return (
     <ERPLayout title="طلبات الشراء">
@@ -110,7 +108,7 @@ export default function PurchaseOrders() {
                     )}
                     {row.status !== "received" && row.status !== "cancelled" && (
                       <PermissionGate module="purchases" action="create">
-                        <Button variant="ghost" size="sm" className="h-7 text-xs text-blue-600 hover:bg-blue-50 gap-1" onClick={() => convertMut.mutate({ orderId: row.id })} disabled={convertMut.isPending}>
+                        <Button variant="ghost" size="sm" className="h-7 text-xs text-blue-600 hover:bg-blue-50 gap-1" onClick={() => setConvertOrderId(row.id)}>
                           <FileText size={12} /> تحويل لفاتورة
                         </Button>
                       </PermissionGate>
@@ -209,6 +207,12 @@ export default function PurchaseOrders() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <ConvertOrderDialog
+        orderId={convertOrderId}
+        onClose={() => setConvertOrderId(null)}
+        onConverted={() => { setConvertOrderId(null); refetch(); }}
+      />
     </ERPLayout>
   );
 }

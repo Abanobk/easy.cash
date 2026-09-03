@@ -1511,31 +1511,40 @@ const purchasesRouter = router({
         discount: purchaseOrderItems.discount,
         tax: purchaseOrderItems.tax,
         total: purchaseOrderItems.total,
+        convertedQuantity: purchaseOrderItems.convertedQuantity,
         itemName: items.name,
         itemCode: items.code,
         itemUnit: items.unit,
       }).from(purchaseOrderItems)
         .leftJoin(items, eq(purchaseOrderItems.itemId, items.id))
         .where(tenantWhere(purchaseOrderItems, ctx.tenantId, eq(purchaseOrderItems.orderId, input)));
+      const itemsWithRemaining = orderItems.map((i) => ({
+        ...i,
+        remaining: Math.max(0, Number(i.quantity) - Number(i.convertedQuantity ?? 0)),
+      }));
       const [supplier] = await db.select({ name: suppliers.name, phone: suppliers.phone }).from(suppliers)
         .where(tenantWhere(suppliers, ctx.tenantId, eq(suppliers.id, order.supplierId)));
       const [warehouse] = order.warehouseId
         ? await db.select({ name: warehouses.name }).from(warehouses)
           .where(tenantWhere(warehouses, ctx.tenantId, eq(warehouses.id, order.warehouseId)))
         : [null];
-      let convertedInvoice: { id: number; number: string } | null = null;
-      if (order.convertedInvoiceId) {
-        const [inv] = await db.select({ id: purchaseInvoices.id, number: purchaseInvoices.number }).from(purchaseInvoices)
-          .where(tenantWhere(purchaseInvoices, ctx.tenantId, eq(purchaseInvoices.id, order.convertedInvoiceId)));
-        convertedInvoice = inv ?? null;
-      }
+      // كل الفواتير اللي اتحولت من الأمر ده — ممكن يكون أكتر من واحدة لو التحويل كان جزئي
+      const linkedInvoices = await db.select({
+        id: purchaseInvoices.id,
+        number: purchaseInvoices.number,
+        date: purchaseInvoices.date,
+        total: purchaseInvoices.total,
+      }).from(purchaseInvoices)
+        .where(tenantWhere(purchaseInvoices, ctx.tenantId, eq(purchaseInvoices.orderId, input)))
+        .orderBy(desc(purchaseInvoices.id));
       return {
         ...order,
         supplierName: supplier?.name || "",
         supplierPhone: supplier?.phone || "",
         warehouseName: warehouse?.name || "",
-        items: orderItems,
-        convertedInvoice,
+        items: itemsWithRemaining,
+        linkedInvoices,
+        convertedInvoice: linkedInvoices[0] ?? null,
       };
     }),
     create: protectedProcedure.input(z.object({
@@ -1601,6 +1610,11 @@ const purchasesRouter = router({
       orderId: z.number(),
       paymentType: z.enum(["cash", "credit"]).optional(),
       date: z.string().optional(),
+      /** كمية كل بند يتحول دلوقتي — لو مبعتتش، يتحول كل الباقي من كل الأسطر (تحويل كامل) */
+      items: z.array(z.object({
+        orderItemId: z.number(),
+        quantity: z.string(),
+      })).optional(),
     })).mutation(async ({ ctx, input }) => {
       await assertEntityAction(ctx, "purchases", "purchaseOrder", "edit");
       const db = await getDb();
@@ -1610,10 +1624,15 @@ const purchasesRouter = router({
       if (!order) throw new TRPCError({ code: "NOT_FOUND" });
       assertWarehouseAccess(scope, order.warehouseId);
       const { convertPurchaseOrderToInvoice } = await import("./order-conversion");
-      return convertPurchaseOrderToInvoice(db, ctx.tenantId, ctx.user?.id, input.orderId, {
-        paymentType: input.paymentType,
-        date: input.date,
-      });
+      try {
+        return await convertPurchaseOrderToInvoice(db, ctx.tenantId, ctx.user?.id, input.orderId, {
+          paymentType: input.paymentType,
+          date: input.date,
+          items: input.items,
+        });
+      } catch (e: unknown) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: e instanceof Error ? e.message : "فشل تحويل الأمر لفاتورة" });
+      }
     }),
     cancel: protectedProcedure.input(z.number()).mutation(async ({ ctx, input }) => {
       await assertEntityAction(ctx, "purchases", "purchaseOrder", "deleteCancel");
@@ -1623,7 +1642,11 @@ const purchasesRouter = router({
       const [order] = await db.select().from(purchaseOrders).where(tenantWhere(purchaseOrders, ctx.tenantId, eq(purchaseOrders.id, input)));
       if (!order) throw new TRPCError({ code: "NOT_FOUND" });
       assertWarehouseAccess(scope, order.warehouseId);
-      if (order.convertedInvoiceId) throw new TRPCError({ code: "BAD_REQUEST", message: "لا يمكن إلغاء أمر تم تحويله لفاتورة" });
+      const orderLines = await db.select({ quantity: purchaseOrderItems.quantity, convertedQuantity: purchaseOrderItems.convertedQuantity })
+        .from(purchaseOrderItems).where(tenantWhere(purchaseOrderItems, ctx.tenantId, eq(purchaseOrderItems.orderId, input)));
+      if (orderLines.some((l) => Number(l.convertedQuantity ?? 0) > 0.0001)) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "لا يمكن إلغاء أمر تم تحويل جزء منه لفاتورة بالفعل" });
+      }
       if (order.status === "cancelled") throw new TRPCError({ code: "BAD_REQUEST", message: "الأمر ملغي مسبقاً" });
       await db.update(purchaseOrders).set({ status: "cancelled" } as any).where(tenantWhere(purchaseOrders, ctx.tenantId, eq(purchaseOrders.id, input)));
       return { success: true };

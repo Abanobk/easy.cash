@@ -242,8 +242,9 @@ export const purchaseOrders = mysqlTable("purchase_orders", {
   discount: decimal("discount", { precision: 15, scale: 2 }).default("0"),
   tax: decimal("tax", { precision: 15, scale: 2 }).default("0"),
   total: decimal("total", { precision: 15, scale: 2 }).default("0"),
-  status: mysqlEnum("status", ["draft", "confirmed", "received", "cancelled"]).default("draft"),
+  status: mysqlEnum("status", ["draft", "confirmed", "partial", "received", "cancelled"]).default("draft"),
   notes: text("notes"),
+  /** آخر فاتورة اتحولت من الأمر ده — للعرض بس؛ المرجع الكامل هو purchaseInvoices.orderId (أمر ممكن يتحول لأكتر من فاتورة جزئية) */
   convertedInvoiceId: int("convertedInvoiceId"),
   createdBy: int("createdBy"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
@@ -260,6 +261,8 @@ export const purchaseOrderItems = mysqlTable("purchase_order_items", {
   discount: decimal("discount", { precision: 5, scale: 2 }).default("0"),
   tax: decimal("tax", { precision: 5, scale: 2 }).default("0"),
   total: decimal("total", { precision: 15, scale: 2 }).notNull(),
+  /** الكمية اللي اتحوّلت لفاتورة/فواتير فعلية لحد دلوقتي — الباقي = quantity - convertedQuantity */
+  convertedQuantity: decimal("convertedQuantity", { precision: 15, scale: 3 }).default("0"),
 });
 
 // ===================== PURCHASE INVOICES =====================
