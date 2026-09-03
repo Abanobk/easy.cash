@@ -122,8 +122,10 @@ _pack() {
       --exclude=.env.local \
       --exclude=.env.production \
       --exclude=mega-kam-backup \
+      --exclude=backups \
       --exclude=.DS_Store \
       --exclude=.cursor \
+      --exclude=.claude \
       .
   else
     tar czf - \
@@ -135,8 +137,10 @@ _pack() {
       --exclude=.env.local \
       --exclude=.env.production \
       --exclude=mega-kam-backup \
+      --exclude=backups \
       --exclude=.DS_Store \
       --exclude=.cursor \
+      --exclude=.claude \
       .
   fi
 }
@@ -169,9 +173,11 @@ RSYNC_EXCLUDES=(
   --exclude=.env.production
   --exclude=.env.deploy-backup
   --exclude=mega-kam-backup/
+  --exclude=backups/
   --exclude=.DS_Store
   --exclude=._*
   --exclude=.cursor/
+  --exclude=.claude/
   --exclude=coverage/
   --exclude=*.log
   --exclude=last_deploy.txt
