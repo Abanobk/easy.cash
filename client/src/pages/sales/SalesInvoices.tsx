@@ -9,7 +9,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
-import { Plus, Trash2, Eye, ArrowRight, Banknote, ScanLine, CheckCircle2 } from "lucide-react";
+import { Plus, Trash2, Eye, ArrowRight, Banknote, ScanLine, CheckCircle2, Pencil, Undo2 } from "lucide-react";
+import EntityPermissionGate from "@/components/EntityPermissionGate";
 import PermissionGate from "@/components/PermissionGate";
 import { useLocation, useSearch } from "wouter";
 import { InvoicePaymentDialog } from "@/components/InvoicePaymentDialog";
@@ -115,6 +116,7 @@ export default function SalesInvoices() {
 
   const [page, setPage] = useState(1);
   const [showForm, setShowForm] = useState(false);
+  const [editId, setEditId] = useState<number | null>(null);
   const [form, setForm] = useState(emptyForm);
   const [invoiceItems, setInvoiceItems] = useState<InvoiceItem[]>([]);
   const [invoiceTaxes, setInvoiceTaxes] = useState<InvoiceTaxLine[]>([]);
@@ -163,6 +165,19 @@ export default function SalesInvoices() {
     },
     onError: (e) => toast.error(e.message),
   });
+  const updateMut = trpc.sales.invoices.update.useMutation({
+    onSuccess: (res) => {
+      toast.success(lastApproveNow ? `تم حفظ واعتماد الفاتورة ${res.number}` : "تم حفظ التعديلات");
+      refetch();
+      setShowForm(false);
+      resetForm();
+    },
+    onError: (e) => toast.error(e.message),
+  });
+  const unapproveMut = trpc.sales.invoices.unapprove.useMutation({
+    onSuccess: () => { toast.success("تم فك الاعتماد — الفاتورة الآن مسودة قابلة للتعديل"); refetch(); },
+    onError: (e) => toast.error(e.message),
+  });
   const payMut = trpc.sales.invoices.recordPayment.useMutation({
     onSuccess: (res) => {
       toast.success(`تم التحصيل — إيصال ${res.cashNumber}`);
@@ -173,10 +188,56 @@ export default function SalesInvoices() {
   });
 
   const resetForm = () => {
+    setEditId(null);
     setForm({ ...emptyForm, paymentType: "cash" });
     setInvoiceItems([]);
     setInvoiceTaxes([]); setInvoiceExpenses([]); setSettlement(emptySettlement);
     setPrintAfterSave(false); setPrintAfterApprove(false); setPrintNote(false); setBarcode("");
+  };
+
+  /** فتح فاتورة مسودة (بعد فك اعتماد أو معلقة أصلاً) للتعديل — بنعيد استخدام نفس فورم الإنشاء الغني */
+  const openEdit = async (invoiceId: number) => {
+    try {
+      const inv = await utils.sales.invoices.byId.fetch(invoiceId);
+      setEditId(invoiceId);
+      setForm({
+        customerId: inv.customerId,
+        date: toDateStr(inv.date),
+        dueDate: inv.dueDate ? toDateStr(inv.dueDate) : "",
+        warehouseId: inv.warehouseId ?? undefined,
+        branchId: inv.branchId ?? undefined,
+        costCenterId: inv.costCenterId ?? undefined,
+        paymentType: (inv.paymentType as "cash" | "credit") || "cash",
+        currencyCode: inv.currencyCode || "EGP",
+        exchangeRate: inv.exchangeRate?.toString() || "1",
+        notes: inv.notes || "",
+      });
+      setSettlement({
+        cashAmount: inv.cashAmount != null ? String(inv.cashAmount) : "0",
+        bankAmount: inv.bankAmount != null ? String(inv.bankAmount) : "0",
+        bankAccountId: inv.bankAccountId ?? undefined,
+      });
+      setInvoiceTaxes((inv.taxes || []).map((t: any) => ({ taxId: t.taxId ?? undefined, name: t.name ?? undefined, rate: t.rate != null ? String(t.rate) : undefined, amount: String(t.amount), glAccountId: t.glAccountId ?? undefined })));
+      setInvoiceExpenses((inv.expenses || []).map((e: any) => ({ currencyCode: e.currencyCode || "EGP", exchangeRate: e.exchangeRate != null ? String(e.exchangeRate) : "1", amount: String(e.amount), creditAccountId: e.creditAccountId, notes: e.notes || undefined })));
+      setInvoiceItems(inv.items.map((i: any) => ({
+        itemId: i.itemId,
+        itemName: i.itemName || "",
+        itemUnit: i.itemUnit || "",
+        quantity: i.quantity?.toString() || "1",
+        price: i.price?.toString() || "0",
+        discount: i.discount?.toString() || "0",
+        tax: i.tax?.toString() || "0",
+        tax2: i.tax2?.toString() || "0",
+        tax3: i.tax3?.toString() || "0",
+        total: i.total?.toString() || "0",
+        serialNumbers: "",
+        batchId: i.batchId ?? undefined,
+        warehouseId: i.warehouseId ?? undefined,
+      })));
+      setShowForm(true);
+    } catch (e: any) {
+      toast.error(e?.message || "فشل فتح الفاتورة للتعديل");
+    }
   };
 
   const firePrint = (number: string) => {
@@ -334,7 +395,7 @@ export default function SalesInvoices() {
     if (invoiceItems.length === 0) { toast.error("يجب إضافة صنف واحد على الأقل"); return; }
     if (invoiceItems.some((i) => !i.itemId)) { toast.error("يجب اختيار الصنف لجميع الأسطر"); return; }
     const rate = Number(form.exchangeRate) || 1;
-    createMut.mutate({
+    const payload = {
       customerId: form.customerId!,
       date: form.date,
       dueDate: form.dueDate || undefined,
@@ -371,12 +432,14 @@ export default function SalesInvoices() {
         serialNumbers: i.serialNumbers.trim() || undefined,
         batchId: i.batchId,
       })),
-    });
+    };
+    if (editId) updateMut.mutate({ ...payload, id: editId });
+    else createMut.mutate(payload);
   };
 
   if (showForm) {
     return (
-      <ERPLayout title={isCashMode ? "فاتورة مبيعات نقدية جديدة" : "فاتورة مبيعات جديدة"}>
+      <ERPLayout title={editId ? "تعديل فاتورة مبيعات" : (isCashMode ? "فاتورة مبيعات نقدية جديدة" : "فاتورة مبيعات جديدة")}>
         <div className="space-y-4">
           <div className="flex items-center gap-2">
             <Button variant="ghost" size="sm" onClick={() => { setShowForm(false); resetForm(); }} className="gap-1 text-slate-600">
@@ -670,11 +733,11 @@ export default function SalesInvoices() {
           <div className="flex gap-3 justify-end">
             <Button variant="outline" onClick={() => { setShowForm(false); resetForm(); }}>إلغاء</Button>
             <PermissionGate module="sales" action="create" featureKey="sales-invoiceslist-invoice">
-              <Button onClick={() => handleSubmit(false)} disabled={createMut.isPending} variant="outline" className="px-6">
-                {createMut.isPending ? "جاري الحفظ..." : "حفظ"}
+              <Button onClick={() => handleSubmit(false)} disabled={createMut.isPending || updateMut.isPending} variant="outline" className="px-6">
+                {(createMut.isPending || updateMut.isPending) ? "جاري الحفظ..." : "حفظ"}
               </Button>
-              <Button onClick={() => handleSubmit(true)} disabled={createMut.isPending} className="bg-blue-600 hover:bg-blue-700 text-white px-8 gap-1">
-                <CheckCircle2 size={15} />{createMut.isPending ? "جاري الحفظ..." : "حفظ واعتماد"}
+              <Button onClick={() => handleSubmit(true)} disabled={createMut.isPending || updateMut.isPending} className="bg-blue-600 hover:bg-blue-700 text-white px-8 gap-1">
+                <CheckCircle2 size={15} />{(createMut.isPending || updateMut.isPending) ? "جاري الحفظ..." : "حفظ واعتماد"}
               </Button>
             </PermissionGate>
           </div>
@@ -734,6 +797,24 @@ export default function SalesInvoices() {
             <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-blue-600 hover:bg-blue-50" onClick={() => navigate(`/sales/invoices/${row.id}`)}>
               <Eye size={13} />
             </Button>
+            {row.status === "draft" && (
+              <PermissionGate module="sales" action="edit">
+                <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-slate-600 hover:bg-slate-100" title="تعديل" onClick={() => void openEdit(row.id)}>
+                  <Pencil size={13} />
+                </Button>
+              </PermissionGate>
+            )}
+            {["paid", "confirmed", "partial"].includes(row.status || "") && (
+              <EntityPermissionGate moduleKey="sales" entityKey={row.paymentType === "cash" ? "cashSaleInvoice" : "saleInvoice"} action="unapprove">
+                <Button
+                  variant="ghost" size="sm" className="h-7 w-7 p-0 text-amber-700 hover:bg-amber-50" title="فك اعتماد"
+                  disabled={unapproveMut.isPending}
+                  onClick={() => unapproveMut.mutate(row.id)}
+                >
+                  <Undo2 size={13} />
+                </Button>
+              </EntityPermissionGate>
+            )}
             <PermissionGate module="sales" action="create">
               <Button
                 variant="ghost"

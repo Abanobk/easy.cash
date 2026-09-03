@@ -9,7 +9,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
-import { Plus, Trash2, Eye, ArrowRight, Banknote, Copy, ScanLine, CheckCircle2 } from "lucide-react";
+import { Plus, Trash2, Eye, ArrowRight, Banknote, Copy, ScanLine, CheckCircle2, Pencil, Undo2 } from "lucide-react";
+import EntityPermissionGate from "@/components/EntityPermissionGate";
 import { InvoicePrintButton } from "@/components/InvoicePrintButton";
 import PermissionGate from "@/components/PermissionGate";
 import { useLocation } from "wouter";
@@ -66,6 +67,7 @@ export default function PurchaseInvoices() {
   const [, navigate] = useLocation();
   const [page, setPage] = useState(1);
   const [showForm, setShowForm] = useState(false);
+  const [editId, setEditId] = useState<number | null>(null);
   const [form, setForm] = useState(emptyForm);
   const [invoiceItems, setInvoiceItems] = useState<InvoiceItem[]>([]);
   const [invoiceTaxes, setInvoiceTaxes] = useState<InvoiceTaxLine[]>([]);
@@ -101,6 +103,19 @@ export default function PurchaseInvoices() {
     },
     onError: (e) => toast.error(e.message),
   });
+  const updateMut = trpc.purchases.invoices.update.useMutation({
+    onSuccess: (res) => {
+      toast.success(lastApproveNow ? `تم حفظ واعتماد الفاتورة ${res.number}` : "تم حفظ التعديلات");
+      refetch();
+      setShowForm(false);
+      resetForm();
+    },
+    onError: (e) => toast.error(e.message),
+  });
+  const unapproveMut = trpc.purchases.invoices.unapprove.useMutation({
+    onSuccess: () => { toast.success("تم فك الاعتماد — الفاتورة الآن مسودة قابلة للتعديل"); refetch(); },
+    onError: (e) => toast.error(e.message),
+  });
   const payMut = trpc.purchases.invoices.recordPayment.useMutation({
     onSuccess: (res) => {
       toast.success(`تم السداد — إيصال ${res.cashNumber}`);
@@ -111,8 +126,54 @@ export default function PurchaseInvoices() {
   });
 
   const resetForm = () => {
+    setEditId(null);
     setForm(emptyForm); setInvoiceItems([]); setInvoiceTaxes([]); setInvoiceExpenses([]);
     setSettlement(emptySettlement); setPrintAfterSave(false); setPrintAfterApprove(false); setPrintNote(false); setBarcode("");
+  };
+
+  /** فتح فاتورة مسودة (بعد فك اعتماد أو معلقة أصلاً) للتعديل — بنعيد استخدام نفس فورم الإنشاء الغني */
+  const openEdit = async (invoiceId: number) => {
+    try {
+      const inv = await utils.purchases.invoices.byId.fetch(invoiceId);
+      setEditId(invoiceId);
+      setForm({
+        supplierId: inv.supplierId,
+        date: toDateStr(inv.date),
+        dueDate: inv.dueDate ? toDateStr(inv.dueDate) : "",
+        warehouseId: inv.warehouseId ?? undefined,
+        branchId: inv.branchId ?? undefined,
+        costCenterId: inv.costCenterId ?? undefined,
+        paymentType: (inv.paymentType as "cash" | "credit") || "cash",
+        receiptType: (inv.receiptType as "full" | "partial") || "full",
+        currencyCode: inv.currencyCode || "EGP",
+        exchangeRate: inv.exchangeRate?.toString() || "1",
+        notes: inv.notes || "",
+      });
+      setSettlement({
+        cashAmount: inv.cashAmount != null ? String(inv.cashAmount) : "0",
+        bankAmount: inv.bankAmount != null ? String(inv.bankAmount) : "0",
+        bankAccountId: inv.bankAccountId ?? undefined,
+      });
+      setInvoiceTaxes((inv.taxes || []).map((t: any) => ({ taxId: t.taxId ?? undefined, name: t.name ?? undefined, rate: t.rate != null ? String(t.rate) : undefined, amount: String(t.amount), glAccountId: t.glAccountId ?? undefined })));
+      setInvoiceExpenses((inv.expenses || []).map((e: any) => ({ currencyCode: e.currencyCode || "EGP", exchangeRate: e.exchangeRate != null ? String(e.exchangeRate) : "1", amount: String(e.amount), creditAccountId: e.creditAccountId, notes: e.notes || undefined })));
+      setInvoiceItems(inv.items.map((i: any) => ({
+        ...emptyItem(),
+        itemId: i.itemId,
+        quantity: i.quantity?.toString() || "1",
+        price: i.price?.toString() || "0",
+        discount: i.discount?.toString() || "0",
+        tax: i.tax?.toString() || "0",
+        tax2: i.tax2?.toString() || "0",
+        tax3: i.tax3?.toString() || "0",
+        total: i.total?.toString() || "0",
+        warehouseId: i.warehouseId ?? undefined,
+        batchNumber: i.batches?.length ? "" : "",
+        batches: (i.batches || []).map((b: any) => ({ batchNumber: b.batchNumber || "", expiryDate: b.expiryDate ? toDateStr(b.expiryDate) : "", quantity: String(b.quantity) })),
+      })));
+      setShowForm(true);
+    } catch (e: any) {
+      toast.error(e?.message || "فشل فتح الفاتورة للتعديل");
+    }
   };
 
   const firePrint = (number: string) => {
@@ -241,7 +302,7 @@ export default function PurchaseInvoices() {
     if (invoiceItems.some((i) => !i.itemId)) { toast.error("يجب اختيار الصنف لجميع الأسطر"); return; }
     const rate = Number(form.exchangeRate) || 1;
     const totalBase = toBaseAmount(total, form.currencyCode, rate);
-    createMut.mutate({
+    const payload = {
       supplierId: form.supplierId!,
       date: form.date,
       dueDate: form.dueDate || undefined,
@@ -281,12 +342,14 @@ export default function PurchaseInvoices() {
         serialNumbers: i.serialNumbers.trim() || undefined,
         batches: i.batches.length ? i.batches.map((b) => ({ batchNumber: b.batchNumber, expiryDate: b.expiryDate, quantity: b.quantity })) : undefined,
       })),
-    });
+    };
+    if (editId) updateMut.mutate({ ...payload, id: editId });
+    else createMut.mutate(payload);
   };
 
   if (showForm) {
     return (
-      <ERPLayout title="فاتورة شراء جديدة">
+      <ERPLayout title={editId ? "تعديل فاتورة شراء" : "فاتورة شراء جديدة"}>
         <div className="space-y-4">
           <Button variant="ghost" size="sm" onClick={() => { setShowForm(false); resetForm(); }} className="gap-1 text-slate-600"><ArrowRight size={16} />العودة للقائمة</Button>
           <Card className="border-0 shadow-sm">
@@ -504,8 +567,8 @@ export default function PurchaseInvoices() {
           <div className="flex gap-3 justify-end">
             <Button variant="outline" onClick={() => { setShowForm(false); resetForm(); }}>إلغاء</Button>
             <PermissionGate module="purchases" action="create" featureKey="purchases-receiptslist-receipt">
-              <Button onClick={() => handleSubmit(false)} disabled={createMut.isPending} variant="outline" className="px-6">{createMut.isPending ? "جاري الحفظ..." : "حفظ"}</Button>
-              <Button onClick={() => handleSubmit(true)} disabled={createMut.isPending} className="bg-blue-600 hover:bg-blue-700 text-white px-8 gap-1"><CheckCircle2 size={15} />{createMut.isPending ? "جاري الحفظ..." : "حفظ واعتماد"}</Button>
+              <Button onClick={() => handleSubmit(false)} disabled={createMut.isPending || updateMut.isPending} variant="outline" className="px-6">{(createMut.isPending || updateMut.isPending) ? "جاري الحفظ..." : "حفظ"}</Button>
+              <Button onClick={() => handleSubmit(true)} disabled={createMut.isPending || updateMut.isPending} className="bg-blue-600 hover:bg-blue-700 text-white px-8 gap-1"><CheckCircle2 size={15} />{(createMut.isPending || updateMut.isPending) ? "جاري الحفظ..." : "حفظ واعتماد"}</Button>
             </PermissionGate>
           </div>
         </div>
@@ -558,6 +621,24 @@ export default function PurchaseInvoices() {
               </PermissionGate>
             )}
             <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-blue-600 hover:bg-blue-50" onClick={() => navigate(`/purchases/invoices/${row.id}`)}><Eye size={13} /></Button>
+            {row.status === "draft" && (
+              <PermissionGate module="purchases" action="edit">
+                <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-slate-600 hover:bg-slate-100" title="تعديل" onClick={() => void openEdit(row.id)}>
+                  <Pencil size={13} />
+                </Button>
+              </PermissionGate>
+            )}
+            {["paid", "confirmed", "partial"].includes(row.status || "") && (
+              <EntityPermissionGate moduleKey="purchases" entityKey="purchaseInvoice" action="unapprove">
+                <Button
+                  variant="ghost" size="sm" className="h-7 w-7 p-0 text-amber-700 hover:bg-amber-50" title="فك اعتماد"
+                  disabled={unapproveMut.isPending}
+                  onClick={() => unapproveMut.mutate(row.id)}
+                >
+                  <Undo2 size={13} />
+                </Button>
+              </EntityPermissionGate>
+            )}
             <PermissionGate module="purchases" action="create">
               <Button
                 variant="ghost"

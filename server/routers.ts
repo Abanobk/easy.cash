@@ -1207,12 +1207,24 @@ const purchasesRouter = router({
         price: purchaseInvoiceItems.price,
         discount: purchaseInvoiceItems.discount,
         tax: purchaseInvoiceItems.tax,
+        tax2: purchaseInvoiceItems.tax2,
+        tax3: purchaseInvoiceItems.tax3,
+        warehouseId: purchaseInvoiceItems.warehouseId,
+        batchId: purchaseInvoiceItems.batchId,
         total: purchaseInvoiceItems.total,
         itemName: items.name,
         itemUnit: items.unit,
       }).from(purchaseInvoiceItems)
         .leftJoin(items, eq(purchaseInvoiceItems.itemId, items.id))
         .where(tenantWhere(purchaseInvoiceItems, ctx.tenantId, eq(purchaseInvoiceItems.invoiceId, input)));
+      const itemBatchRows = invItems.length
+        ? await db.select().from(purchaseInvoiceItemBatches)
+          .where(tenantWhere(purchaseInvoiceItemBatches, ctx.tenantId, inArray(purchaseInvoiceItemBatches.invoiceItemId, invItems.map((i) => i.id))))
+        : [];
+      const invoiceTaxRows = await db.select().from(purchaseInvoiceTaxes)
+        .where(tenantWhere(purchaseInvoiceTaxes, ctx.tenantId, eq(purchaseInvoiceTaxes.invoiceId, input)));
+      const invoiceExpenseRows = await db.select().from(purchaseInvoiceExpenses)
+        .where(tenantWhere(purchaseInvoiceExpenses, ctx.tenantId, eq(purchaseInvoiceExpenses.invoiceId, input)));
       const [supplier] = await db.select({ name: suppliers.name }).from(suppliers)
         .where(tenantWhere(suppliers, ctx.tenantId, eq(suppliers.id, inv.supplierId)));
       const [journalEntry] = await db.select({
@@ -1221,7 +1233,12 @@ const purchasesRouter = router({
       }).from(journalEntries)
         .where(tenantWhere(journalEntries, ctx.tenantId, eq(journalEntries.reference, inv.number)))
         .limit(1);
-      return { ...inv, supplierName: supplier?.name, items: invItems, journalEntry: journalEntry ?? null };
+      return {
+        ...inv, supplierName: supplier?.name,
+        items: invItems.map((i) => ({ ...i, batches: itemBatchRows.filter((b) => b.invoiceItemId === i.id) })),
+        taxes: invoiceTaxRows, expenses: invoiceExpenseRows,
+        journalEntry: journalEntry ?? null,
+      };
     }),
     recordPayment: protectedProcedure.input(z.object({
       invoiceId: z.number(),
@@ -1450,6 +1467,197 @@ const purchasesRouter = router({
         bankAccountId: input.bankAccountId,
         taxes: input.taxes,
         expenses: input.expenses,
+      });
+      if (!isCash || paidTotal < Number(input.total)) {
+        await recalculateSupplierBalance(db, ctx.tenantId, input.supplierId);
+      }
+      return { success: true, id: invId, number };
+    }),
+    unapprove: protectedProcedure.input(z.number()).mutation(async ({ ctx, input }) => {
+      await assertEntityAction(ctx, "purchases", "purchaseInvoice", "unapprove");
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const { unapprovePurchaseInvoice } = await import("./invoice-approval");
+      try {
+        return await unapprovePurchaseInvoice(db, ctx.tenantId, input);
+      } catch (e: unknown) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: e instanceof Error ? e.message : "فشل فك الاعتماد" });
+      }
+    }),
+    update: protectedProcedure.input(z.object({
+      id: z.number(),
+      supplierId: z.number(),
+      date: z.string(),
+      dueDate: z.string().optional(),
+      warehouseId: z.number().optional(),
+      branchId: z.number().optional(),
+      costCenterId: z.number().optional(),
+      paymentType: z.enum(["cash", "credit"]).default("cash"),
+      cashAmount: z.string().optional(),
+      bankAmount: z.string().optional(),
+      bankAccountId: z.number().optional(),
+      receiptType: z.enum(["full", "partial"]).default("full"),
+      approveNow: z.boolean().optional(),
+      currencyCode: z.string().default("EGP"),
+      exchangeRate: z.string().default("1"),
+      foreignTotal: z.string().optional(),
+      subtotal: z.string(),
+      discount: z.string().default("0"),
+      tax: z.string().default("0"),
+      total: z.string(),
+      notes: z.string().optional(),
+      taxes: z.array(z.object({
+        taxId: z.number().optional(),
+        name: z.string().optional(),
+        rate: z.string().optional(),
+        amount: z.string(),
+        glAccountId: z.number().optional(),
+      })).optional(),
+      expenses: z.array(z.object({
+        currencyCode: z.string().default("EGP"),
+        exchangeRate: z.string().default("1"),
+        amount: z.string(),
+        creditAccountId: z.number(),
+        notes: z.string().optional(),
+      })).optional(),
+      items: z.array(z.object({
+        itemId: z.number(),
+        quantity: z.string(),
+        price: z.string(),
+        discount: z.string().default("0"),
+        tax: z.string().default("0"),
+        taxId: z.number().optional(),
+        tax2: z.string().default("0"),
+        tax2Id: z.number().optional(),
+        tax3: z.string().default("0"),
+        tax3Id: z.number().optional(),
+        total: z.string(),
+        warehouseId: z.number().optional(),
+        batchId: z.number().optional(),
+        batchNumber: z.string().optional(),
+        expiryDate: z.string().optional(),
+        serialNumbers: z.string().optional(),
+        batches: z.array(z.object({
+          batchId: z.number().optional(),
+          batchNumber: z.string().optional(),
+          expiryDate: z.string().optional(),
+          quantity: z.string(),
+        })).optional(),
+      })),
+    })).mutation(async ({ ctx, input }) => {
+      await assertEntityAction(ctx, "purchases", "purchaseInvoice", "edit");
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const [existing] = await db.select().from(purchaseInvoices).where(tenantWhere(purchaseInvoices, ctx.tenantId, eq(purchaseInvoices.id, input.id)));
+      if (!existing) throw new TRPCError({ code: "NOT_FOUND" });
+      if (existing.status !== "draft") throw new TRPCError({ code: "BAD_REQUEST", message: "لا يمكن تعديل فاتورة غير مسودة — فك الاعتماد أولاً" });
+      await assertDateNotInClosedPeriod(db, ctx.tenantId, input.date);
+      const scope = await loadUserScopeFromCtx(db, ctx.saasUser);
+      assertBranchAccess(scope, input.branchId);
+      assertWarehouseAccess(scope, input.warehouseId);
+      const number = existing.number;
+      const invId = input.id;
+      const isCash = input.paymentType === "cash";
+      const postNow = !!input.approveNow;
+      if (postNow) {
+        await assertEntityAction(ctx, "purchases", "purchaseInvoice", "approve");
+      }
+      const settledCash = input.cashAmount ?? (isCash ? input.total : "0");
+      const settledBank = input.bankAmount ?? "0";
+      const paidTotal = Math.min(Number(input.total), Number(settledCash) + Number(settledBank));
+
+      // نظّف الأسطر/الضرائب/المصروفات القديمة بالكامل — الفاتورة لسه مسودة، مفيش قيود أو حركة مخزون تعتمد عليها
+      const oldItems = await db.select({ id: purchaseInvoiceItems.id }).from(purchaseInvoiceItems)
+        .where(tenantWhere(purchaseInvoiceItems, ctx.tenantId, eq(purchaseInvoiceItems.invoiceId, invId)));
+      for (const oi of oldItems) {
+        await db.delete(purchaseInvoiceItemBatches).where(tenantWhere(purchaseInvoiceItemBatches, ctx.tenantId, eq(purchaseInvoiceItemBatches.invoiceItemId, oi.id)));
+      }
+      await db.delete(purchaseInvoiceItems).where(tenantWhere(purchaseInvoiceItems, ctx.tenantId, eq(purchaseInvoiceItems.invoiceId, invId)));
+      await db.delete(purchaseInvoiceTaxes).where(tenantWhere(purchaseInvoiceTaxes, ctx.tenantId, eq(purchaseInvoiceTaxes.invoiceId, invId)));
+      await db.delete(purchaseInvoiceExpenses).where(tenantWhere(purchaseInvoiceExpenses, ctx.tenantId, eq(purchaseInvoiceExpenses.invoiceId, invId)));
+
+      await db.update(purchaseInvoices).set({
+        supplierId: input.supplierId,
+        date: input.date as any,
+        dueDate: input.dueDate as any,
+        warehouseId: input.warehouseId,
+        branchId: input.branchId,
+        costCenterId: input.costCenterId,
+        paymentType: input.paymentType,
+        cashAmount: settledCash,
+        bankAmount: settledBank,
+        bankAccountId: input.bankAccountId,
+        receiptType: input.receiptType,
+        subtotal: input.subtotal,
+        discount: input.discount,
+        tax: input.tax,
+        total: input.total,
+        paid: isCash ? input.total : String(paidTotal),
+        remaining: isCash ? "0" : String(Math.max(0, Number(input.total) - paidTotal)),
+        currencyCode: input.currencyCode,
+        exchangeRate: input.exchangeRate,
+        foreignTotal: input.foreignTotal,
+        notes: input.notes,
+        status: !postNow ? "draft" : (isCash ? "paid" : (paidTotal > 0 ? "partial" : "confirmed")),
+      } as any).where(tenantWhere(purchaseInvoices, ctx.tenantId, eq(purchaseInvoices.id, invId)));
+
+      for (const item of input.items) {
+        const { batches, ...itemRow } = item;
+        const [itemResult] = await db.insert(purchaseInvoiceItems).values(withTenantId(ctx.tenantId, { invoiceId: invId, ...itemRow }) as any);
+        const invoiceItemId = (itemResult as any).insertId;
+        const lineWarehouseId = item.warehouseId ?? input.warehouseId;
+        if (postNow) {
+          const { applyStockMovement } = await import("./inventory-stock");
+          const { updateAverageCostAfterPurchase } = await import("./inventory-cost");
+          if (batches?.length) {
+            for (const b of batches) {
+              await db.insert(purchaseInvoiceItemBatches).values(withTenantId(ctx.tenantId, {
+                invoiceItemId, batchId: b.batchId, batchNumber: b.batchNumber, expiryDate: b.expiryDate as any, quantity: b.quantity,
+              }) as any);
+              await applyStockMovement(db, ctx.tenantId, {
+                itemId: item.itemId, quantity: b.quantity, direction: "in", warehouseId: lineWarehouseId,
+                batchId: b.batchId, batchNumber: b.batchNumber, expiryDate: b.expiryDate,
+              });
+            }
+          } else {
+            await applyStockMovement(db, ctx.tenantId, {
+              itemId: item.itemId, quantity: item.quantity, direction: "in", warehouseId: lineWarehouseId,
+              batchId: item.batchId, batchNumber: item.batchNumber, expiryDate: item.expiryDate,
+            });
+          }
+          await updateAverageCostAfterPurchase(db, ctx.tenantId, item.itemId, Number(item.quantity), Number(item.price), lineWarehouseId);
+          if (item.serialNumbers) {
+            const { registerPurchaseSerials } = await import("./inventory-serials");
+            await registerPurchaseSerials(db, ctx.tenantId, { itemId: item.itemId, warehouseId: lineWarehouseId, purchaseInvoiceId: invId, serialNumbers: item.serialNumbers });
+          }
+        } else if (batches?.length) {
+          for (const b of batches) {
+            await db.insert(purchaseInvoiceItemBatches).values(withTenantId(ctx.tenantId, {
+              invoiceItemId, batchId: b.batchId, batchNumber: b.batchNumber, expiryDate: b.expiryDate as any, quantity: b.quantity,
+            }) as any);
+          }
+        }
+      }
+      for (const t of input.taxes ?? []) {
+        await db.insert(purchaseInvoiceTaxes).values(withTenantId(ctx.tenantId, {
+          invoiceId: invId, taxId: t.taxId, name: t.name, rate: t.rate ?? "0", amount: t.amount, glAccountId: t.glAccountId,
+        }) as any);
+      }
+      for (const e of input.expenses ?? []) {
+        await db.insert(purchaseInvoiceExpenses).values(withTenantId(ctx.tenantId, {
+          invoiceId: invId, currencyCode: e.currencyCode, exchangeRate: e.exchangeRate, amount: e.amount, creditAccountId: e.creditAccountId, notes: e.notes,
+        }) as any);
+      }
+      if (!postNow) {
+        return { success: true, id: invId, number };
+      }
+      const [supplier] = await db.select({ name: suppliers.name }).from(suppliers)
+        .where(tenantWhere(suppliers, ctx.tenantId, eq(suppliers.id, input.supplierId)));
+      await postPurchaseInvoiceJournal(db, ctx.tenantId, ctx.user.id, {
+        number, date: input.date, paymentType: input.paymentType, subtotal: input.subtotal, discount: input.discount,
+        tax: input.tax, total: input.total, costCenterId: input.costCenterId, supplierName: supplier?.name,
+        cashAmount: settledCash, bankAmount: settledBank, bankAccountId: input.bankAccountId,
+        taxes: input.taxes, expenses: input.expenses,
       });
       if (!isCash || paidTotal < Number(input.total)) {
         await recalculateSupplierBalance(db, ctx.tenantId, input.supplierId);
@@ -1873,12 +2081,24 @@ const salesRouter = router({
         price: salesInvoiceItems.price,
         discount: salesInvoiceItems.discount,
         tax: salesInvoiceItems.tax,
+        tax2: salesInvoiceItems.tax2,
+        tax3: salesInvoiceItems.tax3,
+        warehouseId: salesInvoiceItems.warehouseId,
+        batchId: salesInvoiceItems.batchId,
         total: salesInvoiceItems.total,
         itemName: items.name,
         itemUnit: items.unit,
       }).from(salesInvoiceItems)
         .leftJoin(items, eq(salesInvoiceItems.itemId, items.id))
         .where(tenantWhere(salesInvoiceItems, ctx.tenantId, eq(salesInvoiceItems.invoiceId, input)));
+      const itemBatchRows = invItems.length
+        ? await db.select().from(salesInvoiceItemBatches)
+          .where(tenantWhere(salesInvoiceItemBatches, ctx.tenantId, inArray(salesInvoiceItemBatches.invoiceItemId, invItems.map((i) => i.id))))
+        : [];
+      const invoiceTaxRows = await db.select().from(salesInvoiceTaxes)
+        .where(tenantWhere(salesInvoiceTaxes, ctx.tenantId, eq(salesInvoiceTaxes.invoiceId, input)));
+      const invoiceExpenseRows = await db.select().from(salesInvoiceExpenses)
+        .where(tenantWhere(salesInvoiceExpenses, ctx.tenantId, eq(salesInvoiceExpenses.invoiceId, input)));
       const [customer] = await db.select({ name: customers.name }).from(customers)
         .where(tenantWhere(customers, ctx.tenantId, eq(customers.id, inv.customerId)));
       const [journalEntry] = await db.select({
@@ -1887,7 +2107,12 @@ const salesRouter = router({
       }).from(journalEntries)
         .where(tenantWhere(journalEntries, ctx.tenantId, eq(journalEntries.reference, inv.number)))
         .limit(1);
-      return { ...inv, customerName: customer?.name, items: invItems, journalEntry: journalEntry ?? null };
+      return {
+        ...inv, customerName: customer?.name,
+        items: invItems.map((i) => ({ ...i, batches: itemBatchRows.filter((b) => b.invoiceItemId === i.id) })),
+        taxes: invoiceTaxRows, expenses: invoiceExpenseRows,
+        journalEntry: journalEntry ?? null,
+      };
     }),
     recordPayment: protectedProcedure.input(z.object({
       invoiceId: z.number(),
@@ -2142,6 +2367,195 @@ const salesRouter = router({
         number,
         date: input.date,
         costCenterId: input.costCenterId,
+        items: input.items.map((it) => ({ itemId: it.itemId, quantity: it.quantity })),
+      });
+      if (!isCash || paidTotal < Number(input.total)) {
+        await recalculateCustomerBalance(db, ctx.tenantId, input.customerId);
+      }
+      return { success: true, id: invId, number };
+    }),
+    unapprove: protectedProcedure.input(z.number()).mutation(async ({ ctx, input }) => {
+      const [inv] = await (await getDb())!.select({ paymentType: salesInvoices.paymentType }).from(salesInvoices)
+        .where(tenantWhere(salesInvoices, ctx.tenantId, eq(salesInvoices.id, input))).limit(1);
+      await assertEntityAction(ctx, "sales", inv?.paymentType === "cash" ? "cashSaleInvoice" : "saleInvoice", "unapprove");
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const { unapproveSalesInvoice } = await import("./invoice-approval");
+      try {
+        return await unapproveSalesInvoice(db, ctx.tenantId, input);
+      } catch (e: unknown) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: e instanceof Error ? e.message : "فشل فك الاعتماد" });
+      }
+    }),
+    update: protectedProcedure.input(z.object({
+      id: z.number(),
+      customerId: z.number(),
+      date: z.string(),
+      dueDate: z.string().optional(),
+      warehouseId: z.number().optional(),
+      branchId: z.number().optional(),
+      costCenterId: z.number().optional(),
+      paymentType: z.enum(["cash", "credit"]).default("cash"),
+      currencyCode: z.string().default("EGP"),
+      exchangeRate: z.string().default("1"),
+      foreignTotal: z.string().optional(),
+      subtotal: z.string(),
+      discount: z.string().default("0"),
+      tax: z.string().default("0"),
+      total: z.string(),
+      notes: z.string().optional(),
+      cashAmount: z.string().optional(),
+      bankAmount: z.string().optional(),
+      bankAccountId: z.number().optional(),
+      approveNow: z.boolean().optional(),
+      taxes: z.array(z.object({
+        taxId: z.number().optional(),
+        name: z.string().optional(),
+        rate: z.string().optional(),
+        amount: z.string(),
+        glAccountId: z.number().optional(),
+      })).optional(),
+      expenses: z.array(z.object({
+        currencyCode: z.string().default("EGP"),
+        exchangeRate: z.string().default("1"),
+        amount: z.string(),
+        creditAccountId: z.number(),
+        notes: z.string().optional(),
+      })).optional(),
+      items: z.array(z.object({
+        itemId: z.number(),
+        quantity: z.string(),
+        price: z.string(),
+        discount: z.string().default("0"),
+        tax: z.string().default("0"),
+        taxId: z.number().optional(),
+        tax2: z.string().default("0"),
+        tax2Id: z.number().optional(),
+        tax3: z.string().default("0"),
+        tax3Id: z.number().optional(),
+        total: z.string(),
+        warehouseId: z.number().optional(),
+        batchId: z.number().optional(),
+        batchNumber: z.string().optional(),
+        serialNumbers: z.string().optional(),
+        batches: z.array(z.object({
+          batchId: z.number().optional(),
+          batchNumber: z.string().optional(),
+          expiryDate: z.string().optional(),
+          quantity: z.string(),
+        })).optional(),
+      })),
+    })).mutation(async ({ ctx, input }) => {
+      await assertEntityAction(ctx, "sales", input.paymentType === "cash" ? "cashSaleInvoice" : "saleInvoice", "edit");
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const [existing] = await db.select().from(salesInvoices).where(tenantWhere(salesInvoices, ctx.tenantId, eq(salesInvoices.id, input.id)));
+      if (!existing) throw new TRPCError({ code: "NOT_FOUND" });
+      if (existing.status !== "draft") throw new TRPCError({ code: "BAD_REQUEST", message: "لا يمكن تعديل فاتورة غير مسودة — فك الاعتماد أولاً" });
+      await assertDateNotInClosedPeriod(db, ctx.tenantId, input.date);
+      const scope = await loadUserScopeFromCtx(db, ctx.saasUser);
+      const [customer] = await db.select({ salesRepId: customers.salesRepId, branchId: customers.branchId, name: customers.name })
+        .from(customers).where(tenantWhere(customers, ctx.tenantId, eq(customers.id, input.customerId)));
+      if (customer) assertEntityBranchAccess(scope, customer.branchId);
+      const resolvedBranchId = input.branchId ?? customer?.branchId ?? undefined;
+      assertBranchAccess(scope, resolvedBranchId);
+      assertWarehouseAccess(scope, input.warehouseId);
+      const isCash = input.paymentType === "cash";
+      const postNow = !!input.approveNow;
+      if (postNow) {
+        await assertEntityAction(ctx, "sales", "saleInvoice", "approve");
+        if (!isCash) await assertCustomerCreditLimit(db, ctx.tenantId, input.customerId, input.total);
+      }
+      const number = existing.number;
+      const invId = input.id;
+      const settledCash = input.cashAmount ?? (isCash ? input.total : "0");
+      const settledBank = input.bankAmount ?? "0";
+      const paidTotal = Math.min(Number(input.total), Number(settledCash) + Number(settledBank));
+
+      const oldItems = await db.select({ id: salesInvoiceItems.id }).from(salesInvoiceItems)
+        .where(tenantWhere(salesInvoiceItems, ctx.tenantId, eq(salesInvoiceItems.invoiceId, invId)));
+      for (const oi of oldItems) {
+        await db.delete(salesInvoiceItemBatches).where(tenantWhere(salesInvoiceItemBatches, ctx.tenantId, eq(salesInvoiceItemBatches.invoiceItemId, oi.id)));
+      }
+      await db.delete(salesInvoiceItems).where(tenantWhere(salesInvoiceItems, ctx.tenantId, eq(salesInvoiceItems.invoiceId, invId)));
+      await db.delete(salesInvoiceTaxes).where(tenantWhere(salesInvoiceTaxes, ctx.tenantId, eq(salesInvoiceTaxes.invoiceId, invId)));
+      await db.delete(salesInvoiceExpenses).where(tenantWhere(salesInvoiceExpenses, ctx.tenantId, eq(salesInvoiceExpenses.invoiceId, invId)));
+
+      await db.update(salesInvoices).set({
+        customerId: input.customerId,
+        date: input.date as any,
+        dueDate: input.dueDate as any,
+        warehouseId: input.warehouseId,
+        paymentType: input.paymentType,
+        cashAmount: settledCash,
+        bankAmount: settledBank,
+        bankAccountId: input.bankAccountId,
+        subtotal: input.subtotal,
+        discount: input.discount,
+        tax: input.tax,
+        total: input.total,
+        paid: isCash ? input.total : String(paidTotal),
+        remaining: isCash ? "0" : String(Math.max(0, Number(input.total) - paidTotal)),
+        salesRepId: customer?.salesRepId ?? undefined,
+        branchId: resolvedBranchId,
+        costCenterId: input.costCenterId,
+        currencyCode: input.currencyCode,
+        exchangeRate: input.exchangeRate,
+        foreignTotal: input.foreignTotal,
+        notes: input.notes,
+        status: !postNow ? "draft" : (isCash ? "paid" : (paidTotal > 0 ? "partial" : "confirmed")),
+      } as any).where(tenantWhere(salesInvoices, ctx.tenantId, eq(salesInvoices.id, invId)));
+
+      for (const item of input.items) {
+        const { batches, ...itemRow } = item;
+        const [itemResult] = await db.insert(salesInvoiceItems).values(withTenantId(ctx.tenantId, { invoiceId: invId, ...itemRow }) as any);
+        const invoiceItemId = (itemResult as any).insertId;
+        const lineWarehouseId = item.warehouseId ?? input.warehouseId;
+        if (postNow) {
+          const { applyStockMovement } = await import("./inventory-stock");
+          if (batches?.length) {
+            for (const b of batches) {
+              await db.insert(salesInvoiceItemBatches).values(withTenantId(ctx.tenantId, {
+                invoiceItemId, batchId: b.batchId, batchNumber: b.batchNumber, expiryDate: b.expiryDate as any, quantity: b.quantity,
+              }) as any);
+              await applyStockMovement(db, ctx.tenantId, { itemId: item.itemId, quantity: b.quantity, direction: "out", warehouseId: lineWarehouseId, batchId: b.batchId });
+            }
+          } else {
+            await applyStockMovement(db, ctx.tenantId, { itemId: item.itemId, quantity: item.quantity, direction: "out", warehouseId: lineWarehouseId, batchId: item.batchId });
+          }
+          if (item.serialNumbers) {
+            const { assignSalesSerials } = await import("./inventory-serials");
+            await assignSalesSerials(db, ctx.tenantId, { itemId: item.itemId, warehouseId: lineWarehouseId, salesInvoiceId: invId, serialNumbers: item.serialNumbers });
+          }
+        } else if (batches?.length) {
+          for (const b of batches) {
+            await db.insert(salesInvoiceItemBatches).values(withTenantId(ctx.tenantId, {
+              invoiceItemId, batchId: b.batchId, batchNumber: b.batchNumber, expiryDate: b.expiryDate as any, quantity: b.quantity,
+            }) as any);
+          }
+        }
+      }
+      for (const t of input.taxes ?? []) {
+        await db.insert(salesInvoiceTaxes).values(withTenantId(ctx.tenantId, {
+          invoiceId: invId, taxId: t.taxId, name: t.name, rate: t.rate ?? "0", amount: t.amount, glAccountId: t.glAccountId,
+        }) as any);
+      }
+      for (const e of input.expenses ?? []) {
+        await db.insert(salesInvoiceExpenses).values(withTenantId(ctx.tenantId, {
+          invoiceId: invId, currencyCode: e.currencyCode, exchangeRate: e.exchangeRate, amount: e.amount, creditAccountId: e.creditAccountId, notes: e.notes,
+        }) as any);
+      }
+      if (!postNow) {
+        return { success: true, id: invId, number };
+      }
+      await postSalesInvoiceJournal(db, ctx.tenantId, ctx.user.id, {
+        number, date: input.date, paymentType: input.paymentType, subtotal: input.subtotal, discount: input.discount,
+        tax: input.tax, total: input.total, costCenterId: input.costCenterId, customerName: customer?.name,
+        cashAmount: settledCash, bankAmount: settledBank, bankAccountId: input.bankAccountId,
+        taxes: input.taxes, expenses: input.expenses,
+      });
+      await postSalesCogsJournal(db, ctx.tenantId, ctx.user.id, {
+        number, date: input.date, costCenterId: input.costCenterId,
         items: input.items.map((it) => ({ itemId: it.itemId, quantity: it.quantity })),
       });
       if (!isCash || paidTotal < Number(input.total)) {
