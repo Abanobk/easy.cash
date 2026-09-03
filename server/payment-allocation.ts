@@ -14,7 +14,7 @@ const openPurchaseStatuses = or(
   eq(purchaseInvoices.status, "partial"),
 );
 
-export type PaymentAllocation = { invoiceNumber: string; amount: string };
+export type PaymentAllocation = { invoiceId: number; invoiceNumber: string; amount: string };
 
 function applySalesInvoiceAmount(
   paid: string | null,
@@ -128,7 +128,7 @@ export async function allocateCustomerPaymentFifo(
         inv.remaining,
       );
       if (applied > 0) {
-        allocations.push({ invoiceNumber: inv.number, amount: String(applied) });
+        allocations.push({ invoiceId: inv.id, invoiceNumber: inv.number, amount: String(applied) });
         remainingPay -= applied;
         skipIds.add(inv.id);
       }
@@ -161,7 +161,7 @@ export async function allocateCustomerPaymentFifo(
         inv.remaining,
       );
       if (applied > 0) {
-        allocations.push({ invoiceNumber: inv.number, amount: String(applied) });
+        allocations.push({ invoiceId: inv.id, invoiceNumber: inv.number, amount: String(applied) });
         remainingPay -= applied;
       }
     }
@@ -213,7 +213,7 @@ export async function allocateSupplierPaymentFifo(
         inv.remaining,
       );
       if (applied > 0) {
-        allocations.push({ invoiceNumber: inv.number, amount: String(applied) });
+        allocations.push({ invoiceId: inv.id, invoiceNumber: inv.number, amount: String(applied) });
         remainingPay -= applied;
         skipIds.add(inv.id);
       }
@@ -246,7 +246,7 @@ export async function allocateSupplierPaymentFifo(
         inv.remaining,
       );
       if (applied > 0) {
-        allocations.push({ invoiceNumber: inv.number, amount: String(applied) });
+        allocations.push({ invoiceId: inv.id, invoiceNumber: inv.number, amount: String(applied) });
         remainingPay -= applied;
       }
     }

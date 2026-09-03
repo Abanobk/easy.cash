@@ -12,6 +12,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { toast } from "sonner";
 import { CHECK_TYPE_META, getCheckTypeFromSearch, type CheckTxType } from "@/config/finance-routes";
 import { formatBankAccountLabel } from "@/lib/bank-label";
+import EntityPermissionGate from "@/components/EntityPermissionGate";
+import { Undo2 } from "lucide-react";
 
 function buildEmptyForm(type: CheckTxType) {
   return {
@@ -93,6 +95,14 @@ export default function Checks() {
     onError: (e) => toast.error(e.message),
   });
 
+  const unapproveMut = trpc.bank.checks.unapprove.useMutation({
+    onSuccess: () => {
+      toast.success("تم فك اعتماد تحصيل الشيك");
+      refetch();
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
   const openCreate = () => {
     setForm(buildEmptyForm(lockedType));
     setOpen(true);
@@ -145,34 +155,63 @@ export default function Checks() {
           { key: "dueDate", label: "الاستحقاق", render: (row: any) => row.dueDate ? new Date(row.dueDate).toLocaleDateString("en-GB") : "-" },
           { key: "status", label: "الحالة", render: (row: any) => statusBadge(row.status) },
         ]}
-        extraRowActions={(row: any) =>
-          row.status === "pending" || row.status === "deposited" ? (
-            <div className="flex gap-1">
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-7 text-xs text-green-700"
-                disabled={collectMut.isPending}
-                onClick={() => collectMut.mutate({ id: row.id })}
+        extraRowActions={(row: any) => {
+          if (row.status === "pending" || row.status === "deposited") {
+            return (
+              <div className="flex gap-1">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-7 text-xs text-green-700"
+                  disabled={collectMut.isPending}
+                  onClick={() => collectMut.mutate({ id: row.id })}
+                >
+                  تحصيل
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-7 text-xs text-red-700"
+                  disabled={bounceMut.isPending}
+                  onClick={() => {
+                    if (confirm("تأكيد إرجاع/رفض هذا الشيك؟")) {
+                      bounceMut.mutate({ id: row.id });
+                    }
+                  }}
+                >
+                  إرجاع
+                </Button>
+              </div>
+            );
+          }
+          if (row.status === "cleared") {
+            const canUnapprove = !!row.statusBeforeClear;
+            return (
+              <EntityPermissionGate
+                moduleKey="bank"
+                entityKey={row.type === "outgoing" ? "checkOut" : "checkIn"}
+                action="unapprove"
               >
-                تحصيل
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-7 text-xs text-red-700"
-                disabled={bounceMut.isPending}
-                onClick={() => {
-                  if (confirm("تأكيد إرجاع/رفض هذا الشيك؟")) {
-                    bounceMut.mutate({ id: row.id });
-                  }
-                }}
-              >
-                إرجاع
-              </Button>
-            </div>
-          ) : null
-        }
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-7 text-xs gap-1 text-amber-700"
+                  disabled={!canUnapprove || unapproveMut.isPending}
+                  title={canUnapprove ? undefined : "هذا الشيك تم تحصيله قبل توفر سجل توزيع الدفعات — لا يمكن فك اعتماده تلقائياً"}
+                  onClick={() => {
+                    if (confirm("فك اعتماد تحصيل هذا الشيك؟ سيتم عكس توزيعه على الفواتير وإلغاء قيد التحصيل.")) {
+                      unapproveMut.mutate({ id: row.id });
+                    }
+                  }}
+                >
+                  <Undo2 size={13} />
+                  فك اعتماد
+                </Button>
+              </EntityPermissionGate>
+            );
+          }
+          return null;
+        }}
       />
 
       <FormModal

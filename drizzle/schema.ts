@@ -603,6 +603,20 @@ export const checks = mysqlTable("checks", {
   description: text("description"),
   createdBy: int("createdBy"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
+  /** الحالة قبل التحصيل (pending/deposited) — تُستخدم لإرجاع الشيك لحالته الصحيحة عند فك اعتماد التحصيل */
+  statusBeforeClear: mysqlEnum("statusBeforeClear", ["pending", "deposited"]),
+});
+
+/** سجل توزيع تحصيل الشيك على الفواتير (FIFO) — بدونه لا يمكن معرفة أي فاتورة تأثرت بتحصيل شيك معيّن لفك اعتماده لاحقاً */
+export const checkPaymentAllocations = mysqlTable("check_payment_allocations", {
+  id: int("id").autoincrement().primaryKey(),
+  tenantId: int("tenantId").notNull().default(1),
+  checkId: int("checkId").notNull(),
+  documentType: mysqlEnum("documentType", ["sales_invoice", "purchase_invoice"]).notNull(),
+  documentId: int("documentId").notNull(),
+  invoiceNumber: varchar("invoiceNumber", { length: 50 }).notNull(),
+  amount: decimal("amount", { precision: 15, scale: 2 }).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
 
 /** دورة حيازة وتوجيه الشيكات الواردة — غير محاسبية بذاتها؛ الإيداع يطلق القيد */

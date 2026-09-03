@@ -1,12 +1,21 @@
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import type { Db } from "./db";
-import { checks, customers, suppliers } from "../drizzle/schema";
 import {
+  checkPaymentAllocations,
+  checks,
+  customers,
+  purchaseInvoices,
+  salesInvoices,
+  suppliers,
+} from "../drizzle/schema";
+import {
+  cancelPostedJournalByReference,
   postCheckBounceJournal,
   postCheckClearJournal,
   postCheckReceiveJournal,
 } from "./auto-journal";
+import { recalculateCustomerBalance, recalculateSupplierBalance } from "./contact-balances";
 import { assertDateNotInClosedPeriod } from "./fiscal-period-guard";
 import { allocateCustomerPaymentFifo, allocateSupplierPaymentFifo } from "./payment-allocation";
 import { tenantWhere, withTenantId } from "./tenant-scope";
@@ -157,10 +166,12 @@ export async function clearCheck(
     bankAccountId: chk.bankAccountId ?? undefined,
   });
 
-  let allocations: { invoiceNumber: string; amount: string }[] | undefined;
+  let allocations: { invoiceId: number; invoiceNumber: string; amount: string }[] | undefined;
   let unallocated: string | undefined;
+  let documentType: "sales_invoice" | "purchase_invoice" | undefined;
 
   if (chk.type === "incoming" && chk.customerId) {
+    documentType = "sales_invoice";
     const result = await allocateCustomerPaymentFifo(
       db,
       tenantId,
@@ -171,6 +182,7 @@ export async function clearCheck(
     allocations = result.allocations;
     unallocated = result.unallocated;
   } else if (chk.type === "outgoing" && chk.supplierId) {
+    documentType = "purchase_invoice";
     const result = await allocateSupplierPaymentFifo(
       db,
       tenantId,
@@ -182,9 +194,24 @@ export async function clearCheck(
     unallocated = result.unallocated;
   }
 
+  // سجل التوزيع ده هو الوحيد اللي بيعرفنا لاحقاً أي فاتورة اتأثرت بتحصيل الشيك ده، عشان فك الاعتماد
+  if (documentType && allocations?.length) {
+    for (const a of allocations) {
+      await db.insert(checkPaymentAllocations).values(
+        withTenantId(tenantId, {
+          checkId,
+          documentType,
+          documentId: a.invoiceId,
+          invoiceNumber: a.invoiceNumber,
+          amount: a.amount,
+        }) as any,
+      );
+    }
+  }
+
   await db
     .update(checks)
-    .set({ status: "cleared" })
+    .set({ status: "cleared", statusBeforeClear: chk.status as "pending" | "deposited" })
     .where(tenantWhere(checks, tenantId, eq(checks.id, checkId)));
 
   if (chk.type === "incoming") {
@@ -253,4 +280,113 @@ export async function bounceCheck(
   }
 
   return { success: true };
+}
+
+/**
+ * فك اعتماد تحصيل شيك — عكس توزيع الدفعة (FIFO) وإلغاء قيد التحصيل وإرجاع الشيك لحالته قبل التحصيل.
+ * شيك اتحصّل قبل وجود سجل check_payment_allocations (statusBeforeClear = null) لا يمكن فك اعتماده
+ * تلقائياً بأمان — مفيش سجل يوضح أي فاتورة اتأثرت، فبنرفض بدل ما نخمّن.
+ */
+export async function unapproveCheck(db: Db, tenantId: number, checkId: number) {
+  const [chk] = await db
+    .select()
+    .from(checks)
+    .where(tenantWhere(checks, tenantId, eq(checks.id, checkId)));
+  if (!chk) throw new TRPCError({ code: "NOT_FOUND", message: "الشيك غير موجود" });
+  if (chk.status !== "cleared") {
+    throw new TRPCError({ code: "BAD_REQUEST", message: "لا يمكن فك اعتماد شيك غير محصّل" });
+  }
+  if (!chk.statusBeforeClear) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "هذا الشيك تم تحصيله قبل توفر سجل توزيع الدفعات — لا يمكن فك اعتماد تحصيله تلقائياً بأمان، يُرجى المعالجة يدوياً",
+    });
+  }
+
+  const actionDate = toDateStr(chk.date);
+  await assertDateNotInClosedPeriod(db, tenantId, actionDate);
+
+  const allocRows = await db
+    .select()
+    .from(checkPaymentAllocations)
+    .where(tenantWhere(checkPaymentAllocations, tenantId, eq(checkPaymentAllocations.checkId, checkId)));
+
+  // تحقق مبدئي قبل أي تعديل: كل فاتورة اتأثرت لازم تكون لسه في حالة يمكن الرجوع فيها بأمان
+  for (const row of allocRows) {
+    if (row.documentType === "sales_invoice") {
+      const [inv] = await db
+        .select({ status: salesInvoices.status, number: salesInvoices.number })
+        .from(salesInvoices)
+        .where(tenantWhere(salesInvoices, tenantId, eq(salesInvoices.id, row.documentId)));
+      if (!inv || inv.status === "draft" || inv.status === "cancelled") {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: `لا يمكن فك اعتماد التحصيل: الفاتورة ${row.invoiceNumber} تغيّرت حالتها بعد تحصيل هذا الشيك — راجعها يدوياً أولاً`,
+        });
+      }
+    } else {
+      const [inv] = await db
+        .select({ status: purchaseInvoices.status, number: purchaseInvoices.number })
+        .from(purchaseInvoices)
+        .where(tenantWhere(purchaseInvoices, tenantId, eq(purchaseInvoices.id, row.documentId)));
+      if (!inv || inv.status === "draft" || inv.status === "cancelled") {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: `لا يمكن فك اعتماد التحصيل: الفاتورة ${row.invoiceNumber} تغيّرت حالتها بعد تحصيل هذا الشيك — راجعها يدوياً أولاً`,
+        });
+      }
+    }
+  }
+
+  for (const row of allocRows) {
+    const amount = parseFloat(row.amount);
+    if (row.documentType === "sales_invoice") {
+      const [inv] = await db
+        .select()
+        .from(salesInvoices)
+        .where(tenantWhere(salesInvoices, tenantId, eq(salesInvoices.id, row.documentId)));
+      if (!inv) continue;
+      const newPaid = Math.max(0, parseFloat(inv.paid || "0") - amount);
+      const newRemaining = Math.min(parseFloat(inv.total || "0"), parseFloat(inv.remaining || "0") + amount);
+      const newStatus = newRemaining >= parseFloat(inv.total || "0") - 0.001 ? "confirmed" : "partial";
+      await db
+        .update(salesInvoices)
+        .set({ paid: String(newPaid), remaining: String(newRemaining), status: newStatus })
+        .where(tenantWhere(salesInvoices, tenantId, eq(salesInvoices.id, inv.id)));
+    } else {
+      const [inv] = await db
+        .select()
+        .from(purchaseInvoices)
+        .where(tenantWhere(purchaseInvoices, tenantId, eq(purchaseInvoices.id, row.documentId)));
+      if (!inv) continue;
+      const newPaid = Math.max(0, parseFloat(inv.paid || "0") - amount);
+      const newRemaining = Math.min(parseFloat(inv.total || "0"), parseFloat(inv.remaining || "0") + amount);
+      const newStatus = newRemaining >= parseFloat(inv.total || "0") - 0.001 ? "confirmed" : "partial";
+      await db
+        .update(purchaseInvoices)
+        .set({ paid: String(newPaid), remaining: String(newRemaining), status: newStatus })
+        .where(tenantWhere(purchaseInvoices, tenantId, eq(purchaseInvoices.id, inv.id)));
+    }
+  }
+
+  await db
+    .delete(checkPaymentAllocations)
+    .where(tenantWhere(checkPaymentAllocations, tenantId, eq(checkPaymentAllocations.checkId, checkId)));
+
+  if (chk.customerId) await recalculateCustomerBalance(db, tenantId, chk.customerId);
+  if (chk.supplierId) await recalculateSupplierBalance(db, tenantId, chk.supplierId);
+
+  await cancelPostedJournalByReference(db, tenantId, `${chk.number}-CLR`);
+
+  await db
+    .update(checks)
+    .set({ status: chk.statusBeforeClear, statusBeforeClear: null })
+    .where(tenantWhere(checks, tenantId, eq(checks.id, checkId)));
+
+  if (chk.type === "incoming") {
+    const { resetRoutingAfterUnclear } = await import("./check-routing");
+    await resetRoutingAfterUnclear(db, tenantId, checkId, chk.statusBeforeClear);
+  }
+
+  return { success: true as const };
 }

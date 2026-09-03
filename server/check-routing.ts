@@ -558,6 +558,43 @@ export async function syncRoutingAfterClearOrBounce(
   });
 }
 
+/**
+ * إرجاع سجل التوجيه لحالته بعد فك اعتماد تحصيل شيك وارد — نفس التصنيف اللي بيستخدمه
+ * ensureCheckRouting لشيك جديد (deposited يفضل deposited، وأي حالة تانية ترجع unrouted لأننا
+ * فقدنا معلومة الحيازة وقت التحصيل، فالأصح نطلب إعادة توجيهه بدل ما نخمّن مين ماسكه).
+ */
+export async function resetRoutingAfterUnclear(
+  db: Db,
+  tenantId: number,
+  checkId: number,
+  statusBeforeClear: "pending" | "deposited",
+) {
+  const [routing] = await db
+    .select()
+    .from(checkRoutings)
+    .where(tenantWhere(checkRoutings, tenantId, eq(checkRoutings.checkId, checkId)))
+    .limit(1);
+  if (!routing) return;
+
+  const newStatus: RoutingStatus = statusBeforeClear === "deposited" ? "deposited" : "unrouted";
+  await db
+    .update(checkRoutings)
+    .set({
+      status: newStatus,
+      closedAt: null,
+      closedBy: null,
+      custodianUserId: null,
+    })
+    .where(tenantWhere(checkRoutings, tenantId, eq(checkRoutings.id, routing.id)));
+
+  await appendEvent(db, tenantId, {
+    routingId: routing.id,
+    checkId,
+    eventType: "note",
+    notes: "تم فك اعتماد تحصيل الشيك — يحتاج إعادة توجيه",
+  });
+}
+
 export async function collectRoutedCheck(
   db: Db,
   tenantId: number,

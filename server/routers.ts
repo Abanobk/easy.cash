@@ -116,7 +116,7 @@ import { sendOperationalAlertDigest } from "./alert-email";
 import { assertDateNotInClosedPeriod } from "./fiscal-period-guard";
 import { allocateCustomerPaymentFifo, allocateSupplierPaymentFifo } from "./payment-allocation";
 import { assertCustomerCreditLimit } from "./credit-limit-guard";
-import { bounceCheck, clearCheck, createCheckWithJournal } from "./check-actions";
+import { bounceCheck, clearCheck, createCheckWithJournal, unapproveCheck } from "./check-actions";
 import {
   assignCustody,
   collectRoutedCheck,
@@ -3751,6 +3751,20 @@ const bankRouter = router({
       const [chk] = await db.select({ type: checks.type }).from(checks).where(tenantWhere(checks, ctx.tenantId, eq(checks.id, input.id))).limit(1);
       await assertEntityAction(ctx, "bank", chk?.type === "outgoing" ? "checkOut" : "checkIn", "deleteCancel");
       return bounceCheck(db, ctx.tenantId, ctx.user.id, input.id, { date: input.date });
+    }),
+    unapprove: protectedProcedure.input(z.object({
+      id: z.number(),
+    })).mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const [chk] = await db.select({ type: checks.type }).from(checks).where(tenantWhere(checks, ctx.tenantId, eq(checks.id, input.id))).limit(1);
+      await assertEntityAction(ctx, "bank", chk?.type === "outgoing" ? "checkOut" : "checkIn", "unapprove");
+      try {
+        return await unapproveCheck(db, ctx.tenantId, input.id);
+      } catch (e) {
+        if (e instanceof TRPCError) throw e;
+        throw new TRPCError({ code: "BAD_REQUEST", message: e instanceof Error ? e.message : "فشل فك الاعتماد" });
+      }
     }),
   }),
 
