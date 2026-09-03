@@ -16,7 +16,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
-  Plus, Factory, Trash2, Loader2, Search, CheckCircle2, XCircle, Pencil, Eye, ChevronsUpDown,
+  Plus, Factory, Trash2, Loader2, Search, CheckCircle2, XCircle, Pencil, Eye, ChevronsUpDown, Copy,
 } from "lucide-react";
 import { toast } from "sonner";
 import PermissionGate from "@/components/PermissionGate";
@@ -413,6 +413,43 @@ export default function Production() {
     setTabNav("new");
   };
 
+  /** نسخ أمر إنتاج موجود كنقطة بداية لأمر جديد — زي "نسخ" في ميجا كاش */
+  const [duplicating, setDuplicating] = useState(false);
+  const handleDuplicate = async (id: number) => {
+    setDuplicating(true);
+    try {
+      const d = await utils.production.get.fetch(id);
+      setEditId(null);
+      bomFilledForRef.current = String(d.productId);
+      setForm({
+        productId: String(d.productId),
+        quantity: String(d.quantity),
+        warehouseId: String(d.warehouseId),
+        branchId: d.branchId ? String(d.branchId) : "",
+        date: new Date().toISOString().split("T")[0],
+        notes: `نسخة من الأمر ${d.number}${d.notes ? ` — ${d.notes}` : ""}`,
+        referenceNumber: "",
+        batchNumber: "",
+        barcode: d.productCode || "",
+      });
+      const savedQty = Number(d.quantity || 0);
+      setMaterials(d.materials.map((m: any) => ({
+        itemId: String(m.itemId),
+        quantity: String(m.quantity),
+        perUnit: savedQty > 0 ? perUnitStr(Number(m.quantity || 0) / savedQty) : String(m.quantity),
+        scrapPercent: String(m.scrapPercent ?? "0"),
+        notes: m.notes || "",
+        source: "manual" as const,
+      })));
+      setTabNav("new");
+      toast.success(`تم نسخ الأمر ${d.number} — راجع البيانات واحفظ`);
+    } catch (e: any) {
+      toast.error(e?.message || "فشل نسخ الأمر");
+    } finally {
+      setDuplicating(false);
+    }
+  };
+
   const saveOrder = async (andApprove = false) => {
     if (!canEdit || !entityCanSave) return toast.error("ليس لديك صلاحية");
     if (!form.productId || !form.warehouseId || !form.quantity) {
@@ -577,6 +614,17 @@ export default function Production() {
                                 </EntityPermissionGate>
                               </PermissionGate>
                             )}
+                            <PermissionGate module="production" action="create">
+                              <EntityPermissionGate moduleKey="production" entityKey="productionOrder" action="add">
+                                <Button
+                                  variant="ghost" size="icon" className="h-8 w-8" title="نسخ لأمر جديد"
+                                  disabled={duplicating}
+                                  onClick={() => void handleDuplicate(row.id)}
+                                >
+                                  <Copy size={14} />
+                                </Button>
+                              </EntityPermissionGate>
+                            </PermissionGate>
                           </div>
                         </td>
                       </tr>
@@ -605,6 +653,12 @@ export default function Production() {
                   <Button variant="outline" size="sm" onClick={() => setViewId(null)}>إغلاق</Button>
                 </CardHeader>
                 <CardContent className="space-y-3">
+                  {detailQ.data.notes && (
+                    <div className="rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 text-sm">
+                      <span className="font-extrabold text-amber-900">ملاحظات: </span>
+                      <span className="text-amber-950 whitespace-pre-wrap">{detailQ.data.notes}</span>
+                    </div>
+                  )}
                   <div className="overflow-x-auto border rounded-xl">
                     <table className="w-full text-sm">
                       <thead>
