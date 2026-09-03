@@ -154,11 +154,11 @@ export function DataTable<T extends { id?: number | string }>({
             <thead>
               <tr className="border-b border-[var(--line)]">
                 {columns.map(col => (
-                  <th key={col.key} className={`px-4 py-4 text-right ${col.className || ""}`}>
+                  <th key={col.key} className={`px-3 py-3 text-right whitespace-nowrap ${col.className || ""}`}>
                     {col.label}
                   </th>
                 ))}
-                {hasActions && <th className="px-4 py-4 text-right w-28">إجراءات</th>}
+                {hasActions && <th className="px-3 py-3 text-right w-28 whitespace-nowrap">إجراءات</th>}
               </tr>
             </thead>
             <tbody>
@@ -183,13 +183,20 @@ export function DataTable<T extends { id?: number | string }>({
                     } ${onRowClick ? "cursor-pointer" : ""}`}
                     onClick={() => onRowClick?.(row)}
                   >
-                    {columns.map(col => (
-                      <td key={col.key} className={`px-4 py-4 ${col.className || ""}`}>
-                        {col.render ? col.render(row) : (row as any)[col.key] ?? "-"}
-                      </td>
-                    ))}
+                    {columns.map(col => {
+                      const raw = (row as any)[col.key];
+                      return (
+                        <td key={col.key} className={`px-3 py-3 ${col.className || ""}`}>
+                          {col.render ? col.render(row) : (
+                            <span className="block max-w-[220px] truncate" title={raw != null ? String(raw) : undefined}>
+                              {raw ?? "-"}
+                            </span>
+                          )}
+                        </td>
+                      );
+                    })}
                     {hasActions && (
-                      <td className="px-4 py-3.5" onClick={(e) => e.stopPropagation()}>
+                      <td className="px-3 py-3" onClick={(e) => e.stopPropagation()}>
                         {renderActions(row)}
                       </td>
                     )}
