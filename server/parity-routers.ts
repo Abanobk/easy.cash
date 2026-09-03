@@ -25,6 +25,12 @@ import {
   getFiscalYearCloseReadiness,
 } from "./fiscal-year-closing";
 
+/** drizzle/mysql2 يرجّع أعمدة date() ككائن Date حقيقي — String(x).slice(0,10) بيفقد السنة */
+function toDateStr(v: unknown): string {
+  if (v instanceof Date) return v.toISOString().slice(0, 10);
+  return String(v || "").slice(0, 10);
+}
+
 type TenantTable = { tenantId: Column<any, object, object>; id: Column<any, object, object> };
 
 /** توحيد نص الصنف/الباركود للمطابقة الذكية */
@@ -228,7 +234,7 @@ export const settingsExtendedRouter = router({
         .from(fiscalYears)
         .where(tenantWhere(fiscalYears, ctx.tenantId, eq(fiscalYears.status, "closed")))
         .orderBy(desc(fiscalYears.endDate));
-      const prev = closedYears.find((c) => String(c.endDate).slice(0, 10) < input.startDate);
+      const prev = closedYears.find((c) => toDateStr(c.endDate) < input.startDate);
       let openingJournalCreated = false;
       if (prev) {
         const { postYearOpeningJournal } = await import("./auto-journal");
@@ -237,7 +243,7 @@ export const settingsExtendedRouter = router({
           ctx.tenantId,
           ctx.user?.id,
           { id: newId, name: input.name, startDate: input.startDate },
-          String(prev.endDate).slice(0, 10),
+          toDateStr(prev.endDate),
         );
         openingJournalCreated = !openRes?.skipped;
       }
@@ -269,7 +275,7 @@ export const settingsExtendedRouter = router({
         userId: ctx.user?.id,
         userName: ctx.user?.name || "",
         action: "إغلاق فترة مالية",
-        details: `${fy.name} (${String(fy.startDate).slice(0, 10)} — ${String(fy.endDate).slice(0, 10)})` +
+        details: `${fy.name} (${toDateStr(fy.startDate)} — ${toDateStr(fy.endDate)})` +
           (closingResult && !closingResult.skipped ? " — مع قيد إقفال" : ""),
       }) as any);
       return { success: true, readiness, closingResult };
@@ -288,7 +294,7 @@ export const settingsExtendedRouter = router({
         userId: ctx.user?.id,
         userName: ctx.user?.name || "",
         action: "فتح فترة مالية",
-        details: `${fy.name} (${String(fy.startDate).slice(0, 10)} — ${String(fy.endDate).slice(0, 10)})`,
+        details: `${fy.name} (${toDateStr(fy.startDate)} — ${toDateStr(fy.endDate)})`,
       }) as any);
       return { success: true };
     }),

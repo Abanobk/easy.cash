@@ -5,6 +5,12 @@ import { getPostedMovementByAccount, getAccountBalancesAsOf } from "./accounting
 import { tenantWhere, withTenantId } from "./tenant-scope";
 import { resolveBankGlAccountId } from "./bank-accounts-sync";
 
+/** drizzle/mysql2 يرجّع أعمدة date() ككائن Date حقيقي — String(x).slice(0,10) بيفقد السنة */
+function toDateStr(v: unknown): string {
+  if (v instanceof Date) return v.toISOString().slice(0, 10);
+  return String(v || "").slice(0, 10);
+}
+
 type JournalLineInput = {
   accountId: number;
   debit: string;
@@ -1193,8 +1199,8 @@ export async function postYearEndClosingJournal(
   }
 
   const map = await resolveAccountMap(db, tenantId);
-  const startDate = String(fy.startDate).slice(0, 10);
-  const endDate = String(fy.endDate).slice(0, 10);
+  const startDate = toDateStr(fy.startDate);
+  const endDate = toDateStr(fy.endDate);
   const movement = await getPostedMovementByAccount(db, tenantId, { from: startDate, to: endDate });
   const accountsRows = await db
     .select({
@@ -1305,7 +1311,7 @@ export async function postYearOpeningJournal(
     return { skipped: true as const, reason: "no_balances" as const };
   }
 
-  const startDate = String(fy.startDate).slice(0, 10);
+  const startDate = toDateStr(fy.startDate);
   return createPostedJournal(db, tenantId, createdBy, {
     date: startDate,
     description: `قيد افتتاحي — ${fy.name}`,

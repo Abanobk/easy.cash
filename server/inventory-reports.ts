@@ -103,6 +103,8 @@ function num(v: unknown) {
 
 function dateStr(v: unknown) {
   if (!v) return "";
+  // Date object من drizzle: String() بيدي "... GMT+0000 ..." والـ split("T") بيقطع عند GMT
+  if (v instanceof Date) return v.toISOString().slice(0, 10);
   const s = String(v);
   return s.includes("T") ? s.split("T")[0] : s.slice(0, 10);
 }
@@ -462,7 +464,7 @@ export async function inventoryStocktakeReport(db: Db, filters: InventoryReportF
           warehouseId: null as number | null,
           warehouseName: "دفعة",
           batchNumber: r.batchNumber,
-          expiryDate: r.expiryDate ? String(r.expiryDate).slice(0, 10) : "",
+          expiryDate: dateStr(r.expiryDate),
           quantity: qty,
           minStock: min,
           purchasePrice: num(r.purchasePrice),

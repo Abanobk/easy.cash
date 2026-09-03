@@ -4,6 +4,12 @@ import { assetSales, depreciationRunLines, depreciationRuns, fixedAssets } from 
 import { tenantWhere } from "./tenant-scope";
 import type { ReportFilters } from "./accounting-data";
 
+/** drizzle/mysql2 يرجّع أعمدة date() ككائن Date حقيقي — String(x).slice(0,10) بيفقد السنة */
+function toDateStr(v: unknown): string {
+  if (v instanceof Date) return v.toISOString().slice(0, 10);
+  return String(v || "").slice(0, 10);
+}
+
 export type ReportRow = Record<string, unknown>;
 
 function num(v: unknown) {
@@ -64,7 +70,7 @@ const HANDLERS: Record<string, (db: Db, f: ReportFilters) => Promise<ReportRow[]
         bookAccumulated: Number(Math.max(0, purchase - current).toFixed(2)),
         monthlyTheoretical: Number((annualDep / 12).toFixed(2)),
         depreciationRate: rate,
-        purchaseDate: a.purchaseDate ? String(a.purchaseDate).slice(0, 10) : "",
+        purchaseDate: a.purchaseDate ? toDateStr(a.purchaseDate) : "",
         lastPostedPeriod: posted?.lastPeriod || "",
         lastJournalRef: posted?.lastRef || "",
         source: postedTotal > 0 ? "depreciation_runs" : "no_posted_runs",
@@ -147,8 +153,8 @@ const HANDLERS: Record<string, (db: Db, f: ReportFilters) => Promise<ReportRow[]
         saleAmount: sale,
         gainLoss: sale - book,
         buyer: a.buyer || "",
-        purchaseDate: a.purchaseDate ? String(a.purchaseDate).slice(0, 10) : "",
-        saleDate: a.saleDate ? String(a.saleDate).slice(0, 10) : "",
+        purchaseDate: a.purchaseDate ? toDateStr(a.purchaseDate) : "",
+        saleDate: a.saleDate ? toDateStr(a.saleDate) : "",
         notes: a.notes || "",
       };
     });

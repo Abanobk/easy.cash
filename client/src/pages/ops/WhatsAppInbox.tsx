@@ -11,6 +11,7 @@ import { toast } from "sonner";
 import {
   CheckCircle2, ImagePlus, Inbox, Loader2, RefreshCw, SkipForward, Wand2,
 } from "lucide-react";
+import { toDateStr } from "@/lib/date";
 
 const TYPE_LABELS: Record<string, string> = {
   incoming_check: "شيك وارد",
@@ -77,7 +78,7 @@ function draftFromItem(item: any): DraftForm {
     suggestedType: d.suggestedType || item.suggestedType || "other",
     checkNumber: d.checkNumber || "",
     amount: d.amount != null ? String(d.amount) : "",
-    date: d.date || item.workDate || new Date().toISOString().slice(0, 10),
+    date: d.date || toDateStr(item.workDate) || new Date().toISOString().slice(0, 10),
     dueDate: d.dueDate || "",
     partyName: d.partyName || "",
     customerId: d.customerId ? String(d.customerId) : "",

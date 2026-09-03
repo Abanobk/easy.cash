@@ -15,6 +15,7 @@ import { Download, History, Printer, Search } from "lucide-react";
 import { formatBankAccountLabel } from "@/lib/bank-label";
 import { Link } from "wouter";
 import { tenantPath, useTenantSlug } from "@/lib/tenant";
+import { toDateStr } from "@/lib/date";
 
 type FilterKey =
   | "unrouted"
@@ -184,7 +185,7 @@ export default function CheckRouting() {
   const openRoute = (row: any) => {
     setActiveRoutingId(row.routingId);
     setBankAccountId(row.targetBankAccountId ? String(row.targetBankAccountId) : "");
-    setPlannedDepositDate(row.plannedDepositDate || new Date().toISOString().slice(0, 10));
+    setPlannedDepositDate(toDateStr(row.plannedDepositDate) || new Date().toISOString().slice(0, 10));
     setCustodianUserId(row.custodianUserId ? String(row.custodianUserId) : "");
     setNotes("");
     setRouteOpen(true);

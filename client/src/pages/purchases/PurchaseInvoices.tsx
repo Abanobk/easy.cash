@@ -22,6 +22,7 @@ import { PaymentSettlementBlock, type Settlement } from "@/components/invoices/P
 import { BatchSplitEditor, type BatchSplitRow } from "@/components/invoices/BatchSplitEditor";
 import { findItemByScan } from "@/lib/barcode";
 import { printInvoiceQuick, printWarehouseNote } from "@/lib/print-invoice-quick";
+import { toDateStr } from "@/lib/date";
 
 interface InvoiceItem {
   itemId: number;
@@ -182,7 +183,7 @@ export default function PurchaseInvoices() {
       const hint = await utils.purchases.invoices.lastPriceFromSupplier.fetch({ supplierId: form.supplierId, itemId });
       setInvoiceItems((prev) => {
         const next = [...prev];
-        if (next[idx]) next[idx] = { ...next[idx], lastPriceHint: hint ? { price: Number(hint.price), date: String(hint.date).slice(0, 10), number: hint.number } : null };
+        if (next[idx]) next[idx] = { ...next[idx], lastPriceHint: hint ? { price: Number(hint.price), date: toDateStr(hint.date), number: hint.number } : null };
         return next;
       });
     } catch { /* بيانات إضافية اختيارية — تجاهل الفشل */ }

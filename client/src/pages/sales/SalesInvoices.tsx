@@ -24,6 +24,7 @@ import { PaymentSettlementBlock, type Settlement } from "@/components/invoices/P
 import { findItemByScan } from "@/lib/barcode";
 import { printInvoiceQuick, printWarehouseNote } from "@/lib/print-invoice-quick";
 import { Copy } from "lucide-react";
+import { toDateStr } from "@/lib/date";
 
 interface InvoiceItem {
   itemId: number;
@@ -254,7 +255,7 @@ export default function SalesInvoices() {
       const hint = await utils.sales.invoices.lastPriceToCustomer.fetch({ customerId: form.customerId, itemId });
       setInvoiceItems((prev) => {
         const next = [...prev];
-        if (next[idx]) next[idx] = { ...next[idx], lastPriceHint: hint ? { price: Number(hint.price), date: String(hint.date).slice(0, 10), number: hint.number } : null };
+        if (next[idx]) next[idx] = { ...next[idx], lastPriceHint: hint ? { price: Number(hint.price), date: toDateStr(hint.date), number: hint.number } : null };
         return next;
       });
     } catch { /* بيانات إضافية اختيارية — تجاهل الفشل */ }

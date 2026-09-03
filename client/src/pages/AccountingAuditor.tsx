@@ -28,6 +28,7 @@ import { tenantPath, useTenantSlug } from "@/lib/tenant";
 import { printAccountingAuditReport } from "@/lib/print-audit-report";
 import { Link } from "wouter";
 import { toast } from "sonner";
+import { toDateStr } from "@/lib/date";
 
 type Severity = "critical" | "warning" | "info";
 type Tab = "report" | "uploads" | "policy";
@@ -425,7 +426,7 @@ export default function AccountingAuditorPage() {
                     <tbody>
                       {detailQuery.data.lines.map((l) => (
                         <tr key={l.id} className="border-t border-slate-100">
-                          <td className="p-2">{String(l.txnDate).slice(0, 10)}</td>
+                          <td className="p-2">{toDateStr(l.txnDate)}</td>
                           <td className="p-2">{l.description}</td>
                           <td className="p-2 tabular-nums">{Number(l.debit || 0).toLocaleString("en-US")}</td>
                           <td className="p-2 tabular-nums">{Number(l.credit || 0).toLocaleString("en-US")}</td>
@@ -456,7 +457,7 @@ export default function AccountingAuditorPage() {
                     <tbody>
                       {partyDetailQuery.data.lines.map((l: any) => (
                         <tr key={l.id} className="border-t border-slate-100">
-                          <td className="p-2">{String(l.txnDate).slice(0, 10)}</td>
+                          <td className="p-2">{toDateStr(l.txnDate)}</td>
                           <td className="p-2">{l.description}</td>
                           <td className="p-2 tabular-nums">{Number(l.debit || 0).toLocaleString("en-US")}</td>
                           <td className="p-2 tabular-nums">{Number(l.credit || 0).toLocaleString("en-US")}</td>

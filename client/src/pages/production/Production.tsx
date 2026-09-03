@@ -4,7 +4,7 @@
  * - /Production/ProductionOrdersList.aspx (قائمة)
  * ملاحظة: Mega ليس فيها قائمة منفصلة باسم «الخلطات».
  */
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearch } from "wouter";
 import ERPLayout from "@/components/ERPLayout";
 import { trpc } from "@/lib/trpc";
@@ -23,9 +23,22 @@ import PermissionGate from "@/components/PermissionGate";
 import EntityPermissionGate from "@/components/EntityPermissionGate";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useEntityAllowed } from "@/hooks/useEntityPermission";
+import { toDateStr } from "@/lib/date";
 
 type Tab = "orders" | "new";
-type MaterialRow = { itemId: string; quantity: string; notes: string };
+/**
+ * سطر خامة في أمر الإنتاج.
+ * `perUnit` = الكمية لكل وحدة من المنتج التام (من مكونات الصنف)، و`quantity` = perUnit × كمية الإنتاج.
+ * تعديل `quantity` يدوياً يعيد اشتقاق `perUnit` حتى يفضل التغيير متناسب مع أي تغيير لاحق في الكمية.
+ */
+type MaterialRow = {
+  itemId: string;
+  quantity: string;
+  perUnit: string;
+  scrapPercent: string;
+  notes: string;
+  source: "bom" | "manual";
+};
 
 type ItemOpt = {
   id: number; name: string; code?: string | null; unit?: string | null;
@@ -49,6 +62,24 @@ function fmt(n: number) {
 }
 function money(n: number) {
   return n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+/** كميات المخزون بـ 3 خانات عشرية (نفس دقة عمود production_order_materials.quantity) */
+function roundQty(n: number) {
+  if (!Number.isFinite(n)) return 0;
+  return Math.round(n * 1000) / 1000;
+}
+function qtyStr(n: number) {
+  return String(roundQty(n));
+}
+/** كمية الوحدة بـ 6 خانات (نفس دقة عمود item_bom_lines.quantityPerUnit) — التقريب لـ 3 بيضيّع المكونات الصغيرة */
+function perUnitStr(n: number) {
+  if (!Number.isFinite(n)) return "0";
+  return String(Math.round(n * 1e6) / 1e6);
+}
+/** الكمية الفعلية المصروفة = الكمية + الهالك (نفس حساب السيرفر في materialNeedWithScrap) */
+function withScrap(qty: number, scrapPercent: unknown) {
+  return qty * (1 + (Number(scrapPercent) || 0) / 100);
 }
 
 function ItemSearchSelect({
@@ -182,6 +213,11 @@ export default function Production() {
   const { data: warehouses } = trpc.warehouses.list.useQuery();
   const { data: branches } = trpc.settings.branches.list.useQuery();
   const detailQ = trpc.production.get.useQuery(viewId ?? editId ?? 0, { enabled: !!(viewId || editId) });
+  /** مكونات المنتج التام (شاشة الصنف ← تبويب المكونات) — مصدر السحب التلقائي للخامات */
+  const bomQ = trpc.production.bom.get.useQuery(
+    { productId: Number(form.productId) },
+    { enabled: !!form.productId && tab === "new" },
+  );
   const utils = trpc.useUtils();
 
   const items: ItemOpt[] = (itemsList?.rows || []) as any;
@@ -207,31 +243,105 @@ export default function Production() {
     onError: (e) => toast.error(e.message),
   });
 
+  /**
+   * آخر منتج اتسحبت مكوناته تلقائياً — يمنع إعادة السحب فوق تعديلات المستخدم،
+   * وعند فتح أمر محفوظ للتعديل بنملاه بمنتج الأمر عشان الخامات المحفوظة ما تتمسحش.
+   */
+  const bomFilledForRef = useRef<string | null>(null);
+
   const resetForm = () => {
     setEditId(null);
     setForm(emptyForm());
     setMaterials([]);
     setAddMat({ itemId: "", quantity: "1", notes: "" });
+    bomFilledForRef.current = null;
   };
 
-  // ملخصات زي Mega
+  /** يبني سطور الخامات من المكونات المرتبطة بالمنتج مضروبة في كمية الإنتاج */
+  const bomRowsFor = (lines: any[], orderQty: number): MaterialRow[] =>
+    lines
+      .filter((l) => String(l.materialItemId) !== form.productId)
+      .map((l) => {
+        const perUnit = Number(l.quantityPerUnit || 0);
+        return {
+          itemId: String(l.materialItemId),
+          perUnit: perUnitStr(perUnit),
+          quantity: qtyStr(perUnit * orderQty),
+          scrapPercent: String(l.scrapPercent ?? "0"),
+          notes: l.notes || "",
+          source: "bom" as const,
+        };
+      });
+
+  // سحب تلقائي لمكونات المنتج التام أول ما يتم اختياره
+  useEffect(() => {
+    if (tab !== "new" || !form.productId) return;
+    if (bomFilledForRef.current === form.productId) return;
+    if (bomQ.isFetching || !bomQ.data) return;
+    // تبديل منتج بمنتج تاني = خامات الأمر كلها بتاعة المنتج القديم ⇐ استبدال كامل.
+    // أول اختيار في أمر جديد بنحافظ فيه على أي خامة المستخدم ضافها يدوياً قبل ما يختار.
+    const replacingProduct = bomFilledForRef.current !== null;
+    bomFilledForRef.current = form.productId;
+    const orderQty = Number(form.quantity || 0) || 0;
+    const rows = bomRowsFor(bomQ.data as any[], orderQty);
+    const keptManual = (prev: MaterialRow[]) => (replacingProduct
+      ? []
+      : prev.filter((m) => m.source === "manual" && !rows.some((r) => r.itemId === m.itemId)));
+    if (rows.length) {
+      setMaterials((prev) => [...rows, ...keptManual(prev)]);
+      toast.success(`تم سحب ${rows.length} مكوّن من مكونات المنتج × ${fmt(orderQty)}`);
+    } else {
+      setMaterials(keptManual);
+      toast.message("لا توجد مكونات مرتبطة بهذا المنتج — أضف الخامات يدوياً أو عرّف المكونات من شاشة الصنف");
+    }
+  }, [tab, form.productId, form.quantity, bomQ.data, bomQ.isFetching]);
+
+  /** تغيير كمية الإنتاج يعيد حساب كل سطر: الكمية = كمية الوحدة × كمية الإنتاج */
+  const setOrderQuantity = (value: string) => {
+    setForm((p) => ({ ...p, quantity: value }));
+    const orderQty = Number(value || 0);
+    if (!Number.isFinite(orderQty)) return;
+    setMaterials((prev) => prev.map((m) => ({ ...m, quantity: qtyStr(Number(m.perUnit || 0) * orderQty) })));
+  };
+
+  /** تعديل كمية سطر يدوياً يعيد اشتقاق كمية الوحدة عشان يفضل متناسب مع أي تغيير لاحق في كمية الإنتاج */
+  const setMaterialQuantity = (index: number, value: string) => {
+    const orderQty = Number(form.quantity || 0);
+    setMaterials((prev) => prev.map((m, i) => i === index
+      ? { ...m, quantity: value, perUnit: orderQty > 0 ? perUnitStr(Number(value || 0) / orderQty) : m.perUnit }
+      : m));
+  };
+
+  const reloadBom = async () => {
+    if (!form.productId) return toast.error("اختر الصنف أولاً");
+    const lines = await utils.production.bom.get.fetch({ productId: Number(form.productId) });
+    const rows = bomRowsFor(lines as any[], Number(form.quantity || 0) || 0);
+    if (!rows.length) return toast.error("لا توجد مكونات مرتبطة بهذا المنتج");
+    setMaterials((prev) => [...rows, ...prev.filter((m) => m.source === "manual" && !rows.some((r) => r.itemId === m.itemId))]);
+    bomFilledForRef.current = form.productId;
+    toast.success(`تم تحديث ${rows.length} مكوّن من مكونات المنتج`);
+  };
+
+  // ملخصات زي Mega — محسوبة على الكمية الفعلية المصروفة (الكمية + الهالك)
   const totals = useMemo(() => {
     let rawQty = 0;
     let rawCost = 0;
     let maxProd = Number.POSITIVE_INFINITY;
-    const orderQty = Number(form.quantity || 0) || 1;
+    const shortages: string[] = [];
     for (const m of materials) {
       const it = itemMap.get(m.itemId);
-      const qty = Number(m.quantity || 0);
+      const need = withScrap(Number(m.quantity || 0), m.scrapPercent);
+      const perFinished = withScrap(Number(m.perUnit || 0), m.scrapPercent);
       const unitCost = Number(it?.averageCost || 0) || Number(it?.purchasePrice || 0);
       const avail = Number(it?.currentStock || 0);
-      rawQty += qty;
-      rawCost += qty * unitCost;
-      if (qty > 0) maxProd = Math.min(maxProd, (avail / qty) * orderQty);
+      rawQty += need;
+      rawCost += need * unitCost;
+      if (perFinished > 0) maxProd = Math.min(maxProd, avail / perFinished);
+      if (need > avail + 1e-9) shortages.push(it?.name || `#${m.itemId}`);
     }
     if (!Number.isFinite(maxProd) || !materials.length) maxProd = 0;
-    return { rawQty, rawCost, maxProd: Math.max(0, Math.floor(maxProd * 1000) / 1000) };
-  }, [materials, itemMap, form.quantity]);
+    return { rawQty, rawCost, maxProd: Math.max(0, Math.floor(maxProd * 1000) / 1000), shortages };
+  }, [materials, itemMap]);
 
   const applyBarcode = () => {
     const code = form.barcode.trim().toLowerCase();
@@ -249,12 +359,24 @@ export default function Production() {
     if (!addMat.itemId) return toast.error("اختر المادة الخام");
     if (!(Number(addMat.quantity) > 0)) return toast.error("أدخل كمية أكبر من صفر");
     if (addMat.itemId === form.productId) return toast.error("لا يمكن أن يكون المنتج مادة في نفس الأمر");
+    const orderQty = Number(form.quantity || 0);
+    const perUnitOf = (qty: number) => (orderQty > 0 ? perUnitStr(qty / orderQty) : perUnitStr(qty));
     if (materials.some((m) => m.itemId === addMat.itemId)) {
-      setMaterials((p) => p.map((m) => m.itemId === addMat.itemId
-        ? { ...m, quantity: String(Number(m.quantity) + Number(addMat.quantity)) }
-        : m));
+      setMaterials((p) => p.map((m) => {
+        if (m.itemId !== addMat.itemId) return m;
+        const qty = Number(m.quantity || 0) + Number(addMat.quantity || 0);
+        return { ...m, quantity: qtyStr(qty), perUnit: perUnitOf(qty) };
+      }));
     } else {
-      setMaterials((p) => [...p, { ...addMat }]);
+      const qty = Number(addMat.quantity || 0);
+      setMaterials((p) => [...p, {
+        itemId: addMat.itemId,
+        quantity: qtyStr(qty),
+        perUnit: perUnitOf(qty),
+        scrapPercent: "0",
+        notes: addMat.notes,
+        source: "manual",
+      }]);
     }
     setAddMat({ itemId: "", quantity: "1", notes: "" });
   };
@@ -266,26 +388,32 @@ export default function Production() {
       return;
     }
     setEditId(id);
+    // الأمر المحفوظ له خاماته — بلاش السحب التلقائي يمسحها
+    bomFilledForRef.current = String(d.productId);
     setForm({
       productId: String(d.productId),
       quantity: String(d.quantity),
       warehouseId: String(d.warehouseId),
       branchId: d.branchId ? String(d.branchId) : "",
-      date: String(d.date).slice(0, 10),
+      date: toDateStr(d.date),
       notes: d.notes || "",
       referenceNumber: d.referenceNumber || "",
       batchNumber: d.batchNumber || "",
       barcode: d.productCode || "",
     });
+    const savedQty = Number(d.quantity || 0);
     setMaterials(d.materials.map((m: any) => ({
       itemId: String(m.itemId),
       quantity: String(m.quantity),
+      perUnit: savedQty > 0 ? perUnitStr(Number(m.quantity || 0) / savedQty) : String(m.quantity),
+      scrapPercent: String(m.scrapPercent ?? "0"),
       notes: m.notes || "",
+      source: "manual" as const,
     })));
     setTabNav("new");
   };
 
-  const saveOrder = (andApprove = false) => {
+  const saveOrder = async (andApprove = false) => {
     if (!canEdit || !entityCanSave) return toast.error("ليس لديك صلاحية");
     if (!form.productId || !form.warehouseId || !form.quantity) {
       return toast.error("الصنف ومخزن الخامات والكمية مطلوبة");
@@ -303,35 +431,31 @@ export default function Production() {
       materials: materials.map((m) => ({
         itemId: Number(m.itemId),
         quantity: m.quantity,
+        scrapPercent: m.scrapPercent || "0",
         notes: m.notes || undefined,
       })),
     };
-    const onSaved = async (id: number) => {
-      if (andApprove) {
-        await statusMut.mutateAsync({ id, status: "in_progress" });
+    // الحفظ والاعتماد في مسار واحد: لو الاعتماد فشل، الأمر المحفوظ يفضل مفتوح للتعديل
+    // (editId اتظبط) عشان الضغط تاني يعدّله بدل ما يعمل أمر جديد كل مرة.
+    try {
+      let id = editId;
+      if (id) {
+        await updateMut.mutateAsync({ ...payload, id } as any);
+        toast.success("تم حفظ التعديلات");
+      } else {
+        const r = await createMut.mutateAsync(payload as any);
+        id = Number(r.id);
+        setEditId(id);
+        toast.success(`تم حفظ الأمر ${r.number} (معلق)`);
       }
-    };
-    if (editId) {
-      updateMut.mutate(payload as any, {
-        onSuccess: async () => {
-          toast.success("تم حفظ التعديلات");
-          if (andApprove) await onSaved(editId);
-          listQ.refetch();
-          resetForm();
-          setTabNav("orders");
-        },
-      });
-    } else {
-      createMut.mutate(payload as any, {
-        onSuccess: async (r) => {
-          toast.success(`تم حفظ الأمر ${r.number} (معلق)`);
-          if (andApprove) await onSaved(r.id);
-          listQ.refetch();
-          if (printAfterSave) toast.message("يمكنك طباعة الأمر من القائمة");
-          resetForm();
-          setTabNav("orders");
-        },
-      });
+      if (andApprove) await statusMut.mutateAsync({ id, status: "in_progress" });
+      listQ.refetch();
+      if (printAfterSave) toast.message("يمكنك طباعة الأمر من القائمة");
+      resetForm();
+      setTabNav("orders");
+    } catch {
+      // رسالة الخطأ بتظهر من onError بتاع الـ mutation — نسيب الشاشة زي ما هي للمحاولة تاني
+      listQ.refetch();
     }
   };
 
@@ -437,7 +561,7 @@ export default function Production() {
                     ) : (listQ.data?.rows || []).map((row: any, i: number) => (
                       <tr key={row.id} className={`border-t ${i % 2 ? "bg-slate-50/80" : ""}`}>
                         <td className="px-3 py-2 font-extrabold">{row.number}</td>
-                        <td className="px-3 py-2">{String(row.date).slice(0, 10)}</td>
+                        <td className="px-3 py-2">{toDateStr(row.date, "—")}</td>
                         <td className="px-3 py-2 font-bold">{row.productCode ? `${row.productCode} — ` : ""}{row.productName}</td>
                         <td className="px-3 py-2">{row.warehouseName}</td>
                         <td className="px-3 py-2 font-bold">{fmt(Number(row.quantity))}</td>
@@ -537,7 +661,8 @@ export default function Production() {
                         </EntityPermissionGate>
                       </PermissionGate>
                     )}
-                    {detailQ.data.status === "draft" && (
+                    {(detailQ.data.status === "draft" || detailQ.data.status === "cancelled") && (
+                      // السيرفر بيسمح بحذف المسودات والملغاة — الزر كان ظاهر للمسودات بس
                       <PermissionGate module="production" action="delete">
                         <EntityPermissionGate moduleKey="production" entityKey="productionOrder" action="deleteCancel">
                           <Button size="sm" variant="outline" className="text-red-700"
@@ -599,7 +724,10 @@ export default function Production() {
                 <div className="space-y-1">
                   <Label className="text-xs font-bold">الكمية *</Label>
                   <Input type="number" step="any" className="h-9 font-bold" value={form.quantity}
-                    onChange={(e) => setForm((p) => ({ ...p, quantity: e.target.value }))} />
+                    onChange={(e) => setOrderQuantity(e.target.value)} />
+                  <p className="text-[11px] font-semibold text-slate-500">
+                    كمية كل خامة = كمية الوحدة × هذه الكمية (تتحدث تلقائياً)
+                  </p>
                 </div>
                 <div className="space-y-1">
                   <Label className="text-xs font-bold">التاريخ</Label>
@@ -621,8 +749,19 @@ export default function Production() {
             </Card>
 
             <Card className="erp-data-card border-0">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-extrabold">الخامات</CardTitle>
+              <CardHeader className="pb-2 flex-row items-center justify-between gap-2 space-y-0">
+                <CardTitle className="text-sm font-extrabold">
+                  الخامات
+                  {bomQ.isFetching && form.productId ? (
+                    <span className="ms-2 inline-flex items-center gap-1 text-[11px] font-bold text-slate-500">
+                      <Loader2 size={12} className="animate-spin" /> جارٍ سحب مكونات المنتج...
+                    </span>
+                  ) : null}
+                </CardTitle>
+                <Button type="button" variant="outline" size="sm" className="h-8 font-bold"
+                  disabled={!form.productId} onClick={() => void reloadBom()}>
+                  إعادة سحب مكونات المنتج
+                </Button>
               </CardHeader>
               <CardContent className="space-y-3">
                 <div className="grid grid-cols-1 sm:grid-cols-4 gap-2 items-end border rounded-xl p-3 bg-slate-50">
@@ -654,7 +793,8 @@ export default function Production() {
                       <tr className="bg-slate-800 text-white text-xs">
                         <th className="px-2 py-2 text-right">المادة الخام</th>
                         <th className="px-2 py-2 text-right">الوحدة</th>
-                        <th className="px-2 py-2 text-right w-28">الكمية</th>
+                        <th className="px-2 py-2 text-right w-24">كمية الوحدة</th>
+                        <th className="px-2 py-2 text-right w-28">الكمية المطلوبة</th>
                         <th className="px-2 py-2 text-right">المتاح</th>
                         <th className="px-2 py-2 text-right">التكلفة</th>
                         <th className="w-10" />
@@ -662,21 +802,37 @@ export default function Production() {
                     </thead>
                     <tbody>
                       {!materials.length ? (
-                        <tr><td colSpan={6} className="py-10 text-center text-slate-400 font-semibold">لا توجد بيانات للعرض</td></tr>
+                        <tr><td colSpan={7} className="py-10 text-center text-slate-400 font-semibold">لا توجد بيانات للعرض</td></tr>
                       ) : materials.map((m, i) => {
                         const it = itemMap.get(m.itemId);
                         const qty = Number(m.quantity || 0);
+                        const need = withScrap(qty, m.scrapPercent);
+                        const avail = Number(it?.currentStock || 0);
+                        const short = need > avail + 1e-9;
                         const unitCost = Number(it?.averageCost || 0) || Number(it?.purchasePrice || 0);
                         return (
                           <tr key={`${m.itemId}-${i}`} className={`border-t ${i % 2 ? "bg-slate-50/80" : ""}`}>
-                            <td className="px-2 py-2 font-bold">{it ? `${it.code ? `${it.code} — ` : ""}${it.name}` : m.itemId}</td>
+                            <td className="px-2 py-2 font-bold">
+                              {it ? `${it.code ? `${it.code} — ` : ""}${it.name}` : m.itemId}
+                              {m.source === "bom" && (
+                                <span className="ms-1 text-[10px] font-extrabold text-sky-700 bg-sky-50 ring-1 ring-sky-100 rounded px-1 py-0.5">
+                                  مكوّن
+                                </span>
+                              )}
+                            </td>
                             <td className="px-2 py-2">{it?.unit || "—"}</td>
+                            <td className="px-2 py-2 font-semibold text-slate-600">{fmt(Number(m.perUnit || 0))}</td>
                             <td className="px-2 py-1">
                               <Input type="number" step="any" className="h-8 font-bold" value={m.quantity}
-                                onChange={(e) => setMaterials((p) => p.map((r, idx) => idx === i ? { ...r, quantity: e.target.value } : r))} />
+                                onChange={(e) => setMaterialQuantity(i, e.target.value)} />
+                              {Number(m.scrapPercent || 0) > 0 && (
+                                <p className="text-[10px] font-bold text-amber-700 mt-0.5">
+                                  + هالك {fmt(Number(m.scrapPercent))}% ⇐ صرف {fmt(need)}
+                                </p>
+                              )}
                             </td>
-                            <td className="px-2 py-2">{fmt(Number(it?.currentStock || 0))}</td>
-                            <td className="px-2 py-2 font-bold">{money(qty * unitCost)}</td>
+                            <td className={`px-2 py-2 ${short ? "text-red-600 font-extrabold" : ""}`}>{fmt(avail)}</td>
+                            <td className="px-2 py-2 font-bold">{money(need * unitCost)}</td>
                             <td className="px-1">
                               <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500"
                                 onClick={() => setMaterials((p) => p.filter((_, idx) => idx !== i))}>
@@ -695,6 +851,11 @@ export default function Production() {
                   <div>اجمالي كمية الخامات: {fmt(totals.rawQty)}</div>
                   <div>اقصى كمية يمكن انتاجها: {fmt(totals.maxProd)}</div>
                 </div>
+                {totals.shortages.length > 0 && (
+                  <p className="text-xs font-bold text-red-600">
+                    رصيد غير كافٍ: {totals.shortages.join(" · ")} — الاعتماد هيترفض لحد ما الرصيد يكفي
+                  </p>
+                )}
 
                 <label className="flex items-center gap-2 text-sm font-bold text-slate-700">
                   <input type="checkbox" checked={printAfterSave} onChange={(e) => setPrintAfterSave(e.target.checked)} />
@@ -705,14 +866,14 @@ export default function Production() {
                   <div className="flex flex-wrap gap-2">
                     <Button className="font-extrabold bg-slate-800 hover:bg-slate-900"
                       disabled={createMut.isPending || updateMut.isPending}
-                      onClick={() => saveOrder(false)}>
-                      حفظ
+                      onClick={() => void saveOrder(false)}>
+                      {editId ? "حفظ التعديلات" : "حفظ"}
                     </Button>
                     <EntityPermissionGate moduleKey="production" entityKey="productionOrder" action="approve">
                       <Button className="font-extrabold bg-amber-600 hover:bg-amber-700"
                         disabled={createMut.isPending || updateMut.isPending || statusMut.isPending}
-                        onClick={() => saveOrder(true)}>
-                        اعتماد
+                        onClick={() => void saveOrder(true)}>
+                        {editId ? "اعتماد" : "حفظ واعتماد"}
                       </Button>
                     </EntityPermissionGate>
                     {editId && (

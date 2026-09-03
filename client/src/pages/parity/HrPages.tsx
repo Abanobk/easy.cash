@@ -13,6 +13,7 @@ import {
 } from "@/hooks/useEntityOptions";
 import { statusBadge } from "@/components/DataTable";
 import PermissionGate from "@/components/PermissionGate";
+import { toDateStr } from "@/lib/date";
 
 function useEmployees() {
   return trpc.hr.employees.list.useQuery({ limit: 500 });
@@ -82,7 +83,7 @@ export function HrEmployeeShifts() {
       columns={[
         { key: "employeeName", label: "الموظف" },
         { key: "shiftName", label: "الوردية" },
-        { key: "effectiveFrom", label: "من تاريخ", render: (r) => r.effectiveFrom ? String(r.effectiveFrom).slice(0, 10) : "—" },
+        { key: "effectiveFrom", label: "من تاريخ", render: (r) => r.effectiveFrom ? toDateStr(r.effectiveFrom) : "—" },
       ]}
       fields={[
         { key: "employeeId", label: "الموظف", type: "select", required: true, options: employees },
@@ -108,7 +109,7 @@ export function HrIncentives() {
       columns={[
         { key: "employeeName", label: "الموظف" },
         { key: "amount", label: "المبلغ", render: (r) => `${Number(r.amount).toLocaleString("en-US")} ج.م` },
-        { key: "date", label: "التاريخ", render: (r) => String(r.date).slice(0, 10) },
+        { key: "date", label: "التاريخ", render: (r) => toDateStr(r.date) },
         { key: "reason", label: "السبب" },
       ]}
       fields={[
@@ -486,8 +487,8 @@ export function HrEmployeeVacationRequests() {
       columns={[
         { key: "employeeName", label: "الموظف" },
         { key: "vacationTypeName", label: "نوع الإجازة", render: (r) => String(r.vacationTypeName || "—") },
-        { key: "startDate", label: "من", render: (r) => String(r.startDate).slice(0, 10) },
-        { key: "endDate", label: "إلى", render: (r) => String(r.endDate).slice(0, 10) },
+        { key: "startDate", label: "من", render: (r) => toDateStr(r.startDate) },
+        { key: "endDate", label: "إلى", render: (r) => toDateStr(r.endDate) },
         { key: "days", label: "الأيام", render: (r) => r.days != null ? String(r.days) : "—" },
         { key: "status", label: "الحالة", render: (r) => statusBadge(String(r.status)) },
       ]}

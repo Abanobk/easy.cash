@@ -20,6 +20,12 @@ function monthBounds(month: number, year: number) {
   return { start, end, daysInMonth: lastDay };
 }
 
+/** drizzle/mysql2 يرجّع أعمدة date() ككائن Date حقيقي — String(x).slice(0,10) بيفقد السنة */
+function toDateStr(v: unknown): string {
+  if (v instanceof Date) return v.toISOString().slice(0, 10);
+  return String(v || "").slice(0, 10);
+}
+
 function dec(n: number) {
   return n.toFixed(2);
 }
@@ -30,8 +36,9 @@ function vacationDaysInMonth(
   monthStart: string,
   monthEnd: string,
 ) {
-  const vStart = String(startDate).slice(0, 10);
-  const vEnd = String(endDate).slice(0, 10);
+  // المتصلين بيمرروا نصوص متطبّعة (toDateStr) — مفيش Date objects هنا
+  const vStart = startDate.slice(0, 10);
+  const vEnd = endDate.slice(0, 10);
   const clipStart = vStart > monthStart ? vStart : monthStart;
   const clipEnd = vEnd < monthEnd ? vEnd : monthEnd;
   if (clipStart > clipEnd) return 0;
@@ -180,7 +187,7 @@ export async function calculateMonthPayroll(
 
     let vacationDays = 0;
     for (const row of vacationRows) {
-      vacationDays += vacationDaysInMonth(String(row.startDate), String(row.endDate), start, end);
+      vacationDays += vacationDaysInMonth(toDateStr(row.startDate), toDateStr(row.endDate), start, end);
     }
 
     const vacationDeduction = dailyRate * vacationDays;

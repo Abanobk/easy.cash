@@ -15,6 +15,12 @@ import type { AuditFinding } from "./accounting-auditor";
 import { asDate, parseMoneyToken } from "./bank-statement-parse";
 import { tenantWhere } from "./tenant-scope";
 
+/** drizzle/mysql2 يرجّع أعمدة date() ككائن Date حقيقي — String(x).slice(0,10) بيفقد السنة */
+function toDateStr(v: unknown): string {
+  if (v instanceof Date) return v.toISOString().slice(0, 10);
+  return String(v || "").slice(0, 10);
+}
+
 export type AttachmentEntityType = "sales_invoice" | "purchase_invoice";
 export type AttachmentKind = "invoice_scan" | "payment_receipt" | "other";
 
@@ -184,7 +190,7 @@ async function loadSystemDoc(
     return {
       id: inv.id,
       number: inv.number,
-      date: String(inv.date || "").slice(0, 10),
+      date: toDateStr(inv.date || ""),
       total: n(inv.total),
       partyName: inv.customerName || "",
       link: `/sales/invoices/${inv.id}`,
@@ -207,7 +213,7 @@ async function loadSystemDoc(
   return {
     id: inv.id,
     number: inv.number,
-    date: String(inv.date || "").slice(0, 10),
+    date: toDateStr(inv.date || ""),
     total: n(inv.total),
     partyName: inv.supplierName || "",
     link: `/purchases/invoices/${inv.id}`,

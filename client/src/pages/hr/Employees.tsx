@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
+import { toDateStr } from "@/lib/date";
 
 const emptyForm = {
   name: "", code: "", nationalId: "", departmentId: undefined as number | undefined,
@@ -61,8 +62,8 @@ export default function Employees() {
     setForm({
       name: row.name || "", code: row.code || "", nationalId: row.nationalId || "",
       departmentId: row.departmentId, jobTitleId: row.jobTitleId,
-      hireDate: row.hireDate ? row.hireDate.split("T")[0] : "",
-      birthDate: row.birthDate ? row.birthDate.split("T")[0] : "",
+      hireDate: toDateStr(row.hireDate),
+      birthDate: toDateStr(row.birthDate),
       phone: row.phone || "", email: row.email || "", address: row.address || "",
       basicSalary: row.basicSalary || "", bankAccount: row.bankAccount || "", notes: row.notes || "",
     });

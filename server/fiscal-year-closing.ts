@@ -18,6 +18,12 @@ import {
 } from "./auto-journal";
 import { tenantWhere } from "./tenant-scope";
 
+/** drizzle/mysql2 يرجّع أعمدة date() ككائن Date حقيقي — String(x).slice(0,10) بيفقد السنة */
+function toDateStr(v: unknown): string {
+  if (v instanceof Date) return v.toISOString().slice(0, 10);
+  return String(v || "").slice(0, 10);
+}
+
 const openSalesStatuses = or(
   eq(salesInvoices.status, "confirmed"),
   eq(salesInvoices.status, "partial"),
@@ -40,8 +46,8 @@ export async function getFiscalYearCloseReadiness(
   tenantId: number,
   fy: { id: number; name: string; startDate: string | Date; endDate: string | Date; status: string },
 ) {
-  const startDate = String(fy.startDate).slice(0, 10);
-  const endDate = String(fy.endDate).slice(0, 10);
+  const startDate = toDateStr(fy.startDate);
+  const endDate = toDateStr(fy.endDate);
   const warnings: FiscalCloseWarning[] = [];
 
   const movement = await getPostedMovementByAccount(db, tenantId, { from: startDate, to: endDate });
@@ -187,14 +193,14 @@ export async function closeFiscalYearWithJournals(
     closingResult = await postYearEndClosingJournal(db, tenantId, userId, fy);
   }
 
-  const endDate = String(fy.endDate).slice(0, 10);
+  const endDate = toDateStr(fy.endDate);
   let openingResult: Awaited<ReturnType<typeof postYearOpeningJournal>> | null = null;
   const allYears = await db
     .select()
     .from(fiscalYears)
     .where(tenantWhere(fiscalYears, tenantId));
   const nextYear = allYears
-    .filter((row) => row.status === "open" && String(row.startDate).slice(0, 10) > endDate)
+    .filter((row) => row.status === "open" && toDateStr(row.startDate) > endDate)
     .sort((a, b) => String(a.startDate).localeCompare(String(b.startDate)))[0];
   if (nextYear) {
     openingResult = await postYearOpeningJournal(db, tenantId, userId, nextYear, endDate);
@@ -260,7 +266,7 @@ export async function backfillMissingCogsJournals(
 
     const result = await postSalesCogsJournal(db, tenantId, userId, {
       number: inv.number,
-      date: String(inv.date).slice(0, 10),
+      date: toDateStr(inv.date),
       costCenterId: inv.costCenterId ?? undefined,
       items: items.map((it) => ({ itemId: it.itemId, quantity: String(it.quantity) })),
     });

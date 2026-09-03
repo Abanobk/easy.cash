@@ -14,6 +14,7 @@ import { useItemOptions, useWarehouseOptions } from "@/hooks/useEntityOptions";
 import PermissionGate from "@/components/PermissionGate";
 import { tenantPath, useTenantSlug } from "@/lib/tenant";
 import { Plus, Trash2, Upload } from "lucide-react";
+import { toDateStr } from "@/lib/date";
 
 export function ItemCategoriesPage() {
   const q = trpc.parity.inventory.categories.list.useQuery();
@@ -61,7 +62,7 @@ export function ItemBatchesPage() {
       columns={[
         { key: "itemName", label: "الصنف" },
         { key: "batchNumber", label: "رقم التشغيلة" },
-        { key: "expiryDate", label: "الانتهاء", render: (r) => r.expiryDate ? String(r.expiryDate).slice(0, 10) : "—" },
+        { key: "expiryDate", label: "الانتهاء", render: (r) => r.expiryDate ? toDateStr(r.expiryDate) : "—" },
         { key: "quantity", label: "الكمية", render: (r) => Number(r.quantity || 0).toLocaleString("en-US") },
       ]}
       fields={[
@@ -108,8 +109,8 @@ export function ItemOffersPage() {
         { key: "discountPercent", label: "الخصم %" },
         { key: "itemName", label: "الصنف", render: (r) => r.itemName ? String(r.itemName) : "—" },
         { key: "categoryName", label: "الفئة", render: (r) => r.categoryName ? String(r.categoryName) : "—" },
-        { key: "startDate", label: "من", render: (r) => r.startDate ? String(r.startDate).slice(0, 10) : "—" },
-        { key: "endDate", label: "إلى", render: (r) => r.endDate ? String(r.endDate).slice(0, 10) : "—" },
+        { key: "startDate", label: "من", render: (r) => r.startDate ? toDateStr(r.startDate) : "—" },
+        { key: "endDate", label: "إلى", render: (r) => r.endDate ? toDateStr(r.endDate) : "—" },
       ]}
       fields={[
         { key: "name", label: "اسم العرض", required: true },
@@ -421,7 +422,7 @@ export function PriceChangerPage() {
                       <td className="px-2 py-1">{r.oldPrice}</td>
                       <td className="px-2 py-1 font-bold">{r.newPrice}</td>
                       <td className="px-2 py-1">{r.priceType === "sale" ? "بيع" : "شراء"}</td>
-                      <td className="px-2 py-1">{String(r.date).slice(0, 10)}</td>
+                      <td className="px-2 py-1">{toDateStr(r.date)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -507,7 +508,7 @@ export function BeginningInventoryPage() {
         ) },
         { key: "quantity", label: "الكمية", render: (r) => Number(r.quantity || 0).toLocaleString("en-US") },
         { key: "unitCost", label: "التكلفة", render: (r) => Number(r.unitCost || 0).toLocaleString("en-US") },
-        { key: "date", label: "التاريخ", render: (r) => String(r.date).slice(0, 10) },
+        { key: "date", label: "التاريخ", render: (r) => toDateStr(r.date) },
       ]}
       fields={[
         { key: "warehouseId", label: "المخزن", type: "select", required: true, options: warehouses },

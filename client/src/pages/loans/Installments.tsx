@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { toast } from "sonner";
 import { CheckCircle } from "lucide-react";
 import PermissionGate from "@/components/PermissionGate";
+import { toDateStr } from "@/lib/date";
 
 export default function Installments() {
   const [page, setPage] = useState(1);
@@ -97,7 +98,7 @@ export default function Installments() {
             { key: "dueDate", label: "الاستحقاق", render: (row: any) => row.dueDate ? new Date(row.dueDate).toLocaleDateString("en-GB") : "—" },
             { key: "amount", label: "المبلغ", render: (row: any) => `${Number(row.amount).toLocaleString("en-US")} ج.م` },
             { key: "status", label: "الحالة", render: (row: any) => statusBadge(row.status) },
-            { key: "paidDate", label: "تاريخ الدفع", render: (row: any) => row.paidDate ? String(row.paidDate).slice(0, 10) : "—" },
+            { key: "paidDate", label: "تاريخ الدفع", render: (row: any) => row.paidDate ? toDateStr(row.paidDate) : "—" },
           ]}
           actions={(row: any) => row.status !== "paid" ? (
             <PermissionGate module="loans" action="edit">
@@ -128,7 +129,7 @@ export default function Installments() {
           </DialogHeader>
           <div className="space-y-3 text-sm">
             <p className="font-semibold text-slate-700">
-              {payRow?.loanPartyName} · استحقاق {payRow?.dueDate ? String(payRow.dueDate).slice(0, 10) : ""}
+              {payRow?.loanPartyName} · استحقاق {payRow?.dueDate ? toDateStr(payRow.dueDate) : ""}
             </p>
             <div className="space-y-1">
               <Label className="text-xs font-bold">المبلغ المدفوع</Label>

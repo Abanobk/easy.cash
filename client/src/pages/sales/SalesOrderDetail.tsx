@@ -5,6 +5,7 @@ import { ArrowRight, ClipboardList, CheckCircle, FileText, XCircle } from "lucid
 import ERPLayout from "@/components/ERPLayout";
 import PermissionGate from "@/components/PermissionGate";
 import { toast } from "sonner";
+import { toDateStr } from "@/lib/date";
 
 const statusMap: Record<string, { label: string; color: string }> = {
   draft: { label: "مسودة", color: "bg-gray-100 text-gray-700" },
@@ -114,8 +115,8 @@ export default function SalesOrderDetail() {
           </div>
           <div className="bg-white rounded-lg border p-4 space-y-2">
             <h3 className="text-sm font-semibold text-slate-700">بيانات الطلب</h3>
-            <p className="text-sm"><span className="text-slate-500">التاريخ:</span> {o.date ? String(o.date).slice(0, 10) : "—"}</p>
-            <p className="text-sm"><span className="text-slate-500">التسليم المتوقع:</span> {o.expectedDate ? String(o.expectedDate).slice(0, 10) : "—"}</p>
+            <p className="text-sm"><span className="text-slate-500">التاريخ:</span> {o.date ? toDateStr(o.date) : "—"}</p>
+            <p className="text-sm"><span className="text-slate-500">التسليم المتوقع:</span> {o.expectedDate ? toDateStr(o.expectedDate) : "—"}</p>
             {o.warehouseName && <p className="text-sm"><span className="text-slate-500">المخزن:</span> {o.warehouseName}</p>}
           </div>
         </div>

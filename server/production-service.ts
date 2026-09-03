@@ -16,6 +16,15 @@ function num(v: unknown) {
   return Number(v ?? 0);
 }
 
+/**
+ * أعمدة date() بترجع من drizzle/mysql2 كـ Date object، و`String(date).slice(0,10)`
+ * بيقص السنة ("Tue Sep 01") فقيد اليومية بيفشل عند الإدراج.
+ */
+function toDateStr(v: unknown): string {
+  if (v instanceof Date) return v.toISOString().slice(0, 10);
+  return String(v || "").slice(0, 10);
+}
+
 /** كمية مادة خام مطلقة للأمر (سلوك Mega) مع هالك اختياري */
 export function materialNeedWithScrap(absoluteQty: unknown, _orderQty: unknown, scrapPercent: unknown) {
   const base = num(absoluteQty);
@@ -164,7 +173,7 @@ export async function startProductionOrder(
     {
       id: order.id,
       number: order.number,
-      date: String(order.date).slice(0, 10),
+      date: toDateStr(order.date),
       productName: product?.name ?? `#${order.productId}`,
     },
     materialCost,
@@ -253,7 +262,7 @@ export async function completeProductionOrder(
     {
       id: fresh.id,
       number: fresh.number,
-      date: String(fresh.date).slice(0, 10),
+      date: toDateStr(fresh.date),
       productName: product?.name ?? `#${fresh.productId}`,
     },
     wipCost,

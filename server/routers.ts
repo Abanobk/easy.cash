@@ -128,6 +128,12 @@ import {
   routingSummaryCounts,
 } from "./check-routing";
 
+/** drizzle/mysql2 يرجّع أعمدة date() ككائن Date حقيقي — String(x).slice(0,10) بيفقد السنة */
+function toDateStr(v: unknown): string {
+  if (v instanceof Date) return v.toISOString().slice(0, 10);
+  return String(v || "").slice(0, 10);
+}
+
 // ===================== DASHBOARD =====================
 const dashboardRouter = router({
   stats: protectedProcedure.query(async ({ ctx }) => {
@@ -3935,7 +3941,7 @@ const loansRouter = router({
     const today = new Date().toISOString().slice(0, 10);
     const enriched = sched.map((r) => ({
       ...r,
-      status: r.status === "pending" && String(r.dueDate).slice(0, 10) < today ? "overdue" : r.status,
+      status: r.status === "pending" && toDateStr(r.dueDate) < today ? "overdue" : r.status,
     }));
     const paid = enriched.filter((r) => r.status === "paid").reduce((s, r) => s + Number(r.amount || 0), 0);
     const remaining = enriched.filter((r) => r.status !== "paid").reduce((s, r) => s + Number(r.amount || 0), 0);
@@ -4026,7 +4032,7 @@ const loansRouter = router({
     const schedule = buildLoanInstallments({
       principal: Number(loan.amount),
       interestRate: Number(loan.interestRate || 0),
-      startDate: String(loan.startDate).slice(0, 10),
+      startDate: toDateStr(loan.startDate),
       count: input.installmentCount,
     });
     for (const row of schedule) {
@@ -4058,7 +4064,7 @@ const loansRouter = router({
       const rows = await db.select().from(installments).where(tenantWhere(installments, ctx.tenantId, eq(installments.loanId, input))).orderBy(installments.dueDate);
       return rows.map((r) => ({
         ...r,
-        status: r.status === "pending" && String(r.dueDate).slice(0, 10) < today ? "overdue" : r.status,
+        status: r.status === "pending" && toDateStr(r.dueDate) < today ? "overdue" : r.status,
       }));
     }),
     listAll: protectedProcedure.input(z.object({
@@ -4094,7 +4100,7 @@ const loansRouter = router({
       return rows
         .map((r) => ({
           ...r,
-          status: r.status === "pending" && String(r.dueDate).slice(0, 10) < today ? "overdue" as const : r.status,
+          status: r.status === "pending" && toDateStr(r.dueDate) < today ? "overdue" as const : r.status,
         }))
         .filter((r) => !input?.status || r.status === input.status);
     }),
@@ -4120,11 +4126,11 @@ const loansRouter = router({
         .where(tenantWhere(loans, ctx.tenantId, eq(loans.id, row.loanId))).limit(1);
       if (!loan) throw new TRPCError({ code: "NOT_FOUND", message: "القرض غير موجود" });
       const paidAmount = input.paidAmount || row.amount;
-      const paidDate = (input.paidDate || new Date().toISOString().slice(0, 10)) as any;
+      const paidDate: string = input.paidDate || new Date().toISOString().slice(0, 10);
       await db.update(installments).set({
         status: "paid",
         paidAmount,
-        paidDate,
+        paidDate: paidDate as any,
         notes: input.notes ?? row.notes,
       }).where(tenantWhere(installments, ctx.tenantId, eq(installments.id, input.installmentId)));
       const remaining = await db.select({ id: installments.id }).from(installments)
@@ -4144,7 +4150,7 @@ const loansRouter = router({
             loanType: loan.type as "given" | "received",
             partyName: loan.partyName,
             installmentId: input.installmentId,
-            date: String(paidDate).slice(0, 10),
+            date: paidDate,
             amount: String(paidAmount),
             settlementMethod: input.settlementMethod,
             bankAccountId: input.bankAccountId,
@@ -4959,7 +4965,23 @@ const productionRouter = router({
       createdBy: ctx.user?.id,
     }) as any);
     const orderId = (result as any).insertId;
-    for (const m of input.materials || []) {
+    // لو الأمر اتبعت من غير خامات، اسحب مكونات المنتج التام × الكمية (نفس اللي بتعمله الشاشة)
+    let lines = input.materials || [];
+    if (!lines.length) {
+      const bom = await db.select().from(itemBomLines)
+        .where(tenantWhere(itemBomLines, ctx.tenantId, eq(itemBomLines.productId, input.productId)));
+      const orderQty = Number(input.quantity) || 0;
+      lines = bom
+        .filter((l) => l.materialItemId !== input.productId)
+        .map((l) => ({
+          itemId: l.materialItemId,
+          quantity: String(Math.round(Number(l.quantityPerUnit || 0) * orderQty * 1000) / 1000),
+          scrapPercent: String(l.scrapPercent ?? "0"),
+          notes: l.notes ?? undefined,
+          warehouseId: undefined,
+        }));
+    }
+    for (const m of lines) {
       await db.insert(productionOrderMaterials).values(withTenantId(ctx.tenantId, {
         orderId,
         itemId: m.itemId,
@@ -5373,7 +5395,7 @@ const statementRouter = router({
     const srAll = await db.select().from(salesReturns).where(tenantWhere(salesReturns, ctx.tenantId, eq(salesReturns.customerId, input.customerId))).orderBy(salesReturns.date);
 
     const inRange = (d: unknown) => {
-      const day = String(d || "").slice(0, 10);
+      const day = toDateStr(d || "");
       if (!day) return false;
       if (input.dateFrom && day < input.dateFrom) return false;
       if (input.dateTo && day > input.dateTo) return false;
@@ -5439,7 +5461,7 @@ const statementRouter = router({
     const prAll = await db.select().from(purchaseReturns).where(tenantWhere(purchaseReturns, ctx.tenantId, eq(purchaseReturns.supplierId, input.supplierId))).orderBy(purchaseReturns.date);
 
     const inRange = (d: unknown) => {
-      const day = String(d || "").slice(0, 10);
+      const day = toDateStr(d || "");
       if (!day) return false;
       if (input.dateFrom && day < input.dateFrom) return false;
       if (input.dateTo && day > input.dateTo) return false;
@@ -6467,8 +6489,8 @@ const saasRouter = router({
     .orderBy(desc(subscriptions.createdAt));
     return rows.map((r) => ({
       ...r,
-      startDate: r.startDate ? String(r.startDate).split("T")[0] : "",
-      endDate: r.endDate ? String(r.endDate).split("T")[0] : "",
+      startDate: toDateStr(r.startDate),
+      endDate: toDateStr(r.endDate),
     }));
   }),
 

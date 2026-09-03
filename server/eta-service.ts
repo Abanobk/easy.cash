@@ -11,6 +11,12 @@ import {
 import { decodeSecret, encodeSecret } from "./paymob";
 import { tenantWhere } from "./tenant-scope";
 
+/** drizzle/mysql2 يرجّع أعمدة date() ككائن Date حقيقي — String(x).slice(0,10) بيفقد السنة */
+function toDateStr(v: unknown): string {
+  if (v instanceof Date) return v.toISOString().slice(0, 10);
+  return String(v || "").slice(0, 10);
+}
+
 export type EtaMode = "preprod" | "production";
 
 export type EtaSettings = {
@@ -304,7 +310,7 @@ export async function submitSalesInvoiceToEta(
     const token = await fetchEtaToken(mode, profile.etaClientId, clientSecret);
     const payload = buildEtaDocument({
       invoiceNumber: inv.number,
-      date: String(inv.date).slice(0, 10),
+      date: toDateStr(inv.date),
       issuerTax: profile.taxNumber,
       issuerName: profile.name,
       receiverTax: customer?.taxNumber,

@@ -9,6 +9,7 @@ import { Download, Upload, AlertTriangle, RefreshCw } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import PermissionGate from "@/components/PermissionGate";
+import { toDateStr } from "@/lib/date";
 
 export function DatabaseBackup() {
   const exportQ = trpc.settings.backup.export.useQuery(undefined, { enabled: false });
@@ -404,8 +405,8 @@ export function FiscalYears() {
         }
         columns={[
           { key: "name", label: "الاسم" },
-          { key: "startDate", label: "من", render: (r) => String(r.startDate).slice(0, 10) },
-          { key: "endDate", label: "إلى", render: (r) => String(r.endDate).slice(0, 10) },
+          { key: "startDate", label: "من", render: (r) => toDateStr(r.startDate) },
+          { key: "endDate", label: "إلى", render: (r) => toDateStr(r.endDate) },
           {
             key: "status",
             label: "الحالة",

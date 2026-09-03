@@ -12,6 +12,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
 import { Eye, RefreshCw } from "lucide-react";
 import PermissionGate from "@/components/PermissionGate";
+import { toDateStr } from "@/lib/date";
 
 const emptyForm = {
   type: "received" as "given" | "received",
@@ -167,10 +168,10 @@ export default function Loans() {
                     {detailQ.data.installments.map((r: any, i: number) => (
                       <tr key={r.id} className="border-t">
                         <td className="px-3 py-2">{i + 1}</td>
-                        <td className="px-3 py-2">{String(r.dueDate).slice(0, 10)}</td>
+                        <td className="px-3 py-2">{toDateStr(r.dueDate)}</td>
                         <td className="px-3 py-2 font-bold">{Number(r.amount).toLocaleString("en-US")}</td>
                         <td className="px-3 py-2">{r.status === "paid" ? "مدفوع" : r.status === "overdue" ? "متأخر" : "معلق"}</td>
-                        <td className="px-3 py-2">{r.paidDate ? String(r.paidDate).slice(0, 10) : "—"}</td>
+                        <td className="px-3 py-2">{r.paidDate ? toDateStr(r.paidDate) : "—"}</td>
                       </tr>
                     ))}
                     {!detailQ.data.installments.length && (

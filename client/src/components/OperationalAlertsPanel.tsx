@@ -3,6 +3,7 @@ import { trpc } from "@/lib/trpc";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { AlertTriangle, Package, FileText, CreditCard, Users, CalendarClock } from "lucide-react";
+import { toDateStr } from "@/lib/date";
 
 export function OperationalAlertsPanel() {
   const { data: alerts, isLoading } = trpc.dashboard.alerts.useQuery();
@@ -149,7 +150,7 @@ export function OperationalAlertsPanel() {
                     {chk.checkNumber} (إيداع قريب)
                   </Link>
                   <span className="text-amber-800 font-medium">
-                    {String(chk.plannedDepositDate).slice(0, 10)}
+                    {toDateStr(chk.plannedDepositDate)}
                   </span>
                 </div>
               ))}
@@ -175,7 +176,7 @@ export function OperationalAlertsPanel() {
                 <div key={chk.id} className="flex justify-between text-xs px-2 py-1.5 rounded bg-yellow-50 border border-yellow-100">
                   <Link href="/bank/check-routing" className="text-yellow-800 hover:underline">{chk.checkNumber}</Link>
                   <span className="text-yellow-700 font-medium">
-                    {Number(chk.amount).toLocaleString("en-US")} ج.م — {String(chk.dueDate).slice(0, 10)}
+                    {Number(chk.amount).toLocaleString("en-US")} ج.م — {toDateStr(chk.dueDate)}
                   </span>
                 </div>
               ))}

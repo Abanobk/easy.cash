@@ -4,6 +4,12 @@ import { notifications } from "../drizzle/schema";
 import { getOperationalAlerts } from "./operational-alerts";
 import { tenantWhere, withTenantId } from "./tenant-scope";
 
+/** drizzle/mysql2 يرجّع أعمدة date() ككائن Date حقيقي — String(x).slice(0,10) بيفقد السنة */
+function toDateStr(v: unknown): string {
+  if (v instanceof Date) return v.toISOString().slice(0, 10);
+  return String(v || "").slice(0, 10);
+}
+
 export type OperationalNotificationDraft = {
   referenceKey: string;
   title: string;
@@ -49,7 +55,7 @@ export function buildOperationalNotificationDrafts(alerts: Awaited<ReturnType<ty
     drafts.push({
       referenceKey: `ops:due_check:${chk.id}`,
       title: "شيك مستحق قريباً",
-      message: `شيك ${chk.checkNumber} بقيمة ${Number(chk.amount).toLocaleString("ar-EG")} ج.م — استحقاق ${String(chk.dueDate).slice(0, 10)}`,
+      message: `شيك ${chk.checkNumber} بقيمة ${Number(chk.amount).toLocaleString("ar-EG")} ج.م — استحقاق ${toDateStr(chk.dueDate)}`,
       type: "info",
       href: "/bank/check-routing",
     });
@@ -59,7 +65,7 @@ export function buildOperationalNotificationDrafts(alerts: Awaited<ReturnType<ty
     drafts.push({
       referenceKey: `ops:overdue_check:${chk.id}`,
       title: "شيك متأخر",
-      message: `شيك ${chk.checkNumber} بقيمة ${Number(chk.amount).toLocaleString("ar-EG")} ج.م — متأخر منذ ${String(chk.dueDate).slice(0, 10)}`,
+      message: `شيك ${chk.checkNumber} بقيمة ${Number(chk.amount).toLocaleString("ar-EG")} ج.م — متأخر منذ ${toDateStr(chk.dueDate)}`,
       type: "error",
       href: "/bank/check-routing",
     });
@@ -79,7 +85,7 @@ export function buildOperationalNotificationDrafts(alerts: Awaited<ReturnType<ty
     drafts.push({
       referenceKey: `ops:deposit_due:${chk.id}`,
       title: "موعد إيداع شيك قريب",
-      message: `شيك ${chk.checkNumber} — إيداع مخطط ${String(chk.plannedDepositDate).slice(0, 10)} — ${Number(chk.amount).toLocaleString("ar-EG")} ج.م`,
+      message: `شيك ${chk.checkNumber} — إيداع مخطط ${toDateStr(chk.plannedDepositDate)} — ${Number(chk.amount).toLocaleString("ar-EG")} ج.م`,
       type: "info",
       href: "/bank/check-routing",
     });
@@ -89,7 +95,7 @@ export function buildOperationalNotificationDrafts(alerts: Awaited<ReturnType<ty
     drafts.push({
       referenceKey: `ops:overdue_deposit:${chk.id}`,
       title: "شيك متأخر عن الإيداع",
-      message: `شيك ${chk.checkNumber} كان موعد إيداعه ${String(chk.plannedDepositDate).slice(0, 10)} — ${Number(chk.amount).toLocaleString("ar-EG")} ج.م`,
+      message: `شيك ${chk.checkNumber} كان موعد إيداعه ${toDateStr(chk.plannedDepositDate)} — ${Number(chk.amount).toLocaleString("ar-EG")} ج.م`,
       type: "error",
       href: "/bank/check-routing",
     });
@@ -99,7 +105,7 @@ export function buildOperationalNotificationDrafts(alerts: Awaited<ReturnType<ty
     drafts.push({
       referenceKey: `ops:deposited_overdue:${chk.id}`,
       title: "شيك مودع متأخر عن التحصيل",
-      message: `شيك ${chk.checkNumber} لدى البنك ومتأخر عن الاستحقاق ${String(chk.dueDate).slice(0, 10)}`,
+      message: `شيك ${chk.checkNumber} لدى البنك ومتأخر عن الاستحقاق ${toDateStr(chk.dueDate)}`,
       type: "warning",
       href: "/bank/check-routing",
     });
@@ -129,7 +135,7 @@ export function buildOperationalNotificationDrafts(alerts: Awaited<ReturnType<ty
     drafts.push({
       referenceKey: `ops:due_installment:${inst.id}`,
       title: inst.isOverdue ? "قسط متأخر" : "قسط مستحق قريباً",
-      message: `قسط ${Number(inst.amount).toLocaleString("ar-EG")} ج.م — ${inst.partyName} — ${String(inst.dueDate).slice(0, 10)}`,
+      message: `قسط ${Number(inst.amount).toLocaleString("ar-EG")} ج.م — ${inst.partyName} — ${toDateStr(inst.dueDate)}`,
       type: inst.isOverdue ? "error" : "warning",
       href: "/loans",
     });

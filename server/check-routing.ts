@@ -14,6 +14,12 @@ import { bounceCheck, clearCheck } from "./check-actions";
 import { assertDateNotInClosedPeriod } from "./fiscal-period-guard";
 import { tenantWhere, withTenantId } from "./tenant-scope";
 
+/** drizzle/mysql2 يرجّع أعمدة date() ككائن Date حقيقي — String(x).slice(0,10) بيفقد السنة */
+function toDateStr(v: unknown): string {
+  if (v instanceof Date) return v.toISOString().slice(0, 10);
+  return String(v || "").slice(0, 10);
+}
+
 export type RoutingStatus =
   | "unrouted"
   | "in_custody"
@@ -287,14 +293,14 @@ export async function listCheckRoutings(
   const mapped = rows.map((r) => {
     const custodyStart = r.routingCreatedAt ? new Date(r.routingCreatedAt).getTime() : Date.now();
     const custodyDays = Math.max(0, Math.floor((Date.now() - custodyStart) / 86_400_000));
-    const planned = r.plannedDepositDate ? String(r.plannedDepositDate).slice(0, 10) : null;
+    const planned = r.plannedDepositDate ? toDateStr(r.plannedDepositDate) : null;
     const isOverdueDeposit = r.routingStatus === "scheduled" && planned != null && planned < today;
     return {
       ...r,
       plannedDepositDate: planned,
-      depositedAt: r.depositedAt ? String(r.depositedAt).slice(0, 10) : null,
-      date: r.date ? String(r.date).slice(0, 10) : null,
-      dueDate: r.dueDate ? String(r.dueDate).slice(0, 10) : null,
+      depositedAt: r.depositedAt ? toDateStr(r.depositedAt) : null,
+      date: r.date ? toDateStr(r.date) : null,
+      dueDate: r.dueDate ? toDateStr(r.dueDate) : null,
       amount: Number(r.amount),
       custodyDays,
       isOverdueDeposit,
@@ -349,7 +355,7 @@ export async function listRoutingEvents(db: Db, tenantId: number, routingId: num
     performedByName: e.performedBy ? userMap.get(e.performedBy) || null : null,
     bankAccountId: e.bankAccountId,
     bankAccountName: e.bankAccountId ? bankMap.get(e.bankAccountId) || null : null,
-    plannedDepositDate: e.plannedDepositDate ? String(e.plannedDepositDate).slice(0, 10) : null,
+    plannedDepositDate: e.plannedDepositDate ? toDateStr(e.plannedDepositDate) : null,
     notes: e.notes,
     createdAt: e.createdAt,
   }));
@@ -515,7 +521,7 @@ export async function depositRoutedCheck(
     eventType: "deposit",
     fromUserId: routing.custodianUserId,
     bankAccountId,
-    plannedDepositDate: routing.plannedDepositDate ? String(routing.plannedDepositDate).slice(0, 10) : null,
+    plannedDepositDate: routing.plannedDepositDate ? toDateStr(routing.plannedDepositDate) : null,
     notes: input.notes || "إيداع الشيك وتحويل المسؤولية للبنك",
     performedBy,
   });
@@ -598,7 +604,7 @@ export async function routingSummaryCounts(db: Db, tenantId: number) {
     if (r.status === "unrouted") unrouted += c;
     else if (r.status === "in_custody") inCustody += c;
     else if (r.status === "scheduled") {
-      const planned = r.plannedDepositDate ? String(r.plannedDepositDate).slice(0, 10) : null;
+      const planned = r.plannedDepositDate ? toDateStr(r.plannedDepositDate) : null;
       if (planned && planned < today) overdueDeposit += c;
       else scheduled += c;
     } else if (r.status === "deposited") atBank += c;

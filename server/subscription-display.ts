@@ -64,10 +64,7 @@ export function buildSubscriptionBanner(input: {
   const daysRemaining = daysUntil(input.endDate);
   if (daysRemaining < 0) return null;
 
-  const renewalDate =
-    typeof input.endDate === "string"
-      ? input.endDate.slice(0, 10)
-      : input.endDate.toISOString().split("T")[0];
+  const renewalDate = toDateOnly(input.endDate);
   const fmt = formatArDate(input.endDate);
   const duration = input.durationDays ?? null;
   const isMonthly = duration != null && duration <= MONTHLY_MAX_DAYS;

@@ -13,6 +13,12 @@ import {
 } from "../drizzle/schema";
 import { tenantWhere } from "./tenant-scope";
 
+/** drizzle/mysql2 يرجّع أعمدة date() ككائن Date حقيقي — String(x).slice(0,10) بيفقد السنة */
+function toDateStr(v: unknown): string {
+  if (v instanceof Date) return v.toISOString().slice(0, 10);
+  return String(v || "").slice(0, 10);
+}
+
 function addDays(date: Date, days: number) {
   const d = new Date(date);
   d.setDate(d.getDate() + days);
@@ -212,7 +218,7 @@ export async function getOperationalAlerts(db: Db, tenantId: number) {
 
   const dueInstallments = dueInstallmentsRaw.map((row) => ({
     ...row,
-    isOverdue: String(row.dueDate).slice(0, 10) < today,
+    isOverdue: toDateStr(row.dueDate) < today,
   }));
 
   const [draftSales] = await db

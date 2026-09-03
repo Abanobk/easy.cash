@@ -13,6 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { toast } from "sonner";
 import { Trash2 } from "lucide-react";
 import PermissionGate from "@/components/PermissionGate";
+import { toDateStr } from "@/lib/date";
 
 export function AssetCategoriesPage() {
   const q = trpc.parity.assets.categories.list.useQuery();
@@ -39,7 +40,7 @@ export function CapitalMaintenancePage() {
       canEdit={false}
       columns={[
         { key: "assetName", label: "الأصل" },
-        { key: "date", label: "التاريخ", render: (r) => String(r.date).slice(0, 10) },
+        { key: "date", label: "التاريخ", render: (r) => toDateStr(r.date) },
         { key: "amount", label: "المبلغ", render: (r) => `${Number(r.amount).toLocaleString("en-US")} ج.م` },
         { key: "description", label: "الوصف" },
       ]}
@@ -118,7 +119,7 @@ export function AssetSellingPage() {
           permissionModule="assets"
           columns={[
             { key: "assetName", label: "الأصل" },
-            { key: "date", label: "التاريخ", render: (r: any) => String(r.date).slice(0, 10) },
+            { key: "date", label: "التاريخ", render: (r: any) => toDateStr(r.date) },
             { key: "amount", label: "المبلغ", render: (r: any) => `${Number(r.amount).toLocaleString("en-US")} ج.م` },
             { key: "buyer", label: "المشتري" },
           ]}

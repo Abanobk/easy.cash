@@ -12,6 +12,7 @@ import {
   entryTextareaClass,
 } from "@/components/form/EntryForm";
 import { DateField } from "@/components/form/DateField";
+import { toDateStr } from "@/lib/date";
 
 export { FieldLabel, FormSection } from "@/components/form/EntryForm";
 
@@ -407,7 +408,7 @@ export function partyFormFromRow(row: any, dualKey: "linkedSupplierId" | "linked
     taxNumber: row.taxNumber || "",
     commercialRegister: row.commercialRegister || "",
     openingBalance: row.openingBalance != null ? String(row.openingBalance) : "",
-    openingBalanceDate: row.openingBalanceDate ? String(row.openingBalanceDate).slice(0, 10) : "",
+    openingBalanceDate: row.openingBalanceDate ? toDateStr(row.openingBalanceDate) : "",
     creditLimit: row.creditLimit != null ? String(row.creditLimit) : "",
     paymentTermDays: row.paymentTermDays != null ? String(row.paymentTermDays) : "",
     discountPercent: row.discountPercent != null ? String(row.discountPercent) : "",

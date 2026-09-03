@@ -12,6 +12,12 @@ import {
 import { tenantWhere } from "./tenant-scope";
 import type { ReportFilters } from "./accounting-data";
 
+/** drizzle/mysql2 يرجّع أعمدة date() ككائن Date حقيقي — String(x).slice(0,10) بيفقد السنة */
+function toDateStr(v: unknown): string {
+  if (v instanceof Date) return v.toISOString().slice(0, 10);
+  return String(v || "").slice(0, 10);
+}
+
 export type ReportRow = Record<string, unknown>;
 
 const HANDLERS: Record<string, (db: Db, f: ReportFilters) => Promise<ReportRow[]>> = {
@@ -31,7 +37,7 @@ const HANDLERS: Record<string, (db: Db, f: ReportFilters) => Promise<ReportRow[]
       .where(tenantWhere(attendance, f.tenantId, ...(dateParts.length ? [and(...dateParts)] : [])))
       .orderBy(desc(attendance.date));
     return rows.map((r) => ({
-      date: String(r.date).slice(0, 10),
+      date: toDateStr(r.date),
       employeeName: r.employeeName,
       checkIn: r.checkIn || "",
       checkOut: r.checkOut || "",
@@ -58,8 +64,8 @@ const HANDLERS: Record<string, (db: Db, f: ReportFilters) => Promise<ReportRow[]
     return rows.map((r) => ({
       employeeName: r.employeeName,
       vacationType: r.vacationType || "",
-      startDate: String(r.startDate).slice(0, 10),
-      endDate: String(r.endDate).slice(0, 10),
+      startDate: toDateStr(r.startDate),
+      endDate: toDateStr(r.endDate),
       days: r.days ?? 0,
       status: r.status,
     }));
@@ -130,7 +136,7 @@ const HANDLERS: Record<string, (db: Db, f: ReportFilters) => Promise<ReportRow[]
       .where(tenantWhere(salaryAdvances, f.tenantId))
       .orderBy(desc(salaryAdvances.date));
     return rows.map((r) => ({
-      date: String(r.date).slice(0, 10),
+      date: toDateStr(r.date),
       employeeName: r.employeeName,
       amount: Number(r.amount),
       status: r.status,

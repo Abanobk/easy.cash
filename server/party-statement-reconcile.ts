@@ -29,6 +29,12 @@ import {
 } from "./statement-ledger";
 import { tenantWhere } from "./tenant-scope";
 
+/** drizzle/mysql2 يرجّع أعمدة date() ككائن Date حقيقي — String(x).slice(0,10) بيفقد السنة */
+function toDateStr(v: unknown): string {
+  if (v instanceof Date) return v.toISOString().slice(0, 10);
+  return String(v || "").slice(0, 10);
+}
+
 function n(v: unknown) {
   const x = Number(v);
   return Number.isFinite(x) ? x : 0;
@@ -211,7 +217,7 @@ export async function reconcilePartyStatementImport(db: Db, tenantId: number, im
     const debit = n(line.debit);
     const credit = n(line.credit);
     const abs = Math.max(debit, credit);
-    const date = String(line.txnDate).slice(0, 10);
+    const date = toDateStr(line.txnDate);
     const ref = String(line.reference || "").trim();
 
     if (abs <= 0) {

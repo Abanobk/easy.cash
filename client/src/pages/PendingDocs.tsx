@@ -6,6 +6,7 @@ import { FileText, AlertCircle, CheckCircle } from "lucide-react";
 import { Link } from "wouter";
 import { tenantPath, useTenantSlug } from "@/lib/tenant";
 import { toast } from "sonner";
+import { toDateStr } from "@/lib/date";
 
 export default function PendingDocs() {
   const tenantSlug = useTenantSlug();
@@ -103,7 +104,7 @@ export default function PendingDocs() {
                       {d.type}
                     </td>
                     <td className="px-4 py-2 border-b"><Link href={d.href} className="text-blue-600 hover:underline">{d.number}</Link></td>
-                    <td className="px-4 py-2 border-b">{String(d.date).slice(0, 10)}</td>
+                    <td className="px-4 py-2 border-b">{toDateStr(d.date)}</td>
                     <td className="px-4 py-2 border-b">{d.party}</td>
                     <td className="px-4 py-2 border-b">{d.total != null ? Number(d.total).toLocaleString("en-US") : "—"}</td>
                     <td className="px-4 py-2 border-b">

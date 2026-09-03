@@ -55,6 +55,12 @@ import {
 } from "../drizzle/schema";
 import { tenantWhere } from "./tenant-scope";
 
+/** drizzle/mysql2 يرجّع أعمدة date() ككائن Date حقيقي — String(x).slice(0,10) بيفقد السنة */
+function toDateStr(v: unknown): string {
+  if (v instanceof Date) return v.toISOString().slice(0, 10);
+  return String(v || "").slice(0, 10);
+}
+
 export type ReportRow = Record<string, unknown>;
 
 async function productionOrdersReport(db: Db, f: ReportFilters) {
@@ -84,7 +90,7 @@ async function productionOrdersReport(db: Db, f: ReportFilters) {
     .orderBy(desc(productionOrders.date));
   return rows.map((r) => ({
     number: r.number,
-    date: String(r.date).slice(0, 10),
+    date: toDateStr(r.date),
     productCode: r.productCode || "",
     productName: r.productName || "",
     warehouseName: r.warehouseName || "",
@@ -132,7 +138,7 @@ async function productionMaterialsReport(db: Db, f: ReportFilters) {
     const unitCost = Number(r.unitCost || 0);
     return {
       orderNumber: r.orderNumber,
-      date: String(r.date).slice(0, 10),
+      date: toDateStr(r.date),
       status: r.status,
       warehouseName: r.warehouseName || "",
       itemCode: r.itemCode || "",
@@ -256,7 +262,7 @@ const HANDLERS: Record<string, (db: Db, f: ReportFilters) => Promise<ReportRow[]
       .orderBy(desc(salesOrders.date));
     return rows.map((r) => ({
       documentNumber: r.number,
-      date: String(r.date).slice(0, 10),
+      date: toDateStr(r.date),
       partyName: r.customerName || "",
       total: Number(r.total),
       status: r.status,
@@ -278,7 +284,7 @@ const HANDLERS: Record<string, (db: Db, f: ReportFilters) => Promise<ReportRow[]
       .orderBy(desc(purchaseOrders.date));
     return rows.map((r) => ({
       documentNumber: r.number,
-      date: String(r.date).slice(0, 10),
+      date: toDateStr(r.date),
       partyName: r.supplierName || "",
       total: Number(r.total),
       status: r.status,
@@ -303,7 +309,7 @@ const HANDLERS: Record<string, (db: Db, f: ReportFilters) => Promise<ReportRow[]
     return rows.map((r) => ({
       customerName: r.partyName || "—",
       loanNumber: r.loanNumber,
-      dueDate: String(r.dueDate).slice(0, 10),
+      dueDate: toDateStr(r.dueDate),
       amount: Number(r.amount),
       paid: Number(r.paidAmount),
       remaining: Number(r.amount) - Number(r.paidAmount),

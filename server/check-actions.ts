@@ -11,6 +11,12 @@ import { assertDateNotInClosedPeriod } from "./fiscal-period-guard";
 import { allocateCustomerPaymentFifo, allocateSupplierPaymentFifo } from "./payment-allocation";
 import { tenantWhere, withTenantId } from "./tenant-scope";
 
+/** drizzle/mysql2 يرجّع أعمدة date() ككائن Date حقيقي — String(x).slice(0,10) بيفقد السنة */
+function toDateStr(v: unknown): string {
+  if (v instanceof Date) return v.toISOString().slice(0, 10);
+  return String(v || "").slice(0, 10);
+}
+
 export async function createCheckWithJournal(
   db: Db,
   tenantId: number,
@@ -119,7 +125,7 @@ export async function clearCheck(
     throw new TRPCError({ code: "BAD_REQUEST", message: "لا يمكن تحصيل هذا الشيك في حالته الحالية" });
   }
 
-  const actionDate = opts?.date || String(chk.date).slice(0, 10);
+  const actionDate = opts?.date || toDateStr(chk.date);
   await assertDateNotInClosedPeriod(db, tenantId, actionDate);
 
   let customerName: string | undefined;

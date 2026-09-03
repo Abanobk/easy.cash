@@ -12,6 +12,7 @@ import { tenantPath, useTenantSlug } from "@/lib/tenant";
 import { toast } from "sonner";
 import { Factory, Loader2, Upload, ShoppingCart, TrendingUp, Beaker, FileText, ArrowLeftRight } from "lucide-react";
 import FactoryConvertDialog from "@/components/ops/FactoryConvertDialog";
+import { toDateStr } from "@/lib/date";
 
 type EntryType = "general" | "purchase" | "sales" | "mixing";
 
@@ -385,7 +386,7 @@ export default function FactoryDailyPage() {
                       <Button
                         size="sm"
                         className="h-8 text-xs gap-1"
-                        onClick={() => setConvertRow({ id: row.id, type: row.type, workDate: String(row.workDate).slice(0, 10) })}
+                        onClick={() => setConvertRow({ id: row.id, type: row.type, workDate: toDateStr(row.workDate) })}
                       >
                         <ArrowLeftRight size={12} />
                         {row.type === "mixing" ? "تحويل لأمر إنتاج" : "تحويل لفاتورة"}
