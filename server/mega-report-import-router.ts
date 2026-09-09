@@ -21,6 +21,12 @@ import {
 import { parseMegaReportBuffer, type MegaInvoiceLine } from "./mega-report-parse";
 import { resolveTypedEntityCode } from "./entity-codes";
 
+/** drizzle/mysql2 بيرجّع أعمدة date() ككائن Date حقيقي — String(v).slice(0,10) بيكسرها، فلازم نتعامل معاها بالطريقة دي */
+function toDateStr(v: unknown): string {
+  if (v instanceof Date) return v.toISOString().slice(0, 10);
+  return String(v || "").slice(0, 10);
+}
+
 function normalizeKey(value: string) {
   return String(value || "")
     .trim()
@@ -438,7 +444,7 @@ export const megaReportImportRouter = router({
 
     // بصمة الفاتورة = العميل + التاريخ + الإجمالي + بنودها — نستخدمها لمنع استيراد نفس الفاتورة مرتين
     const sig = (customerId: number, date: string, total: string, lines: Array<{ itemId: number; quantity: string; price: string }>) =>
-      [customerId, String(date).slice(0, 10), Number(total).toFixed(2),
+      [customerId, toDateStr(date), Number(total).toFixed(2),
        lines.map((l) => `${l.itemId}:${Number(l.quantity)}:${Number(l.price)}`).sort().join("|")].join("~");
     const seen = new Set<string>();
 
@@ -566,7 +572,7 @@ export const megaReportImportRouter = router({
     const errors: string[] = [];
 
     const sig = (supplierId: number, date: string, total: string, lines: Array<{ itemId: number; quantity: string; price: string }>) =>
-      [supplierId, String(date).slice(0, 10), Number(total).toFixed(2),
+      [supplierId, toDateStr(date), Number(total).toFixed(2),
        lines.map((l) => `${l.itemId}:${Number(l.quantity)}:${Number(l.price)}`).sort().join("|")].join("~");
     const seen = new Set<string>();
 
