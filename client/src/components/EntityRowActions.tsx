@@ -1,27 +1,31 @@
 import { ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { Edit, Trash2 } from "lucide-react";
-import type { PermissionModule } from "@shared/permissions";
-import { useModulePermissions } from "@/hooks/usePermissions";
+import { useEntityAllowed } from "@/hooks/useEntityPermission";
+import type { DataTableEntity } from "@/components/DataTable";
 
 type EntityRowActionsProps = {
-  module: PermissionModule;
+  entity: DataTableEntity;
+  editAction?: "edit";
+  deleteAction?: "deleteCancel";
   onEdit?: () => void;
   onDelete?: () => void;
   deleteConfirm?: string;
   extra?: ReactNode;
 };
 
-/** أزرار تعديل/حذف الصفوف مع احترام صلاحيات الوحدة */
+/** أزرار تعديل/حذف الصفوف مع احترام الشجرة التفصيلية الجديدة */
 export function EntityRowActions({
-  module,
+  entity,
+  editAction = "edit",
+  deleteAction = "deleteCancel",
   onEdit,
   onDelete,
   deleteConfirm = "حذف السجل؟",
   extra,
 }: EntityRowActionsProps) {
-  const { canEdit, canDelete, isLoading } = useModulePermissions(module);
-  if (isLoading) return null;
+  const canEdit = useEntityAllowed(entity.moduleKey, entity.entityKey, editAction);
+  const canDelete = useEntityAllowed(entity.moduleKey, entity.entityKey, deleteAction);
 
   const handleDelete = () => {
     if (confirm(deleteConfirm)) onDelete?.();

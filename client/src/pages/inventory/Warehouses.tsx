@@ -59,7 +59,8 @@ export default function Warehouses() {
         isLoading={isLoading}
         onAdd={() => { setEditId(null); setForm(emptyForm); setOpen(true); }}
         addLabel="مخزن جديد"
-        permissionModule="inventory"
+        addEntity={{ moduleKey: "inventory", entityKey: "warehouses" }}
+        rowEntity={{ moduleKey: "inventory", entityKey: "warehouses" }}
         onEdit={(row: any) => {
           setEditId(row.id);
           setForm({

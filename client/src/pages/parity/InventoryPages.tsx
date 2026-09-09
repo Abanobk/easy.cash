@@ -11,8 +11,9 @@ import { toast } from "sonner";
 import { useMemo, useState } from "react";
 import { useLocation } from "wouter";
 import { useItemOptions, useWarehouseOptions } from "@/hooks/useEntityOptions";
-import PermissionGate from "@/components/PermissionGate";
+import EntityPermissionGate from "@/components/EntityPermissionGate";
 import { tenantPath, useTenantSlug } from "@/lib/tenant";
+import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { Plus, Trash2, Upload } from "lucide-react";
 import { toDateStr } from "@/lib/date";
 
@@ -31,7 +32,7 @@ export function ItemCategoriesPage() {
   };
   return (
     <SimpleEntityPage title="فئات الأصناف" tableTitle="الفئات" data={q.data as any} isLoading={q.isLoading} onRefresh={() => q.refetch()}
-      permissionModule="inventory"
+      entity={{ moduleKey: "inventory", entityKey: "itemCategories" }}
       canEdit={false}
       columns={[
         { key: "name", label: "اسم الفئة" },
@@ -57,7 +58,7 @@ export function ItemBatchesPage() {
   const d = trpc.parity.inventory.batches.delete.useMutation();
   return (
     <SimpleEntityPage title="أرقام التشغيلة" tableTitle="التشغيلات" data={q.data as any} isLoading={q.isLoading} onRefresh={() => q.refetch()}
-      permissionModule="inventory"
+      entity={{ moduleKey: "inventory", entityKey: "batchNumbers" }}
       canEdit={false}
       columns={[
         { key: "itemName", label: "الصنف" },
@@ -103,7 +104,7 @@ export function ItemOffersPage() {
 
   return (
     <SimpleEntityPage title="العروض" tableTitle="عروض الأسعار" data={q.data as any} isLoading={q.isLoading} onRefresh={() => q.refetch()}
-      permissionModule="inventory"
+      entity={{ moduleKey: "inventory", entityKey: "offers" }}
       columns={[
         { key: "name", label: "العرض" },
         { key: "discountPercent", label: "الخصم %" },
@@ -130,6 +131,7 @@ export function ItemSerialsPage() {
   const [itemFilter, setItemFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState<"" | "in_stock" | "sold" | "returned">("");
   const [search, setSearch] = useState("");
+  const debouncedSearch = useDebouncedValue(search);
   const [addOpen, setAddOpen] = useState(false);
   const [form, setForm] = useState({ itemId: "", serialNumber: "", warehouseId: "", status: "in_stock" });
   const items = useItemOptions();
@@ -137,7 +139,7 @@ export function ItemSerialsPage() {
   const q = trpc.parity.inventory.serials.list.useQuery({
     itemId: itemFilter ? Number(itemFilter) : undefined,
     status: statusFilter || undefined,
-    search: search || undefined,
+    search: debouncedSearch || undefined,
   });
   const createMut = trpc.parity.inventory.serials.create.useMutation({
     onSuccess: () => { toast.success("تم إضافة السيريال"); q.refetch(); setAddOpen(false); setForm({ itemId: "", serialNumber: "", warehouseId: "", status: "in_stock" }); },
@@ -164,11 +166,11 @@ export function ItemSerialsPage() {
         <CardHeader className="pb-2 border-b">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <CardTitle className="text-base font-extrabold">سجل السيريالات</CardTitle>
-            <PermissionGate module="inventory" action="create">
+            <EntityPermissionGate moduleKey="inventory" entityKey="serials" action="add">
               <Button className="h-9 gap-1 font-extrabold" onClick={() => setAddOpen(true)}>
                 <Plus size={14} /> إضافة سيريال
               </Button>
-            </PermissionGate>
+            </EntityPermissionGate>
           </div>
         </CardHeader>
         <CardContent className="p-4 space-y-4">
@@ -231,7 +233,7 @@ export function ItemSerialsPage() {
                     <td className="px-3 py-2 text-xs text-slate-500">{row.createdAt ? new Date(row.createdAt).toLocaleDateString("en-GB") : "—"}</td>
                     <td className="px-2 py-2">
                       <div className="flex items-center justify-center gap-1">
-                        <PermissionGate module="inventory" action="edit">
+                        <EntityPermissionGate moduleKey="inventory" entityKey="serials" action="edit">
                           <Select
                             value={row.status}
                             onValueChange={(v) => statusMut.mutate({ id: row.id, status: v as any })}
@@ -243,13 +245,13 @@ export function ItemSerialsPage() {
                               <SelectItem value="returned">مرتجع</SelectItem>
                             </SelectContent>
                           </Select>
-                        </PermissionGate>
-                        <PermissionGate module="inventory" action="delete">
+                        </EntityPermissionGate>
+                        <EntityPermissionGate moduleKey="inventory" entityKey="serials" action="deleteCancel">
                           <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-red-600"
                             onClick={() => confirm("حذف السيريال؟") && deleteMut.mutate(row.id)}>
                             <Trash2 size={14} />
                           </Button>
-                        </PermissionGate>
+                        </EntityPermissionGate>
                       </div>
                     </td>
                   </tr>
@@ -355,7 +357,7 @@ export function PriceChangerPage() {
               <Label className="text-xs font-bold">التاريخ</Label>
               <Input type="date" className="h-10" value={date} onChange={(e) => setDate(e.target.value)} />
             </div>
-            <PermissionGate module="inventory" action="edit">
+            <EntityPermissionGate moduleKey="inventory" entityKey="priceChange" action="edit">
               <Button
                 className="h-10 font-extrabold"
                 disabled={!dirtyRows.length || applyBulk.isPending}
@@ -363,7 +365,7 @@ export function PriceChangerPage() {
               >
                 تطبيق التغييرات ({dirtyRows.length})
               </Button>
-            </PermissionGate>
+            </EntityPermissionGate>
           </CardContent>
         </Card>
 
@@ -460,10 +462,10 @@ export function BeginningInventoryPage() {
       data={q.data as any}
       isLoading={q.isLoading}
       onRefresh={() => q.refetch()}
-      permissionModule="inventory"
+      entity={{ moduleKey: "inventory", entityKey: "beginningInventory" }}
       canEdit={false}
       extraActions={
-        <PermissionGate module="inventory" action="create">
+        <EntityPermissionGate moduleKey="inventory" entityKey="beginningInventory" action="add">
           <div className="flex flex-wrap gap-2">
             <Button
               size="sm"
@@ -496,14 +498,14 @@ export function BeginningInventoryPage() {
               {clearAll.isPending ? "جاري المسح..." : "مسح كل مخزون أول المدة"}
             </Button>
           </div>
-        </PermissionGate>
+        </EntityPermissionGate>
       }
       columns={[
         { key: "warehouseName", label: "المخزن" },
         { key: "itemName", label: "الصنف", render: (r) => (
           <span className="font-bold">
             {r.itemCode ? `${r.itemCode} — ` : ""}{String(r.itemName || "—")}
-            {r.itemBarcode ? <span className="block text-[11px] text-slate-500 font-semibold">باركود: {String(r.itemBarcode)}</span> : null}
+            {r.itemBarcode ? <span className="block text-[11px] text-slate-500 font-semibold">سيريل نمبر: {String(r.itemBarcode)}</span> : null}
           </span>
         ) },
         { key: "quantity", label: "الكمية", render: (r) => Number(r.quantity || 0).toLocaleString("en-US") },

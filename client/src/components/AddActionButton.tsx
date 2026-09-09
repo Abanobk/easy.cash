@@ -1,14 +1,16 @@
 import { Button, type ButtonProps } from "@/components/ui/button";
-import type { PermissionModule } from "@shared/permissions";
-import { useModulePermissions } from "@/hooks/usePermissions";
+import { useEntityAllowed } from "@/hooks/useEntityPermission";
+import type { PermActionKey } from "@shared/permission-tree";
 
 type AddActionButtonProps = ButtonProps & {
-  module: PermissionModule;
+  moduleKey: string;
+  entityKey: string;
+  action?: PermActionKey;
 };
 
-/** زر إضافة يظهر فقط لمن لديه صلاحية create على الوحدة */
-export function AddActionButton({ module, children, ...props }: AddActionButtonProps) {
-  const { canCreate, isLoading } = useModulePermissions(module);
-  if (isLoading || !canCreate) return null;
+/** زر إضافة يظهر فقط لمن لديه صلاحية "add" على العنصر في الشجرة التفصيلية */
+export function AddActionButton({ moduleKey, entityKey, action = "add", children, ...props }: AddActionButtonProps) {
+  const allowed = useEntityAllowed(moduleKey, entityKey, action);
+  if (!allowed) return null;
   return <Button {...props}>{children}</Button>;
 }

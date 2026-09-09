@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import ERPLayout from "@/components/ERPLayout";
 import { DataTable, statusBadge } from "@/components/DataTable";
 import { FormModal } from "@/components/FormModal";
@@ -11,19 +11,25 @@ import {
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import { Link } from "wouter";
-import { FileText } from "lucide-react";
+import { Link, useLocation } from "wouter";
+import { FileText, Upload } from "lucide-react";
 import { isoToDisplayDate } from "@/components/form/DateField";
+import { tenantPath, useTenantSlug } from "@/lib/tenant";
+import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 
 export default function Suppliers() {
+  const tenantSlug = useTenantSlug();
+  const [, navigate] = useLocation();
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
+  const debouncedSearch = useDebouncedValue(search);
   const [open, setOpen] = useState(false);
   const [editId, setEditId] = useState<number | null>(null);
   const [linkedCustomerId, setLinkedCustomerId] = useState<number | null>(null);
   const [form, setForm] = useState(emptyContactPartyForm());
 
-  const { data, isLoading, refetch } = trpc.suppliers.list.useQuery({ page, limit: 20, search });
+  useEffect(() => setPage(1), [debouncedSearch]);
+  const { data, isLoading, refetch } = trpc.suppliers.list.useQuery({ page, limit: 20, search: debouncedSearch });
   const { data: categories } = trpc.contactCategories.list.useQuery();
   const { data: branchList } = trpc.settings.branches.list.useQuery();
 
@@ -84,7 +90,18 @@ export default function Suppliers() {
         onSearch={setSearch}
         onAdd={() => { setEditId(null); setLinkedCustomerId(null); setForm(emptyContactPartyForm()); setOpen(true); }}
         addLabel="مورد جديد"
-        permissionModule="contacts"
+        addEntity={{ moduleKey: "contacts", entityKey: "supplier" }}
+        rowEntity={{ moduleKey: "contacts", entityKey: "supplier" }}
+        headerExtra={
+          <Button
+            variant="outline"
+            size="sm"
+            className="font-extrabold gap-1"
+            onClick={() => navigate(tenantPath(tenantSlug, "/contacts/smart-import?type=supplier"))}
+          >
+            <Upload size={14} /> استيراد ذكي (Excel)
+          </Button>
+        }
         onEdit={handleEdit}
         onDelete={(row) => deleteMut.mutate(row.id!)}
         deleteConfirm="حذف المورد؟"

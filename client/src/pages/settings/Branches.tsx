@@ -50,7 +50,7 @@ export default function Branches() {
                 <Search size={14} className="absolute right-3 top-2.5 text-slate-400" />
                 <Input placeholder="بحث..." value={search} onChange={e => setSearch(e.target.value)} className="pr-8 h-10 w-56 text-sm" />
               </div>
-              <AddActionButton module="settings" className="bg-blue-600 hover:bg-blue-700 text-white gap-2 h-10 px-4 text-sm font-semibold" onClick={() => { resetForm(); setOpen(true); }}>
+              <AddActionButton moduleKey="settings" entityKey="branches" className="bg-blue-600 hover:bg-blue-700 text-white gap-2 h-10 px-4 text-sm font-semibold" onClick={() => { resetForm(); setOpen(true); }}>
                 <Plus size={16} /> إضافة فرع
               </AddActionButton>
             </div>
@@ -84,7 +84,7 @@ export default function Branches() {
                   <TableCell>
                     <div className="flex gap-1">
                       <EntityRowActions
-                        module="settings"
+                        entity={{ moduleKey: "settings", entityKey: "branches" }}
                         onEdit={() => openEdit(row)}
                         onDelete={() => deleteMut.mutate(row.id)}
                       />

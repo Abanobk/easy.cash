@@ -1,5 +1,5 @@
 import ERPLayout from "@/components/ERPLayout";
-import PermissionGate from "@/components/PermissionGate";
+import EntityPermissionGate from "@/components/EntityPermissionGate";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -160,6 +160,8 @@ export default function BeginningInventorySmartImport() {
     const XLSX = await import("xlsx");
     const ws = XLSX.utils.json_to_sheet([
       {
+        الكود: "P-0001",
+        "سيريل نمبر": "123456789",
         المخزن: "مخزن الخامات",
         الصنف: "مثال صنف",
         الكمية: 10,
@@ -167,7 +169,6 @@ export default function BeginningInventorySmartImport() {
         "اجمالي التكلفة": 250,
         الوحدة: "كيلو",
         الفئة: "",
-        باركود: "123456789",
       },
     ]);
     const wb = XLSX.utils.book_new();
@@ -204,8 +205,8 @@ export default function BeginningInventorySmartImport() {
 
   const mapExcelRows = (json: Record<string, unknown>[]) => json.map((r) => ({
     warehouse: pickCol(r, ["warehouse", "المخزن", "مخزن", "store", "warehouse name"]),
-    barcode: pickCol(r, ["barcode", "باركود", "الباركود", "bar code", "part number", "partno"], { partial: false })
-      || pickCol(r, ["barcode", "باركود", "الباركود"]),
+    barcode: pickCol(r, ["barcode", "باركود", "الباركود", "bar code", "part number", "partno", "سيريل نمبر", "سيريل", "serial", "serial number"], { partial: false })
+      || pickCol(r, ["barcode", "باركود", "الباركود", "سيريل نمبر", "سيريل"]),
     code: pickCol(r, ["code", "كود", "الكود", "item code", "part number", "partno", "pn"], { partial: false })
       || pickCol(r, ["الكود", "كود الصنف", "item code"]),
     name: pickCol(r, ["name", "اسم", "الصنف", "اسم الصنف", "item", "item name", "الوصف"]),
@@ -587,7 +588,7 @@ export default function BeginningInventorySmartImport() {
 
   return (
     <ERPLayout title="استيراد ذكي — مخزون أول المدة">
-      <PermissionGate module="inventory" action="create">
+      <EntityPermissionGate moduleKey="inventory" entityKey="beginningInventory" action="add">
         <div className="space-y-5 pb-8" dir="rtl">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <Button
@@ -833,7 +834,7 @@ export default function BeginningInventorySmartImport() {
                   أصناف مش موجودة عندنا ({missingRows.length})
                 </div>
                 <p className="text-sm font-semibold text-rose-800">
-                  تقدر تضيفها هنا — النظام يولّد <span className="font-black">بارت نمبر تلقائي (P-…)</span> ويستخدمه كباركود لو الملف مفيهوش باركود.
+                  تقدر تضيفها هنا — النظام يولّد <span className="font-black">بارت نمبر تلقائي (P-…)</span> ويستخدمه كسيريل نمبر لو الملف مفيهوش سيريل نمبر.
                 </p>
               </div>
               <Button
@@ -1011,7 +1012,7 @@ export default function BeginningInventorySmartImport() {
                                   {r.itemCode ? `${r.itemCode} — ` : ""}{r.itemName}
                                 </div>
                                 {r.itemBarcode ? (
-                                  <div className="text-sm font-bold text-slate-500">باركود / بارت: {r.itemBarcode}</div>
+                                  <div className="text-sm font-bold text-slate-500">سيريل نمبر / بارت: {r.itemBarcode}</div>
                                 ) : null}
                                 <button
                                   type="button"
@@ -1151,7 +1152,7 @@ export default function BeginningInventorySmartImport() {
             </div>
           </div>
         </div>
-      </PermissionGate>
+      </EntityPermissionGate>
     </ERPLayout>
   );
 }

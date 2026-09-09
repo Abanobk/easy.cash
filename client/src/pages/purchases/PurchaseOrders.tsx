@@ -14,7 +14,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { Plus, ShoppingCart, CheckCircle, Trash2, FileText, Pencil, Undo2 } from "lucide-react";
 import { toast } from "sonner";
 import { AddActionButton } from "@/components/AddActionButton";
-import PermissionGate from "@/components/PermissionGate";
 import EntityPermissionGate from "@/components/EntityPermissionGate";
 import { useWarehouseOptions } from "@/hooks/useEntityOptions";
 import { ConvertOrderDialog } from "@/components/purchases/ConvertOrderDialog";
@@ -90,7 +89,7 @@ export default function PurchaseOrders() {
             <CardTitle className="text-base font-semibold text-slate-800 flex items-center gap-2">
               <ShoppingCart size={18} className="text-blue-600" /> طلبات الشراء
             </CardTitle>
-            <AddActionButton module="purchases" size="sm" className="bg-blue-600 hover:bg-blue-700 text-white gap-1" onClick={() => { resetForm(); setOpen(true); }}>
+            <AddActionButton moduleKey="purchases" entityKey="purchaseOrder" size="sm" className="bg-blue-600 hover:bg-blue-700 text-white gap-1" onClick={() => { resetForm(); setOpen(true); }}>
               <Plus size={14} /> طلب شراء جديد
             </AddActionButton>
           </div>
@@ -123,16 +122,16 @@ export default function PurchaseOrders() {
                   <TableCell>
                     {row.status === "draft" && (
                       <>
-                        <PermissionGate module="purchases" action="edit">
+                        <EntityPermissionGate moduleKey="purchases" entityKey="purchaseOrder" action="edit">
                           <Button variant="ghost" size="sm" className="h-7 text-xs text-slate-600 hover:bg-slate-100 gap-1" onClick={() => void openEdit(row.id)}>
                             <Pencil size={12} /> تعديل
                           </Button>
-                        </PermissionGate>
-                        <PermissionGate module="purchases" action="edit">
+                        </EntityPermissionGate>
+                        <EntityPermissionGate moduleKey="purchases" entityKey="purchaseOrder" action="approve">
                           <Button variant="ghost" size="sm" className="h-7 text-xs text-green-600 hover:bg-green-50 gap-1" onClick={() => approveMut.mutate(row.id)}>
                             <CheckCircle size={12} /> اعتماد
                           </Button>
-                        </PermissionGate>
+                        </EntityPermissionGate>
                       </>
                     )}
                     {row.status === "confirmed" && (
@@ -143,11 +142,11 @@ export default function PurchaseOrders() {
                       </EntityPermissionGate>
                     )}
                     {row.status !== "received" && row.status !== "cancelled" && (
-                      <PermissionGate module="purchases" action="create">
+                      <EntityPermissionGate moduleKey="purchases" entityKey="purchaseOrder" action="edit">
                         <Button variant="ghost" size="sm" className="h-7 text-xs text-blue-600 hover:bg-blue-50 gap-1" onClick={() => setConvertOrderId(row.id)}>
                           <FileText size={12} /> تحويل لفاتورة
                         </Button>
-                      </PermissionGate>
+                      </EntityPermissionGate>
                     )}
                   </TableCell>
                 </TableRow>

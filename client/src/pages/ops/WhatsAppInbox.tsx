@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from "react";
 import ERPLayout from "@/components/ERPLayout";
-import PermissionGate from "@/components/PermissionGate";
+import EntityPermissionGate from "@/components/EntityPermissionGate";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -210,9 +210,10 @@ export default function WhatsAppInboxPage() {
 
   return (
     <ERPLayout title="وارد واتساب">
-      <PermissionGate
-        module="bank"
-        action="view"
+      <EntityPermissionGate
+        moduleKey="ops"
+        entityKey="whatsappInbox"
+        action="viewDoc"
         fallback={<p className="text-sm text-slate-500">لا توجد صلاحية لعرض وارد الواتساب.</p>}
       >
         <div className="mx-auto max-w-6xl space-y-5">
@@ -445,7 +446,7 @@ export default function WhatsAppInboxPage() {
             </section>
           </div>
         </div>
-      </PermissionGate>
+      </EntityPermissionGate>
     </ERPLayout>
   );
 }

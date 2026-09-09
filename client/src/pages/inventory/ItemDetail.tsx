@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useParams } from "wouter";
 import ERPLayout from "@/components/ERPLayout";
 import { FieldLabel, FormSection, FormBanner, entryControlClass, entrySelectTriggerClass, entryTextareaClass } from "@/components/form/EntryForm";
@@ -11,7 +11,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { toast } from "sonner";
 import { ArrowRight, ChevronsUpDown, Pencil, Plus, Save, Search, Trash2 } from "lucide-react";
-import { useModulePermissions } from "@/hooks/usePermissions";
+import { useEntityAllowed } from "@/hooks/useEntityPermission";
 import { tenantPath, useTenantSlug } from "@/lib/tenant";
 
 type TabId = "basic" | "prices" | "units" | "components" | "minmax";
@@ -115,7 +115,7 @@ function ComponentItemPicker({
       <PopoverContent className="w-[min(28rem,92vw)] p-2" align="start">
         <div className="relative mb-2">
           <Search size={14} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
-          <Input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder="بحث بالاسم / الكود / الباركود" className="h-9 pr-8 text-sm" />
+          <Input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder="بحث بالاسم / الكود / السيريل نمبر" className="h-9 pr-8 text-sm" />
         </div>
         <div className="max-h-56 overflow-y-auto space-y-0.5">
           {filtered.length === 0 ? (
@@ -135,7 +135,7 @@ function ComponentItemPicker({
             >
               <div className="font-bold truncate">{item.code ? `${item.code} — ${item.name}` : item.name}</div>
               <div className="text-[11px] text-slate-500 font-semibold mt-0.5">
-                {item.barcode ? `باركود: ${item.barcode} · ` : ""}{item.unit || "—"}
+                {item.barcode ? `سيريل نمبر: ${item.barcode} · ` : ""}{item.unit || "—"}
               </div>
             </button>
           ))}
@@ -155,7 +155,8 @@ export default function ItemDetail() {
   const tenantSlug = useTenantSlug();
   const isNew = params.id === "new" || !params.id;
   const editId = isNew ? null : Number(params.id);
-  const { canEdit, canCreate } = useModulePermissions("inventory");
+  const canEdit = useEntityAllowed("inventory", "item", "edit");
+  const canCreate = useEntityAllowed("inventory", "item", "add");
 
   const [tab, setTab] = useState<TabId>("basic");
   const [form, setForm] = useState(emptyForm);
@@ -176,14 +177,26 @@ export default function ItemDetail() {
   const defaultUnit = unitOptions.includes("قطعة") ? "قطعة" : (unitOptions[0] || "قطعة");
   const catalog = (catalogQ.data || []) as ItemOpt[];
 
+  /**
+   * بنملأ الفورم من بيانات السيرفر مرة واحدة بس لكل صنف (أول ما نفتحه، أو لما نتنقل
+   * لصنف تاني) — مش في كل مرة itemQ.data بيتحدّث. لو سيبناها تشتغل على أي تحديث،
+   * أي إعادة جلب في الخلفية (رجوع فوكس للتاب، إلخ) هتمسح تعديلات المستخدم اللي
+   * لسه ما اتحفظتش من غير ما هو حاسس، وتخلي الحفظ يبعت القيم القديمة بدل الجديدة.
+   */
+  const syncedForId = useRef<number | null | undefined>(undefined);
   useEffect(() => {
     if (isNew) {
-      setForm({ ...emptyForm, unit: defaultUnit });
-      setCompLines([]);
+      if (syncedForId.current !== null) {
+        syncedForId.current = null;
+        setForm({ ...emptyForm, unit: defaultUnit });
+        setCompLines([]);
+      }
       return;
     }
     const row = itemQ.data;
     if (!row) return;
+    if (syncedForId.current === editId) return; // اتملى قبل كده — متعادش نمسح تعديل المستخدم
+    syncedForId.current = editId;
     const unit = (row.unit || defaultUnit).trim() || defaultUnit;
     setForm({
       name: row.name || "",
@@ -198,7 +211,7 @@ export default function ItemDetail() {
       description: row.description || "",
       trackSerial: Boolean(row.trackSerial),
     });
-  }, [isNew, itemQ.data, defaultUnit]);
+  }, [isNew, itemQ.data, editId, defaultUnit]);
 
   useEffect(() => {
     if (!bomQ.data) return;
@@ -275,7 +288,7 @@ export default function ItemDetail() {
   const resolveBarcode = () => {
     const hit = findItemByScan(catalog, compForm.barcode);
     if (!hit) {
-      toast.error("لم يُعثر على صنف بهذا الباركود/الكود");
+      toast.error("لم يُعثر على صنف بهذا السيريل نمبر/الكود");
       return;
     }
     if (editId && hit.id === editId) {
@@ -293,7 +306,7 @@ export default function ItemDetail() {
   const addComponent = async () => {
     const itemId = Number(compForm.itemId);
     if (!itemId) {
-      toast.error("اختر الصنف أو امسح الباركود أولاً");
+      toast.error("اختر الصنف أو امسح السيريل نمبر أولاً");
       return;
     }
     if (editId && itemId === editId) {
@@ -454,7 +467,7 @@ export default function ItemDetail() {
             </Button>
             <div>
               <h1 className="text-xl font-bold text-slate-800">{isNew ? "إضافة صنف جديد" : "تعديل بطاقة الصنف"}</h1>
-              <p className="text-sm text-slate-500">نفس تبويبات بطاقة الصنف — المكونات بمسح الباركود واختيار الصنف</p>
+              <p className="text-sm text-slate-500">نفس تبويبات بطاقة الصنف — المكونات بمسح السيريل نمبر واختيار الصنف</p>
             </div>
           </div>
           <Button className="gap-1.5 bg-blue-600 hover:bg-blue-700" onClick={handleSubmit} disabled={saving}>
@@ -490,7 +503,7 @@ export default function ItemDetail() {
               <p className="text-sm text-slate-700 leading-relaxed">
                 <strong className="text-slate-900">الكود:</strong> رقم الصنف الداخلي (مثل P-0001).
                 {" "}
-                <strong className="text-slate-900">الباركود:</strong> للمسح في الفواتير — قد يختلف عن الكود.
+                <strong className="text-slate-900">السيريل نمبر:</strong> للمسح في الفواتير — قد يختلف عن الكود.
               </p>
             </FormBanner>
 
@@ -506,8 +519,8 @@ export default function ItemDetail() {
                 <Input value={form.code} onChange={f("code")} placeholder={isNew ? "تلقائي" : "كود الصنف"} className={entryControlClass} />
               </div>
               <div>
-                <FieldLabel hint="للماسح الضوئي">الباركود</FieldLabel>
-                <Input value={form.barcode} onChange={f("barcode")} placeholder="امسح أو اكتب الباركود" className={entryControlClass} />
+                <FieldLabel hint="للماسح الضوئي">السيريل نمبر</FieldLabel>
+                <Input value={form.barcode} onChange={f("barcode")} placeholder="امسح أو اكتب السيريل نمبر" className={entryControlClass} />
               </div>
               <div>
                 <FieldLabel>الفئة</FieldLabel>
@@ -600,7 +613,7 @@ export default function ItemDetail() {
         {tab === "units" && (
           <FormBanner tone="info">
             <p className="text-sm text-slate-700">
-              الوحدة الأساسية من خصائص عامة. تعدد الوحدات للصنف الواحد (كرتونة = N قطعة) هيتعمل لاحقاً مع باركود لكل وحدة.
+              الوحدة الأساسية من خصائص عامة. تعدد الوحدات للصنف الواحد (كرتونة = N قطعة) هيتعمل لاحقاً مع سيريل نمبر لكل وحدة.
             </p>
           </FormBanner>
         )}
@@ -627,7 +640,7 @@ export default function ItemDetail() {
 
             <FormSection title="إضافة مكوّن" accent="emerald">
               <div>
-                <FieldLabel>الباركود</FieldLabel>
+                <FieldLabel>السيريل نمبر</FieldLabel>
                 <Input
                   value={compForm.barcode}
                   onChange={(e) => setCompForm((p) => ({ ...p, barcode: e.target.value }))}
@@ -640,7 +653,7 @@ export default function ItemDetail() {
                   onBlur={() => {
                     if (compForm.barcode.trim() && !compForm.itemId) resolveBarcode();
                   }}
-                  placeholder="امسح الباركود ثم Enter"
+                  placeholder="امسح السيريل نمبر ثم Enter"
                   className={entryControlClass}
                   dir="ltr"
                 />
@@ -692,7 +705,7 @@ export default function ItemDetail() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="bg-slate-100 border-b border-slate-200">
-                    <th className="px-3 py-2.5 text-right text-xs font-bold">الباركود</th>
+                    <th className="px-3 py-2.5 text-right text-xs font-bold">السيريل نمبر</th>
                     <th className="px-3 py-2.5 text-right text-xs font-bold">الاسم</th>
                     <th className="px-3 py-2.5 text-right text-xs font-bold">الكمية</th>
                     <th className="px-3 py-2.5 text-right text-xs font-bold">وحدة القياس</th>
@@ -703,7 +716,7 @@ export default function ItemDetail() {
                 <tbody>
                   {compLines.length === 0 ? (
                     <tr>
-                      <td colSpan={6} className="py-10 text-center text-slate-400">لا توجد مكونات — امسح باركود أو اختر صنفاً ثم إضافة</td>
+                      <td colSpan={6} className="py-10 text-center text-slate-400">لا توجد مكونات — امسح سيريل نمبر أو اختر صنفاً ثم إضافة</td>
                     </tr>
                   ) : (
                     compLines.map((l, i) => (

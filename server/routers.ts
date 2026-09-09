@@ -16,7 +16,7 @@ import {
   purchaseReturnItems, salesReturnItems, attendance, payroll, salaryAdvances,
   fixedAssets, costCenters, loans, installments, notifications,
   inventoryAdjustments, inventoryAdjustmentItems, stockTransfers, stockTransferItems,
-  productionOrders, productionOrderMaterials, itemBomLines,
+  productionOrders, productionOrderMaterials, itemBomLines, itemWarehouseStock,
   taxes, salesReps, branches, companySettings, users,
   appUsers, subscriptions, subscriptionPlans,
   discountCoupons, companyProfile, supportTickets, userNotifications,
@@ -616,6 +616,27 @@ const customersRouter = router({
     await db.delete(customers).where(tenantWhere(customers, ctx.tenantId, eq(customers.id, input)));
     return { success: true };
   }),
+  cleanImport: protectedProcedure.input(z.object({
+    rows: z.array(z.object({
+      code: z.string().optional(),
+      name: z.string().min(1),
+      phone: z.string().optional(),
+      phone2: z.string().optional(),
+      email: z.string().optional(),
+      address: z.string().optional(),
+      city: z.string().optional(),
+      taxNumber: z.string().optional(),
+      openingBalance: z.union([z.string(), z.number()]).optional(),
+      openingBalanceDate: z.string().optional(),
+      notes: z.string().optional(),
+    })).min(1).max(5000),
+  })).mutation(async ({ ctx, input }) => {
+    await assertEntityAction(ctx, "contacts", "customer", "add");
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    const { cleanImportContacts } = await import("./contact-clean-import");
+    return cleanImportContacts(db, ctx.tenantId!, "customer", input.rows);
+  }),
 });
 
 // ===================== SUPPLIERS =====================
@@ -806,6 +827,27 @@ const suppliersRouter = router({
     }
     await db.delete(suppliers).where(tenantWhere(suppliers, ctx.tenantId, eq(suppliers.id, input)));
     return { success: true };
+  }),
+  cleanImport: protectedProcedure.input(z.object({
+    rows: z.array(z.object({
+      code: z.string().optional(),
+      name: z.string().min(1),
+      phone: z.string().optional(),
+      phone2: z.string().optional(),
+      email: z.string().optional(),
+      address: z.string().optional(),
+      city: z.string().optional(),
+      taxNumber: z.string().optional(),
+      openingBalance: z.union([z.string(), z.number()]).optional(),
+      openingBalanceDate: z.string().optional(),
+      notes: z.string().optional(),
+    })).min(1).max(5000),
+  })).mutation(async ({ ctx, input }) => {
+    await assertEntityAction(ctx, "contacts", "supplier", "add");
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    const { cleanImportContacts } = await import("./contact-clean-import");
+    return cleanImportContacts(db, ctx.tenantId!, "supplier", input.rows);
   }),
 });
 
@@ -5428,6 +5470,28 @@ const productionRouter = router({
       : [];
     const matMap = new Map(matItems.map((i) => [i.id, i]));
 
+    // رصيد كل خامة في المخزن اللي فعليًا هيتصرف منه (مخزن الخامة لو محدد، وإلا مخزن الأمر)
+    // — مش رصيدها الكلي في كل المخازن، عشان محدش يفتكر إن فيه رصيد كافي وهو في مخزن تاني.
+    const matWarehouseIds = [...new Set(materials.map((m) => m.warehouseId ?? order.warehouseId))];
+    const stockRows = matItemIds.length && matWarehouseIds.length
+      ? await db.select({
+          itemId: itemWarehouseStock.itemId,
+          warehouseId: itemWarehouseStock.warehouseId,
+          quantity: itemWarehouseStock.quantity,
+        }).from(itemWarehouseStock).where(tenantWhere(
+          itemWarehouseStock, ctx.tenantId,
+          and(inArray(itemWarehouseStock.itemId, matItemIds), inArray(itemWarehouseStock.warehouseId, matWarehouseIds)),
+        ))
+      : [];
+    const stockKey = (itemId: number, warehouseId: number) => `${itemId}::${warehouseId}`;
+    const stockMap = new Map(stockRows.map((r) => [stockKey(r.itemId, r.warehouseId), Number(r.quantity || 0)]));
+    const whIds = [...new Set(matWarehouseIds)];
+    const whRows = whIds.length
+      ? await db.select({ id: warehouses.id, name: warehouses.name }).from(warehouses)
+        .where(tenantWhere(warehouses, ctx.tenantId, inArray(warehouses.id, whIds)))
+      : [];
+    const whMap = new Map(whRows.map((w) => [w.id, w.name]));
+
     const lines = materials.map((m) => {
       const it = matMap.get(m.itemId);
       const absQty = Number(m.quantity || 0);
@@ -5435,7 +5499,8 @@ const productionRouter = router({
       const totalQty = absQty * (1 + scrap / 100);
       const scrapQty = absQty * (scrap / 100);
       const unitCost = Number(it?.averageCost || 0) || Number(it?.purchasePrice || 0);
-      const available = Number(it?.currentStock || 0);
+      const effectiveWarehouseId = m.warehouseId ?? order.warehouseId;
+      const available = stockMap.get(stockKey(m.itemId, effectiveWarehouseId)) ?? 0;
       return {
         id: m.id,
         itemId: m.itemId,
@@ -5443,6 +5508,8 @@ const productionRouter = router({
         scrapPercent: m.scrapPercent,
         notes: m.notes,
         warehouseId: m.warehouseId,
+        effectiveWarehouseId,
+        warehouseName: whMap.get(effectiveWarehouseId),
         itemName: it?.name,
         itemCode: it?.code,
         unit: it?.unit,
@@ -5476,6 +5543,25 @@ const productionRouter = router({
     };
   }),
 
+  /** رصيد أصناف بعينها موزّع على المخازن — تستخدمها شاشة إنشاء/تعديل أمر الإنتاج عشان تعرف
+   * "المتاح" الحقيقي في المخزن اللي المستخدم فعلاً هيصرف منه كل خامة، مش رصيدها الكلي في كل المخازن. */
+  materialStock: protectedProcedure
+    .input(z.object({ itemIds: z.array(z.number()) }))
+    .query(async ({ ctx, input }) => {
+      await assertEntityAction(ctx, "production", "productionOrder", "viewDocList");
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      if (!input.itemIds.length) return { rows: [] as { itemId: number; warehouseId: number; quantity: string }[] };
+      const rows = await db.select({
+        itemId: itemWarehouseStock.itemId,
+        warehouseId: itemWarehouseStock.warehouseId,
+        quantity: itemWarehouseStock.quantity,
+      }).from(itemWarehouseStock).where(tenantWhere(
+        itemWarehouseStock, ctx.tenantId, inArray(itemWarehouseStock.itemId, input.itemIds),
+      ));
+      return { rows };
+    }),
+
   create: protectedProcedure.input(z.object({
     productId: z.number(),
     quantity: z.string(),
@@ -5499,6 +5585,9 @@ const productionRouter = router({
     await assertDateNotInClosedPeriod(db, ctx.tenantId, input.date);
     const scope = await loadUserScopeFromCtx(db, ctx.saasUser);
     assertWarehouseAccess(scope, input.warehouseId);
+    for (const m of input.materials || []) {
+      if (m.warehouseId) assertWarehouseAccess(scope, m.warehouseId);
+    }
     if (input.productId && (input.materials || []).some((m) => m.itemId === input.productId)) {
       throw new TRPCError({ code: "BAD_REQUEST", message: "لا يمكن أن يكون المنتج النهائي مادة خام في نفس الأمر" });
     }
@@ -5577,6 +5666,9 @@ const productionRouter = router({
     await assertDateNotInClosedPeriod(db, ctx.tenantId, input.date);
     const scope = await loadUserScopeFromCtx(db, ctx.saasUser);
     assertWarehouseAccess(scope, input.warehouseId);
+    for (const m of input.materials) {
+      if (m.warehouseId) assertWarehouseAccess(scope, m.warehouseId);
+    }
     await db.update(productionOrders).set({
       productId: input.productId,
       warehouseId: input.warehouseId,

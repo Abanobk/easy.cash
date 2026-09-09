@@ -18,6 +18,7 @@ import {
   type OpsDraft,
 } from "./ops-inbox";
 import { protectedProcedure, router } from "./_core/trpc";
+import { assertEntityAction } from "./entity-permission-service";
 
 function requireTenant(tenantId: number | null | undefined) {
   if (!tenantId) throw new TRPCError({ code: "FORBIDDEN", message: "لا توجد شركة" });
@@ -65,6 +66,7 @@ export const opsInboxRouter = router({
     )
     .query(async ({ ctx, input }) => {
       const tenantId = requireTenant(ctx.tenantId);
+      await assertEntityAction(ctx, "ops", "whatsappInbox", "viewDoc");
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "قاعدة البيانات غير متاحة" });
       return listOpsInbox(db, tenantId, input || {});
@@ -83,6 +85,7 @@ export const opsInboxRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       const tenantId = requireTenant(ctx.tenantId);
+      await assertEntityAction(ctx, "ops", "whatsappInbox", "add");
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "قاعدة البيانات غير متاحة" });
       try {
@@ -102,6 +105,7 @@ export const opsInboxRouter = router({
     .input(z.object({ id: z.number().int().positive(), draft: draftInput }))
     .mutation(async ({ ctx, input }) => {
       const tenantId = requireTenant(ctx.tenantId);
+      await assertEntityAction(ctx, "ops", "whatsappInbox", "edit");
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "قاعدة البيانات غير متاحة" });
       try {
@@ -118,6 +122,7 @@ export const opsInboxRouter = router({
     .input(z.object({ id: z.number().int().positive(), draft: draftInput.optional() }))
     .mutation(async ({ ctx, input }) => {
       const tenantId = requireTenant(ctx.tenantId);
+      await assertEntityAction(ctx, "ops", "whatsappInbox", "edit");
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "قاعدة البيانات غير متاحة" });
       const userId = ctx.user?.id || ctx.saasUser?.id;
@@ -142,6 +147,7 @@ export const opsInboxRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       const tenantId = requireTenant(ctx.tenantId);
+      await assertEntityAction(ctx, "ops", "whatsappInbox", "edit");
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "قاعدة البيانات غير متاحة" });
       return setOpsInboxStatus(
@@ -158,6 +164,7 @@ export const opsInboxRouter = router({
     .input(z.object({ id: z.number().int().positive() }))
     .mutation(async ({ ctx, input }) => {
       const tenantId = requireTenant(ctx.tenantId);
+      await assertEntityAction(ctx, "ops", "whatsappInbox", "edit");
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "قاعدة البيانات غير متاحة" });
       try {
@@ -174,6 +181,7 @@ export const opsInboxRouter = router({
     .input(z.object({ id: z.number().int().positive() }))
     .query(async ({ ctx, input }) => {
       const tenantId = requireTenant(ctx.tenantId);
+      await assertEntityAction(ctx, "ops", "whatsappInbox", "viewDoc");
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "قاعدة البيانات غير متاحة" });
       const row = await getOpsInboxContent(db, tenantId, input.id);
@@ -195,6 +203,7 @@ export const opsInboxRouter = router({
     )
     .query(async ({ ctx, input }) => {
       const tenantId = requireTenant(ctx.tenantId);
+      await assertEntityAction(ctx, "ops", "factoryDaily", "viewDoc");
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "قاعدة البيانات غير متاحة" });
       return listFactoryDaily(db, tenantId, input || {});
@@ -220,6 +229,7 @@ export const opsInboxRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       const tenantId = requireTenant(ctx.tenantId);
+      await assertEntityAction(ctx, "ops", "factoryDaily", "add");
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "قاعدة البيانات غير متاحة" });
       try {
@@ -239,6 +249,7 @@ export const opsInboxRouter = router({
     .input(z.object({ id: z.number().int().positive() }))
     .query(async ({ ctx, input }) => {
       const tenantId = requireTenant(ctx.tenantId);
+      await assertEntityAction(ctx, "ops", "factoryDaily", "viewDoc");
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "قاعدة البيانات غير متاحة" });
       const row = await getFactoryDailyContent(db, tenantId, input.id);
@@ -255,6 +266,7 @@ export const opsInboxRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       const tenantId = requireTenant(ctx.tenantId);
+      await assertEntityAction(ctx, "ops", "factoryDaily", "edit");
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "قاعدة البيانات غير متاحة" });
       return setFactoryDailyStatus(db, tenantId, input.id, input.status);
@@ -265,6 +277,7 @@ export const opsInboxRouter = router({
     .input(z.object({ id: z.number().int().positive() }))
     .query(async ({ ctx, input }) => {
       const tenantId = requireTenant(ctx.tenantId);
+      await assertEntityAction(ctx, "ops", "factoryDaily", "viewDoc");
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "قاعدة البيانات غير متاحة" });
       try {

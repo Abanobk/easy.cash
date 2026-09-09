@@ -4,7 +4,7 @@ import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { ArrowRight, ShoppingCart, CheckCircle, FileText, XCircle } from "lucide-react";
 import ERPLayout from "@/components/ERPLayout";
-import PermissionGate from "@/components/PermissionGate";
+import EntityPermissionGate from "@/components/EntityPermissionGate";
 import { toast } from "sonner";
 import { ConvertOrderDialog } from "@/components/purchases/ConvertOrderDialog";
 
@@ -80,25 +80,25 @@ export default function PurchaseOrderDetail() {
           </div>
           <div className="flex items-center gap-2 flex-wrap">
             {canApprove && (
-              <PermissionGate module="purchases" action="edit">
+              <EntityPermissionGate moduleKey="purchases" entityKey="purchaseOrder" action="approve">
                 <Button size="sm" className="bg-blue-600 gap-1" onClick={() => approveMut.mutate(id)} disabled={approveMut.isPending}>
                   <CheckCircle size={14} /> اعتماد
                 </Button>
-              </PermissionGate>
+              </EntityPermissionGate>
             )}
             {canConvert && (
-              <PermissionGate module="purchases" action="create">
+              <EntityPermissionGate moduleKey="purchases" entityKey="purchaseOrder" action="edit">
                 <Button size="sm" className="bg-green-600 gap-1" onClick={() => setConvertOpen(true)}>
                   <FileText size={14} /> تحويل لفاتورة
                 </Button>
-              </PermissionGate>
+              </EntityPermissionGate>
             )}
             {canCancel && (
-              <PermissionGate module="purchases" action="delete">
+              <EntityPermissionGate moduleKey="purchases" entityKey="purchaseOrder" action="deleteCancel">
                 <Button size="sm" variant="outline" className="text-red-600 gap-1" onClick={() => cancelMut.mutate(id)} disabled={cancelMut.isPending}>
                   <XCircle size={14} /> إلغاء
                 </Button>
-              </PermissionGate>
+              </EntityPermissionGate>
             )}
           </div>
         </div>

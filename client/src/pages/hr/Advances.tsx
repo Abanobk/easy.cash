@@ -13,7 +13,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Plus, DollarSign, CheckCircle } from "lucide-react";
 import { toast } from "sonner";
 import { AddActionButton } from "@/components/AddActionButton";
-import PermissionGate from "@/components/PermissionGate";
+import EntityPermissionGate from "@/components/EntityPermissionGate";
 
 export default function Advances() {
   const [open, setOpen] = useState(false);
@@ -43,7 +43,7 @@ export default function Advances() {
             <CardTitle className="text-base font-semibold text-slate-800 flex items-center gap-2">
               <DollarSign size={18} className="text-blue-600" /> سلف الموظفين
             </CardTitle>
-            <AddActionButton module="hr" size="sm" className="bg-blue-600 hover:bg-blue-700 text-white gap-1" onClick={() => { resetForm(); setOpen(true); }}>
+            <AddActionButton moduleKey="hr" entityKey="employeeTransactions" size="sm" className="bg-blue-600 hover:bg-blue-700 text-white gap-1" onClick={() => { resetForm(); setOpen(true); }}>
               <Plus size={14} /> سلفة جديدة
             </AddActionButton>
           </div>
@@ -75,11 +75,11 @@ export default function Advances() {
                   <TableCell><Badge variant={statusBadge(row.status) as any} className="text-xs">{statusLabel(row.status)}</Badge></TableCell>
                   <TableCell>
                     {row.status === "pending" && (
-                      <PermissionGate module="hr" action="edit">
+                      <EntityPermissionGate moduleKey="hr" entityKey="employeeTransactions" action="approve">
                         <Button variant="ghost" size="sm" className="h-7 text-xs text-green-600 hover:bg-green-50 gap-1" onClick={() => approveMut.mutate(row.id)}>
                           <CheckCircle size={12} /> اعتماد
                         </Button>
-                      </PermissionGate>
+                      </EntityPermissionGate>
                     )}
                   </TableCell>
                 </TableRow>

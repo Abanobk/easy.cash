@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { CheckCircle, XCircle, Clock, Calendar, Users, Save } from "lucide-react";
-import PermissionGate from "@/components/PermissionGate";
+import EntityPermissionGate from "@/components/EntityPermissionGate";
 
 type AttendanceStatus = "present" | "absent" | "late" | "half_day" | "holiday";
 
@@ -111,7 +111,7 @@ export default function Attendance() {
                   className="h-8 text-sm w-40"
                 />
               </div>
-              <PermissionGate module="hr" action="edit">
+              <EntityPermissionGate moduleKey="hr" entityKey="attendance" action="edit">
                 <Button
                   onClick={initRecords}
                   disabled={empLoading}
@@ -120,10 +120,10 @@ export default function Attendance() {
                   <Users size={13} />
                   {initialized ? "إعادة تحميل" : "تحميل الموظفين"}
                 </Button>
-              </PermissionGate>
+              </EntityPermissionGate>
               {initialized && (
                 <>
-                  <PermissionGate module="hr" action="edit">
+                  <EntityPermissionGate moduleKey="hr" entityKey="attendance" action="edit">
                     <div className="flex items-center gap-1 mr-auto">
                       <span className="text-xs text-slate-500 ml-2">تحديد الكل:</span>
                       {(Object.keys(statusConfig) as AttendanceStatus[]).map(s => (
@@ -136,8 +136,8 @@ export default function Attendance() {
                         </button>
                       ))}
                     </div>
-                  </PermissionGate>
-                  <PermissionGate module="hr" action="edit">
+                  </EntityPermissionGate>
+                  <EntityPermissionGate moduleKey="hr" entityKey="attendance" action="edit">
                     <Button
                       onClick={handleSave}
                       disabled={saveMut.isPending}
@@ -146,7 +146,7 @@ export default function Attendance() {
                       <Save size={13} />
                       {saveMut.isPending ? "جاري الحفظ..." : "حفظ الحضور"}
                     </Button>
-                  </PermissionGate>
+                  </EntityPermissionGate>
                 </>
               )}
             </div>

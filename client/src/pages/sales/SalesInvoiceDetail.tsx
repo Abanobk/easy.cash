@@ -1,10 +1,11 @@
 import { useParams, useLocation, Link } from "wouter";
+import { tenantPath, useTenantSlug } from "@/lib/tenant";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { ArrowRight, FileText, Banknote, BookOpen, Send, RefreshCw } from "lucide-react";
 import { useState } from "react";
 import ERPLayout from "@/components/ERPLayout";
-import PermissionGate from "@/components/PermissionGate";
+import EntityPermissionGate from "@/components/EntityPermissionGate";
 import { InvoicePaymentDialog } from "@/components/InvoicePaymentDialog";
 import { InvoicePrintButton } from "@/components/InvoicePrintButton";
 import { DocumentAttachmentsPanel } from "@/components/DocumentAttachmentsPanel";
@@ -35,6 +36,7 @@ const ETA_STATUS_LABEL: Record<string, string> = {
 export default function SalesInvoiceDetail() {
   const params = useParams<{ id: string }>();
   const [, navigate] = useLocation();
+  const tenantSlug = useTenantSlug();
   const id = parseInt(params.id || "0");
   const [showPayment, setShowPayment] = useState(false);
 
@@ -74,7 +76,7 @@ export default function SalesInvoiceDetail() {
       <div className="flex flex-col items-center justify-center h-64 gap-4">
         <FileText className="h-12 w-12 text-gray-300" />
         <p className="text-gray-500">لم يتم العثور على الفاتورة</p>
-        <Button variant="outline" onClick={() => navigate("/sales/invoices")}>
+        <Button variant="outline" onClick={() => navigate(tenantPath(tenantSlug, "/sales/invoices"))}>
           <ArrowRight className="h-4 w-4 ml-2" /> العودة للقائمة
         </Button>
       </div>
@@ -94,7 +96,7 @@ export default function SalesInvoiceDetail() {
       {/* Toolbar */}
       <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
         <div className="flex items-center gap-3">
-          <Button variant="outline" size="sm" onClick={() => navigate("/sales/invoices")}>
+          <Button variant="outline" size="sm" onClick={() => navigate(tenantPath(tenantSlug, "/sales/invoices"))}>
             <ArrowRight className="h-4 w-4 ml-1" /> رجوع
           </Button>
           <h1 className="text-xl font-bold text-gray-800">فاتورة بيع - {inv.number}</h1>
@@ -104,21 +106,21 @@ export default function SalesInvoiceDetail() {
         </div>
         <div className="flex items-center gap-2">
           {remaining > 0 && (
-            <PermissionGate module="cash" action="create">
+            <EntityPermissionGate moduleKey="cash" entityKey="cashReceiptFromCustomer" action="add">
               <Button onClick={() => setShowPayment(true)} className="bg-green-600 hover:bg-green-700 text-white gap-2">
                 <Banknote className="h-4 w-4" /> تحصيل ({remaining.toLocaleString("en-US")} ج.م)
               </Button>
-            </PermissionGate>
+            </EntityPermissionGate>
           )}
           {inv.journalEntry?.id && (
-            <Link href={`/accounts/journal/${inv.journalEntry.id}`}>
+            <Link href={tenantPath(tenantSlug, `/accounts/journal/${inv.journalEntry.id}`)}>
               <Button variant="outline" className="gap-2">
                 <BookOpen className="h-4 w-4" /> قيد {inv.journalEntry.number}
               </Button>
             </Link>
           )}
           {["confirmed", "paid", "partial"].includes(inv.status) && !["submitted", "accepted"].includes(inv.etaStatus || "") && (
-            <PermissionGate module="sales" action="edit" featureKey="sales-invoiceslist-invoice">
+            <EntityPermissionGate moduleKey="sales" entityKey={inv.paymentType === "cash" ? "cashSaleInvoice" : "saleInvoice"} action="edit">
               <Button
                 variant="outline"
                 className="gap-2 border-emerald-300 text-emerald-700"
@@ -135,7 +137,7 @@ export default function SalesInvoiceDetail() {
                     ? "إعادة إرسال لـ ETA"
                     : "إرسال لـ ETA"}
               </Button>
-            </PermissionGate>
+            </EntityPermissionGate>
           )}
           {inv.etaUuid && (
             <Button

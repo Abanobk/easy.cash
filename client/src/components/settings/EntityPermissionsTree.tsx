@@ -2,10 +2,13 @@ import { useEffect, useMemo, useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import PermissionGate from "@/components/PermissionGate";
+import EntityPermissionGate from "@/components/EntityPermissionGate";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   PERM_ACTION_LABELS,
   PERM_ACTION_CATEGORY,
@@ -18,7 +21,7 @@ import {
   AlertCircle, Check, ChevronDown, ChevronLeft, Save, Search, Maximize2, Minimize2,
   Settings2, Users, Briefcase, Warehouse, ShoppingBag, ShoppingCart, MapPin, Banknote,
   Landmark, Calculator, Building2, Factory, Target, HandCoins, CalendarClock, Receipt,
-  BarChart3, ShieldCheck, Layers, Container, Sparkles,
+  BarChart3, ShieldCheck, Layers, Container, Sparkles, Inbox, Plus, Trash2,
 } from "lucide-react";
 
 type TreeEntity = {
@@ -56,6 +59,7 @@ const MODULE_ICONS: Record<string, React.ComponentType<{ size?: number; classNam
   security: ShieldCheck,
   import_costing: Container,
   ai_tools: Sparkles,
+  ops: Inbox,
 };
 
 /** ألوان كل فئة أفعال — نفس اللون بيتكرر على الشِب النشط والنقطة في الدليل */
@@ -129,7 +133,12 @@ export default function EntityPermissionsTree() {
   const [touchedKeys, setTouchedKeys] = useState<Set<string>>(new Set());
   const [openModules, setOpenModules] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState("");
+  const [showCreate, setShowCreate] = useState(false);
+  const [newName, setNewName] = useState("");
+  const [newDesc, setNewDesc] = useState("");
+  const [copyFrom, setCopyFrom] = useState("user");
 
+  const utils = trpc.useUtils();
   const rolesQuery = trpc.permissions.listRoles.useQuery();
   const editableRoles = rolesQuery.data?.editableRoles || [];
 
@@ -141,6 +150,31 @@ export default function EntityPermissionsTree() {
       setTouchedKeys(new Set());
     }
   }, [editableRoles, role]);
+
+  const createMut = trpc.permissions.createRole.useMutation({
+    onSuccess: async (res) => {
+      toast.success("تم إنشاء الدور");
+      setShowCreate(false);
+      setNewName("");
+      setNewDesc("");
+      await utils.permissions.listRoles.invalidate();
+      setRole(res.roleKey);
+      setDraft(null);
+      setTouchedKeys(new Set());
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const deleteMut = trpc.permissions.deleteRole.useMutation({
+    onSuccess: async () => {
+      toast.success("تم حذف الدور");
+      await utils.permissions.listRoles.invalidate();
+      setRole("user");
+      setDraft(null);
+      setTouchedKeys(new Set());
+    },
+    onError: (e) => toast.error(e.message),
+  });
 
   const treeQuery = trpc.permissions.entityTree.useQuery(
     { role },
@@ -295,7 +329,33 @@ export default function EntityPermissionsTree() {
                   ))}
                 </SelectContent>
               </Select>
-              <PermissionGate module="security" action="edit">
+              <EntityPermissionGate moduleKey="security" entityKey="users" action="add">
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="h-11 px-4 font-extrabold gap-2"
+                  onClick={() => setShowCreate(true)}
+                >
+                  <Plus size={16} /> دور جديد
+                </Button>
+              </EntityPermissionGate>
+              {selectedMeta && !selectedMeta.isBuiltin && (
+                <EntityPermissionGate moduleKey="security" entityKey="users" action="deleteCancel">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="h-11 px-3 font-extrabold text-red-700 border-red-200 hover:bg-red-50 gap-1"
+                    disabled={deleteMut.isPending}
+                    onClick={() => {
+                      if (!confirm(`حذف الدور «${selectedMeta.name}»؟`)) return;
+                      deleteMut.mutate({ roleKey: selectedMeta.roleKey });
+                    }}
+                  >
+                    <Trash2 size={15} /> حذف
+                  </Button>
+                </EntityPermissionGate>
+              )}
+              <EntityPermissionGate moduleKey="security" entityKey="users" action="edit">
                 <Button
                   className="h-11 px-5 font-extrabold text-[15px] gap-2"
                   onClick={save}
@@ -304,7 +364,7 @@ export default function EntityPermissionsTree() {
                   <Save size={16} />
                   {saveMut.isPending ? "جاري الحفظ..." : "حفظ الشجرة"}
                 </Button>
-              </PermissionGate>
+              </EntityPermissionGate>
             </div>
           </div>
 
@@ -346,11 +406,11 @@ export default function EntityPermissionsTree() {
             <div className="flex flex-wrap items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-bold text-amber-900">
               <AlertCircle size={16} className="text-amber-600 shrink-0" />
               لديك تعديلات غير محفوظة على دور «{selectedMeta?.name || role}».
-              <PermissionGate module="security" action="edit">
+              <EntityPermissionGate moduleKey="security" entityKey="users" action="edit">
                 <Button size="sm" className="h-8 ms-auto font-extrabold gap-1" onClick={save} disabled={saveMut.isPending}>
                   <Save size={14} /> حفظ الآن
                 </Button>
-              </PermissionGate>
+              </EntityPermissionGate>
             </div>
           )}
         </CardHeader>
@@ -472,7 +532,7 @@ export default function EntityPermissionsTree() {
       {/* زر حفظ عائم — يفضل متاح لو المستخدم نزل جوه قائمة طويلة، عشان مايضطرش يرجع لفوق */}
       {dirty && (
         <div className="fixed inset-x-0 bottom-5 z-40 flex justify-center pointer-events-none">
-          <PermissionGate module="security" action="edit">
+          <EntityPermissionGate moduleKey="security" entityKey="users" action="edit">
             <Button
               className="pointer-events-auto h-12 px-6 rounded-full shadow-lg font-extrabold text-[15px] gap-2 bg-slate-900 hover:bg-slate-800 text-white"
               onClick={save}
@@ -481,9 +541,67 @@ export default function EntityPermissionsTree() {
               <Save size={17} />
               {saveMut.isPending ? "جاري الحفظ..." : "حفظ التعديلات"}
             </Button>
-          </PermissionGate>
+          </EntityPermissionGate>
         </div>
       )}
+
+      <Dialog open={showCreate} onOpenChange={setShowCreate}>
+        <DialogContent className="sm:max-w-md" dir="rtl">
+          <DialogHeader>
+            <DialogTitle className="text-lg font-extrabold">إضافة دور جديد</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 pt-1">
+            <div>
+              <Label className="text-sm font-bold">اسم الدور</Label>
+              <Input
+                value={newName}
+                onChange={(e) => setNewName(e.target.value)}
+                placeholder="مثال: مدير الحسابات"
+                className="mt-1 h-11 font-semibold"
+              />
+            </div>
+            <div>
+              <Label className="text-sm font-bold">الوصف (اختياري)</Label>
+              <Textarea
+                value={newDesc}
+                onChange={(e) => setNewDesc(e.target.value)}
+                placeholder="صلاحيات خاصة بهذا الدور"
+                className="mt-1 font-semibold"
+                rows={2}
+              />
+            </div>
+            <div>
+              <Label className="text-sm font-bold">انسخ الصلاحيات من</Label>
+              <Select value={copyFrom} onValueChange={setCopyFrom}>
+                <SelectTrigger className="mt-1 h-11 font-bold">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {editableRoles.filter((r) => r.isBuiltin).map((r) => (
+                    <SelectItem key={r.roleKey} value={r.roleKey}>{r.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-slate-500 mt-1.5 font-semibold">
+                بعدها تقدر تعدّل صلاحياته من الصلاحيات التفصيلية تحت.
+              </p>
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="outline" onClick={() => setShowCreate(false)}>إلغاء</Button>
+              <Button
+                disabled={!newName.trim() || createMut.isPending}
+                onClick={() => createMut.mutate({
+                  name: newName.trim(),
+                  description: newDesc.trim() || undefined,
+                  copyFrom,
+                })}
+              >
+                {createMut.isPending ? "جاري الإنشاء..." : "إنشاء الدور"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

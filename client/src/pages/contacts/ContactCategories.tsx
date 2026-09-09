@@ -48,7 +48,7 @@ export default function ContactCategories() {
             <CardTitle className="text-base font-semibold text-slate-800 flex items-center gap-2">
               <Layers size={18} className="text-blue-600" /> فئات العملاء والموردين
             </CardTitle>
-            <AddActionButton module="contacts" className="bg-blue-600 hover:bg-blue-700 text-white gap-2 h-10 px-4 text-sm font-semibold" onClick={() => { resetForm(); setOpen(true); }}>
+            <AddActionButton moduleKey="contacts" entityKey="contactCategories" className="bg-blue-600 hover:bg-blue-700 text-white gap-2 h-10 px-4 text-sm font-semibold" onClick={() => { resetForm(); setOpen(true); }}>
               <Plus size={16} /> إضافة فئة
             </AddActionButton>
           </div>
@@ -75,7 +75,7 @@ export default function ContactCategories() {
                   <TableCell>
                     <div className="flex gap-1">
                       <EntityRowActions
-                        module="contacts"
+                        entity={{ moduleKey: "contacts", entityKey: "contactCategories" }}
                         onEdit={() => openEdit(row)}
                         onDelete={() => deleteMut.mutate(row.id)}
                       />

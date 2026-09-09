@@ -8,8 +8,9 @@ import { SimpleEntityPage } from "@/components/SimpleEntityPage";
 import { Download, Upload, AlertTriangle, RefreshCw } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
-import PermissionGate from "@/components/PermissionGate";
+import EntityPermissionGate from "@/components/EntityPermissionGate";
 import { toDateStr } from "@/lib/date";
+import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 
 export function DatabaseBackup() {
   const exportQ = trpc.settings.backup.export.useQuery(undefined, { enabled: false });
@@ -178,7 +179,7 @@ export function ExchangeRates() {
     <SimpleEntityPage
       title="أسعار العملات"
       tableTitle="أسعار العملات"
-      permissionModule="settings"
+      entity={{ moduleKey: "settings", entityKey: "currencyRates" }}
       data={q.data as any}
       isLoading={q.isLoading}
       onRefresh={() => q.refetch()}
@@ -234,7 +235,7 @@ export function GeneralAttributes() {
           embedded
           title="خصائص عامة"
           tableTitle="الخصائص"
-          permissionModule="settings"
+          entity={{ moduleKey: "settings", entityKey: "generalProperties" }}
           data={q.data as any}
           isLoading={q.isLoading}
           onRefresh={() => q.refetch()}
@@ -265,7 +266,7 @@ export function GeneralAttributes() {
           title="وحدات القياس"
           tableTitle="وحدات القياس"
           addLabel="وحدة جديدة"
-          permissionModule="settings"
+          entity={{ moduleKey: "settings", entityKey: "generalProperties" }}
           data={unitsQ.data as any}
           isLoading={unitsQ.isLoading}
           onRefresh={() => unitsQ.refetch()}
@@ -385,12 +386,12 @@ export function FiscalYears() {
       <SimpleEntityPage
         title="الفترة المالية"
         tableTitle="الفترات المالية"
-        permissionModule="settings"
+        entity={{ moduleKey: "settings", entityKey: "openPreviousPeriod" }}
         data={q.data as any}
         isLoading={q.isLoading}
         onRefresh={() => q.refetch()}
         extraActions={
-          <PermissionGate module="settings" action="edit">
+          <EntityPermissionGate moduleKey="settings" entityKey="companySettings" action="edit">
             <Button
               variant="outline"
               size="sm"
@@ -401,7 +402,7 @@ export function FiscalYears() {
               <RefreshCw size={14} className={backfillCogs.isPending ? "animate-spin" : ""} />
               ترحيل قيود COGS للفواتير القديمة
             </Button>
-          </PermissionGate>
+          </EntityPermissionGate>
         }
         columns={[
           { key: "name", label: "الاسم" },
@@ -515,11 +516,12 @@ export function FiscalYears() {
 
 export function UserActivitiesPage() {
   const [search, setSearch] = useState("");
+  const debouncedSearch = useDebouncedValue(search);
   const [action, setAction] = useState("");
-  const [query, setQuery] = useState({ search: "", action: "" });
+  const [query, setQuery] = useState({ action: "" });
   const q = trpc.parity.settings.userActivities.list.useQuery({
     limit: 300,
-    search: query.search || undefined,
+    search: debouncedSearch || undefined,
     action: query.action || undefined,
   });
 
@@ -555,7 +557,6 @@ export function UserActivitiesPage() {
               placeholder="مستخدم أو تفاصيل..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && setQuery({ search, action })}
             />
           </div>
           <div className="space-y-1">
@@ -571,7 +572,7 @@ export function UserActivitiesPage() {
               ))}
             </select>
           </div>
-          <Button size="sm" className="bg-blue-600" onClick={() => setQuery({ search, action })}>
+          <Button size="sm" className="bg-blue-600" onClick={() => setQuery({ action })}>
             بحث
           </Button>
           <Button
@@ -580,7 +581,7 @@ export function UserActivitiesPage() {
             onClick={() => {
               setSearch("");
               setAction("");
-              setQuery({ search: "", action: "" });
+              setQuery({ action: "" });
               void q.refetch();
             }}
           >
@@ -724,11 +725,11 @@ export function ImportDataPage() {
           {preview.length > 0 && (
             <p className="text-xs text-slate-500">{preview.length} سجل جاهز للاستيراد</p>
           )}
-          <PermissionGate module="settings" action="create">
+          <EntityPermissionGate moduleKey="settings" entityKey="importData" action="add">
             <Button className="gap-2 bg-blue-600" disabled={!json || imp.isPending} onClick={handleImport}>
               <Upload size={16} /> استيراد
             </Button>
-          </PermissionGate>
+          </EntityPermissionGate>
         </CardContent>
       </Card>
     </ERPLayout>
@@ -779,7 +780,6 @@ export function CitiesPage() {
     <SimpleEntityPage
       title="المدن والمحافظات"
       tableTitle="المدن"
-      permissionModule="settings"
       data={q.data as any}
       isLoading={q.isLoading}
       onRefresh={() => q.refetch()}
@@ -810,7 +810,6 @@ export function AddressesPage() {
     <SimpleEntityPage
       title="العناوين"
       tableTitle="عناوين الشركة"
-      permissionModule="settings"
       data={q.data as any}
       isLoading={q.isLoading}
       onRefresh={() => q.refetch()}

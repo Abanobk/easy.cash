@@ -19,7 +19,6 @@ import { ERP_NAVIGATION, NavItemConfig } from "@/config/erp-navigation";
 import { navIcon } from "@/config/erp-nav-icons";
 import SubscriptionStatusBar from "@/components/SubscriptionStatusBar";
 import SubscriptionHubButton from "@/components/SubscriptionHubButton";
-import { usePermissions } from "@/hooks/usePermissions";
 import { useEntityPermissions, useEntityAllowed } from "@/hooks/useEntityPermission";
 import { moduleKeyForNavGroup, entityTreeAllowsNavItem } from "@/lib/entity-nav-filter";
 import { toast } from "sonner";
@@ -34,7 +33,6 @@ interface NavItem {
 
 function filterNavByPermissions(
   items: NavItemConfig[],
-  canAccessPath: (path?: string, featureKey?: string) => boolean,
   entities: Record<string, string[]>,
   parentModuleKey: string | null = null,
 ): NavItemConfig[] {
@@ -51,7 +49,7 @@ function filterNavByPermissions(
     }
 
     if (hasChildren) {
-      const children = filterNavByPermissions(item.children!, canAccessPath, entities, moduleKey);
+      const children = filterNavByPermissions(item.children!, entities, moduleKey);
       if (children.length === 0) continue;
       result.push({ ...item, children });
       continue;
@@ -60,12 +58,26 @@ function filterNavByPermissions(
       result.push(item);
       continue;
     }
-    if (!canAccessPath(item.path, item.featureKey)) continue;
     // عنصر فرعي جوه قسم متظبط جزئيًا — يتحقق بمطابقة اسمه بأقرب عنصر في الشجرة.
     if (!isTopLevel && moduleKey && !entityTreeAllowsNavItem(entities, moduleKey, item.label, false)) continue;
     result.push(item);
   }
   return result;
+}
+
+/**
+ * بحث في قايمة تنقل مفلترة بالفعل عن مسار معيّن — تُستخدم للتأكد من صلاحية الوصول المباشر
+ * لصفحة (كتابة الرابط يدويًا). `path` جاي من location.pathname (بدون query string أبدًا)،
+ * بينما item.path في erp-navigation.ts كتير بيحمل تبويب كـ query (زي "/production?tab=orders")
+ * — لازم نقارن بالـ pathname بس، وإلا كل صفحة بتاخد تبويب هتتقفل غلط لأي دور مش admin.
+ */
+function pathExistsInNavConfig(items: NavItemConfig[], path: string): boolean {
+  for (const item of items) {
+    const itemPath = item.path?.split("?")[0];
+    if (itemPath && (itemPath === path || path.startsWith(`${itemPath}/`))) return true;
+    if (item.children?.length && pathExistsInNavConfig(item.children, path)) return true;
+  }
+  return false;
 }
 
 function configToNav(items: NavItemConfig[]): NavItem[] {
@@ -221,28 +233,27 @@ export default function ERPLayout({ children, title }: ERPLayoutProps) {
     staleTime: 60_000,
   });
   const saasUser = saasMe.data;
-  const { canAccessPath, isLoading: permsLoading, bypass: permsBypass } = usePermissions();
-  const { entities: entityPerms, isLoading: entityPermsLoading } = useEntityPermissions();
+  const { entities: entityPerms, isLoading: entityPermsLoading, bypass: entityPermsBypass } = useEntityPermissions();
   const canUseAccountingAuditor = useEntityAllowed("ai_tools", "accountingAuditor", "viewDoc");
 
-  const navItems = useMemo(() => {
-    if (permsLoading || permsBypass) return baseNavItems;
-    if (entityPermsLoading) return baseNavItems;
-    const filtered = filterNavByPermissions(ERP_NAVIGATION, canAccessPath, entityPerms);
-    return configToNav(filtered);
-  }, [permsLoading, permsBypass, canAccessPath, entityPerms, entityPermsLoading]);
+  const filteredNavConfig = useMemo(() => {
+    if (entityPermsLoading || entityPermsBypass) return ERP_NAVIGATION;
+    return filterNavByPermissions(ERP_NAVIGATION, entityPerms);
+  }, [entityPermsLoading, entityPermsBypass, entityPerms]);
+
+  const navItems = useMemo(() => configToNav(filteredNavConfig), [filteredNavConfig]);
 
   useEffect(() => {
-    if (permsLoading || permsBypass || !tenantSlug) return;
+    if (entityPermsLoading || entityPermsBypass || !tenantSlug) return;
     const prefix = `/${tenantSlug}`;
     if (!location.startsWith(prefix)) return;
     const relative = location.slice(prefix.length) || "/";
     if (relative.startsWith("/subscription-expired") || relative.startsWith("/login")) return;
-    if (!canAccessPath(relative)) {
+    if (relative !== "/" && !pathExistsInNavConfig(filteredNavConfig, relative)) {
       toast.error("ليس لديك صلاحية الوصول لهذه الصفحة");
       navigate(tenantPath(tenantSlug, "/"));
     }
-  }, [location, tenantSlug, permsLoading, permsBypass, canAccessPath, navigate]);
+  }, [location, tenantSlug, entityPermsLoading, entityPermsBypass, filteredNavConfig, navigate]);
 
   // Redirect to expired page if subscription is not active (except superadmin)
   useEffect(() => {

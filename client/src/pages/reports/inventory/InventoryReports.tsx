@@ -438,8 +438,8 @@ export default function InventoryReports() {
                   </Select>
                 </div>
                 <div className="flex-1 min-w-[140px]">
-                  <Label className="text-xs mb-1 block">بحث بالصنف / الكود / الباركود</Label>
-                  <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="اسم أو كود أو باركود" className="h-9" />
+                  <Label className="text-xs mb-1 block">بحث بالصنف / الكود / السيريل نمبر</Label>
+                  <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="اسم أو كود أو سيريل نمبر" className="h-9" />
                 </div>
                 {reportSlug === "stocktake" && (
                   <>
@@ -654,7 +654,7 @@ function getTableConfig(slug: ReportSlug): {
       return {
         columns: [
           { key: "code", label: "الكود", render: (r) => r.code || "—" },
-          { key: "barcode", label: "الباركود", render: (r) => r.barcode || "—" },
+          { key: "barcode", label: "السيريل نمبر", render: (r) => r.barcode || "—" },
           { key: "name", label: "الصنف", render: (r) => r.name },
           { key: "cat", label: "الفئة", render: (r) => r.categoryName || "—" },
           { key: "unit", label: "الوحدة", render: (r) => r.unit },
@@ -664,7 +664,7 @@ function getTableConfig(slug: ReportSlug): {
           { key: "min", label: "الحد الأدنى", render: (r) => fmt(r.minStock, 3) },
         ],
         exportRows: (rows) => rows.map((r) => ({
-          الكود: r.code, الباركود: r.barcode, الصنف: r.name, الفئة: r.categoryName,
+          الكود: r.code, "سيريل نمبر": r.barcode, الصنف: r.name, الفئة: r.categoryName,
           الوحدة: r.unit, "سعر الشراء": r.purchasePrice, "سعر البيع": r.salePrice, المخزون: r.currentStock,
         })),
       };

@@ -84,7 +84,7 @@ export default function ChartOfAccounts() {
           </div>
           <Badge variant="outline" className={`text-xs ${typeInfo.color} border-0`}>{typeInfo.label}</Badge>
           <AddActionButton
-            module="accounts"
+            moduleKey="accounts" entityKey="chartOfAccounts"
             variant="ghost" size="sm"
             className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 text-blue-600 hover:bg-blue-100"
             onClick={(e) => { e.stopPropagation(); setForm({ ...emptyForm, parentId: account.id, type: account.type }); setOpen(true); }}
@@ -112,7 +112,7 @@ export default function ChartOfAccounts() {
             </div>
             <div className="flex items-center gap-2">
               <AddActionButton
-                module="accounts"
+                moduleKey="accounts" entityKey="chartOfAccounts"
                 variant="outline"
                 size="sm"
                 className="h-8 gap-1.5 text-xs"
@@ -122,7 +122,7 @@ export default function ChartOfAccounts() {
                 <RefreshCw size={14} className={reseedMut.isPending ? "animate-spin" : ""} />
                 تهيئة من قالب Mega
               </AddActionButton>
-              <AddActionButton module="accounts" onClick={() => { setForm(emptyForm); setOpen(true); }} size="sm" className="bg-blue-600 hover:bg-blue-700 text-white h-8 gap-1.5 text-xs">
+              <AddActionButton moduleKey="accounts" entityKey="chartOfAccounts" onClick={() => { setForm(emptyForm); setOpen(true); }} size="sm" className="bg-blue-600 hover:bg-blue-700 text-white h-8 gap-1.5 text-xs">
                 <Plus size={14} />
                 حساب جديد
               </AddActionButton>
@@ -139,7 +139,7 @@ export default function ChartOfAccounts() {
           ) : roots.length === 0 ? (
             <div className="py-16 text-center text-slate-400 text-sm space-y-3">
               <p>لا توجد حسابات.</p>
-              <AddActionButton module="accounts" variant="outline" size="sm" onClick={() => reseedMut.mutate()} disabled={reseedMut.isPending}>
+              <AddActionButton moduleKey="accounts" entityKey="chartOfAccounts" variant="outline" size="sm" onClick={() => reseedMut.mutate()} disabled={reseedMut.isPending}>
                 تهيئة شجرة الحسابات الافتراضية
               </AddActionButton>
             </div>

@@ -12,7 +12,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { Trash2 } from "lucide-react";
-import PermissionGate from "@/components/PermissionGate";
+import EntityPermissionGate from "@/components/EntityPermissionGate";
 import { toDateStr } from "@/lib/date";
 
 export function AssetCategoriesPage() {
@@ -22,7 +22,7 @@ export function AssetCategoriesPage() {
   const d = trpc.parity.assets.categories.delete.useMutation();
   return (
     <SimpleEntityPage title="فئات الأصول" tableTitle="الفئات" data={q.data as any} isLoading={q.isLoading} onRefresh={() => q.refetch()}
-      permissionModule="assets"
+      entity={{ moduleKey: "assets", entityKey: "assetCategories" }}
       columns={[{ key: "name", label: "الفئة" }, { key: "depreciationRate", label: "نسبة الإهلاك %" }]}
       fields={[{ key: "name", label: "الفئة", required: true }, { key: "depreciationRate", label: "نسبة الإهلاك %" }]}
       onCreate={(v) => c.mutateAsync(v as any)} onUpdate={(id, v) => u.mutateAsync({ id, ...v } as any)} onDelete={(id) => d.mutateAsync(id)} />
@@ -36,7 +36,7 @@ export function CapitalMaintenancePage() {
   const d = trpc.parity.assets.capitalMaintenance.delete.useMutation();
   return (
     <SimpleEntityPage title="الصيانة الرأسمالية" tableTitle="سجلات الصيانة" data={q.data as any} isLoading={q.isLoading} onRefresh={() => q.refetch()}
-      permissionModule="assets"
+      entity={{ moduleKey: "assets", entityKey: "capitalMaintenance" }}
       canEdit={false}
       columns={[
         { key: "assetName", label: "الأصل" },
@@ -116,7 +116,7 @@ export function AssetSellingPage() {
           isLoading={q.isLoading}
           onAdd={() => { setForm(emptySale); setOpen(true); }}
           addLabel="بيع أصل"
-          permissionModule="assets"
+          addEntity={{ moduleKey: "assets", entityKey: "assetSale" }}
           columns={[
             { key: "assetName", label: "الأصل" },
             { key: "date", label: "التاريخ", render: (r: any) => toDateStr(r.date) },
@@ -124,7 +124,7 @@ export function AssetSellingPage() {
             { key: "buyer", label: "المشتري" },
           ]}
           actions={(row: any) => (
-            <PermissionGate module="assets" action="delete">
+            <EntityPermissionGate moduleKey="assets" entityKey="assetSale" action="deleteCancel">
               <Button
                 variant="ghost"
                 size="sm"
@@ -139,7 +139,7 @@ export function AssetSellingPage() {
               >
                 <Trash2 size={14} />
               </Button>
-            </PermissionGate>
+            </EntityPermissionGate>
           )}
         />
       </div>
@@ -254,7 +254,7 @@ export function SalesAreasPage() {
   const d = trpc.parity.sales.areas.delete.useMutation();
   return (
     <SimpleEntityPage title="مناطق البيع" tableTitle="المناطق" data={q.data as any} isLoading={q.isLoading} onRefresh={() => q.refetch()}
-      permissionModule="sales_reps"
+      entity={{ moduleKey: "sales_reps", entityKey: "salesAreas" }}
       columns={[{ key: "name", label: "المنطقة" }, { key: "description", label: "الوصف" }]}
       fields={[{ key: "name", label: "المنطقة", required: true }, { key: "description", label: "الوصف", type: "textarea" }]}
       onCreate={(v) => c.mutateAsync(v as any)} onUpdate={(id, v) => u.mutateAsync({ id, ...v } as any)} onDelete={(id) => d.mutateAsync(id)} />

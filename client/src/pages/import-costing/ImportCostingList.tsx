@@ -6,7 +6,7 @@ import { DataTable } from "@/components/DataTable";
 import { trpc } from "@/lib/trpc";
 import { tenantPath, useTenantSlug } from "@/lib/tenant";
 import { toast } from "sonner";
-import PermissionGate from "@/components/PermissionGate";
+import EntityPermissionGate from "@/components/EntityPermissionGate";
 import { Button } from "@/components/ui/button";
 
 function money(n: number) {
@@ -49,9 +49,10 @@ export default function ImportCostingList() {
 
   return (
     <ERPLayout title="تكليف شحنة">
-      <PermissionGate
-        module="import_costing"
-        featureKey="importcosting-shipments"
+      <EntityPermissionGate
+        moduleKey="import_costing"
+        entityKey="shipmentCosting"
+        action="viewDoc"
         fallback={<p className="text-sm text-slate-500">لا توجد صلاحية لعرض تكليف الشحنة.</p>}
       >
         <div className="mb-5 overflow-hidden rounded-2xl border border-slate-200 bg-gradient-to-bl from-slate-900 via-slate-800 to-slate-900 text-white">
@@ -98,8 +99,8 @@ export default function ImportCostingList() {
           total={q.data?.total}
           page={page}
           onPageChange={setPage}
-          permissionModule="import_costing"
-          addFeatureKey="importcosting-shipments"
+          addEntity={{ moduleKey: "import_costing", entityKey: "shipmentCosting" }}
+          rowEntity={{ moduleKey: "import_costing", entityKey: "shipmentCosting" }}
           onAdd={() => navigate(tenantPath(tenantSlug, "/import-costing/new"))}
           addLabel="تقدير جديد"
           onRowClick={(row: { id?: number }) => row.id && navigate(tenantPath(tenantSlug, `/import-costing/${row.id}`))}
@@ -179,7 +180,7 @@ export default function ImportCostingList() {
             },
           ]}
         />
-      </PermissionGate>
+      </EntityPermissionGate>
     </ERPLayout>
   );
 }

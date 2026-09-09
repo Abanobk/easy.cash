@@ -55,7 +55,7 @@ export default function InventoryAdjustments() {
             <CardTitle className="text-base font-semibold text-slate-800 flex items-center gap-2">
               <ClipboardList size={18} className="text-teal-600" /> تسوية المخزون
             </CardTitle>
-            <AddActionButton module="inventory" size="sm" className="bg-teal-600 hover:bg-teal-700 text-white gap-1" onClick={() => { resetForm(); setOpen(true); }}>
+            <AddActionButton moduleKey="inventory" entityKey="stockAdjustment" size="sm" className="bg-teal-600 hover:bg-teal-700 text-white gap-1" onClick={() => { resetForm(); setOpen(true); }}>
               <Plus size={14} /> تسوية جديدة
             </AddActionButton>
           </div>

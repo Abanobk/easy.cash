@@ -1,30 +1,13 @@
 /**
- * تصفية شجرة التنقل الجانبية حسب الشجرة التفصيلية (shared/permission-tree.ts)، فوق تصفية
- * النظام القديم (canAccessPath) الموجودة أصلاً — مش بدل منها.
+ * تصفية شجرة التنقل الجانبية حسب الشجرة التفصيلية (shared/permission-tree.ts) — المرجع
+ * الوحيد. عنصر (أو قسم كامل) مالوش صف صراحة بأفعال فعلية لدور المستخدم = يتشال من
+ * القايمة، بدون استثناءات وبدون رجوع لأي نظام قديم.
  *
- * القاعدة الأهم عشان محدش يتفاجئ: بنطبّق القيود دي بس لو الدور "مهاجر" فعليًا للنظام
- * الجديد (يعني عنده ولو صف واحد محفوظ في أي قسم "أساسي"). أي دور لسه ما لمسش الشجرة
- * التفصيلية خالص يفضل شغال بالنظام القديم 100% زي ما هو — صفر تأثير عليه.
- *
- * لما يبقى الدور مهاجر:
- * - قسم رئيسي (زي "اعدادات عامة") محدش فتحله ولا عنصر واحد جواه → يتشال من القايمة خالص.
- * - قسم فيه عناصر متظبطة → يفضل ظاهر، لكن كل عنصر جواه بيتحقق بمطابقة اسمه بأقرب عنصر في
- *   الشجرة لنفس القسم؛ لو العنصر متظبط وأفعاله فاضية (أو مش متظبط خالص) يتشال، ولو العنصر
- *   مش متعرف عليه (فشلت المطابقة) يفضل ظاهر (أضمن — نتجنب إخفاء شاشة حقيقية بالغلط).
- *
- * ملحوظة مهمة (درس اتعلمناه على مرحلتين): "أدوات الذكاء الاصطناعي" و"تكليف شحنة" مش
- * جزء من شجرة ميجا الأساسية — دول مفاتيح تشغيل/إيقاف مستقلة (زي "امنع المستخدم ده من
- * المساعد الذكي"). اتحطوا برّه حساب "الدور مهاجر للأقسام الأساسية" عشان قفل واحدة
- * منهم لوحدها ميأثرش على باقي القائمة خالص (لو اعتبرناهم زي أي قسم عادي، أول مرة مدير
- * يقفل حاجة زي المساعد الذكي لمستخدم، هيختفي منه فجأة كل قسم تاني لسه محدش لمسه).
- *
- * لكن — لو الدور أصلاً بييتحكم فيه بالتفصيل (زي "مدير الإنتاج" اللي عنده صلاحيات
- * مضبوطة في أقسام أساسية كتير)، أي أداة زيادة زي دي محدش فتحله فيها حاجة المفروض
- * برضو تتقفل زيها بالظبط — مش تفضل مفتوحة بحجة إنها "مستثناة". الاستثناء بتاعها هو
- * بس إنها متأثرش على تفعيل "وضع التقييد" لباقي الأقسام؛ أما تفعيل وضع التقييد عليها
- * هي نفسها فبيتحدد بنفس حالة الدور العامة (coreMigrated) زي أي قسم تاني تمامًا.
+ * استثناء واحد فني بحت: لو نجحناش نطابق اسم عنصر في القايمة بعنصر حقيقي في الشجرة
+ * (فشلت matchEntityKey)، نسيبه ظاهر — أضمن من إخفاء شاشة حقيقية بالغلط بسبب فرق بسيط
+ * في التسمية.
  */
-import { PERMISSION_TREE, CORE_MIGRATION_EXEMPT_MODULES, isCoreMigrated } from "@shared/permission-tree";
+import { PERMISSION_TREE } from "@shared/permission-tree";
 
 /** ترتيب الأقسام هنا زي ما هو في client/src/config/erp-navigation.ts بالظبط. */
 const NAV_GROUP_TO_MODULE: Record<string, string> = {
@@ -49,6 +32,7 @@ const NAV_GROUP_TO_MODULE: Record<string, string> = {
   "التقارير": "reports",
   "الصلاحيات": "security",
   "تكليف شحنة": "import_costing",
+  "وارد العمليات": "ops",
 };
 
 function normalizeLabel(s: string): string {
@@ -98,26 +82,13 @@ export function entityTreeAllowsNavItem(
   isGroup: boolean,
 ): boolean {
   if (!moduleKey) return true;
-  const moduleTouched = Object.keys(entities).some((k) => k.startsWith(`${moduleKey}::`));
-  const coreMigrated = isCoreMigrated(Object.keys(entities));
 
-  if (CORE_MIGRATION_EXEMPT_MODULES.has(moduleKey)) {
-    if (!moduleTouched) {
-      // لو الدور مش بييتحكم فيه بالتفصيل خالص (لسه ما لمسش أي قسم أساسي)، سيب الأداة
-      // دي مفتوحة زي الافتراضي القديم — صفر تأثير على دور بريء تمامًا. لكن لو الدور
-      // فعلاً متحكم فيه بالتفصيل، أي أداة زيادة محدش فتحله فيها حاجة تتقفل زي أي قسم
-      // تاني بالظبط (نفس منطق "قسم محدش لمسه خالص ميظهرش").
-      return !coreMigrated;
-    }
-    const entityKey = matchEntityKey(moduleKey, label);
-    if (!entityKey) return true;
-    const allowed = entities[`${moduleKey}::${entityKey}`];
-    return Array.isArray(allowed) && allowed.length > 0;
+  if (isGroup) {
+    // القسم يفضل ظاهر لو فيه عنصر واحد على الأقل جواه بأفعال فعلية.
+    return Object.entries(entities).some(
+      ([k, actions]) => k.startsWith(`${moduleKey}::`) && Array.isArray(actions) && actions.length > 0,
+    );
   }
-
-  if (!coreMigrated) return true;
-  if (isGroup) return moduleTouched;
-  if (!moduleTouched) return true;
 
   const entityKey = matchEntityKey(moduleKey, label);
   if (!entityKey) return true;

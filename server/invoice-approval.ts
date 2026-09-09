@@ -25,6 +25,7 @@ import { recalculateCustomerBalance, recalculateSupplierBalance } from "./contac
 import { applyStockMovement, resolveWarehouseId } from "./inventory-stock";
 import { updateAverageCostAfterPurchase, recalculateItemAverageCost } from "./inventory-cost";
 import { assertDateNotInClosedPeriod } from "./fiscal-period-guard";
+import { downstreamMessage, findDownstreamStockConsumers } from "./reversal-guards";
 import { tenantWhere } from "./tenant-scope";
 
 /** drizzle/mysql2 يرجّع أعمدة date() ككائن Date حقيقي — String(x).slice(0,10) بيفقد السنة */
@@ -266,7 +267,17 @@ type ReversalLine = {
 };
 
 /** يتأكد إن كل أسطر الفاتورة ممكن تتراجع من غير ما ترجع بالمخزون تحت الصفر — قبل ما نغيّر أي حاجة فعليًا */
-async function assertReversalStockAvailable(db: Db, tenantId: number, lines: ReversalLine[]) {
+async function assertReversalStockAvailable(
+  db: Db,
+  tenantId: number,
+  lines: ReversalLine[],
+  invoiceDate: string,
+) {
+  /** رسالة موجِّهة بأسماء المستندات اللاحقة اللي صرفت الصنف — وإلا نص عام */
+  const shortageError = async (itemId: number, generic: string) => {
+    const docs = await findDownstreamStockConsumers(db, tenantId, { itemId, afterDate: invoiceDate });
+    return new Error(docs.length ? downstreamMessage(generic, docs) : generic);
+  };
   for (const line of lines) {
     const rows = line.splits.length ? line.splits : [{ batchId: line.batchId, quantity: line.quantity }];
     for (const s of rows) {
@@ -275,13 +286,13 @@ async function assertReversalStockAvailable(db: Db, tenantId: number, lines: Rev
           eq(itemWarehouseStock.itemId, line.itemId), eq(itemWarehouseStock.warehouseId, line.warehouseId),
         )));
       if (Number(wh?.quantity ?? 0) < Number(s.quantity) - 0.0001) {
-        throw new Error(`لا يمكن فك الاعتماد: جزء من مخزون «${line.itemName}» تم استخدامه بالفعل في هذا المخزن`);
+        throw await shortageError(line.itemId, `لا يمكن فك الاعتماد: جزء من مخزون «${line.itemName}» تم استخدامه بالفعل في هذا المخزن`);
       }
       if (s.batchId) {
         const [b] = await db.select({ quantity: itemBatches.quantity }).from(itemBatches)
           .where(tenantWhere(itemBatches, tenantId, eq(itemBatches.id, s.batchId)));
         if (Number(b?.quantity ?? 0) < Number(s.quantity) - 0.0001) {
-          throw new Error(`لا يمكن فك الاعتماد: تشغيلة «${line.itemName}» تم استخدام جزء منها بالفعل`);
+          throw await shortageError(line.itemId, `لا يمكن فك الاعتماد: تشغيلة «${line.itemName}» تم استخدام جزء منها بالفعل`);
         }
       }
     }
@@ -299,9 +310,9 @@ export async function unapprovePurchaseInvoice(db: Db, tenantId: number, invoice
   if (Number(inv.paid) > 0) {
     throw new Error("تم تسجيل سداد على هذه الفاتورة — راجع السداد أولاً قبل فك الاعتماد");
   }
-  const [ret] = await db.select({ id: purchaseReturns.id }).from(purchaseReturns)
+  const [ret] = await db.select({ id: purchaseReturns.id, number: purchaseReturns.number }).from(purchaseReturns)
     .where(tenantWhere(purchaseReturns, tenantId, eq(purchaseReturns.invoiceId, invoiceId))).limit(1);
-  if (ret) throw new Error("توجد فاتورة مردود مرتبطة بهذه الفاتورة — ألغِ المردود أولاً");
+  if (ret) throw new Error(`توجد فاتورة مردود شراء ${ret.number} مرتبطة بهذه الفاتورة — ألغِ اعتمادها أولاً`);
   await assertDateNotInClosedPeriod(db, tenantId, toDateStr(inv.date));
 
   const rawLines = await db.select().from(purchaseInvoiceItems)
@@ -319,7 +330,7 @@ export async function unapprovePurchaseInvoice(db: Db, tenantId: number, invoice
     });
   }
 
-  await assertReversalStockAvailable(db, tenantId, lines);
+  await assertReversalStockAvailable(db, tenantId, lines, toDateStr(inv.date));
 
   for (const line of lines) {
     if (line.splits.length) {
@@ -359,9 +370,9 @@ export async function unapproveSalesInvoice(db: Db, tenantId: number, invoiceId:
   if (Number(inv.paid) > 0) {
     throw new Error("تم تسجيل تحصيل على هذه الفاتورة — راجع التحصيل أولاً قبل فك الاعتماد");
   }
-  const [ret] = await db.select({ id: salesReturns.id }).from(salesReturns)
+  const [ret] = await db.select({ id: salesReturns.id, number: salesReturns.number }).from(salesReturns)
     .where(tenantWhere(salesReturns, tenantId, eq(salesReturns.invoiceId, invoiceId))).limit(1);
-  if (ret) throw new Error("توجد فاتورة مردود مرتبطة بهذه الفاتورة — ألغِ المردود أولاً");
+  if (ret) throw new Error(`توجد فاتورة مردود بيع ${ret.number} مرتبطة بهذه الفاتورة — ألغِ اعتمادها أولاً`);
   await assertDateNotInClosedPeriod(db, tenantId, toDateStr(inv.date));
 
   const rawLines = await db.select().from(salesInvoiceItems)

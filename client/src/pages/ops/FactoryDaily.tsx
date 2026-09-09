@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "wouter";
 import ERPLayout from "@/components/ERPLayout";
-import PermissionGate from "@/components/PermissionGate";
+import EntityPermissionGate from "@/components/EntityPermissionGate";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -186,9 +186,10 @@ export default function FactoryDailyPage() {
 
   return (
     <ERPLayout title="شغل المصنع اليومي">
-      <PermissionGate
-        module="bank"
-        action="view"
+      <EntityPermissionGate
+        moduleKey="ops"
+        entityKey="factoryDaily"
+        action="viewDoc"
         fallback={<p className="text-sm text-slate-500">لا توجد صلاحية لعرض شغل المصنع.</p>}
       >
         <div className="mx-auto max-w-5xl space-y-5">
@@ -422,7 +423,7 @@ export default function FactoryDailyPage() {
           onClose={() => setConvertRow(null)}
           onPosted={() => setConvertRow(null)}
         />
-      </PermissionGate>
+      </EntityPermissionGate>
     </ERPLayout>
   );
 }

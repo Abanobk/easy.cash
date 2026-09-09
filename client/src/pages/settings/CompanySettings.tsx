@@ -9,7 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { Building2, GitBranch, Save, Bell, RefreshCw } from "lucide-react";
-import PermissionGate from "@/components/PermissionGate";
+import EntityPermissionGate from "@/components/EntityPermissionGate";
 import { AddActionButton } from "@/components/AddActionButton";
 import { Switch } from "@/components/ui/switch";
 
@@ -111,7 +111,7 @@ export default function CompanySettings() {
                   <Textarea value={form.address} onChange={f("address")} className="text-sm resize-none" rows={2} />
                 </div>
                 <div className="col-span-2">
-                  <PermissionGate module="settings" action="edit">
+                  <EntityPermissionGate moduleKey="settings" entityKey="companySettings" action="edit">
                     <Button
                       onClick={() => { if (!form.name.trim()) { toast.error("اسم الشركة مطلوب"); return; } saveMut.mutate(form); }}
                       disabled={saveMut.isPending}
@@ -120,7 +120,7 @@ export default function CompanySettings() {
                       <Save size={14} />
                       {saveMut.isPending ? "جاري الحفظ..." : "حفظ البيانات"}
                     </Button>
-                  </PermissionGate>
+                  </EntityPermissionGate>
                 </div>
               </div>
             </CardContent>
@@ -150,7 +150,7 @@ export default function CompanySettings() {
                   </div>
                   <div>
                     <AddActionButton
-                      module="settings"
+                      moduleKey="settings" entityKey="branches"
                       onClick={() => { if (!branchForm.name.trim()) { toast.error("اسم الفرع مطلوب"); return; } createBranchMut.mutate(branchForm); }}
                       disabled={createBranchMut.isPending}
                       className="bg-blue-600 hover:bg-blue-700 text-white h-9 gap-1.5 text-sm"
@@ -231,7 +231,7 @@ export default function CompanySettings() {
                   <p className="text-xs text-slate-400 mt-1">افصل بين العناوين بفاصلة</p>
                 </div>
                 <div className="flex gap-2 flex-wrap">
-                  <PermissionGate module="settings" action="edit">
+                  <EntityPermissionGate moduleKey="settings" entityKey="companySettings" action="edit">
                     <Button
                       onClick={() => {
                         if (!form.name.trim()) { toast.error("احفظ اسم الشركة أولاً من تبويب بيانات الشركة"); return; }
@@ -250,7 +250,7 @@ export default function CompanySettings() {
                     >
                       <Bell size={14} /> إرسال ملخص الآن
                     </Button>
-                  </PermissionGate>
+                  </EntityPermissionGate>
                 </div>
                 <p className="text-xs text-amber-700 bg-amber-50 border border-amber-100 rounded p-2">
                   يتطلب إعداد <code className="text-[11px]">RESEND_API_KEY</code> و <code className="text-[11px]">ALERT_EMAIL_FROM</code> في متغيرات السيرفر.
@@ -267,7 +267,7 @@ export default function CompanySettings() {
                   يتم تحديث الرصيد تلقائياً عند إنشاء فواتير آجلة، التحصيل، والمردودات.
                   استخدم هذا الزر لإعادة حساب كل الأرصدة من الفواتير المفتوحة.
                 </p>
-                <PermissionGate module="settings" action="edit">
+                <EntityPermissionGate moduleKey="settings" entityKey="companySettings" action="edit">
                   <Button
                     variant="outline"
                     onClick={() => reconcileMut.mutate()}
@@ -277,7 +277,7 @@ export default function CompanySettings() {
                     <RefreshCw size={14} className={reconcileMut.isPending ? "animate-spin" : ""} />
                     {reconcileMut.isPending ? "جاري التحديث..." : "إعادة حساب كل الأرصدة"}
                   </Button>
-                </PermissionGate>
+                </EntityPermissionGate>
               </CardContent>
             </Card>
           </div>

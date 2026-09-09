@@ -12,7 +12,7 @@ import {
   useEmployeeOptions, useShiftOptions, useDepartmentOptions, useHrSystemOptions, useVacationTypeOptions,
 } from "@/hooks/useEntityOptions";
 import { statusBadge } from "@/components/DataTable";
-import PermissionGate from "@/components/PermissionGate";
+import EntityPermissionGate from "@/components/EntityPermissionGate";
 import { toDateStr } from "@/lib/date";
 
 function useEmployees() {
@@ -26,7 +26,7 @@ export function HrShifts() {
   const d = trpc.parity.hr.shifts.delete.useMutation();
   return (
     <SimpleEntityPage title="فترات العمل" tableTitle="الورديات" data={q.data as any} isLoading={q.isLoading} onRefresh={() => q.refetch()}
-      permissionModule="hr"
+      entity={{ moduleKey: "hr", entityKey: "workShifts" }}
       columns={[{ key: "name", label: "الاسم" }, { key: "startTime", label: "من" }, { key: "endTime", label: "إلى" }]}
       fields={[
         { key: "name", label: "الاسم", required: true },
@@ -44,7 +44,7 @@ export function HrVacations() {
   const d = trpc.parity.hr.vacations.delete.useMutation();
   return (
     <SimpleEntityPage title="الإجازات" tableTitle="أنواع الإجازات" data={q.data as any} isLoading={q.isLoading} onRefresh={() => q.refetch()}
-      permissionModule="hr"
+      entity={{ moduleKey: "hr", entityKey: "leaves" }}
       columns={[{ key: "name", label: "النوع" }, { key: "daysPerYear", label: "أيام/سنة" }]}
       fields={[{ key: "name", label: "النوع", required: true }, { key: "daysPerYear", label: "أيام بالسنة", type: "number" }]}
       onCreate={(v) => c.mutateAsync({ ...v, daysPerYear: Number(v.daysPerYear || 0) } as any)}
@@ -67,7 +67,7 @@ export function HrEmployeeShifts() {
   }, [q.data, employeeFilter]);
   return (
     <SimpleEntityPage title="نظام الورديات" tableTitle="ورديات الموظفين" data={rows as any} isLoading={q.isLoading} onRefresh={() => q.refetch()}
-      permissionModule="hr"
+      entity={{ moduleKey: "hr", entityKey: "shiftSystem" }}
       canEdit={false}
       extraActions={
         <Select value={employeeFilter} onValueChange={setEmployeeFilter}>
@@ -104,7 +104,7 @@ export function HrIncentives() {
   const d = trpc.parity.hr.incentives.delete.useMutation();
   return (
     <SimpleEntityPage title="الحوافز" tableTitle="حوافز الموظفين" data={q.data as any} isLoading={q.isLoading} onRefresh={() => q.refetch()}
-      permissionModule="hr"
+      entity={{ moduleKey: "hr", entityKey: "incentives" }}
       canEdit={false}
       columns={[
         { key: "employeeName", label: "الموظف" },
@@ -149,7 +149,7 @@ export function HrUnderRequest() {
   const d = trpc.parity.hr.underRequest.delete.useMutation();
   return (
     <SimpleEntityPage title="موظفين تحت الطلب" tableTitle="القائمة" data={q.data as any} isLoading={q.isLoading} onRefresh={() => q.refetch()}
-      permissionModule="hr"
+      entity={{ moduleKey: "hr", entityKey: "onDemandEmployees" }}
       columns={[{ key: "name", label: "الاسم" }, { key: "phone", label: "الهاتف" }, { key: "dailyRate", label: "الأجر اليومي" }]}
       fields={[
         { key: "name", label: "الاسم", required: true },
@@ -175,7 +175,7 @@ export function HrMachines() {
   });
   return (
     <SimpleEntityPage title="ماكينات البصمة" tableTitle="الماكينات" data={q.data as any} isLoading={q.isLoading} onRefresh={() => q.refetch()}
-      permissionModule="hr"
+      entity={{ moduleKey: "hr", entityKey: "fingerprintDevices" }}
       extraActions={
         <Button
           size="sm"
@@ -220,7 +220,7 @@ export function HrMobileLocations() {
   const d = trpc.parity.hr.mobileLocations.delete.useMutation();
   return (
     <SimpleEntityPage title="مواقع بصمة الموبايل" tableTitle="المواقع" data={q.data as any} isLoading={q.isLoading} onRefresh={() => q.refetch()}
-      permissionModule="hr"
+      entity={{ moduleKey: "hr", entityKey: "mobileFingerprintLocations" }}
       columns={[
         { key: "name", label: "الاسم" },
         { key: "latitude", label: "خط العرض" },
@@ -293,7 +293,7 @@ export function HrMachineAttendance() {
             <div><Label>حضور</Label><Input type="time" value={form.checkIn} onChange={(e) => setForm({ ...form, checkIn: e.target.value })} /></div>
             <div><Label>انصراف</Label><Input type="time" value={form.checkOut} onChange={(e) => setForm({ ...form, checkOut: e.target.value })} /></div>
           </div>
-          <PermissionGate module="hr" action="create">
+          <EntityPermissionGate moduleKey="hr" entityKey="attendanceMachine" action="add">
             <Button className="w-full" onClick={() => mut.mutate({
               employeeId: Number(form.employeeId),
               date: form.date,
@@ -301,7 +301,7 @@ export function HrMachineAttendance() {
               checkOut: form.checkOut,
               machineId: form.machineId ? Number(form.machineId) : undefined,
             })}>تسجيل</Button>
-          </PermissionGate>
+          </EntityPermissionGate>
         </CardContent></Card>
 
         <Card><CardContent className="p-6 space-y-3">
@@ -383,7 +383,7 @@ export function HrMobileAttendance() {
           <div><Label>خط الطول</Label><Input value={form.longitude} readOnly placeholder="—" /></div>
         </div>
         <Button variant="outline" className="w-full" onClick={captureLocation}>تحديد موقعي GPS</Button>
-        <PermissionGate module="hr" action="create">
+        <EntityPermissionGate moduleKey="hr" entityKey="mobileFingerprint" action="add">
           <Button className="w-full bg-green-600" onClick={() => mut.mutate({
             employeeId: Number(form.employeeId),
             date: form.date,
@@ -391,7 +391,7 @@ export function HrMobileAttendance() {
             latitude: form.latitude,
             longitude: form.longitude,
           })}>تسجيل بصمة</Button>
-        </PermissionGate>
+        </EntityPermissionGate>
       </CardContent></Card>
     </ERPLayout>
   );
@@ -403,7 +403,7 @@ export function HrSystems() {
   const d = trpc.parity.hr.systems.delete.useMutation();
   return (
     <SimpleEntityPage title="الأنظمة" tableTitle="أنظمة HR" data={q.data as any} isLoading={q.isLoading} onRefresh={() => q.refetch()}
-      permissionModule="hr"
+      entity={{ moduleKey: "hr", entityKey: "systems" }}
       columns={[{ key: "name", label: "الاسم" }, { key: "description", label: "الوصف" }]}
       fields={[{ key: "name", label: "الاسم", required: true }, { key: "description", label: "الوصف", type: "textarea" }]}
       onCreate={(v) => c.mutateAsync(v as any)} onUpdate={() => {}} onDelete={(id) => d.mutateAsync(id)} />
@@ -419,7 +419,7 @@ export function HrDepEmpSystems() {
   const d = trpc.parity.hr.depEmpSystems.delete.useMutation();
   return (
     <SimpleEntityPage title="أنظمة الأقسام / الموظفين" tableTitle="الربط" data={q.data as any} isLoading={q.isLoading} onRefresh={() => q.refetch()}
-      permissionModule="hr"
+      entity={{ moduleKey: "hr", entityKey: "deptEmployeeSystems" }}
       canEdit={false}
       columns={[
         { key: "systemName", label: "النظام" },
@@ -467,7 +467,7 @@ export function HrEmployeeVacationRequests() {
       data={rows as any}
       isLoading={q.isLoading}
       onRefresh={() => q.refetch()}
-      permissionModule="hr"
+      entity={{ moduleKey: "hr", entityKey: "employeeVacationRequests" }}
       canEdit={false}
       extraActions={
         <div className="flex items-center gap-2">

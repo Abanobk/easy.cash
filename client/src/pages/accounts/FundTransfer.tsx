@@ -82,7 +82,7 @@ export default function FundTransfer() {
         onPageChange={setPage}
         onAdd={() => { resetForm(); setOpen(true); }}
         addLabel="تحويل جديد"
-        permissionModule="accounts"
+        addEntity={{ moduleKey: "accounts", entityKey: "journalEntry" }}
         onRowClick={(row: { id?: number }) => row.id && navigate(tenantPath(tenantSlug, `/accounts/journal/${row.id}`))}
         columns={[
           { key: "number", label: "رقم القيد", className: "w-28" },

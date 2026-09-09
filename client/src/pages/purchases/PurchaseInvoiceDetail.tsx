@@ -1,10 +1,11 @@
 import { useParams, useLocation, Link } from "wouter";
+import { tenantPath, useTenantSlug } from "@/lib/tenant";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { ArrowRight, Printer, FileText, Banknote, BookOpen } from "lucide-react";
 import { useRef, useState } from "react";
 import ERPLayout from "@/components/ERPLayout";
-import PermissionGate from "@/components/PermissionGate";
+import EntityPermissionGate from "@/components/EntityPermissionGate";
 import { InvoicePaymentDialog } from "@/components/InvoicePaymentDialog";
 import { DocumentAttachmentsPanel } from "@/components/DocumentAttachmentsPanel";
 import { toast } from "sonner";
@@ -25,6 +26,7 @@ const paymentTypeMap: Record<string, string> = {
 export default function PurchaseInvoiceDetail() {
   const params = useParams<{ id: string }>();
   const [, navigate] = useLocation();
+  const tenantSlug = useTenantSlug();
   const printRef = useRef<HTMLDivElement>(null);
   const id = parseInt(params.id || "0");
   const [showPayment, setShowPayment] = useState(false);
@@ -94,7 +96,7 @@ export default function PurchaseInvoiceDetail() {
       <div className="flex flex-col items-center justify-center h-64 gap-4">
         <FileText className="h-12 w-12 text-gray-300" />
         <p className="text-gray-500">لم يتم العثور على الفاتورة</p>
-        <Button variant="outline" onClick={() => navigate("/purchases/invoices")}>
+        <Button variant="outline" onClick={() => navigate(tenantPath(tenantSlug, "/purchases/invoices"))}>
           <ArrowRight className="h-4 w-4 ml-2" /> العودة للقائمة
         </Button>
       </div>
@@ -111,7 +113,7 @@ export default function PurchaseInvoiceDetail() {
       {/* Toolbar */}
       <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
         <div className="flex items-center gap-3">
-          <Button variant="outline" size="sm" onClick={() => navigate("/purchases/invoices")}>
+          <Button variant="outline" size="sm" onClick={() => navigate(tenantPath(tenantSlug, "/purchases/invoices"))}>
             <ArrowRight className="h-4 w-4 ml-1" /> رجوع
           </Button>
           <h1 className="text-xl font-bold text-gray-800">فاتورة شراء - {inv.number}</h1>
@@ -121,14 +123,14 @@ export default function PurchaseInvoiceDetail() {
         </div>
         <div className="flex items-center gap-2">
           {remaining > 0 && (
-            <PermissionGate module="cash" action="create">
+            <EntityPermissionGate moduleKey="cash" entityKey="cashPaymentToSupplier" action="add">
               <Button onClick={() => setShowPayment(true)} className="bg-green-600 hover:bg-green-700 text-white gap-2">
                 <Banknote className="h-4 w-4" /> سداد ({remaining.toLocaleString("en-US")} ج.م)
               </Button>
-            </PermissionGate>
+            </EntityPermissionGate>
           )}
           {inv.journalEntry?.id && (
-            <Link href={`/accounts/journal/${inv.journalEntry.id}`}>
+            <Link href={tenantPath(tenantSlug, `/accounts/journal/${inv.journalEntry.id}`)}>
               <Button variant="outline" className="gap-2">
                 <BookOpen className="h-4 w-4" /> قيد {inv.journalEntry.number}
               </Button>

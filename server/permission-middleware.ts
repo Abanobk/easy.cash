@@ -95,16 +95,22 @@ export async function assertTrpcPermission(
   const rule = resolveTrpcPermission(path);
   if (!rule) return;
 
-  // لو الشجرة التفصيلية متظبطة صراحة للعنصر بتاع الـpath ده لهذا الدور، سيبها هي
-  // المرجع الوحيد وسيب الفحص القديم (اللي هنا) — عشان صلاحية أدق سمحت بيها الشجرة
-  // متتمنعش بالغلط من القاعدة القديمة الأخشن (قسم × 4 أفعال عامة).
+  // الـpath ده لو جزء من نطاق الشجرة التفصيلية، هي المرجع الوحيد — مفيش رجوع للفحص
+  // القديم تحت أي ظرف: صف صراحة موجود → defer لـassertEntityAction جوه الـprocedure،
+  // مفيش صف خالص → منع مباشر. الفحص القديم (تحت) بيفضل بس لما الـpath يكون أصلاً
+  // مش جزء من الشجرة (بيانات مرجعية للاختيار زي قوائم العملاء/الأصناف).
   if (getRawInput) {
     try {
-      const { shouldDeferToEntityTree } = await import("./entity-permission-service");
+      const { evaluateEntityGate } = await import("./entity-permission-service");
       const raw = await getRawInput();
-      if (await shouldDeferToEntityTree(saasUser.tenantId, saasUser.role, path, raw)) return;
-    } catch {
-      // فشل قراءة الإدخال أو الفحص الجديد — كمّل بالفحص القديم زي ما هو، أضمن.
+      const outcome = await evaluateEntityGate(saasUser.tenantId, saasUser.role, path, raw);
+      if (outcome.kind === "defer") return;
+      if (outcome.kind === "deny") {
+        throw new TRPCError({ code: "FORBIDDEN", message: `لا تملك صلاحية الوصول لهذا الإجراء` });
+      }
+    } catch (e) {
+      if (e instanceof TRPCError) throw e;
+      // فشل قراءة الإدخال فقط — كمّل بالفحص القديم زي ما هو، أضمن.
     }
   }
 

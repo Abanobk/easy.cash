@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import ERPLayout from "@/components/ERPLayout";
 import { DataTable, statusBadge } from "@/components/DataTable";
 import { FormModal } from "@/components/FormModal";
@@ -9,6 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { toDateStr } from "@/lib/date";
+import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 
 const emptyForm = {
   name: "", code: "", nationalId: "", departmentId: undefined as number | undefined,
@@ -19,11 +20,13 @@ const emptyForm = {
 export default function Employees() {
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
+  const debouncedSearch = useDebouncedValue(search);
   const [open, setOpen] = useState(false);
   const [editId, setEditId] = useState<number | null>(null);
   const [form, setForm] = useState(emptyForm);
 
-  const { data, isLoading, refetch } = trpc.hr.employees.list.useQuery({ page, limit: 20, search });
+  useEffect(() => setPage(1), [debouncedSearch]);
+  const { data, isLoading, refetch } = trpc.hr.employees.list.useQuery({ page, limit: 20, search: debouncedSearch });
   const { data: departments } = trpc.hr.departments.list.useQuery();
   const { data: jobTitles } = trpc.hr.jobTitles.list.useQuery();
   const createMut = trpc.hr.employees.create.useMutation({
@@ -86,7 +89,8 @@ export default function Employees() {
         onSearch={setSearch}
         onAdd={() => { setEditId(null); setForm(emptyForm); setOpen(true); }}
         addLabel="موظف جديد"
-        permissionModule="hr"
+        addEntity={{ moduleKey: "hr", entityKey: "employees" }}
+        rowEntity={{ moduleKey: "hr", entityKey: "employees" }}
         onEdit={handleEdit}
         onDelete={(row) => deleteMut.mutate(row.id!)}
         deleteConfirm="حذف الموظف؟"

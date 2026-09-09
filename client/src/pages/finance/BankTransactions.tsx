@@ -127,7 +127,18 @@ export default function BankTransactions() {
         onPageChange={setPage}
         onAdd={openCreate}
         addLabel={meta.addLabel}
-        permissionModule="bank"
+        addEntity={{
+          moduleKey: "bank",
+          entityKey: (
+            { deposit: "bankDeposit", withdraw: "bankWithdrawal", deposit_customer: "bankDepositFromCustomer", withdraw_supplier: "bankWithdrawalToSupplier", withdraw_customer: "bankWithdrawal" } as Record<string, string>
+          )[lockedType] || "bankDeposit",
+        }}
+        rowEntity={{
+          moduleKey: "bank",
+          entityKey: (
+            { deposit: "bankDeposit", withdraw: "bankWithdrawal", deposit_customer: "bankDepositFromCustomer", withdraw_supplier: "bankWithdrawalToSupplier", withdraw_customer: "bankWithdrawal" } as Record<string, string>
+          )[lockedType] || "bankDeposit",
+        }}
         onDelete={() => toast.info("لا يمكن الحذف حالياً")}
         columns={[
           { key: "number", label: "الرقم", className: "w-28" },

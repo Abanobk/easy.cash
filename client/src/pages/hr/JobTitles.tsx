@@ -43,7 +43,7 @@ export default function JobTitles() {
             <CardTitle className="text-base font-semibold text-slate-800 flex items-center gap-2">
               <Briefcase size={18} className="text-blue-600" /> قائمة الوظائف
             </CardTitle>
-            <AddActionButton module="hr" className="bg-blue-600 hover:bg-blue-700 text-white gap-2 h-10 px-4 text-sm font-semibold" onClick={() => { resetForm(); setOpen(true); }}>
+            <AddActionButton moduleKey="hr" entityKey="jobs" className="bg-blue-600 hover:bg-blue-700 text-white gap-2 h-10 px-4 text-sm font-semibold" onClick={() => { resetForm(); setOpen(true); }}>
               إضافة وظيفة
             </AddActionButton>
           </div>
@@ -66,7 +66,7 @@ export default function JobTitles() {
                   <TableCell className="text-xs text-slate-500">{i + 1}</TableCell>
                   <TableCell className="text-sm font-medium text-slate-800">{row.name}</TableCell>
                   <TableCell>
-                    <EntityRowActions module="hr" onEdit={() => openEdit(row)} onDelete={() => deleteMut.mutate(row.id)} />
+                    <EntityRowActions entity={{ moduleKey: "hr", entityKey: "jobs" }} onEdit={() => openEdit(row)} onDelete={() => deleteMut.mutate(row.id)} />
                   </TableCell>
                 </TableRow>
               ))}

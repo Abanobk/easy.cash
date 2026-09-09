@@ -1,31 +1,22 @@
 /**
- * تنفيذ فعلي للشجرة التفصيلية (shared/permission-tree.ts) — بيتفعّل تدريجيًا شاشة بشاشة.
- *
- * القاعدة المهمة عشان الترقية متكسرش حد شغال حاليًا: لو الدور ده أصلاً معندوش أي صف
- * محفوظ في القسم ده خالص (ولا عنصر واحد جواه) في tenant_entity_permissions، بنعتبر
- * القسم كله "مش متظبط" ومنقيدش حاجة — نسيب القرار للنظام القديم (module × 4 أفعال)
- * زي ما هو دايمًا. لكن أول ما المدير يظبط عنصر واحد جوه قسم معيّن لدور معيّن، أي عنصر
- * تاني جواه القسم ده محدش لمسه يتقفل افتراضيًا بدل ما يفضل مفتوح (نفس القاعدة اللي
- * القائمة الجانبية شغالة بيها فعلاً) — يعني القرار مش بس "هل العنصر ده بالذات متظبط"
- * لوحده، لازم كمان "هل القسم ده كله متحكم فيه بالتفصيل". راجع isModuleTouchedForRole.
- *
- * استثناء واحد: موديولات إضافية خاصة بينا (CORE_MIGRATION_EXEMPT_MODULES — أدوات
- * الذكاء الاصطناعي وتكليف شحنة) بتتقفل هي نفسها افتراضيًا (مش تفضل مفتوحة) أول ما
- * الدور يبقى متحكم فيه بالتفصيل من أي قسم أساسي واحد على الأقل — راجع isRoleCoreMigrated.
+ * تنفيذ فعلي للشجرة التفصيلية (shared/permission-tree.ts) — المرجع الوحيد للصلاحيات
+ * الدقيقة (على مستوى عنصر × فعل)، مفيش رجوع للنظام القديم خالص. القاعدة بسيطة: عنصر
+ * مالوش صف محفوظ صراحة لهذا الدور = ممنوع، نقطة — سواء الدور جديد كليًا أو موديول
+ * لسه محدش لمسه. المدير لازم يفتح كل عنصر بنفسه من "الصلاحيات التفصيلية".
  */
 import { TRPCError } from "@trpc/server";
-import { and, eq, notInArray } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { tenantEntityPermissions } from "../drizzle/schema";
 import { getDb } from "./db";
 import { roleBypassesPermissions } from "./permissions-service";
-import { PERM_ACTION_LABELS, CORE_MIGRATION_EXEMPT_MODULES, type PermActionKey } from "../shared/permission-tree";
+import { PERM_ACTION_LABELS, type PermActionKey } from "../shared/permission-tree";
 
 type EntityPermCtx = {
   tenantId: number | null | undefined;
   saasUser: { id: number; role: string } | null | undefined;
 };
 
-/** null = العنصر ده لسه مش متظبط لهذا الدور — متقيدش، سيب القرار للنظام القديم. */
+/** null = مفيش صف محفوظ صراحة لهذا الدور على هذا العنصر — يُعامل كممنوع بالكامل. */
 export async function getEntityAllowedActions(
   tenantId: number,
   role: string,
@@ -50,55 +41,7 @@ export async function getEntityAllowedActions(
   return (row.allowedActions as string[]) || [];
 }
 
-/**
- * true لو الدور متحكم فيه بالتفصيل فعلاً — عنده صف واحد على الأقل في قسم "أساسي"
- * (مش أدوات الذكاء الاصطناعي/تكليف شحنة — CORE_MIGRATION_EXEMPT_MODULES). بيستخدمها
- * assertEntityAction عشان يقرر هل موديول إضافي محدش فتحله فيه حاجة يتقفل افتراضيًا
- * (الدور ده أصلاً بييتحكم فيه بالتفصيل) ولا يفضل مفتوح (الدور بريء تمامًا لسه).
- */
-export async function isRoleCoreMigrated(tenantId: number, role: string): Promise<boolean> {
-  const db = await getDb();
-  if (!db) return false;
-  const [row] = await db
-    .select({ id: tenantEntityPermissions.id })
-    .from(tenantEntityPermissions)
-    .where(
-      and(
-        eq(tenantEntityPermissions.tenantId, tenantId),
-        eq(tenantEntityPermissions.role, role),
-        notInArray(tenantEntityPermissions.moduleKey, [...CORE_MIGRATION_EXEMPT_MODULES]),
-      ),
-    )
-    .limit(1);
-  return !!row;
-}
-
-/**
- * true لو القسم ده بالذات (زي "reports" أو "contacts") فيه صف واحد على الأقل محفوظ
- * لهذا الدور — أي عنصر تاني، مش بس هذا. بيستخدمها assertEntityAction عشان لو مدير
- * فعّل بعض عناصر قسم بعينه بالتفصيل (زي "عميل" جوه "العملاء والموردين") من غير ما
- * يلمس عنصر تاني جواه (زي "مورد")، العنصر اللي محدش لمسه يتقفل افتراضيًا بدل ما
- * يفضل مفتوح — نفس القاعدة بالظبط اللي شغالة في القائمة الجانبية
- * (client/src/lib/entity-nav-filter.ts) لكن هنا في نقطة التنفيذ الفعلية.
- */
-export async function isModuleTouchedForRole(tenantId: number, role: string, moduleKey: string): Promise<boolean> {
-  const db = await getDb();
-  if (!db) return false;
-  const [row] = await db
-    .select({ id: tenantEntityPermissions.id })
-    .from(tenantEntityPermissions)
-    .where(
-      and(
-        eq(tenantEntityPermissions.tenantId, tenantId),
-        eq(tenantEntityPermissions.role, role),
-        eq(tenantEntityPermissions.moduleKey, moduleKey),
-      ),
-    )
-    .limit(1);
-  return !!row;
-}
-
-/** يرمي FORBIDDEN لو الدور ظابط العنصر ده صراحة والفعل مش موجود في القائمة المسموحة. */
+/** يرمي FORBIDDEN إلا لو الدور ظابط العنصر ده صراحة والفعل موجود في القائمة المسموحة. */
 export async function assertEntityAction(
   ctx: EntityPermCtx,
   moduleKey: string,
@@ -109,33 +52,11 @@ export async function assertEntityAction(
   if (roleBypassesPermissions(ctx.saasUser.role)) return;
   if (!ctx.tenantId) return;
   const allowed = await getEntityAllowedActions(ctx.tenantId, ctx.saasUser.role, moduleKey, entityKey);
-  if (allowed !== null) {
-    if (!allowed.includes(action)) {
-      throw new TRPCError({
-        code: "FORBIDDEN",
-        message: `لا تملك صلاحية "${PERM_ACTION_LABELS[action]}" على هذا العنصر`,
-      });
-    }
-    return;
-  }
-
-  // العنصر ده نفسه معندوش صف محفوظ. نقرر نقيّده افتراضيًا (بدل ما يفضل مفتوح) في حالتين:
-  const denyMessage = () => new TRPCError({
+  if (allowed?.includes(action)) return;
+  throw new TRPCError({
     code: "FORBIDDEN",
     message: `لا تملك صلاحية "${PERM_ACTION_LABELS[action]}" على هذا العنصر`,
   });
-
-  if (CORE_MIGRATION_EXEMPT_MODULES.has(moduleKey)) {
-    // (1) موديول إضافي (أدوات الذكاء الاصطناعي/تكليف شحنة) والدور أصلاً متحكم فيه
-    //     بالتفصيل من قسم أساسي واحد على الأقل.
-    if (await isRoleCoreMigrated(ctx.tenantId, ctx.saasUser.role)) throw denyMessage();
-    return;
-  }
-
-  // (2) القسم ده بالذات فيه عنصر تاني متظبط للدور ده (يعني المدير بيتحكم في القسم ده
-  //     بالتفصيل فعلاً) — أي عنصر جواه محدش لمسه يتقفل زيه بالظبط، مش يفضل مفتوح.
-  if (await isModuleTouchedForRole(ctx.tenantId, ctx.saasUser.role, moduleKey)) throw denyMessage();
-  return; // القسم ده كله لسه محدش لمسه خالص لهذا الدور — سلوك قديم زي ما هو
 }
 
 /**
@@ -329,22 +250,31 @@ export function resolveEntityKeysForPath(path: string, rawInput: unknown): PathE
   return null;
 }
 
+export type EntityGateOutcome =
+  /** الـpath ده أصلاً مش جزء من نطاق الشجرة التفصيلية (زي قوائم بيانات مرجعية للاختيار) — الفحص القديم زي ما هو. */
+  | { kind: "not-applicable" }
+  /** متظبط صراحة — سيب القرار الدقيق لـassertEntityAction جوه الـprocedure نفسها. */
+  | { kind: "defer" }
+  /** الـpath ده جزء من الشجرة لكن الدور معندوش صف صراحة لأي عنصر منه — امنع مباشرة، بدون رجوع للقديم. */
+  | { kind: "deny" };
+
 /**
- * true لو الشجرة التفصيلية متظبطة صراحة لعنصر (أو عناصر) هذا الـpath لهذا الدور —
- * يعني الفحص القديم (قسم × 4 أفعال) لازم يتنحّى ويسيب القرار لـassertEntityAction
- * جوه الـprocedure نفسها.
+ * يقرر مصير الطلب: هل الـpath ده جزء من الشجرة التفصيلية أصلاً؟ لو لأ، الفحص القديم
+ * (قسم × 4 أفعال) هو المرجع الوحيد المتبقي (بيانات مرجعية للاختيار — مش قرار صلاحية
+ * حقيقي في الأصل). لو أيوة، الشجرة التفصيلية هي المرجع الوحيد من هنا وطلعوا: صف صراحة
+ * موجود → defer لـassertEntityAction، مفيش صف خالص → deny فورًا بدون أي رجوع للقديم.
  */
-export async function shouldDeferToEntityTree(
+export async function evaluateEntityGate(
   tenantId: number,
   role: string,
   path: string,
   rawInput: unknown,
-): Promise<boolean> {
+): Promise<EntityGateOutcome> {
   const resolution = resolveEntityKeysForPath(path, rawInput);
-  if (!resolution) return false;
+  if (!resolution) return { kind: "not-applicable" };
   for (const entityKey of resolution.entityKeys) {
     const allowed = await getEntityAllowedActions(tenantId, role, resolution.moduleKey, entityKey);
-    if (allowed !== null) return true;
+    if (allowed !== null) return { kind: "defer" };
   }
-  return false;
+  return { kind: "deny" };
 }

@@ -56,7 +56,7 @@ export default function SalesReturns() {
             <CardTitle className="text-base font-semibold text-slate-800 flex items-center gap-2">
               <RotateCcw size={18} className="text-red-600" /> مردودات البيع
             </CardTitle>
-            <AddActionButton module="sales" size="sm" className="bg-red-600 hover:bg-red-700 text-white gap-1" onClick={() => { resetForm(); setOpen(true); }}>
+            <AddActionButton moduleKey="sales" entityKey="saleReturnInvoice" size="sm" className="bg-red-600 hover:bg-red-700 text-white gap-1" onClick={() => { resetForm(); setOpen(true); }}>
               <Plus size={14} /> مردود بيع جديد
             </AddActionButton>
           </div>

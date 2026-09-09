@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
 import ERPLayout from "@/components/ERPLayout";
 import { DataTable, statusBadge } from "@/components/DataTable";
@@ -7,20 +7,24 @@ import { toast } from "sonner";
 import { AlertTriangle, CheckSquare, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { useModulePermissions } from "@/hooks/usePermissions";
+import { useEntityAllowed } from "@/hooks/useEntityPermission";
 import { tenantPath, useTenantSlug } from "@/lib/tenant";
+import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 
 /** قائمة الأصناف (Mega ItemsList) — التعديل في بطاقة صفحة كاملة */
 export default function Items() {
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
+  const debouncedSearch = useDebouncedValue(search);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
-  const { canEdit, canDelete } = useModulePermissions("inventory");
+  const canEdit = useEntityAllowed("inventory", "item", "edit");
+  const canDelete = useEntityAllowed("inventory", "item", "deleteCancel");
   const tenantSlug = useTenantSlug();
   const [, navigate] = useLocation();
   const utils = trpc.useUtils();
 
-  const { data, isLoading, refetch } = trpc.items.list.useQuery({ page, limit: 20, search });
+  useEffect(() => setPage(1), [debouncedSearch]);
+  const { data, isLoading, refetch } = trpc.items.list.useQuery({ page, limit: 20, search: debouncedSearch });
   const rows = data?.rows || [];
 
   const deleteMut = trpc.items.delete.useMutation({
@@ -131,7 +135,8 @@ export default function Items() {
         onSearch={setSearch}
         onAdd={() => openItem("new")}
         addLabel="صنف جديد"
-        permissionModule="inventory"
+        addEntity={{ moduleKey: "inventory", entityKey: "item" }}
+        rowEntity={{ moduleKey: "inventory", entityKey: "item" }}
         onEdit={(row) => {
           if (!canEdit) {
             toast.error("ليس لديك صلاحية تعديل الأصناف");
@@ -160,7 +165,7 @@ export default function Items() {
           { key: "code", label: "الكود", className: "w-28" },
           {
             key: "barcode",
-            label: "الباركود",
+            label: "السيريل نمبر",
             className: "w-32",
             render: (row) => row.barcode || <span className="text-slate-400">—</span>,
           },

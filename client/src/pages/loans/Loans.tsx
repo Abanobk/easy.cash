@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import ERPLayout from "@/components/ERPLayout";
 import { DataTable } from "@/components/DataTable";
 import { FormModal } from "@/components/FormModal";
@@ -11,8 +11,9 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
 import { Eye, RefreshCw } from "lucide-react";
-import PermissionGate from "@/components/PermissionGate";
+import EntityPermissionGate from "@/components/EntityPermissionGate";
 import { toDateStr } from "@/lib/date";
+import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 
 const emptyForm = {
   type: "received" as "given" | "received",
@@ -26,18 +27,20 @@ const emptyForm = {
 export default function Loans() {
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
+  const debouncedSearch = useDebouncedValue(search);
   const [typeFilter, setTypeFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
-  const [query, setQuery] = useState({ search: "", type: "all", status: "all" });
+  const [query, setQuery] = useState({ type: "all", status: "all" });
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState(emptyForm);
   const [viewId, setViewId] = useState<number | null>(null);
   const [regenCount, setRegenCount] = useState("12");
 
+  useEffect(() => setPage(1), [debouncedSearch]);
   const { data, isLoading, refetch } = trpc.loans.list.useQuery({
     page,
     limit: 20,
-    search: query.search || undefined,
+    search: debouncedSearch || undefined,
     type: query.type !== "all" ? (query.type as any) : undefined,
     status: query.status !== "all" ? (query.status as any) : undefined,
   });
@@ -78,8 +81,7 @@ export default function Loans() {
             <div className="space-y-1 flex-1 min-w-[160px]">
               <Label className="text-xs font-bold">بحث</Label>
               <Input className="h-10 font-semibold" placeholder="رقم / جهة..." value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && (setPage(1), setQuery({ search, type: typeFilter, status: statusFilter }))} />
+                onChange={(e) => setSearch(e.target.value)} />
             </div>
             <div className="space-y-1">
               <Label className="text-xs font-bold">النوع</Label>
@@ -104,7 +106,7 @@ export default function Loans() {
                 </SelectContent>
               </Select>
             </div>
-            <Button className="h-10 font-extrabold" onClick={() => { setPage(1); setQuery({ search, type: typeFilter, status: statusFilter }); }}>بحث</Button>
+            <Button className="h-10 font-extrabold" onClick={() => { setPage(1); setQuery({ type: typeFilter, status: statusFilter }); }}>بحث</Button>
           </CardContent>
         </Card>
 
@@ -117,7 +119,7 @@ export default function Loans() {
           onPageChange={setPage}
           onAdd={() => { setForm(emptyForm); setOpen(true); }}
           addLabel="قرض جديد"
-          permissionModule="loans"
+          addEntity={{ moduleKey: "loans", entityKey: "loan" }}
           columns={[
             { key: "number", label: "الرقم", className: "w-28" },
             { key: "type", label: "النوع", render: (row: any) => (
@@ -181,7 +183,7 @@ export default function Loans() {
                 </table>
               </div>
               <div className="flex flex-wrap gap-2 items-end">
-                <PermissionGate module="loans" action="edit">
+                <EntityPermissionGate moduleKey="loans" entityKey="loan" action="edit">
                   <div className="space-y-1">
                     <Label className="text-xs font-bold">عدد الأقساط</Label>
                     <Input className="h-9 w-24" value={regenCount} onChange={(e) => setRegenCount(e.target.value)} />
@@ -194,7 +196,7 @@ export default function Loans() {
                     <Button size="sm" variant="outline" className="h-9 text-red-700"
                       onClick={() => statusMut.mutate({ id: viewId, status: "cancelled" })}>إلغاء القرض</Button>
                   )}
-                </PermissionGate>
+                </EntityPermissionGate>
               </div>
             </CardContent>
           </Card>

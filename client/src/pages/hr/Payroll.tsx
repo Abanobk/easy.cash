@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { DollarSign, Users, Calculator, CheckCircle } from "lucide-react";
 import { statusBadge } from "@/components/DataTable";
-import PermissionGate from "@/components/PermissionGate";
+import EntityPermissionGate from "@/components/EntityPermissionGate";
 
 const months = [
   { value: "1", label: "يناير" }, { value: "2", label: "فبراير" },
@@ -81,7 +81,7 @@ export default function Payroll() {
             <Label className="text-xs font-medium text-slate-600 whitespace-nowrap">السنة:</Label>
             <Input value={year} onChange={e => setYear(e.target.value)} className="h-8 text-sm w-24" />
           </div>
-          <PermissionGate module="hr" action="edit">
+          <EntityPermissionGate moduleKey="hr" entityKey="salaryAccount" action="edit">
             <Button
               className="bg-blue-600 hover:bg-blue-700 text-white h-8 text-xs gap-1.5 mr-auto"
               onClick={handleCalculate}
@@ -90,8 +90,8 @@ export default function Payroll() {
               <Calculator size={13} />
               {calculateMut.isPending ? "جاري الاحتساب..." : "احتساب الرواتب"}
             </Button>
-          </PermissionGate>
-          <PermissionGate module="hr" action="edit">
+          </EntityPermissionGate>
+          <EntityPermissionGate moduleKey="hr" entityKey="salaryAccount" action="approve">
             <Button
               variant="outline"
               className="h-8 text-xs gap-1.5 border-green-300 text-green-700 hover:bg-green-50"
@@ -101,7 +101,7 @@ export default function Payroll() {
               <CheckCircle size={13} />
               {payMut.isPending ? "جاري الصرف..." : "صرف الرواتب"}
             </Button>
-          </PermissionGate>
+          </EntityPermissionGate>
         </div>
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">

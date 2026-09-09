@@ -16,7 +16,7 @@ import {
   type PermissionModule,
   hasPermission,
 } from "../shared/permissions";
-import { appUsers, tenantRolePermissions, tenantRoles, tenantScreenPermissions, userPermissionOverrides } from "../drizzle/schema";
+import { appUsers, tenantEntityPermissions, tenantRolePermissions, tenantRoles, tenantScreenPermissions, userPermissionOverrides } from "../drizzle/schema";
 import { getDb } from "./db";
 import { canManageTeamUsers } from "./saas-auth";
 
@@ -198,7 +198,7 @@ export async function createTenantRole(input: {
     });
   }
 
-  // انسخ تجاوزات الشاشات من الدور المصدر إن وُجدت
+  // انسخ تجاوزات الشاشات من الدور المصدر إن وُجدت (نظام قديم — باقي لأي كود قديم لسه بيقراه)
   const screenRows = await db
     .select()
     .from(tenantScreenPermissions)
@@ -212,6 +212,22 @@ export async function createTenantRole(input: {
       canCreate: row.canCreate,
       canEdit: row.canEdit,
       canDelete: row.canDelete,
+    });
+  }
+
+  // انسخ الصلاحيات التفصيلية الفعلية (النظام الوحيد المُطبَّق) من الدور المصدر —
+  // من غيرها الدور الجديد يطلع بدون أي صلاحية خالص لحد ما حد يدخل يظبطه يدويًا.
+  const entityRows = await db
+    .select()
+    .from(tenantEntityPermissions)
+    .where(and(eq(tenantEntityPermissions.tenantId, input.tenantId), eq(tenantEntityPermissions.role, copyFrom)));
+  for (const row of entityRows) {
+    await db.insert(tenantEntityPermissions).values({
+      tenantId: input.tenantId,
+      role: roleKey,
+      moduleKey: row.moduleKey,
+      entityKey: row.entityKey,
+      allowedActions: row.allowedActions,
     });
   }
 
@@ -270,6 +286,9 @@ export async function deleteTenantRole(tenantId: number, roleKey: string) {
   await db
     .delete(tenantScreenPermissions)
     .where(and(eq(tenantScreenPermissions.tenantId, tenantId), eq(tenantScreenPermissions.role, roleKey)));
+  await db
+    .delete(tenantEntityPermissions)
+    .where(and(eq(tenantEntityPermissions.tenantId, tenantId), eq(tenantEntityPermissions.role, roleKey)));
   await db
     .delete(tenantRoles)
     .where(and(eq(tenantRoles.tenantId, tenantId), eq(tenantRoles.roleKey, roleKey)));

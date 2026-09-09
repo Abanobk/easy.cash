@@ -56,6 +56,8 @@ function matchOne<T extends { id: number; name?: string | null; code?: string | 
     if (exact.length > 1) return { id: null, name: null, by: null, candidates: exact.slice(0, 8) };
     const partial = catalog.filter((x) => {
       const n = normalizeKey(x.name || "");
+      // اسم قصير جداً (زي "H" حرف واحد) بيبقى substring في أي اسم فيه نفس الحرف صدفة — مينفعش نعتمد عليه كتطابق جزئي
+      if (!n || Math.min(n.length, nm.length) < 3) return false;
       return n.includes(nm) || nm.includes(n);
     });
     if (partial.length === 1) return { id: partial[0].id, name: partial[0].name || "", by: "name" as const };

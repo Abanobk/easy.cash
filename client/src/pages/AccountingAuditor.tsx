@@ -15,7 +15,7 @@ import {
   ShieldX,
 } from "lucide-react";
 import ERPLayout from "@/components/ERPLayout";
-import PermissionGate from "@/components/PermissionGate";
+import EntityPermissionGate from "@/components/EntityPermissionGate";
 import AuditNarrativeReport from "@/components/audit/AuditNarrativeReport";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -187,9 +187,10 @@ export default function AccountingAuditorPage() {
 
   return (
     <ERPLayout title="مراجع الحسابات الذكي">
-      <PermissionGate
-        module="accounts"
-        action="view"
+      <EntityPermissionGate
+        moduleKey="ai_tools"
+        entityKey="accountingAuditor"
+        action="viewDoc"
         fallback={<p className="text-sm text-slate-500">لا توجد صلاحية لعرض مراجعة الحسابات.</p>}
       >
         <div className="mx-auto max-w-5xl space-y-5">
@@ -664,7 +665,7 @@ export default function AccountingAuditorPage() {
             </>
           ) : null}
         </div>
-      </PermissionGate>
+      </EntityPermissionGate>
     </ERPLayout>
   );
 }

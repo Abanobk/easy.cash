@@ -59,7 +59,7 @@ export default function StockTransfers() {
             <CardTitle className="text-base font-semibold text-slate-800 flex items-center gap-2">
               <ArrowLeftRight size={18} className="text-purple-600" /> التحويلات بين المخازن
             </CardTitle>
-            <AddActionButton module="inventory" size="sm" className="bg-purple-600 hover:bg-purple-700 text-white gap-1" onClick={() => { resetForm(); setOpen(true); }}>
+            <AddActionButton moduleKey="inventory" entityKey="stockTransfer" size="sm" className="bg-purple-600 hover:bg-purple-700 text-white gap-1" onClick={() => { resetForm(); setOpen(true); }}>
               <Plus size={14} /> تحويل جديد
             </AddActionButton>
           </div>

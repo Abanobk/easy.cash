@@ -1,7 +1,8 @@
-import { eq, inArray } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import type { Db } from "./db";
 import {
   items,
+  itemWarehouseStock,
   productionOrderMaterials,
   productionOrders,
 } from "../drizzle/schema";
@@ -11,6 +12,8 @@ import {
   postProductionWipJournal,
 } from "./auto-journal";
 import { applyStockMovement } from "./inventory-stock";
+import { assertDateNotInClosedPeriod } from "./fiscal-period-guard";
+import { downstreamMessage, findDownstreamStockConsumers } from "./reversal-guards";
 import { tenantWhere } from "./tenant-scope";
 
 function num(v: unknown) {
@@ -101,6 +104,22 @@ async function updateFinishedGoodsAverageCost(
     .update(items)
     .set({ averageCost: String(avg.toFixed(4)) } as any)
     .where(tenantWhere(items, tenantId, eq(items.id, itemId)));
+}
+
+/**
+ * معكوس updateFinishedGoodsAverageCost: بنشيل دفعة (removedQty بتكلفة removedUnitCost) من متوسط
+ * محسوب على stockAfter، ونرجّع المتوسط اللي كان قبلها. مضبوط تماماً طالما مفيش إنتاج/شراء تاني
+ * للمنتج بعد الإتمام؛ لو حصل، بيكون تقريبياً — نفس التسامح المقبول في invoice-approval.ts.
+ */
+export function reverseWeightedAverage(
+  stockAfter: number,
+  curAvg: number,
+  removedQty: number,
+  removedUnitCost: number,
+) {
+  const remain = stockAfter - removedQty;
+  if (remain <= 1e-9) return curAvg;
+  return (stockAfter * curAvg - removedQty * removedUnitCost) / remain;
 }
 
 /** التحقق من توفر المواد قبل البدء */
@@ -194,7 +213,12 @@ export async function startProductionOrder(
   return { success: true as const, wipCost: materialCost };
 }
 
-/** فك اعتماد: إلغاء قيد WIP (لم تتحرك أي كمية مخزنية عند البدء أصلاً) والرجوع لمسودة */
+/**
+ * فك اعتماد أمر تشغيل والرجوع لمسودة قابلة للتعديل.
+ * - من `in_progress`: إلغاء قيد WIP فقط (مفيش حركة مخزون حصلت عند البدء).
+ * - من `completed`: عكس صرف الخامات واستلام المنتج التام ومتوسط التكلفة والقيدين
+ *   (بشرط إن المنتج التام لسه موجود ومتصرفش في مستندات لاحقة).
+ */
 export async function unapproveProductionOrder(
   db: Db,
   tenantId: number,
@@ -205,7 +229,13 @@ export async function unapproveProductionOrder(
     .from(productionOrders)
     .where(tenantWhere(productionOrders, tenantId, eq(productionOrders.id, orderId)));
   if (!order) throw new Error("أمر التشغيل غير موجود");
-  if (order.status !== "in_progress") throw new Error("الأمر ليس معتمداً أصلاً");
+
+  if (order.status === "completed") {
+    return unapproveCompletedProductionOrder(db, tenantId, order);
+  }
+  if (order.status !== "in_progress") {
+    throw new Error("الأمر ليس معتمداً أو مكتملاً");
+  }
 
   // نفس صيغة المرجع المستخدمة في postProductionWipJournal — مش رقم الأمر نفسه
   await cancelPostedJournalByReference(db, tenantId, `PROD-WIP-${order.id}`);
@@ -220,6 +250,95 @@ export async function unapproveProductionOrder(
       approvedAt: null,
     } as any)
     .where(tenantWhere(productionOrders, tenantId, eq(productionOrders.id, orderId)));
+
+  return { success: true as const };
+}
+
+/** عكس completeProductionOrder بالكامل ورجوع الأمر لمسودة */
+async function unapproveCompletedProductionOrder(
+  db: Db,
+  tenantId: number,
+  order: typeof productionOrders.$inferSelect,
+) {
+  await assertDateNotInClosedPeriod(db, tenantId, toDateStr(order.date));
+
+  const materials = await db
+    .select()
+    .from(productionOrderMaterials)
+    .where(tenantWhere(productionOrderMaterials, tenantId, eq(productionOrderMaterials.orderId, order.id)));
+
+  const orderQty = num(order.quantity);
+  const warehouseId = order.warehouseId;
+
+  // لقطة صنف المنتج التام قبل أي تعديل — لازمة لعكس متوسط التكلفة
+  const [product] = await db
+    .select({ currentStock: items.currentStock, averageCost: items.averageCost, purchasePrice: items.purchasePrice })
+    .from(items)
+    .where(tenantWhere(items, tenantId, eq(items.id, order.productId)));
+
+  // حارس: المنتج التام لسه موجود في مخزن الأمر بالكمية المطلوب عكسها
+  const [whRow] = await db
+    .select({ quantity: itemWarehouseStock.quantity })
+    .from(itemWarehouseStock)
+    .where(tenantWhere(itemWarehouseStock, tenantId, and(
+      eq(itemWarehouseStock.itemId, order.productId),
+      eq(itemWarehouseStock.warehouseId, warehouseId),
+    )));
+  if (num(whRow?.quantity) < orderQty - 1e-4) {
+    const docs = await findDownstreamStockConsumers(db, tenantId, {
+      itemId: order.productId,
+      afterDate: toDateStr(order.date),
+      exclude: { type: "production", id: order.id },
+    });
+    throw new Error(downstreamMessage("لا يمكن فك اعتماد الأمر: المنتج التام استُهلك في مستندات لاحقة", docs));
+  }
+
+  // عكس الحركة المخزنية: المنتج التام يخرج، الخامات ترجع
+  await applyStockMovement(db, tenantId, {
+    itemId: order.productId,
+    quantity: orderQty,
+    direction: "out",
+    warehouseId,
+  });
+  for (const m of materials) {
+    const needed = materialNeedWithScrap(m.quantity, orderQty, m.scrapPercent);
+    if (needed <= 0) continue;
+    await applyStockMovement(db, tenantId, {
+      itemId: m.itemId,
+      quantity: needed,
+      direction: "in",
+      warehouseId: m.warehouseId ?? warehouseId,
+    });
+  }
+
+  // عكس متوسط تكلفة المنتج التام
+  const wipCost = num(order.wipCostAmount);
+  const removedUnitCost = orderQty > 0 ? wipCost / orderQty : 0;
+  if (product && orderQty > 0) {
+    const stockAfter = num(product.currentStock); // الرصيد قبل العكس — لسه شامل هذا الأمر
+    const curAvg = num(product.averageCost) || num(product.purchasePrice);
+    const restored = reverseWeightedAverage(stockAfter, curAvg, orderQty, removedUnitCost);
+    await db
+      .update(items)
+      .set({ averageCost: String(restored.toFixed(4)) } as any)
+      .where(tenantWhere(items, tenantId, eq(items.id, order.productId)));
+  }
+
+  // إلغاء القيدين
+  await cancelPostedJournalByReference(db, tenantId, `PROD-COMPLETE-${order.id}`);
+  await cancelPostedJournalByReference(db, tenantId, `PROD-WIP-${order.id}`);
+
+  await db
+    .update(productionOrders)
+    .set({
+      status: "draft",
+      wipCostAmount: "0",
+      wipJournalId: null,
+      completionJournalId: null,
+      approvedBy: null,
+      approvedAt: null,
+    } as any)
+    .where(tenantWhere(productionOrders, tenantId, eq(productionOrders.id, order.id)));
 
   return { success: true as const };
 }
@@ -260,11 +379,13 @@ export async function completeProductionOrder(
   for (const m of materials) {
     const needed = materialNeedWithScrap(m.quantity, orderQty, m.scrapPercent);
     if (needed <= 0) continue;
+    // كل خامة ليها مخزن صرف خاص بيها لو اتحدد (مثلاً مخزن الخامات)، وإلا بترجع لمخزن الأمر
+    // (زي ما كان قبل كده — أمر فيه مخزن واحد للخامة والمنتج التام).
     await applyStockMovement(db, tenantId, {
       itemId: m.itemId,
       quantity: needed,
       direction: "out",
-      warehouseId,
+      warehouseId: m.warehouseId ?? warehouseId,
     });
   }
 

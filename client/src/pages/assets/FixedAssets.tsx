@@ -81,7 +81,7 @@ export default function FixedAssets() {
           onPageChange={setPage}
           onAdd={() => { setForm(emptyForm); setOpen(true); }}
           addLabel="أصل جديد"
-          permissionModule="assets"
+          addEntity={{ moduleKey: "assets", entityKey: "assets" }}
           columns={[
             { key: "code", label: "الكود", className: "w-24" },
             { key: "name", label: "اسم الأصل" },

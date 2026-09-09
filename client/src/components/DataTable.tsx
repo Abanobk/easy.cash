@@ -4,9 +4,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Plus, Search, ChevronRight, ChevronLeft, Loader2 } from "lucide-react";
-import { usePermissions } from "@/hooks/usePermissions";
+import { useEntityAllowed, useEntityPermissions } from "@/hooks/useEntityPermission";
 import { EntityRowActions } from "@/components/EntityRowActions";
-import type { PermissionAction, PermissionModule } from "@shared/permissions";
+import type { PermActionKey } from "@shared/permission-tree";
+
+export type DataTableEntity = { moduleKey: string; entityKey: string };
 
 interface Column<T> {
   key: string;
@@ -28,9 +30,11 @@ interface DataTableProps<T> {
   onSearch?: (v: string) => void;
   onAdd?: () => void;
   addLabel?: string;
-  addPermission?: { module: PermissionModule; action?: PermissionAction; featureKey?: string };
-  addFeatureKey?: string;
-  permissionModule?: PermissionModule;
+  /** الشجرة التفصيلية الجديدة — بديل addPermission/permissionModule القديمين */
+  addEntity?: DataTableEntity;
+  addAction?: PermActionKey;
+  /** الشجرة التفصيلية الجديدة لأزرار تعديل/حذف الصف — بديل permissionModule القديم */
+  rowEntity?: DataTableEntity;
   onEdit?: (row: T) => void;
   onDelete?: (row: T) => void;
   deleteConfirm?: string | ((row: T) => string);
@@ -77,22 +81,18 @@ export function statusBadge(status: string) {
 export function DataTable<T extends { id?: number | string }>({
   title, columns, data, isLoading, total = 0, page = 1,
   onPageChange, limit = 20, search, onSearch, onAdd, addLabel = "إضافة جديد",
-  addPermission, addFeatureKey, permissionModule, onEdit, onDelete, deleteConfirm,
+  addEntity, addAction = "add", rowEntity, onEdit, onDelete, deleteConfirm,
   extraRowActions, actions, emptyMessage = "لا توجد بيانات", headerExtra, onRowClick,
 }: DataTableProps<T>) {
   const totalPages = Math.ceil(total / limit);
-  const { can, canFeature, bypass, isLoading: permsLoading } = usePermissions();
-  const effectiveAddPermission = addPermission ?? (permissionModule ? { module: permissionModule, action: "create" as const, featureKey: addFeatureKey } : undefined);
-  const canAdd = onAdd && !permsLoading && (bypass || !effectiveAddPermission || (
-    effectiveAddPermission.featureKey
-      ? canFeature(effectiveAddPermission.featureKey, effectiveAddPermission.action ?? "create")
-      : can(effectiveAddPermission.module, effectiveAddPermission.action ?? "create")
-  ));
+  const { isLoading: permsLoading } = useEntityPermissions();
+  const addAllowed = useEntityAllowed(addEntity?.moduleKey ?? "", addEntity?.entityKey ?? "", addAction);
+  const canAdd = onAdd && !permsLoading && (!addEntity || addAllowed);
 
   const renderActions = (row: T) => {
-    const builtIn = (onEdit || onDelete) && permissionModule ? (
+    const builtIn = (onEdit || onDelete) && rowEntity ? (
       <EntityRowActions
-        module={permissionModule}
+        entity={rowEntity}
         onEdit={onEdit ? () => onEdit(row) : undefined}
         onDelete={onDelete ? () => onDelete(row) : undefined}
         deleteConfirm={typeof deleteConfirm === "function" ? deleteConfirm(row) : deleteConfirm}

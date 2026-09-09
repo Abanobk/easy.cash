@@ -116,7 +116,12 @@ export default function CashTransactions() {
         onPageChange={setPage}
         onAdd={openCreate}
         addLabel={addLabel}
-        permissionModule="cash"
+        addEntity={{
+          moduleKey: "cash",
+          entityKey: (
+            { receive: "cashReceipt", pay: "cashPayment", receive_customer: "cashReceiptFromCustomer", pay_supplier: "cashPaymentToSupplier", pay_customer: "cashPayment" } as Record<string, string>
+          )[lockedType] || "cashReceipt",
+        }}
         columns={[
           { key: "number", label: "الرقم", className: "w-28 font-mono" },
           { key: "date", label: "التاريخ", render: (row: any) => row.date ? new Date(row.date).toLocaleDateString("en-GB") : "-" },

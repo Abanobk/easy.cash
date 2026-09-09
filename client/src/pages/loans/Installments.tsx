@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import ERPLayout from "@/components/ERPLayout";
 import { DataTable } from "@/components/DataTable";
 import { trpc } from "@/lib/trpc";
@@ -10,22 +10,25 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { CheckCircle } from "lucide-react";
-import PermissionGate from "@/components/PermissionGate";
+import EntityPermissionGate from "@/components/EntityPermissionGate";
 import { toDateStr } from "@/lib/date";
+import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 
 export default function Installments() {
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
+  const debouncedSearch = useDebouncedValue(search);
   const [status, setStatus] = useState("all");
-  const [query, setQuery] = useState({ search: "", status: "all" });
+  const [query, setQuery] = useState({ status: "all" });
   const [payRow, setPayRow] = useState<any | null>(null);
   const [paidAmount, setPaidAmount] = useState("");
   const [paidDate, setPaidDate] = useState(new Date().toISOString().split("T")[0]);
   const [settlementMethod, setSettlementMethod] = useState<"cash" | "bank">("cash");
   const [bankAccountId, setBankAccountId] = useState("");
 
+  useEffect(() => setPage(1), [debouncedSearch]);
   const { data: allInstallments, isLoading, refetch } = trpc.loans.installments.listAll.useQuery({
-    search: query.search || undefined,
+    search: debouncedSearch || undefined,
     status: query.status !== "all" ? (query.status as any) : undefined,
   });
   const banksQ = trpc.bank.accounts.list.useQuery(undefined, { enabled: !!payRow });
@@ -60,8 +63,7 @@ export default function Installments() {
             <div className="space-y-1 flex-1 min-w-[160px]">
               <Label className="text-xs font-bold">بحث</Label>
               <Input className="h-10 font-semibold" placeholder="جهة أو رقم قرض..." value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && (setPage(1), setQuery({ search, status }))} />
+                onChange={(e) => setSearch(e.target.value)} />
             </div>
             <div className="space-y-1">
               <Label className="text-xs font-bold">الحالة</Label>
@@ -75,7 +77,7 @@ export default function Installments() {
                 </SelectContent>
               </Select>
             </div>
-            <Button className="h-10 font-extrabold" onClick={() => { setPage(1); setQuery({ search, status }); }}>بحث</Button>
+            <Button className="h-10 font-extrabold" onClick={() => { setPage(1); setQuery({ status }); }}>بحث</Button>
           </CardContent>
         </Card>
 
@@ -101,7 +103,7 @@ export default function Installments() {
             { key: "paidDate", label: "تاريخ الدفع", render: (row: any) => row.paidDate ? toDateStr(row.paidDate) : "—" },
           ]}
           actions={(row: any) => row.status !== "paid" ? (
-            <PermissionGate module="loans" action="edit">
+            <EntityPermissionGate moduleKey="installments" entityKey="installment" action="edit">
               <Button
                 variant="ghost"
                 size="sm"
@@ -116,7 +118,7 @@ export default function Installments() {
               >
                 <CheckCircle size={13} /> دفع
               </Button>
-            </PermissionGate>
+            </EntityPermissionGate>
           ) : null}
           emptyMessage="لا توجد أقساط. أضف قروضاً من صفحة القروض ليُولَّد الجدول تلقائياً."
         />

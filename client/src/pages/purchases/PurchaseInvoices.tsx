@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import ERPLayout from "@/components/ERPLayout";
 import { DataTable, statusBadge } from "@/components/DataTable";
 import { trpc } from "@/lib/trpc";
@@ -12,8 +12,9 @@ import { toast } from "sonner";
 import { Plus, Trash2, Eye, ArrowRight, Banknote, Copy, ScanLine, CheckCircle2, Pencil, Undo2 } from "lucide-react";
 import EntityPermissionGate from "@/components/EntityPermissionGate";
 import { InvoicePrintButton } from "@/components/InvoicePrintButton";
-import PermissionGate from "@/components/PermissionGate";
+
 import { useLocation } from "wouter";
+import { tenantPath, useTenantSlug } from "@/lib/tenant";
 import { InvoicePaymentDialog } from "@/components/InvoicePaymentDialog";
 import { isForeignCurrency, toBaseAmount, formatInvoiceListTotal } from "@shared/currency";
 import { QuickAddDialog } from "@/components/invoices/QuickAddDialog";
@@ -24,6 +25,7 @@ import { BatchSplitEditor, type BatchSplitRow } from "@/components/invoices/Batc
 import { findItemByScan } from "@/lib/barcode";
 import { printInvoiceQuick, printWarehouseNote } from "@/lib/print-invoice-quick";
 import { toDateStr } from "@/lib/date";
+import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 
 interface InvoiceItem {
   itemId: number;
@@ -65,7 +67,10 @@ const emptySettlement: Settlement = { cashAmount: "0", bankAmount: "0", bankAcco
 
 export default function PurchaseInvoices() {
   const [, navigate] = useLocation();
+  const tenantSlug = useTenantSlug();
   const [page, setPage] = useState(1);
+  const [search, setSearch] = useState("");
+  const debouncedSearch = useDebouncedValue(search);
   const [showForm, setShowForm] = useState(false);
   const [editId, setEditId] = useState<number | null>(null);
   const [form, setForm] = useState(emptyForm);
@@ -83,7 +88,8 @@ export default function PurchaseInvoices() {
   const [lastApproveNow, setLastApproveNow] = useState(false);
 
   const utils = trpc.useUtils();
-  const { data, isLoading, refetch } = trpc.purchases.invoices.list.useQuery({ page, limit: 20 });
+  useEffect(() => setPage(1), [debouncedSearch]);
+  const { data, isLoading, refetch } = trpc.purchases.invoices.list.useQuery({ page, limit: 20, search: debouncedSearch || undefined });
   const { data: suppliers } = trpc.suppliers.list.useQuery({ page: 1, limit: 200 });
   const { data: allItems } = trpc.items.all.useQuery();
   const { data: warehouses } = trpc.warehouses.list.useQuery();
@@ -275,7 +281,7 @@ export default function PurchaseInvoices() {
   const onScanBarcode = () => {
     if (!barcode.trim() || !allItems) return;
     const hit = findItemByScan(allItems as any, barcode);
-    if (!hit) { toast.error("لم يتم العثور على صنف بهذا الباركود"); return; }
+    if (!hit) { toast.error("لم يتم العثور على صنف بهذا السيريل نمبر"); return; }
     const idx = invoiceItems.findIndex((i) => !i.itemId);
     if (idx >= 0) updateItem(idx, "itemId", hit.id);
     else {
@@ -449,7 +455,7 @@ export default function PurchaseInvoices() {
                       value={barcode}
                       onChange={(e) => setBarcode(e.target.value)}
                       onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); onScanBarcode(); } }}
-                      placeholder="امسح أو اكتب الباركود"
+                      placeholder="امسح أو اكتب السيريل نمبر"
                       className="h-8 text-xs pr-7 w-52"
                     />
                   </div>
@@ -518,7 +524,7 @@ export default function PurchaseInvoices() {
                         <td className="px-3 py-2"><Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-red-500 hover:bg-red-50" onClick={() => setInvoiceItems((p) => p.filter((_, i) => i !== idx))}><Trash2 size={12} /></Button></td>
                       </tr>
                     ))}
-                    {invoiceItems.length === 0 && <tr><td colSpan={14} className="py-8 text-center text-slate-400 text-xs">اضغط "إضافة صنف" أو امسح باركود لإضافة أصناف للفاتورة</td></tr>}
+                    {invoiceItems.length === 0 && <tr><td colSpan={14} className="py-8 text-center text-slate-400 text-xs">اضغط "إضافة صنف" أو امسح سيريل نمبر لإضافة أصناف للفاتورة</td></tr>}
                   </tbody>
                 </table>
               </div>
@@ -566,10 +572,10 @@ export default function PurchaseInvoices() {
 
           <div className="flex gap-3 justify-end">
             <Button variant="outline" onClick={() => { setShowForm(false); resetForm(); }}>إلغاء</Button>
-            <PermissionGate module="purchases" action="create" featureKey="purchases-receiptslist-receipt">
+            <EntityPermissionGate moduleKey="purchases" entityKey="purchaseInvoice" action="add">
               <Button onClick={() => handleSubmit(false)} disabled={createMut.isPending || updateMut.isPending} variant="outline" className="px-6">{(createMut.isPending || updateMut.isPending) ? "جاري الحفظ..." : "حفظ"}</Button>
               <Button onClick={() => handleSubmit(true)} disabled={createMut.isPending || updateMut.isPending} className="bg-blue-600 hover:bg-blue-700 text-white px-8 gap-1"><CheckCircle2 size={15} />{(createMut.isPending || updateMut.isPending) ? "جاري الحفظ..." : "حفظ واعتماد"}</Button>
-            </PermissionGate>
+            </EntityPermissionGate>
           </div>
         </div>
 
@@ -596,10 +602,11 @@ export default function PurchaseInvoices() {
         total={data?.total}
         page={page}
         onPageChange={setPage}
+        search={search}
+        onSearch={setSearch}
         onAdd={() => setShowForm(true)}
         addLabel="فاتورة جديدة"
-        permissionModule="purchases"
-        addFeatureKey="purchases-receiptslist-receipt"
+        addEntity={{ moduleKey: "purchases", entityKey: "purchaseInvoice" }}
         columns={[
           { key: "number", label: "رقم الفاتورة", className: "w-32 font-mono" },
           { key: "supplierName", label: "المورد" },
@@ -614,19 +621,19 @@ export default function PurchaseInvoices() {
         actions={(row) => (
           <div className="flex items-center gap-1">
             {Number(row.remaining) > 0 && (
-              <PermissionGate module="cash" action="create">
+              <EntityPermissionGate moduleKey="cash" entityKey="cashPaymentToSupplier" action="add">
                 <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-green-600 hover:bg-green-50" title="سداد" onClick={() => setPaymentRow(row)}>
                   <Banknote size={13} />
                 </Button>
-              </PermissionGate>
+              </EntityPermissionGate>
             )}
-            <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-blue-600 hover:bg-blue-50" onClick={() => navigate(`/purchases/invoices/${row.id}`)}><Eye size={13} /></Button>
+            <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-blue-600 hover:bg-blue-50" onClick={() => navigate(tenantPath(tenantSlug, `/purchases/invoices/${row.id}`))}><Eye size={13} /></Button>
             {row.status === "draft" && (
-              <PermissionGate module="purchases" action="edit">
+              <EntityPermissionGate moduleKey="purchases" entityKey="purchaseInvoice" action="edit">
                 <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-slate-600 hover:bg-slate-100" title="تعديل" onClick={() => void openEdit(row.id)}>
                   <Pencil size={13} />
                 </Button>
-              </PermissionGate>
+              </EntityPermissionGate>
             )}
             {["paid", "confirmed", "partial"].includes(row.status || "") && (
               <EntityPermissionGate moduleKey="purchases" entityKey="purchaseInvoice" action="unapprove">
@@ -639,7 +646,7 @@ export default function PurchaseInvoices() {
                 </Button>
               </EntityPermissionGate>
             )}
-            <PermissionGate module="purchases" action="create">
+            <EntityPermissionGate moduleKey="purchases" entityKey="purchaseInvoice" action="copy">
               <Button
                 variant="ghost"
                 size="sm"
@@ -650,7 +657,7 @@ export default function PurchaseInvoices() {
               >
                 <Copy size={13} />
               </Button>
-            </PermissionGate>
+            </EntityPermissionGate>
             <InvoicePrintButton
               invoiceId={row.id}
               type="purchase"

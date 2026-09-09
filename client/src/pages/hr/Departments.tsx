@@ -43,7 +43,7 @@ export default function Departments() {
             <CardTitle className="text-base font-semibold text-slate-800 flex items-center gap-2">
               <Building2 size={18} className="text-blue-600" /> قائمة الإدارات
             </CardTitle>
-            <AddActionButton module="hr" className="bg-blue-600 hover:bg-blue-700 text-white gap-2 h-10 px-4 text-sm font-semibold" onClick={() => { resetForm(); setOpen(true); }}>
+            <AddActionButton moduleKey="hr" entityKey="departments" className="bg-blue-600 hover:bg-blue-700 text-white gap-2 h-10 px-4 text-sm font-semibold" onClick={() => { resetForm(); setOpen(true); }}>
               إضافة إدارة
             </AddActionButton>
           </div>
@@ -69,7 +69,7 @@ export default function Departments() {
                   <TableCell className="text-xs text-slate-500">{row.description || "-"}</TableCell>
                   <TableCell>
                     <EntityRowActions
-                      module="hr"
+                      entity={{ moduleKey: "hr", entityKey: "departments" }}
                       onEdit={() => openEdit(row)}
                       onDelete={() => deleteMut.mutate(row.id)}
                     />

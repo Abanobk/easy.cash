@@ -10,8 +10,8 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { Edit, Trash2 } from "lucide-react";
-import type { PermissionAction, PermissionModule } from "@shared/permissions";
-import { usePermissions, useModulePermissions } from "@/hooks/usePermissions";
+import { useEntityAllowed } from "@/hooks/useEntityPermission";
+import type { DataTableEntity } from "@/components/DataTable";
 
 export type EntityField = {
   key: string;
@@ -39,8 +39,8 @@ type SimpleEntityPageProps = {
   onUpdate: (id: number, values: Record<string, string>) => Promise<unknown> | void;
   onDelete: (id: number) => Promise<unknown> | void;
   addLabel?: string;
-  addPermission?: { module: PermissionModule; action?: PermissionAction };
-  permissionModule?: PermissionModule;
+  /** الشجرة التفصيلية الجديدة — لإظهار زرار الإضافة وتعديل/حذف الصف */
+  entity?: DataTableEntity;
   canEdit?: boolean;
   canDelete?: boolean;
   extraActions?: ReactNode;
@@ -61,8 +61,7 @@ export function SimpleEntityPage({
   onUpdate,
   onDelete,
   addLabel = "إضافة",
-  addPermission,
-  permissionModule,
+  entity,
   canEdit: canEditProp,
   canDelete: canDeleteProp,
   extraActions,
@@ -74,12 +73,12 @@ export function SimpleEntityPage({
   const [form, setForm] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [search, setSearch] = useState("");
-  const { can, bypass, isLoading: permsLoading } = usePermissions();
-  const modulePerms = useModulePermissions(permissionModule ?? "dashboard");
-  const effectiveAdd = addPermission ?? (permissionModule ? { module: permissionModule, action: "create" as const } : undefined);
-  const showAdd = !effectiveAdd || bypass || can(effectiveAdd.module, effectiveAdd.action ?? "create");
-  const canEdit = canEditProp ?? (permissionModule ? modulePerms.canEdit : true);
-  const canDelete = canDeleteProp ?? (permissionModule ? modulePerms.canDelete : true);
+  const addAllowed = useEntityAllowed(entity?.moduleKey ?? "", entity?.entityKey ?? "", "add");
+  const editAllowed = useEntityAllowed(entity?.moduleKey ?? "", entity?.entityKey ?? "", "edit");
+  const deleteAllowed = useEntityAllowed(entity?.moduleKey ?? "", entity?.entityKey ?? "", "deleteCancel");
+  const showAdd = !entity || addAllowed;
+  const canEdit = canEditProp ?? (entity ? editAllowed : true);
+  const canDelete = canDeleteProp ?? (entity ? deleteAllowed : true);
 
   const filteredData = (() => {
     const rows = data || [];
@@ -156,10 +155,9 @@ export function SimpleEntityPage({
         total={filteredData.length}
         search={search}
         onSearch={setSearch}
-        onAdd={showAdd && !permsLoading ? openCreate : undefined}
+        onAdd={showAdd ? openCreate : undefined}
         addLabel={addLabel}
-        addPermission={effectiveAdd}
-        permissionModule={permissionModule}
+        addEntity={entity}
         emptyMessage={search.trim() ? "لا نتائج مطابقة للبحث" : "لا توجد بيانات"}
         columns={columns.map((c) => ({
           key: c.key,

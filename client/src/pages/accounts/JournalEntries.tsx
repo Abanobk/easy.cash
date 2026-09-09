@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { Plus, Trash2 } from "lucide-react";
 import { tenantPath, useTenantSlug } from "@/lib/tenant";
-import PermissionGate from "@/components/PermissionGate";
+import EntityPermissionGate from "@/components/EntityPermissionGate";
 
 type JournalLine = {
   accountId: number | undefined;
@@ -90,7 +90,7 @@ export default function JournalEntries() {
         onPageChange={setPage}
         onAdd={() => setOpen(true)}
         addLabel="قيد جديد"
-        permissionModule="accounts"
+        addEntity={{ moduleKey: "accounts", entityKey: "journalEntry" }}
         onRowClick={(row: { id?: number }) => row.id && navigate(tenantPath(tenantSlug, `/accounts/journal/${row.id}`))}
         columns={[
           { key: "number", label: "رقم القيد", className: "w-28" },
@@ -140,11 +140,11 @@ export default function JournalEntries() {
           <div>
             <div className="flex items-center justify-between mb-2">
               <Label className="text-xs font-medium text-slate-700">سطور القيد</Label>
-              <PermissionGate module="accounts" action="edit">
+              <EntityPermissionGate moduleKey="accounts" entityKey="journalEntry" action="edit">
                 <Button type="button" variant="outline" size="sm" className="h-7 text-xs gap-1" onClick={addLine}>
                   <Plus size={12} /> إضافة سطر
                 </Button>
-              </PermissionGate>
+              </EntityPermissionGate>
             </div>
             <div className="border border-slate-200 rounded-lg overflow-x-auto">
               <table className="w-full text-sm min-w-[720px]">
@@ -196,11 +196,11 @@ export default function JournalEntries() {
                       </td>
                       <td className="px-2 py-1.5">
                         {lines.length > 2 && (
-                          <PermissionGate module="accounts" action="edit">
+                          <EntityPermissionGate moduleKey="accounts" entityKey="journalEntry" action="edit">
                             <Button type="button" variant="ghost" size="sm" className="h-7 w-7 p-0 text-red-400 hover:bg-red-50" onClick={() => setLines(prev => prev.filter((_, i) => i !== idx))}>
                               <Trash2 size={12} />
                             </Button>
-                          </PermissionGate>
+                          </EntityPermissionGate>
                         )}
                       </td>
                     </tr>

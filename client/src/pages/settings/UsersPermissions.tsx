@@ -11,22 +11,19 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { toast } from "sonner";
 import {
   Shield, User, Crown, Edit, Plus, Trash2, Key, Eye, EyeOff, Calculator, ShoppingCart,
-  Warehouse, Link2, SlidersHorizontal, MapPin, LayoutGrid, Layers, Users, Search, ListTree,
+  Warehouse, Link2, MapPin, Users, Search, ListTree,
 } from "lucide-react";
 import TenantLoginShareActions from "@/components/TenantLoginShareActions";
 import { useTenantSlug } from "@/lib/tenant";
 import { buildTenantLoginUrl } from "@/lib/tenant-login";
 
-import RolePermissionsMatrix from "@/components/settings/RolePermissionsMatrix";
-import ScreenPermissionsMatrix from "@/components/settings/ScreenPermissionsMatrix";
 import EntityPermissionsTree from "@/components/settings/EntityPermissionsTree";
-import UserPermissionOverrides from "@/components/settings/UserPermissionOverrides";
-import PermissionGate from "@/components/PermissionGate";
+import EntityPermissionGate from "@/components/EntityPermissionGate";
 import { AddActionButton } from "@/components/AddActionButton";
 
 type AppRole = string;
 
-type Tab = "screens" | "roles" | "entities" | "users";
+type Tab = "entities" | "users";
 
 interface UserForm {
   name: string;
@@ -114,7 +111,6 @@ export default function UsersPermissions() {
   const [showNewPass, setShowNewPass] = useState(false);
   const [editRoleUser, setEditRoleUser] = useState<{ userId: number; name: string; currentRole: AppRole } | null>(null);
   const [editRole, setEditRole] = useState<AppRole>("user");
-  const [overrideUser, setOverrideUser] = useState<{ userId: number; name: string } | null>(null);
   const [scopeUser, setScopeUser] = useState<{ userId: number; name: string } | null>(null);
   const [scopeBranches, setScopeBranches] = useState<number[] | null>(null);
   const [scopeWarehouses, setScopeWarehouses] = useState<number[] | null>(null);
@@ -176,8 +172,6 @@ export default function UsersPermissions() {
   const tabs = [
     { id: "users" as const, label: "المستخدمون", hint: "الحسابات والأدوار", icon: Users, count: users?.length },
     { id: "entities" as const, label: "الصلاحيات التفصيلية", hint: "قسم ← عنصر ← أفعال زي ميجا كاش", icon: ListTree },
-    { id: "screens" as const, label: "تفصيل الشاشات", hint: "صلاحية كل شاشة", icon: LayoutGrid },
-    { id: "roles" as const, label: "أقسام عامة", hint: "اختصار لكل قسم", icon: Layers },
   ];
 
   return (
@@ -242,10 +236,6 @@ export default function UsersPermissions() {
 
         {activeTab === "entities" ? (
           <EntityPermissionsTree />
-        ) : activeTab === "screens" ? (
-          <ScreenPermissionsMatrix />
-        ) : activeTab === "roles" ? (
-          <RolePermissionsMatrix />
         ) : (
           <div className="space-y-4">
             {/* Toolbar */}
@@ -273,7 +263,7 @@ export default function UsersPermissions() {
                 </Select>
               </div>
               <AddActionButton
-                module="security"
+                moduleKey="security" entityKey="users"
                 onClick={() => setShowAddDialog(true)}
                 className="h-11 px-5 bg-blue-600 hover:bg-blue-700 text-white gap-2 shrink-0 font-extrabold"
               >
@@ -358,11 +348,11 @@ export default function UsersPermissions() {
                       {users?.length ? "لا نتائج مطابقة للبحث" : "لا يوجد مستخدمون بعد"}
                     </p>
                     {!users?.length && (
-                      <PermissionGate module="security" action="create">
+                      <EntityPermissionGate moduleKey="security" entityKey="users" action="add">
                         <Button className="mt-1" onClick={() => setShowAddDialog(true)}>
                           <Plus size={16} className="ms-1" /> إضافة أول مستخدم
                         </Button>
-                      </PermissionGate>
+                      </EntityPermissionGate>
                     )}
                   </div>
                 ) : (
@@ -413,7 +403,7 @@ export default function UsersPermissions() {
                               </td>
                               <td className="px-3 py-2">
                                 <div className="flex items-center justify-center gap-0.5">
-                                  <PermissionGate module="security" action="edit">
+                                  <EntityPermissionGate moduleKey="security" entityKey="users" action="edit">
                                     <ActionIconBtn
                                       label="تغيير الدور"
                                       className="text-blue-700 hover:bg-blue-100"
@@ -434,22 +424,14 @@ export default function UsersPermissions() {
                                       <MapPin size={16} />
                                     </ActionIconBtn>
                                     <ActionIconBtn
-                                      label="صلاحيات مخصصة"
-                                      className="text-violet-700 hover:bg-violet-100"
-                                      disabled={user.role === "admin"}
-                                      onClick={() => setOverrideUser({ userId: user.id, name: user.name })}
-                                    >
-                                      <SlidersHorizontal size={16} />
-                                    </ActionIconBtn>
-                                    <ActionIconBtn
                                       label="تغيير كلمة المرور"
                                       className="text-amber-700 hover:bg-amber-100"
                                       onClick={() => setShowResetDialog({ userId: user.id, name: user.name })}
                                     >
                                       <Key size={16} />
                                     </ActionIconBtn>
-                                  </PermissionGate>
-                                  <PermissionGate module="security" action="delete">
+                                  </EntityPermissionGate>
+                                  <EntityPermissionGate moduleKey="security" entityKey="users" action="deleteCancel">
                                     {!user.isTenantOwner && (
                                       <ActionIconBtn
                                         label="حذف المستخدم"
@@ -463,7 +445,7 @@ export default function UsersPermissions() {
                                         <Trash2 size={16} />
                                       </ActionIconBtn>
                                     )}
-                                  </PermissionGate>
+                                  </EntityPermissionGate>
                                 </div>
                               </td>
                             </tr>
@@ -622,13 +604,6 @@ export default function UsersPermissions() {
           </div>
         </DialogContent>
       </Dialog>
-
-      <UserPermissionOverrides
-        userId={overrideUser?.userId ?? 0}
-        userName={overrideUser?.name ?? ""}
-        open={!!overrideUser}
-        onClose={() => setOverrideUser(null)}
-      />
 
       <Dialog open={!!scopeUser} onOpenChange={() => setScopeUser(null)}>
         <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto" dir="rtl">

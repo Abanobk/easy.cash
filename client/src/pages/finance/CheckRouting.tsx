@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import * as XLSX from "xlsx";
 import ERPLayout from "@/components/ERPLayout";
 import { FormModal } from "@/components/FormModal";
@@ -11,10 +11,11 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Download, History, Printer, Search } from "lucide-react";
+import { Download, History, Printer } from "lucide-react";
 import { formatBankAccountLabel } from "@/lib/bank-label";
 import { Link } from "wouter";
 import { tenantPath, useTenantSlug } from "@/lib/tenant";
+import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { toDateStr } from "@/lib/date";
 
 type FilterKey =
@@ -82,8 +83,9 @@ export default function CheckRouting() {
   const tenantSlug = useTenantSlug();
   const [filter, setFilter] = useState<FilterKey>("unrouted");
   const [search, setSearch] = useState("");
-  const [querySearch, setQuerySearch] = useState("");
+  const debouncedSearch = useDebouncedValue(search);
   const [page, setPage] = useState(1);
+  useEffect(() => setPage(1), [debouncedSearch]);
 
   const [custodyOpen, setCustodyOpen] = useState(false);
   const [routeOpen, setRouteOpen] = useState(false);
@@ -101,7 +103,7 @@ export default function CheckRouting() {
   const summaryQ = trpc.bank.checkRouting.summary.useQuery();
   const listQ = trpc.bank.checkRouting.list.useQuery({
     filter,
-    search: querySearch || undefined,
+    search: debouncedSearch || undefined,
     page,
     limit: 50,
   });
@@ -268,13 +270,6 @@ export default function CheckRouting() {
                 className="h-9"
               />
             </div>
-            <Button
-              size="sm"
-              className="h-9 gap-1 bg-blue-600 hover:bg-blue-700"
-              onClick={() => { setQuerySearch(search.trim()); setPage(1); }}
-            >
-              <Search size={14} /> عرض
-            </Button>
           </CardContent>
         </Card>
 

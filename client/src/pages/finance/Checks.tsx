@@ -146,7 +146,7 @@ export default function Checks() {
         onPageChange={setPage}
         onAdd={openCreate}
         addLabel={meta.addLabel}
-        permissionModule="bank"
+        addEntity={{ moduleKey: "bank", entityKey: lockedType === "outgoing" ? "checkOut" : "checkIn" }}
         columns={[
           { key: "number", label: "المرجع", className: "w-28 font-mono" },
           { key: "checkNumber", label: "رقم الشيك", className: "w-32" },

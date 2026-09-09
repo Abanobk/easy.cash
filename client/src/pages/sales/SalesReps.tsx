@@ -71,7 +71,7 @@ export default function SalesReps() {
                 <Search size={14} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400" />
                 <Input value={search} onChange={e => setSearch(e.target.value)} placeholder="بحث..." className="h-8 text-sm pr-7 w-48" />
               </div>
-              <AddActionButton module="sales_reps" className="bg-blue-600 hover:bg-blue-700 text-white gap-2 h-10 px-4 text-sm font-semibold" onClick={() => { setEditId(null); setForm({ ...emptyForm }); setOpen(true); }}>
+              <AddActionButton moduleKey="sales_reps" entityKey="salesReps" className="bg-blue-600 hover:bg-blue-700 text-white gap-2 h-10 px-4 text-sm font-semibold" onClick={() => { setEditId(null); setForm({ ...emptyForm }); setOpen(true); }}>
                 <Plus size={16} /> مندوب جديد
               </AddActionButton>
             </div>
@@ -105,7 +105,7 @@ export default function SalesReps() {
                   <TableCell>
                     <div className="flex items-center gap-1">
                       <EntityRowActions
-                        module="sales_reps"
+                        entity={{ moduleKey: "sales_reps", entityKey: "salesReps" }}
                         onEdit={() => handleEdit(row)}
                         onDelete={() => deleteMut.mutate(row.id)}
                         deleteConfirm="هل تريد حذف هذا المندوب؟"

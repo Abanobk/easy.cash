@@ -58,7 +58,7 @@ export default function PurchaseReturns() {
             <CardTitle className="text-base font-semibold text-slate-800 flex items-center gap-2">
               <RotateCcw size={18} className="text-orange-600" /> مردودات الشراء
             </CardTitle>
-            <AddActionButton module="purchases" size="sm" className="bg-orange-600 hover:bg-orange-700 text-white gap-1" onClick={() => { resetForm(); setOpen(true); }}>
+            <AddActionButton moduleKey="purchases" entityKey="purchaseReturnInvoice" size="sm" className="bg-orange-600 hover:bg-orange-700 text-white gap-1" onClick={() => { resetForm(); setOpen(true); }}>
               <Plus size={14} /> مردود شراء جديد
             </AddActionButton>
           </div>

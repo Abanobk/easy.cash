@@ -36,7 +36,7 @@ export default function CostCenters() {
         onPageChange={setPage}
         onAdd={() => { setForm(emptyForm); setOpen(true); }}
         addLabel="مركز تكلفة جديد"
-        permissionModule="cost_centers"
+        addEntity={{ moduleKey: "cost_centers", entityKey: "costCenters" }}
         columns={[
           { key: "code", label: "الكود", className: "w-24" },
           { key: "name", label: "اسم مركز التكلفة" },

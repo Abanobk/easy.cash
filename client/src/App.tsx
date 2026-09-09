@@ -17,6 +17,7 @@ import Pricing from "./pages/Pricing";
 import Dashboard from "./pages/Dashboard";
 import Customers from "./pages/contacts/Customers";
 import Suppliers from "./pages/contacts/Suppliers";
+import ContactsSmartImport from "./pages/contacts/ContactsSmartImport";
 import ContactCategories from "./pages/contacts/ContactCategories";
 import Items from "./pages/inventory/Items";
 import ItemDetail from "./pages/inventory/ItemDetail";
@@ -138,6 +139,7 @@ function Router() {
       <Route path={T("/dashboard")} component={wrap(Dashboard)} />
       <Route path={T("/customers")} component={wrap(Customers)} />
       <Route path={T("/suppliers")} component={wrap(Suppliers)} />
+      <Route path={T("/contacts/smart-import")} component={wrap(ContactsSmartImport)} />
       <Route path={T("/contact-categories")} component={wrap(ContactCategories)} />
       <Route path={T("/items/new")} component={wrap(ItemDetail)} />
       <Route path={T("/items/:id")} component={wrap(ItemDetail)} />

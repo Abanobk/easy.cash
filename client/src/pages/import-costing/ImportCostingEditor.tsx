@@ -15,7 +15,7 @@ import {
   X,
 } from "lucide-react";
 import ERPLayout from "@/components/ERPLayout";
-import PermissionGate from "@/components/PermissionGate";
+import EntityPermissionGate from "@/components/EntityPermissionGate";
 import { trpc } from "@/lib/trpc";
 import { tenantPath, useTenantSlug } from "@/lib/tenant";
 import { Button } from "@/components/ui/button";
@@ -27,7 +27,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
-import { usePermissions } from "@/hooks/usePermissions";
+import { useEntityAllowed } from "@/hooks/useEntityPermission";
 import { buildImportCostingAssistantSummary } from "@/lib/assistant-import-costing";
 import { clearAssistantScreen, publishAssistantScreen } from "@/lib/assistant-screen";
 import { printImportCostingReport } from "@/lib/print-import-costing";
@@ -142,8 +142,9 @@ export default function ImportCostingEditor() {
   const [header, setHeader] = useState<ImportCostHeader>(() => emptyImportCostHeader());
   const [lines, setLines] = useState<ImportCostLineInput[]>(() => [emptyImportCostLine()]);
 
-  const { can } = usePermissions();
-  const canSave = isNew ? can("import_costing", "create") : can("import_costing", "edit");
+  const canAdd = useEntityAllowed("import_costing", "shipmentCosting", "add");
+  const canEdit = useEntityAllowed("import_costing", "shipmentCosting", "edit");
+  const canSave = isNew ? canAdd : canEdit;
   const recordKey = isNew ? "new" : String(id);
   const storageKey = draftStorageKey(tenantSlug, recordKey);
   const newHydrated = useRef(false);
@@ -374,7 +375,7 @@ export default function ImportCostingEditor() {
     const rows = computed.lines.map((l, i) => ({
       م: i + 1,
       الفئة: l.category,
-      الباركود: l.barcode,
+      "سيريل نمبر": l.barcode,
       الصنف: l.itemName,
       الكمية: l.quantity,
       "التكلفة $": l.unitCostUsd,
@@ -404,10 +405,10 @@ export default function ImportCostingEditor() {
 
   return (
     <ERPLayout title={isNew ? "تقدير شحنة جديد" : locked ? `تقرير: ${name || "تكليف شحنة"}` : `تعديل: ${name || "تكليف شحنة"}`}>
-      <PermissionGate
-        module="import_costing"
-        action="view"
-        featureKey="importcosting-shipments"
+      <EntityPermissionGate
+        moduleKey="import_costing"
+        entityKey="shipmentCosting"
+        action="viewDoc"
         fallback={<p className="text-sm text-slate-500">لا توجد صلاحية لعرض تكليف الشحنة.</p>}
       >
         {existing.isLoading && !isNew ? (
@@ -486,7 +487,7 @@ export default function ImportCostingEditor() {
             )}
           </div>
         )}
-      </PermissionGate>
+      </EntityPermissionGate>
     </ERPLayout>
   );
 }
@@ -895,7 +896,7 @@ function EditWorkspace(props: {
             <table className="w-full min-w-[980px] text-xs">
               <thead className="bg-slate-50 text-slate-500">
                 <tr>
-                  {["#", "الفئة", "الباركود", "الصنف", "كمية", "سعر $", "وزن", "إجمالي $", "وصول ج", ""].map((h) => (
+                  {["#", "الفئة", "السيريل نمبر", "الصنف", "كمية", "سعر $", "وزن", "إجمالي $", "وصول ج", ""].map((h) => (
                     <th key={h || "x"} className="px-2 py-3 text-right font-medium whitespace-nowrap">{h}</th>
                   ))}
                 </tr>

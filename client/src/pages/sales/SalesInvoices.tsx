@@ -11,8 +11,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
 import { Plus, Trash2, Eye, ArrowRight, Banknote, ScanLine, CheckCircle2, Pencil, Undo2 } from "lucide-react";
 import EntityPermissionGate from "@/components/EntityPermissionGate";
-import PermissionGate from "@/components/PermissionGate";
+
 import { useLocation, useSearch } from "wouter";
+import { tenantPath, useTenantSlug } from "@/lib/tenant";
 import { InvoicePaymentDialog } from "@/components/InvoicePaymentDialog";
 import { isForeignCurrency, toBaseAmount, formatInvoiceListTotal } from "@shared/currency";
 import { SerialNumberPicker } from "@/components/SerialNumberPicker";
@@ -26,6 +27,7 @@ import { findItemByScan } from "@/lib/barcode";
 import { printInvoiceQuick, printWarehouseNote } from "@/lib/print-invoice-quick";
 import { Copy } from "lucide-react";
 import { toDateStr } from "@/lib/date";
+import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 
 interface InvoiceItem {
   itemId: number;
@@ -111,10 +113,13 @@ function recalcLineTotal(row: InvoiceItem) {
 
 export default function SalesInvoices() {
   const [, navigate] = useLocation();
+  const tenantSlug = useTenantSlug();
   const searchString = useSearch();
   const isCashMode = useMemo(() => new URLSearchParams(searchString).get("mode") === "cash", [searchString]);
 
   const [page, setPage] = useState(1);
+  const [search, setSearch] = useState("");
+  const debouncedSearch = useDebouncedValue(search);
   const [showForm, setShowForm] = useState(false);
   const [editId, setEditId] = useState<number | null>(null);
   const [form, setForm] = useState(emptyForm);
@@ -141,9 +146,11 @@ export default function SalesInvoices() {
   const newInvoiceLabel = isCashMode ? "فاتورة نقدية جديدة" : "فاتورة جديدة";
 
   const utils = trpc.useUtils();
+  useEffect(() => setPage(1), [debouncedSearch]);
   const { data, isLoading, refetch } = trpc.sales.invoices.list.useQuery({
     page,
     limit: 20,
+    search: debouncedSearch || undefined,
     paymentType: isCashMode ? "cash" : undefined,
   });
   const { data: customers } = trpc.customers.list.useQuery({ page: 1, limit: 200 });
@@ -310,13 +317,27 @@ export default function SalesInvoices() {
     setInvoiceItems((prev) => [...prev, { itemId: 0, itemName: "", itemUnit: "", quantity: "1", price: "0", discount: "0", tax: "0", tax2: "0", tax3: "0", total: "0", serialNumbers: "", batchId: undefined, warehouseId: undefined }]);
   };
 
-  const applyItemHint = async (idx: number, itemId: number) => {
+  /**
+   * بعد اختيار الصنف بنملأ السعر مبدئياً بسعر البيع الافتراضي من بطاقة الصنف،
+   * وبعدين لما يوصل "آخر سعر بيع لنفس العميل" بنستبدله بيه تلقائياً — بس لو
+   * المستخدم لسه ما عدلش السعر يدوياً (يعني السعر لسه زي ما اتحط افتراضياً)،
+   * عشان مانمسحش تعديل المستخدم. السعر يفضل قابل للتعديل بعد كده زي أي سطر عادي.
+   */
+  const applyItemHint = async (idx: number, itemId: number, defaultPrice: string) => {
     if (!form.customerId || !itemId) return;
     try {
       const hint = await utils.sales.invoices.lastPriceToCustomer.fetch({ customerId: form.customerId, itemId });
       setInvoiceItems((prev) => {
         const next = [...prev];
-        if (next[idx]) next[idx] = { ...next[idx], lastPriceHint: hint ? { price: Number(hint.price), date: toDateStr(hint.date), number: hint.number } : null };
+        const row = next[idx];
+        if (!row || row.itemId !== itemId) return prev; // الصنف اتغيّر في السطر ده قبل ما الطلب يرجع
+        const hintObj = hint ? { price: Number(hint.price), date: toDateStr(hint.date), number: hint.number } : null;
+        const priceUntouched = row.price === defaultPrice;
+        next[idx] = recalcLineTotal({
+          ...row,
+          lastPriceHint: hintObj,
+          price: hintObj && priceUntouched ? String(hintObj.price) : row.price,
+        });
         return next;
       });
     } catch { /* بيانات إضافية اختيارية — تجاهل الفشل */ }
@@ -336,7 +357,7 @@ export default function SalesInvoices() {
           const offerPct = bestOfferDiscount(Number(value), item.categoryId, activeOffers as ActiveOffer[] | undefined);
           if (offerPct > 0) updated[idx].discount = String(offerPct);
         }
-        void applyItemHint(idx, Number(value));
+        void applyItemHint(idx, Number(value), updated[idx].price);
       }
       updated[idx] = recalcLineTotal(updated[idx]);
       return updated;
@@ -348,7 +369,7 @@ export default function SalesInvoices() {
   const onScanBarcode = () => {
     if (!barcode.trim() || !allItems) return;
     const hit = findItemByScan(allItems as any, barcode);
-    if (!hit) { toast.error("لم يتم العثور على صنف بهذا الباركود"); return; }
+    if (!hit) { toast.error("لم يتم العثور على صنف بهذا السيريل نمبر"); return; }
     const idx = invoiceItems.findIndex((i) => !i.itemId);
     if (idx >= 0) updateItem(idx, "itemId", String(hit.id));
     else {
@@ -580,7 +601,7 @@ export default function SalesInvoices() {
                       value={barcode}
                       onChange={(e) => setBarcode(e.target.value)}
                       onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); onScanBarcode(); } }}
-                      placeholder="امسح أو اكتب الباركود"
+                      placeholder="امسح أو اكتب السيريل نمبر"
                       className="h-8 text-xs pr-7 w-52"
                     />
                   </div>
@@ -677,7 +698,7 @@ export default function SalesInvoices() {
                       </tr>
                     ))}
                     {invoiceItems.length === 0 && (
-                      <tr><td colSpan={12} className="py-8 text-center text-slate-400 text-xs">اضغط "إضافة صنف" أو امسح باركود لإضافة أصناف للفاتورة</td></tr>
+                      <tr><td colSpan={12} className="py-8 text-center text-slate-400 text-xs">اضغط "إضافة صنف" أو امسح سيريل نمبر لإضافة أصناف للفاتورة</td></tr>
                     )}
                   </tbody>
                 </table>
@@ -732,14 +753,14 @@ export default function SalesInvoices() {
 
           <div className="flex gap-3 justify-end">
             <Button variant="outline" onClick={() => { setShowForm(false); resetForm(); }}>إلغاء</Button>
-            <PermissionGate module="sales" action="create" featureKey="sales-invoiceslist-invoice">
+            <EntityPermissionGate moduleKey="sales" entityKey={isCashMode ? "cashSaleInvoice" : "saleInvoice"} action="add">
               <Button onClick={() => handleSubmit(false)} disabled={createMut.isPending || updateMut.isPending} variant="outline" className="px-6">
                 {(createMut.isPending || updateMut.isPending) ? "جاري الحفظ..." : "حفظ"}
               </Button>
               <Button onClick={() => handleSubmit(true)} disabled={createMut.isPending || updateMut.isPending} className="bg-blue-600 hover:bg-blue-700 text-white px-8 gap-1">
                 <CheckCircle2 size={15} />{(createMut.isPending || updateMut.isPending) ? "جاري الحفظ..." : "حفظ واعتماد"}
               </Button>
-            </PermissionGate>
+            </EntityPermissionGate>
           </div>
         </div>
 
@@ -766,10 +787,11 @@ export default function SalesInvoices() {
         total={data?.total}
         page={page}
         onPageChange={setPage}
+        search={search}
+        onSearch={setSearch}
         onAdd={openNewForm}
         addLabel={newInvoiceLabel}
-        permissionModule="sales"
-        addFeatureKey="sales-invoiceslist-invoice"
+        addEntity={{ moduleKey: "sales", entityKey: isCashMode ? "cashSaleInvoice" : "saleInvoice" }}
         columns={[
           { key: "number", label: "رقم الفاتورة", className: "w-32 font-mono" },
           { key: "customerName", label: "العميل" },
@@ -788,21 +810,21 @@ export default function SalesInvoices() {
         actions={(row) => (
           <div className="flex items-center gap-1">
             {Number(row.remaining) > 0 && (
-              <PermissionGate module="cash" action="create">
+              <EntityPermissionGate moduleKey="cash" entityKey="cashReceiptFromCustomer" action="add">
                 <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-green-600 hover:bg-green-50" title="تحصيل" onClick={() => setPaymentRow(row)}>
                   <Banknote size={13} />
                 </Button>
-              </PermissionGate>
+              </EntityPermissionGate>
             )}
-            <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-blue-600 hover:bg-blue-50" onClick={() => navigate(`/sales/invoices/${row.id}`)}>
+            <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-blue-600 hover:bg-blue-50" onClick={() => navigate(tenantPath(tenantSlug, `/sales/invoices/${row.id}`))}>
               <Eye size={13} />
             </Button>
             {row.status === "draft" && (
-              <PermissionGate module="sales" action="edit">
+              <EntityPermissionGate moduleKey="sales" entityKey={row.paymentType === "cash" ? "cashSaleInvoice" : "saleInvoice"} action="edit">
                 <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-slate-600 hover:bg-slate-100" title="تعديل" onClick={() => void openEdit(row.id)}>
                   <Pencil size={13} />
                 </Button>
-              </PermissionGate>
+              </EntityPermissionGate>
             )}
             {["paid", "confirmed", "partial"].includes(row.status || "") && (
               <EntityPermissionGate moduleKey="sales" entityKey={row.paymentType === "cash" ? "cashSaleInvoice" : "saleInvoice"} action="unapprove">
@@ -815,7 +837,7 @@ export default function SalesInvoices() {
                 </Button>
               </EntityPermissionGate>
             )}
-            <PermissionGate module="sales" action="create">
+            <EntityPermissionGate moduleKey="sales" entityKey={row.paymentType === "cash" ? "cashSaleInvoice" : "saleInvoice"} action="copy">
               <Button
                 variant="ghost"
                 size="sm"
@@ -826,7 +848,7 @@ export default function SalesInvoices() {
               >
                 <Copy size={13} />
               </Button>
-            </PermissionGate>
+            </EntityPermissionGate>
             <InvoicePrintButton
               invoiceId={row.id}
               type="sale"
