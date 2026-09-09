@@ -1,5 +1,5 @@
 import ERPLayout from "@/components/ERPLayout";
-import PermissionGate from "@/components/PermissionGate";
+import EntityPermissionGate from "@/components/EntityPermissionGate";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -13,6 +13,7 @@ import {
   ArrowRight,
   CheckCircle2,
   FileSpreadsheet,
+  Loader2,
   Package,
   ShoppingCart,
   Factory,
@@ -57,6 +58,10 @@ export default function MegaReportImportPage() {
   const [importDate, setImportDate] = useState(new Date().toISOString().slice(0, 10));
   const [paymentType, setPaymentType] = useState<"credit" | "cash">("credit");
   const [busy, setBusy] = useState(false);
+  /** أي زرّ شغّال دلوقتي — عشان يبهت ويلف عليه spinner والتاني يتقفل */
+  const [runningMode, setRunningMode] = useState<"approve" | "draft" | null>(null);
+  /** نتيجة آخر اعتماد/حفظ — طالما موجودة، أزرار الاعتماد تفضل مقفولة عشان الاستيراد ميتكررش */
+  const [done, setDone] = useState<{ mode: "approve" | "draft"; imported: number; skipped: number; label: string } | null>(null);
 
   const kind = preview?.kind as string | undefined;
 
@@ -92,6 +97,7 @@ export default function MegaReportImportPage() {
 
   const onFile = async (file: File) => {
     setBusy(true);
+    setDone(null);
     setFileName(file.name);
     try {
       const buf = await file.arrayBuffer();
@@ -295,7 +301,7 @@ export default function MegaReportImportPage() {
         // مش بنبعت باركود ميجا كاش أصلًا — الأصناف الجديدة تاخد باركود رقمي تسلسلي من عندنا
         const rows = Array.from(byName.values()).map((r) => ({ clientKey: r.clientKey, name: r.name }));
         const res = await createItemsMut.mutateAsync({ rows, autoBarcode: true });
-        toast.success(`تمت إضافة ${res.created.length} صنف بباركود تلقائي جديد وتم ربطها في كل الأماكن اللي فيها`);
+        toast.success(`تمت إضافة ${res.created.length} صنف بسيريل نمبر تلقائي جديد وتم ربطها في كل الأماكن اللي فيها`);
         if (res.errors?.length) toast.message(res.errors.slice(0, 2).join(" · "));
         await utils.items.list.invalidate();
         applyCreatedItemsByName(res.created);
@@ -357,12 +363,14 @@ export default function MegaReportImportPage() {
     toast.success("تم الربط");
   };
 
-  const commit = async () => {
-    if (!preview) return;
+  const commit = async (mode: "approve" | "draft" = "approve") => {
+    if (!preview || busy || done) return;
     if (!warehouseId && preview.kind !== "production" && preview.kind !== "item_costs" && preview.kind !== "bom") {
       return toast.error("اختَر مخزن الاعتماد");
     }
     setBusy(true);
+    setRunningMode(mode);
+    let outcome: { imported: number; skipped: number; label: string } | null = null;
     try {
       if (preview.kind === "item_costs") {
         const lines = (preview.itemCosts || [])
@@ -376,6 +384,7 @@ export default function MegaReportImportPage() {
         if (!lines.length) return toast.error("لا توجد أسطر مطابقة (صنف+مخزن)");
         const res = await commitCostsMut.mutateAsync({ date: importDate, lines });
         toast.success(`تم استيراد ${res.imported} سطر مخزون`);
+        outcome = { imported: res.imported, skipped: 0, label: `${res.imported} سطر مخزون` };
       } else if (preview.kind === "sales") {
         const documents = (preview.sales || [])
           .filter((d: any) => d.ready)
@@ -399,10 +408,15 @@ export default function MegaReportImportPage() {
         const res = await commitSalesMut.mutateAsync({
           warehouseId: Number(warehouseId),
           paymentType,
+          mode,
           documents,
         });
-        toast.success(`تم استيراد ${res.imported} فاتورة مبيعات`);
+        toast.success(mode === "draft"
+          ? `تم حفظ ${res.imported} فاتورة مبيعات كمسودة — راجعها ثم اعتمدها`
+          : `تم اعتماد وترحيل ${res.imported} فاتورة مبيعات`);
+        if (res.skipped) toast.message(`تم تجاهل ${res.skipped} فاتورة مكرّرة (متسجّلة قبل كده)`);
         if (res.errors?.length) toast.message(res.errors.slice(0, 2).join(" · "));
+        outcome = { imported: res.imported, skipped: res.skipped ?? 0, label: `${res.imported} فاتورة مبيعات` };
       } else if (preview.kind === "purchases") {
         const documents = (preview.purchases || [])
           .filter((d: any) => d.ready)
@@ -426,10 +440,15 @@ export default function MegaReportImportPage() {
         const res = await commitPurchMut.mutateAsync({
           warehouseId: Number(warehouseId),
           paymentType,
+          mode,
           documents,
         });
-        toast.success(`تم استيراد ${res.imported} فاتورة مشتريات`);
+        toast.success(mode === "draft"
+          ? `تم حفظ ${res.imported} فاتورة مشتريات كمسودة — راجعها ثم اعتمدها`
+          : `تم اعتماد وترحيل ${res.imported} فاتورة مشتريات`);
+        if (res.skipped) toast.message(`تم تجاهل ${res.skipped} فاتورة مكرّرة (متسجّلة قبل كده)`);
         if (res.errors?.length) toast.message(res.errors.slice(0, 2).join(" · "));
+        outcome = { imported: res.imported, skipped: res.skipped ?? 0, label: `${res.imported} فاتورة مشتريات` };
       } else if (preview.kind === "production") {
         const documents = (preview.production || [])
           .filter((d: any) => d.ready)
@@ -451,6 +470,7 @@ export default function MegaReportImportPage() {
         });
         toast.success(`تم استيراد ${res.imported} أمر إنتاج (معلّق كمسودة)`);
         if (res.errors?.length) toast.message(res.errors.slice(0, 2).join(" · "));
+        outcome = { imported: res.imported, skipped: 0, label: `${res.imported} أمر إنتاج` };
       } else if (preview.kind === "bom") {
         const documents = (preview.bom || [])
           .filter((d: any) => d.ready)
@@ -465,12 +485,22 @@ export default function MegaReportImportPage() {
         const res = await commitBomMut.mutateAsync({ documents });
         toast.success(`تم استيراد تركيبة ${res.imported} صنف`);
         if (res.errors?.length) toast.message(res.errors.slice(0, 2).join(" · "));
+        outcome = { imported: res.imported, skipped: 0, label: `تركيبة ${res.imported} صنف` };
       }
+      if (outcome) setDone({ mode, ...outcome });
     } catch (e: any) {
       toast.error(e?.message || "فشل الاعتماد");
     } finally {
       setBusy(false);
+      setRunningMode(null);
     }
+  };
+
+  /** إعادة الشاشة لوضع البداية بعد اعتماد/حفظ ناجح — لرفع ملف جديد */
+  const resetImport = () => {
+    setPreview(null);
+    setFileName("");
+    setDone(null);
   };
 
   /** ملخص حي — بيتحدث فورًا مع أي ربط يدوي، مش بيفضل واقف على أول نتيجة من السيرفر */
@@ -594,7 +624,7 @@ export default function MegaReportImportPage() {
 
   return (
     <ERPLayout title="استيراد تقارير Excel">
-      <PermissionGate module="inventory" action="create" fallback={
+      <EntityPermissionGate moduleKey="inventory" entityKey="beginningInventory" action="add" fallback={
         <div className="p-6 text-sm font-bold text-rose-700">محتاج صلاحية إنشاء على المخزون/العمليات</div>
       }>
         <div className="space-y-5 pb-10" dir="rtl">
@@ -617,7 +647,7 @@ export default function MegaReportImportPage() {
               استيراد سريع من تقارير Excel
             </h1>
             <p className="text-base text-slate-600 font-semibold max-w-4xl leading-relaxed">
-              ارفع ملفات Excel اللي بتصدّرها من شاشات التقارير في النظام القديم. النظام يكتشف النوع، يطابق الأصناف بالباركود/الاسم والعملاء/الموردين/المخازن، ويخلّيك تضيف الناقص ثم تعتمد.
+              ارفع ملفات Excel اللي بتصدّرها من شاشات التقارير في النظام القديم. النظام يكتشف النوع، يطابق الأصناف بالسيريل نمبر/الاسم والعملاء/الموردين/المخازن، ويخلّيك تضيف الناقص ثم تعتمد.
             </p>
           </div>
 
@@ -715,7 +745,7 @@ export default function MegaReportImportPage() {
                     <div className="min-w-0 flex-1">
                       <div className="text-base font-black text-slate-900">{mi.name}</div>
                       <div className="text-xs font-semibold text-slate-500">
-                        {mi.barcode ? `باركود ${mi.barcode} · ` : ""}ظهر في {mi.count} سطر
+                        {mi.barcode ? `سيريل نمبر ${mi.barcode} · ` : ""}ظهر في {mi.count} سطر
                       </div>
                     </div>
                     <div className="w-full sm:w-72">
@@ -806,7 +836,7 @@ export default function MegaReportImportPage() {
                 key: d.index,
                 ready: d.ready,
                 title: d.product,
-                meta: `باركود ${d.barcode || "—"} · كمية ${d.qty} · ${d.status}`,
+                meta: `سيريل نمبر ${d.barcode || "—"} · كمية ${d.qty} · ${d.status}`,
                 detail: `${d.matMatched}/${d.materials.length} خامات · مخزن: ${d.deliveries?.[0]?.warehouse || d.site || "—"}`,
               }))}
             />
@@ -857,7 +887,7 @@ export default function MegaReportImportPage() {
                       <div className="min-w-0 flex-1">
                         <div className="text-base font-black text-slate-900">{d.product || "—"}</div>
                         <div className="text-xs font-semibold text-slate-500">
-                          باركود {d.barcode || "—"} · {d.compMatched}/{d.components.length} مكونات مطابقة
+                          سيريل نمبر {d.barcode || "—"} · {d.compMatched}/{d.components.length} مكونات مطابقة
                         </div>
                       </div>
                       <span className={`text-xs font-extrabold px-2.5 py-1 rounded-md shrink-0 ${d.ready ? "bg-emerald-600 text-white" : "bg-rose-600 text-white"}`}>
@@ -902,24 +932,70 @@ export default function MegaReportImportPage() {
             </div>
           )}
 
-          {preview && (
+          {preview && !done && (
             <div className="sticky bottom-0 z-20">
               <div className="rounded-2xl border-2 bg-white/95 backdrop-blur shadow-lg px-5 py-4 flex flex-wrap items-center justify-between gap-3">
                 <div className="text-base font-bold text-slate-700">
-                  {KIND_LABEL[kind || ""] || kind} — راجع المطابقة ثم اعتمد
+                  {(kind === "sales" || kind === "purchases")
+                    ? `${KIND_LABEL[kind || ""] || kind} — احفظ كمسودة للمراجعة، أو اعتمد وترحّل على طول`
+                    : `${KIND_LABEL[kind || ""] || kind} — راجع المطابقة ثم اعتمد`}
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  {(kind === "sales" || kind === "purchases") && (
+                    <Button
+                      variant="outline"
+                      className="font-black h-12 px-6 text-base border-2 border-slate-300 disabled:opacity-50"
+                      disabled={busy}
+                      onClick={() => void commit("draft")}
+                    >
+                      {runningMode === "draft"
+                        ? <span className="inline-flex items-center gap-2"><Loader2 className="h-5 w-5 animate-spin" /> جاري الحفظ...</span>
+                        : "حفظ كمسودة للمراجعة"}
+                    </Button>
+                  )}
+                  <Button
+                    className="bg-emerald-600 hover:bg-emerald-700 font-black h-12 px-7 text-base disabled:opacity-50"
+                    disabled={busy}
+                    onClick={() => void commit("approve")}
+                  >
+                    {runningMode === "approve"
+                      ? <span className="inline-flex items-center gap-2"><Loader2 className="h-5 w-5 animate-spin" /> جاري الاعتماد...</span>
+                      : ((kind === "sales" || kind === "purchases") ? "اعتماد وترحيل" : "اعتماد واستيراد الجاهز")}
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {done && (
+            <div className="sticky bottom-0 z-20">
+              <div className="rounded-2xl border-2 border-emerald-300 bg-emerald-50/95 backdrop-blur shadow-lg px-5 py-4 flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-start gap-3">
+                  <CheckCircle2 className="text-emerald-600 shrink-0 mt-0.5" size={26} />
+                  <div>
+                    <div className="text-base font-black text-emerald-900">
+                      {done.mode === "draft" ? `تم حفظ ${done.label} كمسودة` : `تم اعتماد وترحيل ${done.label}`}
+                    </div>
+                    <div className="text-sm font-semibold text-emerald-800">
+                      {done.mode === "draft"
+                        ? "راجعها من شاشة الفواتير واضغط «حفظ واعتماد» لما تكون جاهزة."
+                        : "اترحّلت في الحسابات والمخزون."}
+                      {done.skipped ? ` · تم تجاهل ${done.skipped} فاتورة مكرّرة.` : ""}
+                    </div>
+                  </div>
                 </div>
                 <Button
-                  className="bg-emerald-600 hover:bg-emerald-700 font-black h-12 px-7 text-base"
-                  disabled={busy}
-                  onClick={() => void commit()}
+                  variant="outline"
+                  className="font-black h-11 px-6 border-2 border-emerald-400 text-emerald-800 hover:bg-emerald-100"
+                  onClick={resetImport}
                 >
-                  {busy ? "جاري الاعتماد..." : "اعتماد واستيراد الجاهز"}
+                  <span className="inline-flex items-center gap-2"><Upload className="h-4 w-4" /> استيراد ملف جديد</span>
                 </Button>
               </div>
             </div>
           )}
         </div>
-      </PermissionGate>
+      </EntityPermissionGate>
     </ERPLayout>
   );
 }

@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
-import { and, count, eq } from "drizzle-orm";
+import { and, count, eq, ne } from "drizzle-orm";
 import { protectedProcedure, router } from "./_core/trpc";
 import { getDb } from "./db";
 import { tenantWhere, withTenantId } from "./tenant-scope";
@@ -406,6 +406,8 @@ export const megaReportImportRouter = router({
   commitSales: protectedProcedure.input(z.object({
     warehouseId: z.number(),
     paymentType: z.enum(["cash", "credit"]).default("credit"),
+    /** approve = يحفظ ويرحّل للحسابات والمخزون فورًا · draft = يحفظ كمسودة فقط للمراجعة ثم الاعتماد يدويًا */
+    mode: z.enum(["approve", "draft"]).default("approve"),
     documents: z.array(z.object({
       customerId: z.number(),
       date: z.string(),
@@ -427,14 +429,49 @@ export const megaReportImportRouter = router({
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     const { applyStockMovement } = await import("./inventory-stock");
     const { postSalesInvoiceJournal } = await import("./auto-journal");
+    const asDraft = input.mode === "draft";
     let imported = 0;
+    let skipped = 0;
     const errors: string[] = [];
+
+    // بصمة الفاتورة = العميل + التاريخ + الإجمالي + بنودها — نستخدمها لمنع استيراد نفس الفاتورة مرتين
+    const sig = (customerId: number, date: string, total: string, lines: Array<{ itemId: number; quantity: string; price: string }>) =>
+      [customerId, String(date).slice(0, 10), Number(total).toFixed(2),
+       lines.map((l) => `${l.itemId}:${Number(l.quantity)}:${Number(l.price)}`).sort().join("|")].join("~");
+    const seen = new Set<string>();
+
     for (const doc of input.documents) {
       try {
+        const docSig = sig(doc.customerId, doc.date, doc.total, doc.lines);
+        // (أ) تكرار داخل نفس الرفعة
+        if (seen.has(docSig)) { skipped += 1; continue; }
+        seen.add(docSig);
+        // (ب) فاتورة مطابقة اتستوردت قبل كده (ضغط «اعتماد» مرتين أو رفع الملف تاني)
+        const candidates = await db.select({ id: salesInvoices.id })
+          .from(salesInvoices)
+          .where(tenantWhere(salesInvoices, ctx.tenantId, and(
+            eq(salesInvoices.customerId, doc.customerId),
+            eq(salesInvoices.date, doc.date as any),
+            eq(salesInvoices.total, doc.total),
+            ne(salesInvoices.status, "cancelled"),
+          )));
+        let isDup = false;
+        for (const c of candidates) {
+          const exist = await db.select({ itemId: salesInvoiceItems.itemId, quantity: salesInvoiceItems.quantity, price: salesInvoiceItems.price })
+            .from(salesInvoiceItems)
+            .where(tenantWhere(salesInvoiceItems, ctx.tenantId, eq(salesInvoiceItems.invoiceId, c.id)));
+          if (sig(doc.customerId, doc.date, doc.total, exist.map((l) => ({ itemId: l.itemId, quantity: String(l.quantity), price: String(l.price) }))) === docSig) {
+            isDup = true;
+            break;
+          }
+        }
+        if (isDup) { skipped += 1; continue; }
+
         const subtotal = doc.lines.reduce((s, l) => s + Number(l.total || 0), 0);
         const [countResult] = await db.select({ count: count() }).from(salesInvoices).where(tenantWhere(salesInvoices, ctx.tenantId));
         const number = doc.serial?.trim() || `SI-${String(countResult.count + 1).padStart(5, "0")}`;
         const isCash = input.paymentType === "cash";
+        const posts = !asDraft;
         const [result] = await db.insert(salesInvoices).values(withTenantId(ctx.tenantId, {
           number,
           customerId: doc.customerId,
@@ -445,11 +482,11 @@ export const megaReportImportRouter = router({
           discount: doc.discount || "0",
           tax: doc.tax || "0",
           total: doc.total,
-          paid: isCash ? doc.total : "0",
-          remaining: isCash ? "0" : doc.total,
+          paid: (posts && isCash) ? doc.total : "0",
+          remaining: (posts && isCash) ? "0" : doc.total,
           notes: doc.serial ? `مستورد من التقرير ${doc.serial}` : "مستورد من تقرير مبيعات",
           createdBy: ctx.user.id,
-          status: isCash ? "paid" : "confirmed",
+          status: asDraft ? "draft" : (isCash ? "paid" : "confirmed"),
         }) as any);
         const invId = Number((result as any).insertId);
         for (const line of doc.lines) {
@@ -462,38 +499,44 @@ export const megaReportImportRouter = router({
             tax: line.tax || "0",
             total: line.total,
           }) as any);
-          await applyStockMovement(db, ctx.tenantId, {
-            itemId: line.itemId,
-            quantity: line.quantity,
-            direction: "out",
-            warehouseId: input.warehouseId,
-            allowNegative: true,
-          });
+          if (posts) {
+            await applyStockMovement(db, ctx.tenantId, {
+              itemId: line.itemId,
+              quantity: line.quantity,
+              direction: "out",
+              warehouseId: input.warehouseId,
+              allowNegative: true,
+            });
+          }
         }
-        try {
-          await postSalesInvoiceJournal(db, ctx.tenantId, ctx.user.id, {
-            number,
-            date: doc.date,
-            paymentType: input.paymentType,
-            subtotal: String(subtotal),
-            discount: doc.discount || "0",
-            tax: doc.tax || "0",
-            total: doc.total,
-          });
-        } catch {
-          // journal optional on migration if accounts incomplete
+        if (posts) {
+          try {
+            await postSalesInvoiceJournal(db, ctx.tenantId, ctx.user.id, {
+              number,
+              date: doc.date,
+              paymentType: input.paymentType,
+              subtotal: String(subtotal),
+              discount: doc.discount || "0",
+              tax: doc.tax || "0",
+              total: doc.total,
+            });
+          } catch {
+            // journal optional on migration if accounts incomplete
+          }
         }
         imported += 1;
       } catch (e) {
         errors.push(`${doc.serial || doc.date}: ${e instanceof Error ? e.message : String(e)}`);
       }
     }
-    return { imported, failed: errors.length, errors: errors.slice(0, 30) };
+    return { imported, skipped, failed: errors.length, errors: errors.slice(0, 30) };
   }),
 
   commitPurchases: protectedProcedure.input(z.object({
     warehouseId: z.number(),
     paymentType: z.enum(["cash", "credit"]).default("credit"),
+    /** approve = يحفظ ويرحّل للمخزون والتكلفة فورًا · draft = يحفظ كمسودة فقط للمراجعة ثم الاعتماد يدويًا */
+    mode: z.enum(["approve", "draft"]).default("approve"),
     documents: z.array(z.object({
       supplierId: z.number(),
       date: z.string(),
@@ -515,14 +558,46 @@ export const megaReportImportRouter = router({
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     const { applyStockMovement } = await import("./inventory-stock");
     const { updateAverageCostAfterPurchase } = await import("./inventory-cost");
+    const asDraft = input.mode === "draft";
     let imported = 0;
+    let skipped = 0;
     const errors: string[] = [];
+
+    const sig = (supplierId: number, date: string, total: string, lines: Array<{ itemId: number; quantity: string; price: string }>) =>
+      [supplierId, String(date).slice(0, 10), Number(total).toFixed(2),
+       lines.map((l) => `${l.itemId}:${Number(l.quantity)}:${Number(l.price)}`).sort().join("|")].join("~");
+    const seen = new Set<string>();
+
     for (const doc of input.documents) {
       try {
+        const docSig = sig(doc.supplierId, doc.date, doc.total, doc.lines);
+        if (seen.has(docSig)) { skipped += 1; continue; }
+        seen.add(docSig);
+        const candidates = await db.select({ id: purchaseInvoices.id })
+          .from(purchaseInvoices)
+          .where(tenantWhere(purchaseInvoices, ctx.tenantId, and(
+            eq(purchaseInvoices.supplierId, doc.supplierId),
+            eq(purchaseInvoices.date, doc.date as any),
+            eq(purchaseInvoices.total, doc.total),
+            ne(purchaseInvoices.status, "cancelled"),
+          )));
+        let isDup = false;
+        for (const c of candidates) {
+          const exist = await db.select({ itemId: purchaseInvoiceItems.itemId, quantity: purchaseInvoiceItems.quantity, price: purchaseInvoiceItems.price })
+            .from(purchaseInvoiceItems)
+            .where(tenantWhere(purchaseInvoiceItems, ctx.tenantId, eq(purchaseInvoiceItems.invoiceId, c.id)));
+          if (sig(doc.supplierId, doc.date, doc.total, exist.map((l) => ({ itemId: l.itemId, quantity: String(l.quantity), price: String(l.price) }))) === docSig) {
+            isDup = true;
+            break;
+          }
+        }
+        if (isDup) { skipped += 1; continue; }
+
         const subtotal = doc.lines.reduce((s, l) => s + Number(l.total || 0), 0);
         const [countResult] = await db.select({ count: count() }).from(purchaseInvoices).where(tenantWhere(purchaseInvoices, ctx.tenantId));
         const number = doc.serial?.trim() || `PI-${String(countResult.count + 1).padStart(5, "0")}`;
         const isCash = input.paymentType === "cash";
+        const posts = !asDraft;
         const [result] = await db.insert(purchaseInvoices).values(withTenantId(ctx.tenantId, {
           number,
           supplierId: doc.supplierId,
@@ -533,11 +608,11 @@ export const megaReportImportRouter = router({
           discount: doc.discount || "0",
           tax: doc.tax || "0",
           total: doc.total,
-          paid: isCash ? doc.total : "0",
-          remaining: isCash ? "0" : doc.total,
+          paid: (posts && isCash) ? doc.total : "0",
+          remaining: (posts && isCash) ? "0" : doc.total,
           notes: doc.serial ? `مستورد من التقرير ${doc.serial}` : "مستورد من تقرير مشتريات",
           createdBy: ctx.user.id,
-          status: isCash ? "paid" : "confirmed",
+          status: asDraft ? "draft" : (isCash ? "paid" : "confirmed"),
         }) as any);
         const invId = Number((result as any).insertId);
         for (const line of doc.lines) {
@@ -550,14 +625,16 @@ export const megaReportImportRouter = router({
             tax: line.tax || "0",
             total: line.total,
           }) as any);
-          await applyStockMovement(db, ctx.tenantId, {
-            itemId: line.itemId,
-            quantity: line.quantity,
-            direction: "in",
-            warehouseId: input.warehouseId,
-          });
-          if (Number(line.price) > 0) {
-            await updateAverageCostAfterPurchase(db, ctx.tenantId, line.itemId, Number(line.quantity), Number(line.price), input.warehouseId);
+          if (posts) {
+            await applyStockMovement(db, ctx.tenantId, {
+              itemId: line.itemId,
+              quantity: line.quantity,
+              direction: "in",
+              warehouseId: input.warehouseId,
+            });
+            if (Number(line.price) > 0) {
+              await updateAverageCostAfterPurchase(db, ctx.tenantId, line.itemId, Number(line.quantity), Number(line.price), input.warehouseId);
+            }
           }
         }
         imported += 1;
@@ -565,7 +642,7 @@ export const megaReportImportRouter = router({
         errors.push(`${doc.serial || doc.date}: ${e instanceof Error ? e.message : String(e)}`);
       }
     }
-    return { imported, failed: errors.length, errors: errors.slice(0, 30) };
+    return { imported, skipped, failed: errors.length, errors: errors.slice(0, 30) };
   }),
 
   commitProduction: protectedProcedure.input(z.object({
