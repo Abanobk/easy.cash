@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Printer, Search, FileText, TrendingUp, TrendingDown, AlertCircle } from "lucide-react";
 import { useSearch } from "wouter";
 import { DateField, isoToDisplayDate } from "@/components/form/DateField";
+import { PartySearchSelect } from "@/components/PartySearchSelect";
 
 type ContactType = "customer" | "supplier";
 
@@ -150,16 +151,12 @@ export default function ContactStatement() {
           </div>
           <div>
             <Label className="text-xs text-gray-600 mb-1 block">{contactType === "customer" ? "العميل" : "المورد"}</Label>
-            <Select value={contactId?.toString() || ""} onValueChange={(v) => { setContactId(parseInt(v)); setSubmitted(false); }}>
-              <SelectTrigger className="h-9">
-                <SelectValue placeholder={`اختر ${contactType === "customer" ? "عميل" : "مورد"}`} />
-              </SelectTrigger>
-              <SelectContent>
-                {contactList.map((c: any) => (
-                  <SelectItem key={c.id} value={c.id.toString()}>{c.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <PartySearchSelect
+              parties={contactList}
+              value={contactId?.toString() || ""}
+              onChange={(v) => { setContactId(parseInt(v)); setSubmitted(false); }}
+              placeholder={`اختر ${contactType === "customer" ? "عميل" : "مورد"}`}
+            />
           </div>
           <div>
             <Label className="text-xs text-gray-600 mb-1 block">من تاريخ</Label>

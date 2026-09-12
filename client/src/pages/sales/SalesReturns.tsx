@@ -8,11 +8,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Plus, RotateCcw, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { AddActionButton } from "@/components/AddActionButton";
+import { PartySearchSelect } from "@/components/PartySearchSelect";
+import { ItemSearchSelect } from "@/components/ItemSearchSelect";
 
 export default function SalesReturns() {
   const [open, setOpen] = useState(false);
@@ -97,12 +98,12 @@ export default function SalesReturns() {
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
                 <Label className="text-xs">العميل *</Label>
-                <Select value={form.customerId} onValueChange={v => setForm(f => ({ ...f, customerId: v }))}>
-                  <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="اختر العميل" /></SelectTrigger>
-                  <SelectContent>
-                    {customers?.rows?.map((c: any) => <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+                <PartySearchSelect
+                  parties={customers?.rows || []}
+                  value={form.customerId}
+                  onChange={(v) => setForm(f => ({ ...f, customerId: v }))}
+                  placeholder="اختر العميل"
+                />
               </div>
               <div className="space-y-1">
                 <Label className="text-xs">التاريخ</Label>
@@ -133,12 +134,12 @@ export default function SalesReturns() {
                     {items.map((it, i) => (
                       <TableRow key={i}>
                         <TableCell className="p-1">
-                          <Select value={it.itemId} onValueChange={v => updateItem(i, "itemId", v)}>
-                            <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="اختر الصنف" /></SelectTrigger>
-                            <SelectContent>
-                              {itemsList?.rows?.map((item: any) => <SelectItem key={item.id} value={String(item.id)}>{item.name}</SelectItem>)}
-                            </SelectContent>
-                          </Select>
+                          <ItemSearchSelect
+                            items={itemsList?.rows || []}
+                            value={it.itemId}
+                            onChange={(v) => updateItem(i, "itemId", v)}
+                            placeholder="اختر الصنف"
+                          />
                         </TableCell>
                         <TableCell className="p-1"><Input type="number" value={it.quantity} onChange={e => updateItem(i, "quantity", e.target.value)} className="h-8 text-xs w-20" /></TableCell>
                         <TableCell className="p-1"><Input type="number" value={it.unitPrice} onChange={e => updateItem(i, "unitPrice", e.target.value)} className="h-8 text-xs w-24" /></TableCell>

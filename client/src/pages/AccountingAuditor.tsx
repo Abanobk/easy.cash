@@ -29,6 +29,7 @@ import { printAccountingAuditReport } from "@/lib/print-audit-report";
 import { Link } from "wouter";
 import { toast } from "sonner";
 import { toDateStr } from "@/lib/date";
+import { PartySearchSelect } from "@/components/PartySearchSelect";
 
 type Severity = "critical" | "warning" | "info";
 type Tab = "report" | "uploads" | "policy";
@@ -348,14 +349,12 @@ export default function AccountingAuditorPage() {
                   {isPartyKind ? (
                     <div>
                       <Label className="text-xs">{stmtKind === "customer" ? "العميل" : "المورد"}</Label>
-                      <Select value={stmtPartyId} onValueChange={setStmtPartyId}>
-                        <SelectTrigger className="mt-1 h-9"><SelectValue placeholder={stmtKind === "customer" ? "اختر عميل" : "اختر مورد"} /></SelectTrigger>
-                        <SelectContent>
-                          {((stmtKind === "customer" ? customersQuery.data?.rows : suppliersQuery.data?.rows) || []).map((p: { id: number; name: string }) => (
-                            <SelectItem key={p.id} value={String(p.id)}>{p.name}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      <PartySearchSelect
+                        parties={(stmtKind === "customer" ? customersQuery.data?.rows : suppliersQuery.data?.rows) || []}
+                        value={stmtPartyId}
+                        onChange={setStmtPartyId}
+                        placeholder={stmtKind === "customer" ? "اختر عميل" : "اختر مورد"}
+                      />
                     </div>
                   ) : null}
                   <div className={isPartyKind ? "" : "md:col-span-2"}>

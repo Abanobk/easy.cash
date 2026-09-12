@@ -7,9 +7,9 @@ import { trpc } from "@/lib/trpc";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { getCashRouteConfig, type CashTxType } from "@/config/finance-routes";
+import { PartySearchSelect } from "@/components/PartySearchSelect";
 
 function buildEmptyForm(type: CashTxType) {
   return {
@@ -173,17 +173,12 @@ export default function CashTransactions() {
           {(lockedType === "receive_customer" || lockedType === "pay_customer") && (
             <div>
               <Label className="text-xs font-medium text-slate-700 mb-1.5 block">العميل *</Label>
-              <Select
+              <PartySearchSelect
+                parties={customers?.rows || []}
                 value={form.customerId?.toString() || ""}
-                onValueChange={(v) => setForm((p) => ({ ...p, customerId: Number(v) }))}
-              >
-                <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="اختر العميل" /></SelectTrigger>
-                <SelectContent>
-                  {customers?.rows.map((c: any) => (
-                    <SelectItem key={c.id} value={c.id.toString()}>{c.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                onChange={(v) => setForm((p) => ({ ...p, customerId: Number(v) }))}
+                placeholder="اختر العميل"
+              />
               <p className="text-xs text-slate-500 mt-1">
                 {lockedType === "pay_customer"
                   ? "يرد المبلغ للعميل ويعكس عمولة المندوبين على هذا الرد"
@@ -194,17 +189,12 @@ export default function CashTransactions() {
           {lockedType === "pay_supplier" && (
             <div>
               <Label className="text-xs font-medium text-slate-700 mb-1.5 block">المورد *</Label>
-              <Select
+              <PartySearchSelect
+                parties={suppliers?.rows || []}
                 value={form.supplierId?.toString() || ""}
-                onValueChange={(v) => setForm((p) => ({ ...p, supplierId: Number(v) }))}
-              >
-                <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="اختر المورد" /></SelectTrigger>
-                <SelectContent>
-                  {suppliers?.rows.map((s: any) => (
-                    <SelectItem key={s.id} value={s.id.toString()}>{s.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                onChange={(v) => setForm((p) => ({ ...p, supplierId: Number(v) }))}
+                placeholder="اختر المورد"
+              />
               <p className="text-xs text-slate-500 mt-1">
                 يُطبَّق المبلغ تلقائياً على أقدم فواتير الشراء المفتوحة للمورد
               </p>

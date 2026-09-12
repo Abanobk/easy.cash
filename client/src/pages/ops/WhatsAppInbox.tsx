@@ -12,6 +12,7 @@ import {
   CheckCircle2, ImagePlus, Inbox, Loader2, RefreshCw, SkipForward, Wand2,
 } from "lucide-react";
 import { toDateStr } from "@/lib/date";
+import { PartySearchSelect } from "@/components/PartySearchSelect";
 
 const TYPE_LABELS: Record<string, string> = {
   incoming_check: "شيك وارد",
@@ -390,27 +391,21 @@ export default function WhatsAppInboxPage() {
                     </div>
                     <div>
                       <Label className="text-xs">العميل</Label>
-                      <Select value={form.customerId || "none"} onValueChange={(v) => setForm({ ...form, customerId: v === "none" ? "" : v })}>
-                        <SelectTrigger className="mt-1 h-9"><SelectValue placeholder="اختر عند الحاجة" /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="none">—</SelectItem>
-                          {(customers as any[]).map((c) => (
-                            <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      <PartySearchSelect
+                        parties={customers as any[]}
+                        value={form.customerId || ""}
+                        onChange={(v) => setForm({ ...form, customerId: v })}
+                        placeholder="اختر عند الحاجة"
+                      />
                     </div>
                     <div>
                       <Label className="text-xs">المورد</Label>
-                      <Select value={form.supplierId || "none"} onValueChange={(v) => setForm({ ...form, supplierId: v === "none" ? "" : v })}>
-                        <SelectTrigger className="mt-1 h-9"><SelectValue placeholder="اختر عند الحاجة" /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="none">—</SelectItem>
-                          {(suppliers as any[]).map((s) => (
-                            <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      <PartySearchSelect
+                        parties={suppliers as any[]}
+                        value={form.supplierId || ""}
+                        onChange={(v) => setForm({ ...form, supplierId: v })}
+                        placeholder="اختر عند الحاجة"
+                      />
                     </div>
                   </div>
                   <div>

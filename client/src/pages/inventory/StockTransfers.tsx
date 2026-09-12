@@ -13,6 +13,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Plus, ArrowLeftRight, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { AddActionButton } from "@/components/AddActionButton";
+import { ItemSearchSelect } from "@/components/ItemSearchSelect";
 
 export default function StockTransfers() {
   const [open, setOpen] = useState(false);
@@ -139,12 +140,12 @@ export default function StockTransfers() {
                     {items.map((it, i) => (
                       <TableRow key={i}>
                         <TableCell className="p-1">
-                          <Select value={it.itemId} onValueChange={v => updateItem(i, "itemId", v)}>
-                            <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="اختر الصنف" /></SelectTrigger>
-                            <SelectContent>
-                              {itemsList?.rows?.map((item: any) => <SelectItem key={item.id} value={String(item.id)}>{item.name}</SelectItem>)}
-                            </SelectContent>
-                          </Select>
+                          <ItemSearchSelect
+                            items={itemsList?.rows || []}
+                            value={it.itemId}
+                            onChange={(v) => updateItem(i, "itemId", v)}
+                            placeholder="اختر الصنف"
+                          />
                         </TableCell>
                         <TableCell className="p-1"><Input type="number" value={it.quantity} onChange={e => updateItem(i, "quantity", e.target.value)} className="h-8 text-xs w-24" /></TableCell>
                         <TableCell className="p-1">
