@@ -34,7 +34,7 @@ export default function SalesOrders() {
   const utils = trpc.useUtils();
   const { data, refetch } = trpc.sales.orders.list.useQuery({ page: 1, limit: 50 });
   const { data: customers } = trpc.customers.list.useQuery({ page: 1, limit: 200 });
-  const { data: itemsList } = trpc.items.list.useQuery({ page: 1, limit: 200 });
+  const { data: itemsList } = trpc.items.all.useQuery();
   const warehouses = useWarehouseOptions();
   const createMut = trpc.sales.orders.create.useMutation({ onSuccess: () => { toast.success("تم إنشاء طلب البيع"); refetch(); setOpen(false); resetForm(); } });
   const updateMut = trpc.sales.orders.update.useMutation({ onSuccess: () => { toast.success("تم حفظ التعديلات"); refetch(); setOpen(false); resetForm(); }, onError: (e) => toast.error(e.message) });
@@ -220,7 +220,7 @@ export default function SalesOrders() {
                       <TableRow key={i}>
                         <TableCell className="p-1">
                           <ItemSearchSelect
-                            items={itemsList?.rows || []}
+                            items={itemsList || []}
                             value={it.itemId}
                             onChange={(v) => updateItem(i, "itemId", v)}
                             placeholder="اختر الصنف"

@@ -78,7 +78,7 @@ export function ItemBatchesPage() {
 
 export function ItemOffersPage() {
   const q = trpc.parity.inventory.offers.list.useQuery();
-  const items = trpc.items.list.useQuery({ page: 1, limit: 500 });
+  const items = trpc.items.all.useQuery();
   const categories = trpc.items.categories.useQuery();
   const c = trpc.parity.inventory.offers.create.useMutation();
   const u = trpc.parity.inventory.offers.update.useMutation();
@@ -86,7 +86,7 @@ export function ItemOffersPage() {
 
   const itemOptions = [
     { value: "", label: "— كل الأصناف —" },
-    ...(items.data?.rows || []).map((i: { id: number; name: string; code?: string | null }) => ({
+    ...(items.data || []).map((i: { id: number; name: string; code?: string | null }) => ({
       value: String(i.id),
       label: i.code ? `${i.code} — ${i.name}` : i.name,
     })),
@@ -310,7 +310,7 @@ export function ItemSerialsPage() {
 }
 
 export function PriceChangerPage() {
-  const items = trpc.items.list.useQuery({ page: 1, limit: 500 });
+  const items = trpc.items.all.useQuery();
   const list = trpc.parity.inventory.priceChanges.list.useQuery();
   const applyBulk = trpc.parity.inventory.priceChanges.applyBulk.useMutation({
     onSuccess: (r) => { toast.success(`تم تحديث ${r.updated} صنف`); list.refetch(); items.refetch(); },
@@ -322,7 +322,7 @@ export function PriceChangerPage() {
   const [draft, setDraft] = useState<Record<number, string>>({});
 
   const rows = useMemo(() => {
-    const all = items.data?.rows || [];
+    const all = items.data || [];
     const q = search.trim().toLowerCase();
     return all.filter((i: any) => {
       if (!q) return true;

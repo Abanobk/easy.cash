@@ -28,7 +28,7 @@ export default function SalesReturns() {
 
   const { data, refetch } = trpc.sales.returns.list.useQuery({ page: 1, limit: 50 });
   const { data: customers } = trpc.customers.list.useQuery({ page: 1, limit: 200 });
-  const { data: itemsList } = trpc.items.list.useQuery({ page: 1, limit: 200 });
+  const { data: itemsList } = trpc.items.all.useQuery();
   const createMut = trpc.sales.returns.create.useMutation({ onSuccess: () => { toast.success("تم تسجيل مردود البيع"); refetch(); setOpen(false); resetForm(); } });
 
   const resetForm = () => {
@@ -143,7 +143,7 @@ export default function SalesReturns() {
                       <TableRow key={i}>
                         <TableCell className="p-1">
                           <ItemSearchSelect
-                            items={itemsList?.rows || []}
+                            items={itemsList || []}
                             value={it.itemId}
                             onChange={(v) => updateItem(i, "itemId", v)}
                             placeholder="اختر الصنف"

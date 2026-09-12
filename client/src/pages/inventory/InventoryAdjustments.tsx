@@ -26,7 +26,7 @@ export default function InventoryAdjustments() {
 
   const { data, refetch } = trpc.inventory.adjustments.list.useQuery({ page: 1, limit: 50 });
   const { data: warehouses } = trpc.warehouses.list.useQuery();
-  const { data: itemsList } = trpc.items.list.useQuery({ page: 1, limit: 200 });
+  const { data: itemsList } = trpc.items.all.useQuery();
   const createMut = trpc.inventory.adjustments.create.useMutation({
     onSuccess: () => { toast.success("تم تسجيل تسوية المخزون"); refetch(); setOpen(false); resetForm(); }
   });
@@ -147,7 +147,7 @@ export default function InventoryAdjustments() {
                       <TableRow key={i}>
                         <TableCell className="p-1">
                           <ItemSearchSelect
-                            items={itemsList?.rows || []}
+                            items={itemsList || []}
                             value={it.itemId}
                             onChange={(v) => updateItem(i, "itemId", v)}
                             placeholder="اختر الصنف"

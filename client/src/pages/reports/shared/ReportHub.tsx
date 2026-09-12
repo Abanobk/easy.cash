@@ -210,7 +210,7 @@ export default function ReportHub({ title, section, icon, reports, procedure }: 
   const { data: repsList } = trpc.salesReps.list.useQuery(undefined, { enabled: needs("rep") });
   const { data: costCentersList } = trpc.costCenters.list.useQuery(undefined, { enabled: needs("costCenter") });
   const { data: branchesList } = trpc.settings.branches.list.useQuery(undefined, { enabled: needs("branch") });
-  const { data: itemsList } = trpc.items.list.useQuery({ limit: 200 }, { enabled: needs("item") });
+  const { data: itemsList } = trpc.items.all.useQuery(undefined, { enabled: needs("item") });
   const { data: warehousesList } = trpc.warehouses.list.useQuery(
     { branchId: selectedBranchId },
     { enabled: needs("warehouse") || needs("branch") },
@@ -456,7 +456,7 @@ export default function ReportHub({ title, section, icon, reports, procedure }: 
                   "الصنف",
                   itemId,
                   setItemId,
-                  (itemsList?.rows || []).map((it: { id: number; name: string; code?: string | null }) => ({
+                  (itemsList || []).map((it: { id: number; name: string; code?: string | null }) => ({
                     id: it.id,
                     label: `${it.code || ""} ${it.name}`.trim(),
                   })),
