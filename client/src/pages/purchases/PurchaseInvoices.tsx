@@ -27,6 +27,7 @@ import { printInvoiceQuick, printWarehouseNote } from "@/lib/print-invoice-quick
 import { toDateStr } from "@/lib/date";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { ItemSearchSelect } from "@/components/ItemSearchSelect";
+import { PartySearchSelect } from "@/components/PartySearchSelect";
 import { calcInvoiceLineNet } from "@shared/invoice-line-calc";
 
 interface InvoiceItem {
@@ -409,10 +410,14 @@ export default function PurchaseInvoices() {
                 <div className="col-span-2">
                   <Label className="text-xs font-medium text-slate-700 mb-1.5 block">المورد *</Label>
                   <div className="flex gap-1">
-                    <Select value={form.supplierId?.toString() || ""} onValueChange={(v) => setForm((p) => ({ ...p, supplierId: Number(v) }))}>
-                      <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="اختر المورد" /></SelectTrigger>
-                      <SelectContent>{suppliers?.rows.map((s) => <SelectItem key={s.id} value={s.id.toString()}>{s.name}</SelectItem>)}</SelectContent>
-                    </Select>
+                    <div className="flex-1 min-w-[9rem]">
+                      <PartySearchSelect
+                        parties={suppliers?.rows || []}
+                        value={form.supplierId?.toString() || ""}
+                        onChange={(v) => setForm((p) => ({ ...p, supplierId: Number(v) }))}
+                        placeholder="اختر المورد"
+                      />
+                    </div>
                     <Button type="button" variant="outline" size="sm" className="h-9 w-9 p-0 shrink-0" title="إضافة مورد جديد" onClick={() => setQuickAdd({ kind: "supplier" })}><Plus size={14} /></Button>
                   </div>
                 </div>

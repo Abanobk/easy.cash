@@ -20,6 +20,7 @@ import { SerialNumberPicker } from "@/components/SerialNumberPicker";
 import { InvoicePrintButton } from "@/components/InvoicePrintButton";
 import { BatchPicker } from "@/components/BatchPicker";
 import { ItemSearchSelect } from "@/components/ItemSearchSelect";
+import { PartySearchSelect } from "@/components/PartySearchSelect";
 import { QuickAddDialog } from "@/components/invoices/QuickAddDialog";
 import { InvoiceTaxList, type InvoiceTaxLine } from "@/components/invoices/InvoiceTaxList";
 import { InvoiceExpenseList, type InvoiceExpenseLine } from "@/components/invoices/InvoiceExpenseList";
@@ -537,12 +538,14 @@ export default function SalesInvoices() {
                 <div className="col-span-2">
                   <Label className="text-xs font-medium text-slate-700 mb-1.5 block">العميل *</Label>
                   <div className="flex gap-1">
-                    <Select value={form.customerId?.toString() || ""} onValueChange={(v) => setForm((p) => ({ ...p, customerId: Number(v) }))}>
-                      <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="اختر العميل" /></SelectTrigger>
-                      <SelectContent>
-                        {customers?.rows.map((c) => <SelectItem key={c.id} value={c.id.toString()}>{c.name}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
+                    <div className="flex-1 min-w-[9rem]">
+                      <PartySearchSelect
+                        parties={customers?.rows || []}
+                        value={form.customerId?.toString() || ""}
+                        onChange={(v) => setForm((p) => ({ ...p, customerId: Number(v) }))}
+                        placeholder="اختر العميل"
+                      />
+                    </div>
                     <Button type="button" variant="outline" size="sm" className="h-9 w-9 p-0 shrink-0" title="إضافة عميل جديد" onClick={() => setQuickAdd({ kind: "customer" })}><Plus size={14} /></Button>
                   </div>
                 </div>

@@ -13,6 +13,12 @@ describe("normalizeArabicKey", () => {
     expect(normalizeArabicKey("مصطفى")).toBe(normalizeArabicKey("مصطفي"));
   });
 
+  it("بيوحّد الهمزة على الواو والياء (ؤ/ئ) وبيشيل الهمزة المفردة", () => {
+    expect(normalizeArabicKey("مؤسسة إسلام")).toBe(normalizeArabicKey("موسسه اسلام"));
+    expect(normalizeArabicKey("مسئول")).toBe(normalizeArabicKey("مسيول"));
+    expect(normalizeArabicKey("جزء")).toBe(normalizeArabicKey("جز"));
+  });
+
   it("بيشيل التشكيل والتطويل", () => {
     expect(normalizeArabicKey("مُحَمَّد")).toBe(normalizeArabicKey("محمد"));
     expect(normalizeArabicKey("محـــمد")).toBe(normalizeArabicKey("محمد"));
