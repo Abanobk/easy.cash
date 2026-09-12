@@ -20,24 +20,12 @@ import {
 } from "../drizzle/schema";
 import { parseMegaReportBuffer, type MegaInvoiceLine } from "./mega-report-parse";
 import { resolveTypedEntityCode } from "./entity-codes";
+import { normalizeArabicKey as normalizeKey } from "../shared/arabic-normalize";
 
 /** drizzle/mysql2 بيرجّع أعمدة date() ككائن Date حقيقي — String(v).slice(0,10) بيكسرها، فلازم نتعامل معاها بالطريقة دي */
 function toDateStr(v: unknown): string {
   if (v instanceof Date) return v.toISOString().slice(0, 10);
   return String(v || "").slice(0, 10);
-}
-
-function normalizeKey(value: string) {
-  return String(value || "")
-    .trim()
-    .toLowerCase()
-    .replace(/[\u064B-\u065F\u0670]/g, "")
-    .replace(/\u0640/g, "")
-    .replace(/[أإآٱ]/g, "ا")
-    .replace(/ى/g, "ي")
-    .replace(/ة/g, "ه")
-    .replace(/[\s\-_/\\]+/g, " ")
-    .trim();
 }
 
 function matchOne<T extends { id: number; name?: string | null; code?: string | null; barcode?: string | null }>(

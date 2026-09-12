@@ -4,19 +4,7 @@ import { customers, suppliers } from "../drizzle/schema";
 import { resolveTypedEntityCode } from "./entity-codes";
 import { recalculateCustomerBalance, recalculateSupplierBalance } from "./contact-balances";
 import { tenantWhere, withTenantId } from "./tenant-scope";
-
-function normalizeKey(value: string) {
-  return String(value || "")
-    .trim()
-    .toLowerCase()
-    .replace(/[\u064B-\u065F\u0670]/g, "")
-    .replace(/\u0640/g, "")
-    .replace(/[أإآٱ]/g, "ا")
-    .replace(/ى/g, "ي")
-    .replace(/ة/g, "ه")
-    .replace(/[\s\-_/\\]+/g, " ")
-    .trim();
-}
+import { normalizeArabicKey as normalizeKey } from "../shared/arabic-normalize";
 
 export type CleanContactRow = {
   code?: string;

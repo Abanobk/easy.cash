@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { ChevronsUpDown, Search } from "lucide-react";
+import { normalizeArabicKey } from "@shared/arabic-normalize";
 
 export type SearchSelectOption = {
   id: number | string;
@@ -33,15 +34,16 @@ export function SearchSelect({
   const [q, setQ] = useState("");
   const selected = options.find((o) => String(o.id) === value);
   const filtered = useMemo(() => {
-    const term = q.trim().toLowerCase();
+    // توحيد عربي (همزات/تاء مربوطة/تشكيل) عشان "احمد" و"أحمد" يتطابقوا في البحث
+    const term = normalizeArabicKey(q);
     return options
       .filter((o) => !excludeId || String(o.id) !== excludeId)
       .filter((o) => {
         if (!term) return true;
         return (
-          o.label.toLowerCase().includes(term)
-          || String(o.sublabel || "").toLowerCase().includes(term)
-          || String(o.keywords || "").toLowerCase().includes(term)
+          normalizeArabicKey(o.label).includes(term)
+          || normalizeArabicKey(o.sublabel).includes(term)
+          || normalizeArabicKey(o.keywords).includes(term)
           || String(o.id).includes(term)
         );
       })

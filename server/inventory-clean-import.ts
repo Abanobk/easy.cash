@@ -12,19 +12,7 @@ import { resolveTypedEntityCode } from "./entity-codes";
 import { applyStockMovement, syncItemTotalStock } from "./inventory-stock";
 import { updateAverageCostAfterPurchase } from "./inventory-cost";
 import { tenantWhere, withTenantId } from "./tenant-scope";
-
-function normalizeKey(value: string) {
-  return String(value || "")
-    .trim()
-    .toLowerCase()
-    .replace(/[\u064B-\u065F\u0670]/g, "")
-    .replace(/\u0640/g, "")
-    .replace(/[أإآٱ]/g, "ا")
-    .replace(/ى/g, "ي")
-    .replace(/ة/g, "ه")
-    .replace(/[\s\-_/\\]+/g, " ")
-    .trim();
-}
+import { normalizeArabicKey as normalizeKey } from "../shared/arabic-normalize";
 
 function looksLikeSku(value: string, itemName: string) {
   const v = value.trim();
