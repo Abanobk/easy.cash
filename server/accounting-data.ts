@@ -54,6 +54,15 @@ export type ReportFilters = {
   discountFilter?: "with" | "without";
   /** ميجا: اخفاء الارصدة الصفرية — افتراضي false (تعرض الأصفار) */
   hideZeroBalances?: boolean;
+  /**
+   * ميجا ميزان المراجعة — مستوى العرض (2..7 من قائمة ميجا).
+   * نطبّقه كعمق الحساب في الشجرة (الجذر = 1).
+   */
+  displayLevel?: number;
+  /** ميجا: حالة النشاط — النشط/الغير نشط خلال الفترة */
+  activityStatus?: "active" | "inactive";
+  /** ميجا: ترتيب بـ — كود شجرة الحسابات / الاسم / الاعلى رصيد */
+  orderBy?: "code" | "name" | "balance";
 };
 
 function dueDateConds(table: { dueDate: Column<any, object, object> }, from?: string, to?: string) {
@@ -281,14 +290,32 @@ export async function trialBalanceReport(db: Db, filters: ReportFilters) {
   });
 
   const hideZeroBalances = filters.hideZeroBalances === true;
+  const byId = new Map(allAccounts.map((a) => [a.id, a]));
+  const treeDepth = (accountId: number) => {
+    let depth = 1;
+    let cur = byId.get(accountId);
+    const seen = new Set<number>();
+    while (cur?.parentId != null && !seen.has(cur.parentId)) {
+      seen.add(cur.parentId);
+      depth += 1;
+      cur = byId.get(cur.parentId);
+      if (depth > 20) break;
+    }
+    return depth;
+  };
 
-  return allAccounts
+  let rows = allAccounts
     .filter((a) => !a.isParent)
     .filter((a) => {
       if (filters.accountId == null) return true;
       if (a.id === filters.accountId) return true;
       if (rootCode && a.code?.startsWith(rootCode)) return true;
       return a.parentId === filters.accountId;
+    })
+    .filter((a) => {
+      // ميجا ddlDisplayLevel: قيم 2..7 — نقيّد بعمق الشجرة عند تحديده
+      if (filters.displayLevel == null || !Number.isFinite(filters.displayLevel)) return true;
+      return treeDepth(a.id) <= filters.displayLevel!;
     })
     .map((a) => {
       const open = openingMovement.get(a.id) || { debit: 0, credit: 0 };
@@ -308,11 +335,30 @@ export async function trialBalanceReport(db: Db, filters: ReportFilters) {
       };
     })
     .filter((r) => {
+      const hasPeriod = !!(r.periodDebit || r.periodCredit);
+      // ميجا حالة النشاط: النشط/الغير نشط خلال الفترة
+      if (filters.activityStatus === "active" && !hasPeriod) return false;
+      if (filters.activityStatus === "inactive" && hasPeriod) return false;
       const nonzero = !!(r.periodDebit || r.periodCredit || r.openingDebit || r.openingCredit || r.closingDebit || r.closingCredit);
       // ميجا بدون تفعيل الإخفاء: نعرض السطر حتى لو كل الأرصدة صفر (ضمن نطاق الحسابات المختارة)
       if (!hideZeroBalances) return true;
       return nonzero;
     });
+
+  // ميجا ترتيب بـ
+  if (filters.orderBy === "name") {
+    rows = rows.sort((a, b) => String(a.accountName || "").localeCompare(String(b.accountName || ""), "ar"));
+  } else if (filters.orderBy === "balance") {
+    rows = rows.sort((a, b) => {
+      const ba = Math.abs(Number(a.closingDebit || 0) - Number(a.closingCredit || 0));
+      const bb = Math.abs(Number(b.closingDebit || 0) - Number(b.closingCredit || 0));
+      return bb - ba;
+    });
+  } else {
+    rows = rows.sort((a, b) => String(a.accountCode || "").localeCompare(String(b.accountCode || ""), "en", { numeric: true }));
+  }
+
+  return rows;
 }
 
 export async function generalJournalReport(db: Db, filters: ReportFilters) {

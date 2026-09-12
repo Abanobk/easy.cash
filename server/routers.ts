@@ -4351,6 +4351,9 @@ const reportsRouter = router({
     search: z.string().optional(),
     /** ميجا ميزان المراجعة: اخفاء الارصدة الصفرية */
     hideZeroBalances: z.boolean().optional(),
+    displayLevel: z.number().int().min(1).max(10).optional(),
+    activityStatus: z.enum(["active", "inactive"]).optional(),
+    orderBy: z.enum(["code", "name", "balance"]).optional(),
   })).query(async ({ ctx, input }) => {
     await assertEntityAction(ctx, "reports", input.slug, "viewDoc");
     const db = await getDb();

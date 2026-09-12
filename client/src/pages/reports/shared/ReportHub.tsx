@@ -42,6 +42,12 @@ type FilterInput = {
   discountFilter?: "with" | "without";
   /** ميجا ميزان المراجعة: اخفاء الارصدة الصفرية (افتراضي غير مفعّل = عرض الأصفار) */
   hideZeroBalances?: boolean;
+  /** ميجا: مستوى العرض (2..7) */
+  displayLevel?: number;
+  /** ميجا: حالة النشاط خلال الفترة */
+  activityStatus?: "active" | "inactive";
+  /** ميجا: ترتيب بـ */
+  orderBy?: "code" | "name" | "balance";
 };
 
 function defaultDates() {
@@ -84,6 +90,12 @@ function parseUrlFilters(search: string): Partial<FilterInput> {
   if (discF === "with" || discF === "without") out.discountFilter = discF;
   const hzb = params.get("hideZeroBalances");
   if (hzb === "1" || hzb === "true") out.hideZeroBalances = true;
+  const dl = params.get("displayLevel");
+  if (dl && Number.isFinite(Number(dl))) out.displayLevel = Number(dl);
+  const act = params.get("activityStatus");
+  if (act === "active" || act === "inactive") out.activityStatus = act;
+  const ob = params.get("orderBy");
+  if (ob === "code" || ob === "name" || ob === "balance") out.orderBy = ob;
   return out;
 }
 
@@ -110,6 +122,9 @@ function buildFilterQueryString(query: FilterInput, includeDates: boolean) {
   if (query.taxFilter) params.set("taxFilter", query.taxFilter);
   if (query.discountFilter) params.set("discountFilter", query.discountFilter);
   if (query.hideZeroBalances) params.set("hideZeroBalances", "1");
+  if (query.displayLevel != null) params.set("displayLevel", String(query.displayLevel));
+  if (query.activityStatus) params.set("activityStatus", query.activityStatus);
+  if (query.orderBy) params.set("orderBy", query.orderBy);
   const qs = params.toString();
   return qs ? `?${qs}` : "";
 }
@@ -173,6 +188,9 @@ export default function ReportHub({ title, section, icon, reports, procedure }: 
   const [taxFilter, setTaxFilter] = useState<string>("");
   const [discountFilter, setDiscountFilter] = useState<string>("");
   const [hideZeroBalances, setHideZeroBalances] = useState(false);
+  const [displayLevel, setDisplayLevel] = useState<string>("");
+  const [activityStatus, setActivityStatus] = useState<string>("");
+  const [orderBy, setOrderBy] = useState<string>("code");
   const [query, setQuery] = useState<FilterInput>(() => ({ slug, ...dates }));
 
   useEffect(() => {
@@ -199,6 +217,9 @@ export default function ReportHub({ title, section, icon, reports, procedure }: 
     if (urlFilters.taxFilter) setTaxFilter(urlFilters.taxFilter);
     if (urlFilters.discountFilter) setDiscountFilter(urlFilters.discountFilter);
     if (urlFilters.hideZeroBalances) setHideZeroBalances(true);
+    if (urlFilters.displayLevel != null) setDisplayLevel(String(urlFilters.displayLevel));
+    if (urlFilters.activityStatus) setActivityStatus(urlFilters.activityStatus);
+    if (urlFilters.orderBy) setOrderBy(urlFilters.orderBy);
     setQuery({ slug, ...dates, ...urlFilters });
   }, [slug, location]);
 
@@ -260,6 +281,9 @@ export default function ReportHub({ title, section, icon, reports, procedure }: 
     taxFilter: query.taxFilter,
     discountFilter: query.discountFilter,
     hideZeroBalances: query.hideZeroBalances,
+    displayLevel: query.displayLevel,
+    activityStatus: query.activityStatus,
+    orderBy: query.orderBy,
   }), [slug, query, reportMeta?.needsDates]);
 
   const { data: rows = [], isLoading, refetch } = useReportData(procedure, filterInput, !!slug);
@@ -314,6 +338,18 @@ export default function ReportHub({ title, section, icon, reports, procedure }: 
       taxFilter: taxFilter === "with" || taxFilter === "without" ? taxFilter : undefined,
       discountFilter: discountFilter === "with" || discountFilter === "without" ? discountFilter : undefined,
       hideZeroBalances: slug === "finalreports-trialbalance" ? hideZeroBalances : undefined,
+      displayLevel:
+        slug === "finalreports-trialbalance" && displayLevel
+          ? Number(displayLevel)
+          : undefined,
+      activityStatus:
+        slug === "finalreports-trialbalance" && (activityStatus === "active" || activityStatus === "inactive")
+          ? activityStatus
+          : undefined,
+      orderBy:
+        slug === "finalreports-trialbalance" && (orderBy === "code" || orderBy === "name" || orderBy === "balance")
+          ? orderBy
+          : undefined,
     });
     refetch();
   };
@@ -576,13 +612,49 @@ export default function ReportHub({ title, section, icon, reports, procedure }: 
                   </div>
                 )}
                 {slug === "finalreports-trialbalance" && (
-                  <label className="flex items-center gap-2 pb-2 cursor-pointer select-none">
-                    <Checkbox
-                      checked={hideZeroBalances}
-                      onCheckedChange={(v) => setHideZeroBalances(v === true)}
-                    />
-                    <span className="text-xs">اخفاء الارصدة الصفرية</span>
-                  </label>
+                  <>
+                    <div>
+                      <Label className="text-xs">مستوى العرض</Label>
+                      <Select value={displayLevel || "all"} onValueChange={(v) => setDisplayLevel(v === "all" ? "" : v)}>
+                        <SelectTrigger className="w-28"><SelectValue placeholder="اختر" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">اختر</SelectItem>
+                          {[2, 3, 4, 5, 6, 7].map((n) => (
+                            <SelectItem key={n} value={String(n)}>{n}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label className="text-xs">حالة النشاط</Label>
+                      <Select value={activityStatus || "all"} onValueChange={(v) => setActivityStatus(v === "all" ? "" : v)}>
+                        <SelectTrigger className="w-44"><SelectValue placeholder="اختر" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">اختر</SelectItem>
+                          <SelectItem value="active">النشط خلال الفترة</SelectItem>
+                          <SelectItem value="inactive">الغير نشط خلال الفترة</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label className="text-xs">ترتيب بـ</Label>
+                      <Select value={orderBy || "code"} onValueChange={setOrderBy}>
+                        <SelectTrigger className="w-44"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="code">كود شجرة الحسابات</SelectItem>
+                          <SelectItem value="name">الاسم</SelectItem>
+                          <SelectItem value="balance">الاعلى رصيد</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <label className="flex items-center gap-2 pb-2 cursor-pointer select-none">
+                      <Checkbox
+                        checked={hideZeroBalances}
+                        onCheckedChange={(v) => setHideZeroBalances(v === true)}
+                      />
+                      <span className="text-xs">اخفاء الارصدة الصفرية</span>
+                    </label>
+                  </>
                 )}
                 <div className="flex-1 min-w-[160px]">
                   <Label className="text-xs">بحث</Label>

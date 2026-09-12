@@ -15,7 +15,7 @@ See `artifacts/mega-p0-grid-columns.json`.
 - اخفاء الارصدة الصفرية — unchecked by default (show zeros)
 - Buttons: عرض، تصدير للاكسل، تفريغ
 
-Easy applied: branch, account (main), dates, hideZeroBalances. Mega-only grouping/level/activity/sort **not** wired (semantics UNKNOWN).
+Easy applied: branch, account (main), dates, hideZeroBalances, displayLevel (2–7 as tree depth), activityStatus (active/inactive in period), orderBy (code/name/balance). Mega-only **طريقة تجميع العملاء** still not wired (semantics UNKNOWN).
 
 ## General Ledger — `/FinalReports/GeneralLedger.aspx`
 - الفرع، الحساب الرئيسي، مركز التكلفة، من تاريخ، الى تاريخ
