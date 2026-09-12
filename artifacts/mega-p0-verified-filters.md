@@ -3,7 +3,11 @@
 Source: live Mega Cash (`km.mega-cash.net`, user `test`, company `KM-01_01_2022`) + screenshots under `/workspace/*-filters.webp` and capture notes from computer-use agent.
 
 ## Grid columns
-**UNKNOWN** for Trial Balance, General Ledger, and Account Statement — reports need dates + عرض before headers appear; automation could not load the grid.
+**UNKNOWN** for Trial Balance, General Ledger, and Account Statement.
+
+Automation can open the filter forms, set dates (`cph_txtDateFromSrch` / `cph_txtDateToSrch` or statement `cph_txtDateFrom` / `cph_txtDateTo`), and click `cph_btnShow`, but the data grid does not appear in a scrapeable DOM (`MainIframe` stays on the filter form; `ifViewer` empty). Calendar day/month tables must not be treated as report headers.
+
+See `artifacts/mega-p0-grid-columns.json`.
 
 ## Trial Balance — `/FinalReports/TrialBalance.aspx`
 - الفرع، من تاريخ، الى تاريخ، الحساب الرئيسي
