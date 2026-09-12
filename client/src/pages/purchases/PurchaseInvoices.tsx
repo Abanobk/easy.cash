@@ -120,7 +120,20 @@ export default function PurchaseInvoices() {
   });
   const unapproveMut = trpc.purchases.invoices.unapprove.useMutation({
     onSuccess: () => { toast.success("تم فك الاعتماد — الفاتورة الآن مسودة قابلة للتعديل"); refetch(); },
-    onError: (e) => toast.error(e.message),
+    onError: (e) => {
+      // لما يكون في سداد مسجّل مانع فك الاعتماد، وجّه المستخدم فعلياً لشاشة المعاملات بدل رسالة نصية بس
+      if (e.message.includes("راجعه أولاً من")) {
+        const isBank = e.message.includes("بنكية");
+        toast.error(e.message, {
+          action: {
+            label: "روح هناك",
+            onClick: () => navigate(tenantPath(tenantSlug, isBank ? "/bank/transactions" : "/cash/pay-supplier")),
+          },
+        });
+        return;
+      }
+      toast.error(e.message);
+    },
   });
   const payMut = trpc.purchases.invoices.recordPayment.useMutation({
     onSuccess: (res) => {

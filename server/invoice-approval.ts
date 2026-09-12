@@ -1,6 +1,8 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import type { Db } from "./db";
 import {
+  bankTransactions,
+  cashTransactions,
   customers,
   items,
   itemBatches,
@@ -32,6 +34,35 @@ import { tenantWhere } from "./tenant-scope";
 function toDateStr(v: unknown): string {
   if (v instanceof Date) return v.toISOString().slice(0, 10);
   return String(v || "").slice(0, 10);
+}
+
+/**
+ * `paid > 0` وحدها مش دليل كافي على "تحصيل" لازم نراجعه قبل فك الاعتماد — فاتورة البيع النقدية
+ * بتتسجل paid = total من لحظة الإنشاء نفسها (مفيش معاملة منفصلة)، وكمان أي دفعة مقدمة وقت
+ * إنشاء فاتورة آجلة بتتسجل جوه نفس معاملة الإنشاء. التحصيل "الحقيقي" اللي المفروض يمنع فك
+ * الاعتماد هو بس اللي اتسجل بعدين كمعاملة نقدية/بنكية منفصلة (recordPayment) وسايبة أثر
+ * في cashTransactions/bankTransactions بمرجع رقم الفاتورة.
+ */
+async function findSeparateInvoiceCollection(
+  db: Db,
+  tenantId: number,
+  invoiceNumber: string,
+  cashTypes: Array<typeof cashTransactions.type.enumValues[number]>,
+  bankTypes: Array<typeof bankTransactions.type.enumValues[number]>,
+): Promise<{ kind: "cash" | "bank"; number: string } | null> {
+  const [cashHit] = await db.select({ number: cashTransactions.number }).from(cashTransactions)
+    .where(tenantWhere(cashTransactions, tenantId, and(
+      eq(cashTransactions.reference, invoiceNumber),
+      inArray(cashTransactions.type, cashTypes),
+    ))).limit(1);
+  if (cashHit) return { kind: "cash", number: cashHit.number };
+  const [bankHit] = await db.select({ number: bankTransactions.number }).from(bankTransactions)
+    .where(tenantWhere(bankTransactions, tenantId, and(
+      eq(bankTransactions.reference, invoiceNumber),
+      inArray(bankTransactions.type, bankTypes),
+    ))).limit(1);
+  if (bankHit) return { kind: "bank", number: bankHit.number };
+  return null;
 }
 
 export async function finalizeSalesInvoice(
@@ -307,8 +338,10 @@ export async function unapprovePurchaseInvoice(db: Db, tenantId: number, invoice
   if (!["paid", "confirmed", "partial"].includes(inv.status as string)) {
     throw new Error("الفاتورة ليست معتمدة أصلاً");
   }
-  if (Number(inv.paid) > 0) {
-    throw new Error("تم تسجيل سداد على هذه الفاتورة — راجع السداد أولاً قبل فك الاعتماد");
+  const payment = await findSeparateInvoiceCollection(db, tenantId, inv.number, ["pay_supplier"], ["withdraw_supplier"]);
+  if (payment) {
+    const place = payment.kind === "cash" ? "معاملات نقدية → صرف لمورد" : "معاملات بنكية → صرف لمورد";
+    throw new Error(`تم تسجيل سداد ${payment.number} على هذه الفاتورة — راجعه أولاً من ${place} قبل فك الاعتماد`);
   }
   const [ret] = await db.select({ id: purchaseReturns.id, number: purchaseReturns.number }).from(purchaseReturns)
     .where(tenantWhere(purchaseReturns, tenantId, eq(purchaseReturns.invoiceId, invoiceId))).limit(1);
@@ -367,8 +400,10 @@ export async function unapproveSalesInvoice(db: Db, tenantId: number, invoiceId:
   if (!["paid", "confirmed", "partial"].includes(inv.status as string)) {
     throw new Error("الفاتورة ليست معتمدة أصلاً");
   }
-  if (Number(inv.paid) > 0) {
-    throw new Error("تم تسجيل تحصيل على هذه الفاتورة — راجع التحصيل أولاً قبل فك الاعتماد");
+  const collection = await findSeparateInvoiceCollection(db, tenantId, inv.number, ["receive_customer"], ["deposit_customer"]);
+  if (collection) {
+    const place = collection.kind === "cash" ? "معاملات نقدية → تحصيل من عميل" : "معاملات بنكية → تحصيل من عميل";
+    throw new Error(`تم تسجيل تحصيل ${collection.number} على هذه الفاتورة — راجعه أولاً من ${place} قبل فك الاعتماد`);
   }
   const [ret] = await db.select({ id: salesReturns.id, number: salesReturns.number }).from(salesReturns)
     .where(tenantWhere(salesReturns, tenantId, eq(salesReturns.invoiceId, invoiceId))).limit(1);

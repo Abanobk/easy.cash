@@ -183,7 +183,21 @@ export default function SalesInvoices() {
   });
   const unapproveMut = trpc.sales.invoices.unapprove.useMutation({
     onSuccess: () => { toast.success("تم فك الاعتماد — الفاتورة الآن مسودة قابلة للتعديل"); refetch(); },
-    onError: (e) => toast.error(e.message),
+    onError: (e) => {
+      // لما يكون في تحصيل مسجّل مانع فك الاعتماد، وجّه المستخدم فعلياً لشاشة المعاملات
+      // بدل ما يقرا رسالة ويدوّر بنفسه — نفس المكان اللي رسالة السيرفر بتحيل عليه بالظبط.
+      if (e.message.includes("راجعه أولاً من")) {
+        const isBank = e.message.includes("بنكية");
+        toast.error(e.message, {
+          action: {
+            label: "روح هناك",
+            onClick: () => navigate(tenantPath(tenantSlug, isBank ? "/bank/transactions" : "/cash/receive-customer")),
+          },
+        });
+        return;
+      }
+      toast.error(e.message);
+    },
   });
   const payMut = trpc.sales.invoices.recordPayment.useMutation({
     onSuccess: (res) => {
