@@ -253,7 +253,8 @@ export default function SalesInvoiceDetail() {
                 <th className="p-3 text-right text-xs">الوحدة</th>
                 <th className="p-3 text-right text-xs">الكمية</th>
                 <th className="p-3 text-right text-xs">السعر</th>
-                <th className="p-3 text-right text-xs">الخصم %</th>
+                <th className="p-3 text-right text-xs">خصم نسبة</th>
+                <th className="p-3 text-right text-xs">خصم نقدي</th>
                 <th className="p-3 text-right text-xs">الضريبة %</th>
                 <th className="p-3 text-right text-xs rounded-tl-lg">الإجمالي</th>
               </tr>
@@ -267,6 +268,7 @@ export default function SalesInvoiceDetail() {
                   <td className="p-3 text-sm border-b border-gray-100">{parseFloat(item.quantity).toLocaleString("en-US")}</td>
                   <td className="p-3 text-sm border-b border-gray-100">{parseFloat(item.price).toLocaleString("en-US", { minimumFractionDigits: 2 })} {unitLabel}</td>
                   <td className="p-3 text-sm border-b border-gray-100">{parseFloat(item.discount || "0")}%</td>
+                  <td className="p-3 text-sm border-b border-gray-100">{parseFloat(item.discountAmount || "0").toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 4 })}</td>
                   <td className="p-3 text-sm border-b border-gray-100">{parseFloat(item.tax || "0")}%</td>
                   <td className="p-3 text-sm font-semibold text-blue-700 border-b border-gray-100">
                     {parseFloat(item.total).toLocaleString("en-US", { minimumFractionDigits: 2 })} {unitLabel}
@@ -275,7 +277,7 @@ export default function SalesInvoiceDetail() {
               ))}
               {(!inv.items || inv.items.length === 0) && (
                 <tr>
-                  <td colSpan={8} className="p-6 text-center text-gray-400 text-sm">لا توجد بنود</td>
+                  <td colSpan={9} className="p-6 text-center text-gray-400 text-sm">لا توجد بنود</td>
                 </tr>
               )}
             </tbody>

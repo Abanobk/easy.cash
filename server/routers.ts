@@ -67,6 +67,7 @@ import {
   postLoanInstallmentPayJournal,
 } from "./auto-journal";
 import { getDebtAgingSummary } from "./debt-aging";
+import { calcPurchaseUnitCostAfterDiscount } from "../shared/invoice-line-calc";
 import {
   buildSubscriptionBanner,
   effectiveSubscriptionStatus,
@@ -1248,6 +1249,7 @@ const purchasesRouter = router({
         quantity: purchaseInvoiceItems.quantity,
         price: purchaseInvoiceItems.price,
         discount: purchaseInvoiceItems.discount,
+        discountAmount: purchaseInvoiceItems.discountAmount,
         tax: purchaseInvoiceItems.tax,
         tax2: purchaseInvoiceItems.tax2,
         tax3: purchaseInvoiceItems.tax3,
@@ -1336,6 +1338,7 @@ const purchasesRouter = router({
         quantity: z.string(),
         price: z.string(),
         discount: z.string().default("0"),
+        discountAmount: z.string().default("0"),
         tax: z.string().default("0"),
         taxId: z.number().optional(),
         tax2: z.string().default("0"),
@@ -1449,7 +1452,12 @@ const purchasesRouter = router({
             ctx.tenantId,
             item.itemId,
             Number(item.quantity),
-            Number(item.price),
+            calcPurchaseUnitCostAfterDiscount({
+              quantity: Number(item.quantity),
+              price: Number(item.price),
+              discountPercent: Number(item.discount),
+              discountAmount: Number(item.discountAmount),
+            }),
             lineWarehouseId,
           );
           if (item.serialNumbers) {
@@ -1567,6 +1575,7 @@ const purchasesRouter = router({
         quantity: z.string(),
         price: z.string(),
         discount: z.string().default("0"),
+        discountAmount: z.string().default("0"),
         tax: z.string().default("0"),
         taxId: z.number().optional(),
         tax2: z.string().default("0"),
@@ -1667,7 +1676,19 @@ const purchasesRouter = router({
               batchId: item.batchId, batchNumber: item.batchNumber, expiryDate: item.expiryDate,
             });
           }
-          await updateAverageCostAfterPurchase(db, ctx.tenantId, item.itemId, Number(item.quantity), Number(item.price), lineWarehouseId);
+          await updateAverageCostAfterPurchase(
+            db,
+            ctx.tenantId,
+            item.itemId,
+            Number(item.quantity),
+            calcPurchaseUnitCostAfterDiscount({
+              quantity: Number(item.quantity),
+              price: Number(item.price),
+              discountPercent: Number(item.discount),
+              discountAmount: Number(item.discountAmount),
+            }),
+            lineWarehouseId,
+          );
           if (item.serialNumbers) {
             const { registerPurchaseSerials } = await import("./inventory-serials");
             await registerPurchaseSerials(db, ctx.tenantId, { itemId: item.itemId, warehouseId: lineWarehouseId, purchaseInvoiceId: invId, serialNumbers: item.serialNumbers });
@@ -2122,6 +2143,7 @@ const salesRouter = router({
         quantity: salesInvoiceItems.quantity,
         price: salesInvoiceItems.price,
         discount: salesInvoiceItems.discount,
+        discountAmount: salesInvoiceItems.discountAmount,
         tax: salesInvoiceItems.tax,
         tax2: salesInvoiceItems.tax2,
         tax3: salesInvoiceItems.tax3,
@@ -2237,6 +2259,7 @@ const salesRouter = router({
         quantity: z.string(),
         price: z.string(),
         discount: z.string().default("0"),
+        discountAmount: z.string().default("0"),
         tax: z.string().default("0"),
         taxId: z.number().optional(),
         tax2: z.string().default("0"),
@@ -2469,6 +2492,7 @@ const salesRouter = router({
         quantity: z.string(),
         price: z.string(),
         discount: z.string().default("0"),
+        discountAmount: z.string().default("0"),
         tax: z.string().default("0"),
         taxId: z.number().optional(),
         tax2: z.string().default("0"),

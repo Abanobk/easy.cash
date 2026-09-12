@@ -26,6 +26,7 @@ import { cancelPostedJournalByReference, postPurchaseInvoiceJournal, postSalesCo
 import { recalculateCustomerBalance, recalculateSupplierBalance } from "./contact-balances";
 import { applyStockMovement, resolveWarehouseId } from "./inventory-stock";
 import { updateAverageCostAfterPurchase, recalculateItemAverageCost } from "./inventory-cost";
+import { calcPurchaseUnitCostAfterDiscount } from "../shared/invoice-line-calc";
 import { assertDateNotInClosedPeriod } from "./fiscal-period-guard";
 import { downstreamMessage, findDownstreamStockConsumers } from "./reversal-guards";
 import { tenantWhere } from "./tenant-scope";
@@ -189,6 +190,8 @@ export async function finalizePurchaseInvoice(
       itemId: purchaseInvoiceItems.itemId,
       quantity: purchaseInvoiceItems.quantity,
       price: purchaseInvoiceItems.price,
+      discount: purchaseInvoiceItems.discount,
+      discountAmount: purchaseInvoiceItems.discountAmount,
       warehouseId: purchaseInvoiceItems.warehouseId,
       batchId: purchaseInvoiceItems.batchId,
     })
@@ -227,7 +230,12 @@ export async function finalizePurchaseInvoice(
       tenantId,
       line.itemId,
       Number(line.quantity),
-      Number(line.price),
+      calcPurchaseUnitCostAfterDiscount({
+        quantity: Number(line.quantity),
+        price: Number(line.price),
+        discountPercent: Number(line.discount),
+        discountAmount: Number(line.discountAmount),
+      }),
       lineWarehouseId,
     );
   }

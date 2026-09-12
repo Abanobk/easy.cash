@@ -309,7 +309,10 @@ export const purchaseInvoiceItems = mysqlTable("purchase_invoice_items", {
   warehouseId: int("warehouseId"),
   quantity: decimal("quantity", { precision: 15, scale: 3 }).notNull(),
   price: decimal("price", { precision: 15, scale: 2 }).notNull(),
+  /** خصم نسبة % — زي ميجا «خصم نسبة» */
   discount: decimal("discount", { precision: 5, scale: 2 }).default("0"),
+  /** خصم نقدي (مبلغ) — زي ميجا «خصم نقدي» بعد خصم النسبة وقبل الضرائب */
+  discountAmount: decimal("discountAmount", { precision: 15, scale: 4 }).default("0"),
   tax: decimal("tax", { precision: 5, scale: 2 }).default("0"),
   taxId: int("taxId"),
   tax2: decimal("tax2", { precision: 5, scale: 2 }).default("0"),
@@ -465,7 +468,10 @@ export const salesInvoiceItems = mysqlTable("sales_invoice_items", {
   warehouseId: int("warehouseId"),
   quantity: decimal("quantity", { precision: 15, scale: 3 }).notNull(),
   price: decimal("price", { precision: 15, scale: 2 }).notNull(),
+  /** خصم نسبة % */
   discount: decimal("discount", { precision: 5, scale: 2 }).default("0"),
+  /** خصم نقدي (مبلغ) */
+  discountAmount: decimal("discountAmount", { precision: 15, scale: 4 }).default("0"),
   tax: decimal("tax", { precision: 5, scale: 2 }).default("0"),
   taxId: int("taxId"),
   tax2: decimal("tax2", { precision: 5, scale: 2 }).default("0"),

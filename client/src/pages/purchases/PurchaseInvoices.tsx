@@ -27,12 +27,16 @@ import { printInvoiceQuick, printWarehouseNote } from "@/lib/print-invoice-quick
 import { toDateStr } from "@/lib/date";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { ItemSearchSelect } from "@/components/ItemSearchSelect";
+import { calcInvoiceLineNet } from "@shared/invoice-line-calc";
 
 interface InvoiceItem {
   itemId: number;
   quantity: string;
   price: string;
+  /** خصم نسبة % (ميجا: خصم نسبة) */
   discount: string;
+  /** خصم نقدي مبلغ (ميجا: خصم نقدي) */
+  discountAmount: string;
   tax: string;
   tax2: string;
   tax3: string;
@@ -45,8 +49,11 @@ interface InvoiceItem {
   lastPriceHint?: { price: number; date: string; number: string } | null;
 }
 
+/** خانات رقمية أوسع زي ميجا عشان القيم تبان أثناء الكتابة */
+const lineNumInput = "h-9 text-sm w-full min-w-[4.5rem] px-2";
+
 const emptyItem = (): InvoiceItem => ({
-  itemId: 0, quantity: "1", price: "0", discount: "0", tax: "0", tax2: "0", tax3: "0", total: "0",
+  itemId: 0, quantity: "1", price: "0", discount: "0", discountAmount: "0", tax: "0", tax2: "0", tax3: "0", total: "0",
   warehouseId: undefined, batchNumber: "", expiryDate: "", serialNumbers: "", batches: [],
 });
 
@@ -182,6 +189,7 @@ export default function PurchaseInvoices() {
         quantity: i.quantity?.toString() || "1",
         price: i.price?.toString() || "0",
         discount: i.discount?.toString() || "0",
+        discountAmount: i.discountAmount?.toString() || "0",
         tax: i.tax?.toString() || "0",
         tax2: i.tax2?.toString() || "0",
         tax3: i.tax3?.toString() || "0",
@@ -244,7 +252,10 @@ export default function PurchaseInvoices() {
         quantity: i.quantity?.toString() || "1",
         price: i.price?.toString() || "0",
         discount: i.discount?.toString() || "0",
+        discountAmount: (i as any).discountAmount?.toString() || "0",
         tax: i.tax?.toString() || "0",
+        tax2: (i as any).tax2?.toString() || "0",
+        tax3: (i as any).tax3?.toString() || "0",
         total: i.total?.toString() || "0",
       })));
       setShowForm(true);
@@ -282,12 +293,17 @@ export default function PurchaseInvoices() {
         }
         void applyItemHint(idx, Number(value));
       }
-      const q = Number(updated[idx].quantity) || 0;
-      const p = Number(updated[idx].price) || 0;
-      const d = Number(updated[idx].discount) || 0;
-      const t = (Number(updated[idx].tax) || 0) + (Number(updated[idx].tax2) || 0) + (Number(updated[idx].tax3) || 0);
-      const sub = q * p * (1 - d / 100);
-      updated[idx].total = (sub * (1 + t / 100)).toFixed(2);
+      const row = updated[idx];
+      const { total: lineTotal } = calcInvoiceLineNet({
+        quantity: Number(row.quantity),
+        price: Number(row.price),
+        discountPercent: Number(row.discount),
+        discountAmount: Number(row.discountAmount),
+        tax1: Number(row.tax),
+        tax2: Number(row.tax2),
+        tax3: Number(row.tax3),
+      });
+      updated[idx].total = lineTotal.toFixed(2);
       return updated;
     });
   };
@@ -305,8 +321,21 @@ export default function PurchaseInvoices() {
     setBarcode("");
   };
 
-  const subtotal = invoiceItems.reduce((s, i) => s + Number(i.quantity) * Number(i.price) * (1 - Number(i.discount) / 100), 0);
-  const taxTotal = invoiceItems.reduce((s, i) => s + Number(i.total) - Number(i.quantity) * Number(i.price) * (1 - Number(i.discount) / 100), 0)
+  const subtotal = invoiceItems.reduce((s, i) => {
+    const { afterDiscount } = calcInvoiceLineNet({
+      quantity: Number(i.quantity),
+      price: Number(i.price),
+      discountPercent: Number(i.discount),
+      discountAmount: Number(i.discountAmount),
+    });
+    return s + afterDiscount;
+  }, 0);
+  const taxTotal = invoiceItems.reduce((s, i) => s + Number(i.total) - calcInvoiceLineNet({
+    quantity: Number(i.quantity),
+    price: Number(i.price),
+    discountPercent: Number(i.discount),
+    discountAmount: Number(i.discountAmount),
+  }).afterDiscount, 0)
     + invoiceTaxes.reduce((s, t) => s + Number(t.amount), 0);
   const total = invoiceItems.reduce((s, i) => s + Number(i.total), 0) + invoiceTaxes.reduce((s, t) => s + Number(t.amount), 0);
   const foreign = isForeignCurrency(form.currencyCode);
@@ -352,6 +381,7 @@ export default function PurchaseInvoices() {
         quantity: i.quantity,
         price: foreign ? (Number(i.price) * rate).toFixed(2) : i.price,
         discount: i.discount,
+        discountAmount: foreign ? (Number(i.discountAmount) * rate).toFixed(4) : i.discountAmount,
         tax: i.tax,
         tax2: i.tax2,
         tax3: i.tax3,
@@ -482,18 +512,19 @@ export default function PurchaseInvoices() {
                 <table className="w-full text-sm">
                   <thead><tr className="bg-slate-50 border-b border-slate-100">
                     <th className="px-3 py-2 text-right text-xs font-semibold text-slate-600 min-w-[160px]">الصنف</th>
-                    <th className="px-3 py-2 text-right text-xs font-semibold text-slate-600 w-32">المخزن</th>
-                    <th className="px-3 py-2 text-right text-xs font-semibold text-slate-600 w-20">الكمية</th>
-                    <th className="px-3 py-2 text-right text-xs font-semibold text-slate-600 w-24">السعر</th>
-                    <th className="px-3 py-2 text-right text-xs font-semibold text-slate-600 w-16">خصم %</th>
-                    <th className="px-3 py-2 text-right text-xs font-semibold text-slate-600 w-16">ض1 %</th>
-                    <th className="px-3 py-2 text-right text-xs font-semibold text-slate-600 w-16">ض2 %</th>
-                    <th className="px-3 py-2 text-right text-xs font-semibold text-slate-600 w-16">ض3 %</th>
+                    <th className="px-3 py-2 text-right text-xs font-semibold text-slate-600 min-w-[8rem]">المخزن</th>
+                    <th className="px-3 py-2 text-right text-xs font-semibold text-slate-600 min-w-[5.5rem]">الكمية</th>
+                    <th className="px-3 py-2 text-right text-xs font-semibold text-slate-600 min-w-[7rem]">السعر</th>
+                    <th className="px-3 py-2 text-right text-xs font-semibold text-slate-600 min-w-[5.5rem]">خصم نسبة</th>
+                    <th className="px-3 py-2 text-right text-xs font-semibold text-slate-600 min-w-[6.5rem]">خصم نقدي</th>
+                    <th className="px-3 py-2 text-right text-xs font-semibold text-slate-600 min-w-[5rem]">ض1 %</th>
+                    <th className="px-3 py-2 text-right text-xs font-semibold text-slate-600 min-w-[5rem]">ض2 %</th>
+                    <th className="px-3 py-2 text-right text-xs font-semibold text-slate-600 min-w-[5rem]">ض3 %</th>
                     <th className="px-3 py-2 text-right text-xs font-semibold text-slate-600 w-28">رقم الدفعة</th>
                     <th className="px-3 py-2 text-right text-xs font-semibold text-slate-600 w-10"></th>
                     <th className="px-3 py-2 text-right text-xs font-semibold text-slate-600 w-28">انتهاء الصلاحية</th>
                     <th className="px-3 py-2 text-right text-xs font-semibold text-slate-600 w-32">أرقام تسلسلية</th>
-                    <th className="px-3 py-2 text-right text-xs font-semibold text-slate-600 w-28">الإجمالي</th>
+                    <th className="px-3 py-2 text-right text-xs font-semibold text-slate-600 min-w-[6.5rem]">الإجمالي</th>
                     <th className="px-3 py-2 w-10"></th>
                   </tr></thead>
                   <tbody>
@@ -509,7 +540,7 @@ export default function PurchaseInvoices() {
                                 placeholder="اختر الصنف"
                               />
                             </div>
-                            <Button type="button" variant="outline" size="sm" className="h-8 w-8 p-0 shrink-0" title="إضافة صنف جديد" onClick={() => setQuickAdd({ kind: "item", rowIdx: idx })}><Plus size={12} /></Button>
+                            <Button type="button" variant="outline" size="sm" className="h-9 w-9 p-0 shrink-0" title="إضافة صنف جديد" onClick={() => setQuickAdd({ kind: "item", rowIdx: idx })}><Plus size={12} /></Button>
                           </div>
                           {item.lastPriceHint && (
                             <div className="text-[10px] text-slate-400 mt-0.5">آخر سعر من المورد: {item.lastPriceHint.price.toLocaleString("en-US")} ({item.lastPriceHint.date})</div>
@@ -517,32 +548,33 @@ export default function PurchaseInvoices() {
                         </td>
                         <td className="px-3 py-2">
                           <Select value={item.warehouseId?.toString() || "default"} onValueChange={(v) => updateItem(idx, "warehouseId", v === "default" ? undefined : Number(v))}>
-                            <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                            <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
                             <SelectContent>
                               <SelectItem value="default">(افتراضي)</SelectItem>
                               {warehouses?.map((w) => <SelectItem key={w.id} value={w.id.toString()}>{w.name}</SelectItem>)}
                             </SelectContent>
                           </Select>
                         </td>
-                        <td className="px-3 py-2"><Input value={item.quantity} onChange={(e) => updateItem(idx, "quantity", e.target.value)} type="number" className="h-8 text-xs w-full" /></td>
-                        <td className="px-3 py-2"><Input value={item.price} onChange={(e) => updateItem(idx, "price", e.target.value)} type="number" className="h-8 text-xs w-full" /></td>
-                        <td className="px-3 py-2"><Input value={item.discount} onChange={(e) => updateItem(idx, "discount", e.target.value)} type="number" className="h-8 text-xs w-full" /></td>
-                        <td className="px-3 py-2"><Input value={item.tax} onChange={(e) => updateItem(idx, "tax", e.target.value)} type="number" className="h-8 text-xs w-full" /></td>
-                        <td className="px-3 py-2"><Input value={item.tax2} onChange={(e) => updateItem(idx, "tax2", e.target.value)} type="number" className="h-8 text-xs w-full" /></td>
-                        <td className="px-3 py-2"><Input value={item.tax3} onChange={(e) => updateItem(idx, "tax3", e.target.value)} type="number" className="h-8 text-xs w-full" /></td>
-                        <td className="px-3 py-2"><Input value={item.batchNumber} onChange={(e) => updateItem(idx, "batchNumber", e.target.value)} disabled={item.batches.length > 0} placeholder={item.batches.length ? "مقسّمة" : "اختياري"} className="h-8 text-xs w-full" /></td>
+                        <td className="px-3 py-2"><Input value={item.quantity} onChange={(e) => updateItem(idx, "quantity", e.target.value)} type="number" step="any" className={lineNumInput} /></td>
+                        <td className="px-3 py-2"><Input value={item.price} onChange={(e) => updateItem(idx, "price", e.target.value)} type="number" step="any" className={lineNumInput} /></td>
+                        <td className="px-3 py-2"><Input value={item.discount} onChange={(e) => updateItem(idx, "discount", e.target.value)} type="number" step="any" className={lineNumInput} title="خصم نسبة %" /></td>
+                        <td className="px-3 py-2"><Input value={item.discountAmount} onChange={(e) => updateItem(idx, "discountAmount", e.target.value)} type="number" step="any" className={lineNumInput} title="خصم نقدي (مبلغ)" /></td>
+                        <td className="px-3 py-2"><Input value={item.tax} onChange={(e) => updateItem(idx, "tax", e.target.value)} type="number" step="any" className={lineNumInput} /></td>
+                        <td className="px-3 py-2"><Input value={item.tax2} onChange={(e) => updateItem(idx, "tax2", e.target.value)} type="number" step="any" className={lineNumInput} /></td>
+                        <td className="px-3 py-2"><Input value={item.tax3} onChange={(e) => updateItem(idx, "tax3", e.target.value)} type="number" step="any" className={lineNumInput} /></td>
+                        <td className="px-3 py-2"><Input value={item.batchNumber} onChange={(e) => updateItem(idx, "batchNumber", e.target.value)} disabled={item.batches.length > 0} placeholder={item.batches.length ? "مقسّمة" : "اختياري"} className="h-9 text-sm w-full" /></td>
                         <td className="px-3 py-2"><BatchSplitEditor totalQuantity={item.quantity} value={item.batches} onChange={(rows) => updateItem(idx, "batches", rows)} /></td>
-                        <td className="px-3 py-2"><Input value={item.expiryDate} onChange={(e) => updateItem(idx, "expiryDate", e.target.value)} disabled={item.batches.length > 0} type="date" className="h-8 text-xs w-full" /></td>
+                        <td className="px-3 py-2"><Input value={item.expiryDate} onChange={(e) => updateItem(idx, "expiryDate", e.target.value)} disabled={item.batches.length > 0} type="date" className="h-9 text-sm w-full" /></td>
                         <td className="px-3 py-2">
                           {itemTracksSerial(item.itemId) ? (
-                            <Input value={item.serialNumbers} onChange={(e) => updateItem(idx, "serialNumbers", e.target.value)} placeholder="سيريال1, سيريال2" className="h-8 text-xs w-full" />
+                            <Input value={item.serialNumbers} onChange={(e) => updateItem(idx, "serialNumbers", e.target.value)} placeholder="سيريال1, سيريال2" className="h-9 text-sm w-full" />
                           ) : (<span className="text-xs text-slate-300">—</span>)}
                         </td>
-                        <td className="px-3 py-2 font-semibold text-slate-800 text-xs">{Number(item.total).toLocaleString("en-US")} {amountLabel}</td>
-                        <td className="px-3 py-2"><Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-red-500 hover:bg-red-50" onClick={() => setInvoiceItems((p) => p.filter((_, i) => i !== idx))}><Trash2 size={12} /></Button></td>
+                        <td className="px-3 py-2 font-semibold text-slate-800 text-sm whitespace-nowrap">{Number(item.total).toLocaleString("en-US")} {amountLabel}</td>
+                        <td className="px-3 py-2"><Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-red-500 hover:bg-red-50" onClick={() => setInvoiceItems((p) => p.filter((_, i) => i !== idx))}><Trash2 size={12} /></Button></td>
                       </tr>
                     ))}
-                    {invoiceItems.length === 0 && <tr><td colSpan={14} className="py-8 text-center text-slate-400 text-xs">اضغط "إضافة صنف" أو امسح سيريل نمبر لإضافة أصناف للفاتورة</td></tr>}
+                    {invoiceItems.length === 0 && <tr><td colSpan={15} className="py-8 text-center text-slate-400 text-xs">اضغط "إضافة صنف" أو امسح سيريل نمبر لإضافة أصناف للفاتورة</td></tr>}
                   </tbody>
                 </table>
               </div>
