@@ -1,0 +1,613 @@
+{
+  "extraction_date": "2026-09-12T14:20:12.529Z",
+  "loginUrl": "https://km.mega-cash.net/",
+  "reports": {
+    "trial_balance": {
+      "url": "https://km.mega-cash.net/FinalReports/TrialBalance.aspx",
+      "status": "OK",
+      "headers": [
+        "يناير",
+        "فبراير",
+        "مارس",
+        "أبريل"
+      ],
+      "blocker": null,
+      "show": {
+        "ok": true,
+        "from": "01/01/2022",
+        "to": "12/09/2026",
+        "account": null,
+        "accountHf": null
+      },
+      "excel": null,
+      "scrape": {
+        "main": {
+          "sources": {
+            "th:not(calendar)": [],
+            "largeTables": [
+              {
+                "idx": 0,
+                "id": "cph_ctl04_daysTable",
+                "rows": 7,
+                "header": [
+                  "س",
+                  "ح",
+                  "ن",
+                  "ث",
+                  "ر",
+                  "خ",
+                  "ج"
+                ]
+              },
+              {
+                "idx": 1,
+                "id": "cph_ctl04_monthsTable",
+                "rows": 3,
+                "header": [
+                  "يناير",
+                  "فبراير",
+                  "مارس",
+                  "أبريل"
+                ]
+              },
+              {
+                "idx": 3,
+                "id": "cph_ctl05_daysTable",
+                "rows": 7,
+                "header": [
+                  "س",
+                  "ح",
+                  "ن",
+                  "ث",
+                  "ر",
+                  "خ",
+                  "ج"
+                ]
+              },
+              {
+                "idx": 4,
+                "id": "cph_ctl05_monthsTable",
+                "rows": 3,
+                "header": [
+                  "يناير",
+                  "فبراير",
+                  "مارس",
+                  "أبريل"
+                ]
+              }
+            ]
+          },
+          "bodyHasعرض": true,
+          "snippet": "ميزان المراجعة تلقائي (4) تلقائي (3) تلقائي (2) تلقائي (1) 0 1 2 3 4 يسار وسط يمين اكسل بالتنسيق اكسل بدون تنسيق تفعيل الروابط تعطيل الروابط KM-01_01_2022 بحث بحث الفرع من تاريخ الى تاريخ الحساب الرئيسى طريقة تجميع العملاء اختر كل العملاء العملاء ذات الارصدة الصفرية تجميع فئة عملاء مستوى العرض اختر 2 3 4 5 6 7 حالة النشاط اختر النشط خلال الفترة الغير نشط خلال الفترة ترتيب ب كود شجرة الحسابات الاسم الاعلى رصيد اخفاء الارصدة الصفرية",
+          "iframeNames": [
+            "ifViewer"
+          ]
+        },
+        "viewer": {
+          "sources": {
+            "th:not(calendar)": [],
+            "largeTables": [
+              {
+                "idx": 0,
+                "id": "cph_ctl04_daysTable",
+                "rows": 7,
+                "header": [
+                  "س",
+                  "ح",
+                  "ن",
+                  "ث",
+                  "ر",
+                  "خ",
+                  "ج"
+                ]
+              },
+              {
+                "idx": 1,
+                "id": "cph_ctl04_monthsTable",
+                "rows": 3,
+                "header": [
+                  "يناير",
+                  "فبراير",
+                  "مارس",
+                  "أبريل"
+                ]
+              },
+              {
+                "idx": 3,
+                "id": "cph_ctl05_daysTable",
+                "rows": 7,
+                "header": [
+                  "س",
+                  "ح",
+                  "ن",
+                  "ث",
+                  "ر",
+                  "خ",
+                  "ج"
+                ]
+              },
+              {
+                "idx": 4,
+                "id": "cph_ctl05_monthsTable",
+                "rows": 3,
+                "header": [
+                  "يناير",
+                  "فبراير",
+                  "مارس",
+                  "أبريل"
+                ]
+              }
+            ]
+          },
+          "bodyHasعرض": true,
+          "snippet": "ميزان المراجعة تلقائي (4) تلقائي (3) تلقائي (2) تلقائي (1) 0 1 2 3 4 يسار وسط يمين اكسل بالتنسيق اكسل بدون تنسيق تفعيل الروابط تعطيل الروابط KM-01_01_2022 بحث بحث الفرع من تاريخ الى تاريخ الحساب الرئيسى طريقة تجميع العملاء اختر كل العملاء العملاء ذات الارصدة الصفرية تجميع فئة عملاء مستوى العرض اختر 2 3 4 5 6 7 حالة النشاط اختر النشط خلال الفترة الغير نشط خلال الفترة ترتيب ب كود شجرة الحسابات الاسم الاعلى رصيد اخفاء الارصدة الصفرية",
+          "iframeNames": [
+            "ifViewer"
+          ]
+        },
+        "https://km.mega-cash.net/": {
+          "sources": {
+            "th:not(calendar)": [],
+            "largeTables": []
+          },
+          "bodyHasعرض": false,
+          "snippet": "القائمةخروجtestالتنبيهات16المستندات المعلقةKM-01_01_2022شاشة الكاشيرEnglish سبتمبر 12 السبت اعدادات عامة العملاء والموردين شئون الموظفين المخازن فواتير الشراء فواتير المبيعات مندوبين البيع معاملات نقدية معاملات بنكية الحسابات الاصول الثابته الانتاج مراكز التكلفة القروض الاقساط الاستحقاقات التقارير الصلاحيات Copyright © 2026 - www.mega-cash.net",
+          "iframeNames": [
+            "MainIframe",
+            ""
+          ]
+        }
+      },
+      "shot": "/workspace/artifacts/mega-p0-grids/trial_balance-after-show-v2.png",
+      "headerSource": "table#cph_ctl04_monthsTable",
+      "allCandidates": [
+        {
+          "src": "table#cph_ctl04_monthsTable",
+          "headers": [
+            "يناير",
+            "فبراير",
+            "مارس",
+            "أبريل"
+          ],
+          "rows": 3
+        },
+        {
+          "src": "table#cph_ctl05_monthsTable",
+          "headers": [
+            "يناير",
+            "فبراير",
+            "مارس",
+            "أبريل"
+          ],
+          "rows": 3
+        },
+        {
+          "src": "table#cph_ctl04_monthsTable",
+          "headers": [
+            "يناير",
+            "فبراير",
+            "مارس",
+            "أبريل"
+          ],
+          "rows": 3
+        },
+        {
+          "src": "table#cph_ctl05_monthsTable",
+          "headers": [
+            "يناير",
+            "فبراير",
+            "مارس",
+            "أبريل"
+          ],
+          "rows": 3
+        }
+      ]
+    },
+    "general_ledger": {
+      "url": "https://km.mega-cash.net/FinalReports/GeneralLedger.aspx",
+      "status": "OK",
+      "headers": [
+        "يناير",
+        "فبراير",
+        "مارس",
+        "أبريل"
+      ],
+      "blocker": null,
+      "show": {
+        "ok": true,
+        "from": "01/01/2022",
+        "to": "12/09/2026",
+        "account": null,
+        "accountHf": null
+      },
+      "excel": null,
+      "scrape": {
+        "main": {
+          "sources": {
+            "th:not(calendar)": [],
+            "largeTables": [
+              {
+                "idx": 0,
+                "id": "cph_ctl04_daysTable",
+                "rows": 7,
+                "header": [
+                  "س",
+                  "ح",
+                  "ن",
+                  "ث",
+                  "ر",
+                  "خ",
+                  "ج"
+                ]
+              },
+              {
+                "idx": 1,
+                "id": "cph_ctl04_monthsTable",
+                "rows": 3,
+                "header": [
+                  "يناير",
+                  "فبراير",
+                  "مارس",
+                  "أبريل"
+                ]
+              },
+              {
+                "idx": 3,
+                "id": "cph_ctl05_daysTable",
+                "rows": 7,
+                "header": [
+                  "س",
+                  "ح",
+                  "ن",
+                  "ث",
+                  "ر",
+                  "خ",
+                  "ج"
+                ]
+              },
+              {
+                "idx": 4,
+                "id": "cph_ctl05_monthsTable",
+                "rows": 3,
+                "header": [
+                  "يناير",
+                  "فبراير",
+                  "مارس",
+                  "أبريل"
+                ]
+              }
+            ]
+          },
+          "bodyHasعرض": false,
+          "snippet": "الاستاذ العام تلقائي (4) تلقائي (3) تلقائي (2) تلقائي (1) 0 1 2 3 4 يسار وسط يمين اكسل بالتنسيق اكسل بدون تنسيق تفعيل الروابط تعطيل الروابط KM-01_01_2022 بحث بحث الفرع الحساب الرئيسى مركز التكلفة من تاريخ الى تاريخ",
+          "iframeNames": [
+            "ifViewer"
+          ]
+        },
+        "viewer": {
+          "sources": {
+            "th:not(calendar)": [],
+            "largeTables": [
+              {
+                "idx": 0,
+                "id": "cph_ctl04_daysTable",
+                "rows": 7,
+                "header": [
+                  "س",
+                  "ح",
+                  "ن",
+                  "ث",
+                  "ر",
+                  "خ",
+                  "ج"
+                ]
+              },
+              {
+                "idx": 1,
+                "id": "cph_ctl04_monthsTable",
+                "rows": 3,
+                "header": [
+                  "يناير",
+                  "فبراير",
+                  "مارس",
+                  "أبريل"
+                ]
+              },
+              {
+                "idx": 3,
+                "id": "cph_ctl05_daysTable",
+                "rows": 7,
+                "header": [
+                  "س",
+                  "ح",
+                  "ن",
+                  "ث",
+                  "ر",
+                  "خ",
+                  "ج"
+                ]
+              },
+              {
+                "idx": 4,
+                "id": "cph_ctl05_monthsTable",
+                "rows": 3,
+                "header": [
+                  "يناير",
+                  "فبراير",
+                  "مارس",
+                  "أبريل"
+                ]
+              }
+            ]
+          },
+          "bodyHasعرض": false,
+          "snippet": "الاستاذ العام تلقائي (4) تلقائي (3) تلقائي (2) تلقائي (1) 0 1 2 3 4 يسار وسط يمين اكسل بالتنسيق اكسل بدون تنسيق تفعيل الروابط تعطيل الروابط KM-01_01_2022 بحث بحث الفرع الحساب الرئيسى مركز التكلفة من تاريخ الى تاريخ",
+          "iframeNames": [
+            "ifViewer"
+          ]
+        },
+        "https://km.mega-cash.net/": {
+          "sources": {
+            "th:not(calendar)": [],
+            "largeTables": []
+          },
+          "bodyHasعرض": false,
+          "snippet": "القائمةخروجtestالتنبيهات16المستندات المعلقةKM-01_01_2022شاشة الكاشيرEnglish سبتمبر 12 السبت اعدادات عامة العملاء والموردين شئون الموظفين المخازن فواتير الشراء فواتير المبيعات مندوبين البيع معاملات نقدية معاملات بنكية الحسابات الاصول الثابته الانتاج مراكز التكلفة القروض الاقساط الاستحقاقات التقارير الصلاحيات Copyright © 2026 - www.mega-cash.net",
+          "iframeNames": [
+            "MainIframe",
+            ""
+          ]
+        }
+      },
+      "shot": "/workspace/artifacts/mega-p0-grids/general_ledger-after-show-v2.png",
+      "headerSource": "table#cph_ctl04_monthsTable",
+      "allCandidates": [
+        {
+          "src": "table#cph_ctl04_monthsTable",
+          "headers": [
+            "يناير",
+            "فبراير",
+            "مارس",
+            "أبريل"
+          ],
+          "rows": 3
+        },
+        {
+          "src": "table#cph_ctl05_monthsTable",
+          "headers": [
+            "يناير",
+            "فبراير",
+            "مارس",
+            "أبريل"
+          ],
+          "rows": 3
+        },
+        {
+          "src": "table#cph_ctl04_monthsTable",
+          "headers": [
+            "يناير",
+            "فبراير",
+            "مارس",
+            "أبريل"
+          ],
+          "rows": 3
+        },
+        {
+          "src": "table#cph_ctl05_monthsTable",
+          "headers": [
+            "يناير",
+            "فبراير",
+            "مارس",
+            "أبريل"
+          ],
+          "rows": 3
+        }
+      ]
+    },
+    "account_statement": {
+      "url": "https://km.mega-cash.net/AccountingReports/AccountStatment.aspx",
+      "status": "OK",
+      "headers": [
+        "يناير",
+        "فبراير",
+        "مارس",
+        "أبريل"
+      ],
+      "blocker": null,
+      "show": {
+        "ok": true,
+        "from": "01/01/2022",
+        "to": "12/09/2026",
+        "account": "1 - الأصول",
+        "accountHf": null
+      },
+      "excel": null,
+      "scrape": {
+        "main": {
+          "sources": {
+            "th:not(calendar)": [],
+            "largeTables": [
+              {
+                "idx": 0,
+                "id": "cph_ctl05_daysTable",
+                "rows": 7,
+                "header": [
+                  "س",
+                  "ح",
+                  "ن",
+                  "ث",
+                  "ر",
+                  "خ",
+                  "ج"
+                ]
+              },
+              {
+                "idx": 1,
+                "id": "cph_ctl05_monthsTable",
+                "rows": 3,
+                "header": [
+                  "يناير",
+                  "فبراير",
+                  "مارس",
+                  "أبريل"
+                ]
+              },
+              {
+                "idx": 3,
+                "id": "cph_ctl06_daysTable",
+                "rows": 7,
+                "header": [
+                  "س",
+                  "ح",
+                  "ن",
+                  "ث",
+                  "ر",
+                  "خ",
+                  "ج"
+                ]
+              },
+              {
+                "idx": 4,
+                "id": "cph_ctl06_monthsTable",
+                "rows": 3,
+                "header": [
+                  "يناير",
+                  "فبراير",
+                  "مارس",
+                  "أبريل"
+                ]
+              }
+            ]
+          },
+          "bodyHasعرض": true,
+          "snippet": "كشف حساب تلقائي (4) تلقائي (3) تلقائي (2) تلقائي (1) 0 1 2 3 4 يسار وسط يمين اكسل بالتنسيق اكسل بدون تنسيق تفعيل الروابط تعطيل الروابط KM-01_01_2022 بحث بحث الفرع العملة اختر جنيه مصري جنيه استرليني جنيه سوداني درهم اماراتي درهم مغربي دولار امريكي دينار اردني دينار عراقي دينار كويتي دينار ليبي روبل روسي روبية هندي ريال ايراني ريال سعودي ريال عماني ريال قطري ريال يمني ين ياباني يوان صيني يورو من تاريخ الى تاريخ اسم الحساب الحساب المقابل مركز التكلفة نوع القيد اعتمد بواسطة ملاحظات عرض حركات الرصيد الافتتاحي عرض الحسابات المقابله اخفاء التفاصيل",
+          "iframeNames": [
+            "ifViewer"
+          ]
+        },
+        "viewer": {
+          "sources": {
+            "th:not(calendar)": [],
+            "largeTables": [
+              {
+                "idx": 0,
+                "id": "cph_ctl05_daysTable",
+                "rows": 7,
+                "header": [
+                  "س",
+                  "ح",
+                  "ن",
+                  "ث",
+                  "ر",
+                  "خ",
+                  "ج"
+                ]
+              },
+              {
+                "idx": 1,
+                "id": "cph_ctl05_monthsTable",
+                "rows": 3,
+                "header": [
+                  "يناير",
+                  "فبراير",
+                  "مارس",
+                  "أبريل"
+                ]
+              },
+              {
+                "idx": 3,
+                "id": "cph_ctl06_daysTable",
+                "rows": 7,
+                "header": [
+                  "س",
+                  "ح",
+                  "ن",
+                  "ث",
+                  "ر",
+                  "خ",
+                  "ج"
+                ]
+              },
+              {
+                "idx": 4,
+                "id": "cph_ctl06_monthsTable",
+                "rows": 3,
+                "header": [
+                  "يناير",
+                  "فبراير",
+                  "مارس",
+                  "أبريل"
+                ]
+              }
+            ]
+          },
+          "bodyHasعرض": true,
+          "snippet": "كشف حساب تلقائي (4) تلقائي (3) تلقائي (2) تلقائي (1) 0 1 2 3 4 يسار وسط يمين اكسل بالتنسيق اكسل بدون تنسيق تفعيل الروابط تعطيل الروابط KM-01_01_2022 بحث بحث الفرع العملة اختر جنيه مصري جنيه استرليني جنيه سوداني درهم اماراتي درهم مغربي دولار امريكي دينار اردني دينار عراقي دينار كويتي دينار ليبي روبل روسي روبية هندي ريال ايراني ريال سعودي ريال عماني ريال قطري ريال يمني ين ياباني يوان صيني يورو من تاريخ الى تاريخ اسم الحساب الحساب المقابل مركز التكلفة نوع القيد اعتمد بواسطة ملاحظات عرض حركات الرصيد الافتتاحي عرض الحسابات المقابله اخفاء التفاصيل",
+          "iframeNames": [
+            "ifViewer"
+          ]
+        },
+        "https://km.mega-cash.net/": {
+          "sources": {
+            "th:not(calendar)": [],
+            "largeTables": []
+          },
+          "bodyHasعرض": false,
+          "snippet": "القائمةخروجtestالتنبيهات16المستندات المعلقةKM-01_01_2022شاشة الكاشيرEnglish سبتمبر 12 السبت اعدادات عامة العملاء والموردين شئون الموظفين المخازن فواتير الشراء فواتير المبيعات مندوبين البيع معاملات نقدية معاملات بنكية الحسابات الاصول الثابته الانتاج مراكز التكلفة القروض الاقساط الاستحقاقات التقارير الصلاحيات Copyright © 2026 - www.mega-cash.net",
+          "iframeNames": [
+            "MainIframe",
+            ""
+          ]
+        }
+      },
+      "shot": "/workspace/artifacts/mega-p0-grids/account_statement-after-show-v2.png",
+      "headerSource": "table#cph_ctl05_monthsTable",
+      "allCandidates": [
+        {
+          "src": "table#cph_ctl05_monthsTable",
+          "headers": [
+            "يناير",
+            "فبراير",
+            "مارس",
+            "أبريل"
+          ],
+          "rows": 3
+        },
+        {
+          "src": "table#cph_ctl06_monthsTable",
+          "headers": [
+            "يناير",
+            "فبراير",
+            "مارس",
+            "أبريل"
+          ],
+          "rows": 3
+        },
+        {
+          "src": "table#cph_ctl05_monthsTable",
+          "headers": [
+            "يناير",
+            "فبراير",
+            "مارس",
+            "أبريل"
+          ],
+          "rows": 3
+        },
+        {
+          "src": "table#cph_ctl06_monthsTable",
+          "headers": [
+            "يناير",
+            "فبراير",
+            "مارس",
+            "أبريل"
+          ],
+          "rows": 3
+        }
+      ]
+    }
+  },
+  "notes": [
+    "Single-letter calendar headers rejected.",
+    "Headers only from observed DOM/Excel — never invented."
+  ]
+}
