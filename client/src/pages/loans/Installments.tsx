@@ -13,6 +13,7 @@ import { CheckCircle } from "lucide-react";
 import EntityPermissionGate from "@/components/EntityPermissionGate";
 import { toDateStr } from "@/lib/date";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
+import { BankAccountSearchSelect } from "@/components/BankAccountSearchSelect";
 
 export default function Installments() {
   const [page, setPage] = useState(1);
@@ -154,14 +155,12 @@ export default function Installments() {
             {settlementMethod === "bank" && (
               <div className="space-y-1">
                 <Label className="text-xs font-bold">الحساب البنكي</Label>
-                <Select value={bankAccountId} onValueChange={setBankAccountId}>
-                  <SelectTrigger className="h-10"><SelectValue placeholder="اختر بنك" /></SelectTrigger>
-                  <SelectContent>
-                    {(banksQ.data || []).map((b: any) => (
-                      <SelectItem key={b.id} value={String(b.id)}>{b.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <BankAccountSearchSelect
+                  accounts={banksQ.data || []}
+                  value={bankAccountId}
+                  onChange={setBankAccountId}
+                  placeholder="اختر بنك"
+                />
               </div>
             )}
           </div>

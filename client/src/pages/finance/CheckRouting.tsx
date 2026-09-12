@@ -12,7 +12,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { Download, History, Printer } from "lucide-react";
-import { formatBankAccountLabel } from "@/lib/bank-label";
+import { BankAccountSearchSelect } from "@/components/BankAccountSearchSelect";
 import { Link } from "wouter";
 import { tenantPath, useTenantSlug } from "@/lib/tenant";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
@@ -452,17 +452,12 @@ export default function CheckRouting() {
         <div className="space-y-3">
           <div>
             <Label className="text-xs">البنك الموجّه إليه *</Label>
-            <Select value={bankAccountId || "none"} onValueChange={(v) => setBankAccountId(v === "none" ? "" : v)}>
-              <SelectTrigger className="h-9"><SelectValue placeholder="اختر بنك" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">اختر...</SelectItem>
-                {(banksQ.data || []).map((b: any) => (
-                  <SelectItem key={b.id} value={String(b.id)}>
-                    {formatBankAccountLabel(b)}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <BankAccountSearchSelect
+              accounts={banksQ.data || []}
+              value={bankAccountId}
+              onChange={setBankAccountId}
+              placeholder="اختر بنك"
+            />
             {!(banksQ.data || []).length && (
               <p className="text-[11px] text-amber-700 mt-1.5 bg-amber-50 border border-amber-100 rounded px-2 py-1.5">
                 لا توجد بنوك بعد. أضف حساباً فرعياً تحت «البنوك» في{" "}
@@ -519,17 +514,12 @@ export default function CheckRouting() {
           </p>
           <div>
             <Label className="text-xs">البنك *</Label>
-            <Select value={bankAccountId || "none"} onValueChange={(v) => setBankAccountId(v === "none" ? "" : v)}>
-              <SelectTrigger className="h-9"><SelectValue placeholder="اختر بنك" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">اختر...</SelectItem>
-                {(banksQ.data || []).map((b: any) => (
-                  <SelectItem key={b.id} value={String(b.id)}>
-                    {formatBankAccountLabel(b)}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <BankAccountSearchSelect
+              accounts={banksQ.data || []}
+              value={bankAccountId}
+              onChange={setBankAccountId}
+              placeholder="اختر بنك"
+            />
           </div>
           <div>
             <Label className="text-xs">تاريخ الإيداع</Label>

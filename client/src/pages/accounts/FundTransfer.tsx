@@ -12,6 +12,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Plus, ArrowRightLeft } from "lucide-react";
 import { toast } from "sonner";
 import { tenantPath, useTenantSlug } from "@/lib/tenant";
+import { AccountSearchSelect } from "@/components/AccountSearchSelect";
 
 export default function FundTransfer() {
   const [, navigate] = useLocation();
@@ -105,25 +106,21 @@ export default function FundTransfer() {
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
                 <Label className="text-xs">من حساب *</Label>
-                <Select value={form.fromAccountId} onValueChange={(v) => setForm((f) => ({ ...f, fromAccountId: v }))}>
-                  <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="الحساب المصدر" /></SelectTrigger>
-                  <SelectContent>
-                    {leafAccounts.map((a: { id: number; code: string; name: string }) => (
-                      <SelectItem key={a.id} value={String(a.id)}>{a.code} - {a.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <AccountSearchSelect
+                  accounts={leafAccounts}
+                  value={form.fromAccountId}
+                  onChange={(v) => setForm((f) => ({ ...f, fromAccountId: v }))}
+                  placeholder="الحساب المصدر"
+                />
               </div>
               <div className="space-y-1">
                 <Label className="text-xs">إلى حساب *</Label>
-                <Select value={form.toAccountId} onValueChange={(v) => setForm((f) => ({ ...f, toAccountId: v }))}>
-                  <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="الحساب المستقبل" /></SelectTrigger>
-                  <SelectContent>
-                    {leafAccounts.map((a: { id: number; code: string; name: string }) => (
-                      <SelectItem key={a.id} value={String(a.id)}>{a.code} - {a.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <AccountSearchSelect
+                  accounts={leafAccounts}
+                  value={form.toAccountId}
+                  onChange={(v) => setForm((f) => ({ ...f, toAccountId: v }))}
+                  placeholder="الحساب المستقبل"
+                />
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3">

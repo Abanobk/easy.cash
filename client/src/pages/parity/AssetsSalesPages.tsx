@@ -14,6 +14,7 @@ import { toast } from "sonner";
 import { Trash2 } from "lucide-react";
 import EntityPermissionGate from "@/components/EntityPermissionGate";
 import { toDateStr } from "@/lib/date";
+import { BankAccountSearchSelect } from "@/components/BankAccountSearchSelect";
 
 export function AssetCategoriesPage() {
   const q = trpc.parity.assets.categories.list.useQuery();
@@ -210,14 +211,12 @@ export function AssetSellingPage() {
           {form.settlementMethod === "bank" && (
             <div>
               <Label className="text-xs font-medium mb-1.5 block">الحساب البنكي *</Label>
-              <Select value={form.bankAccountId} onValueChange={(v) => setForm((p) => ({ ...p, bankAccountId: v }))}>
-                <SelectTrigger className="h-9"><SelectValue placeholder="اختر بنك" /></SelectTrigger>
-                <SelectContent>
-                  {(banksQ.data || []).map((b: any) => (
-                    <SelectItem key={b.id} value={String(b.id)}>{b.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <BankAccountSearchSelect
+                accounts={banksQ.data || []}
+                value={form.bankAccountId}
+                onChange={(v) => setForm((p) => ({ ...p, bankAccountId: v }))}
+                placeholder="اختر بنك"
+              />
             </div>
           )}
           <div>

@@ -3,8 +3,8 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { trpc } from "@/lib/trpc";
+import { BankAccountSearchSelect } from "@/components/BankAccountSearchSelect";
 
 export type PaymentReceiptFile = {
   fileName: string;
@@ -99,13 +99,12 @@ export function InvoicePaymentDialog({
             </div>
             <div>
               <Label className="text-xs">حساب البنك</Label>
-              <Select value={bankAccountId?.toString() || "none"} onValueChange={(v) => setBankAccountId(v === "none" ? undefined : Number(v))}>
-                <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="اختر البنك" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">بدون</SelectItem>
-                  {bankAccounts?.map((b) => <SelectItem key={b.id} value={b.id.toString()}>{b.name}</SelectItem>)}
-                </SelectContent>
-              </Select>
+              <BankAccountSearchSelect
+                accounts={bankAccounts || []}
+                value={bankAccountId?.toString() || ""}
+                onChange={(v) => setBankAccountId(v ? Number(v) : undefined)}
+                placeholder="اختر البنك"
+              />
             </div>
           </div>
           {Number(bankAmount) > 0 && (

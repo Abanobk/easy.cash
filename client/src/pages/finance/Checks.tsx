@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { CHECK_TYPE_META, getCheckTypeFromSearch, type CheckTxType } from "@/config/finance-routes";
-import { formatBankAccountLabel } from "@/lib/bank-label";
+import { BankAccountSearchSelect } from "@/components/BankAccountSearchSelect";
 import EntityPermissionGate from "@/components/EntityPermissionGate";
 import { Undo2 } from "lucide-react";
 import { PartySearchSelect } from "@/components/PartySearchSelect";
@@ -264,24 +264,12 @@ export default function Checks() {
           </div>
           <div className="col-span-2">
             <Label className="text-xs font-medium text-slate-700 mb-1.5 block">الحساب البنكي</Label>
-            <Select
+            <BankAccountSearchSelect
+              accounts={bankAccounts || []}
               value={form.bankAccountId?.toString() || ""}
-              onValueChange={(v) => setForm((p) => ({ ...p, bankAccountId: Number(v) }))}
-            >
-              <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="اختياري" /></SelectTrigger>
-              <SelectContent>
-                {bankAccounts?.map((b: any) => (
-                  <SelectItem key={b.id} value={b.id.toString()}>
-                    {formatBankAccountLabel(b)}
-                  </SelectItem>
-                ))}
-                {!bankAccounts?.length && (
-                  <SelectItem value="__empty" disabled>
-                    لا توجد بنوك — أضف حساباً تحت «البنوك» في شجرة الحسابات
-                  </SelectItem>
-                )}
-              </SelectContent>
-            </Select>
+              onChange={(v) => setForm((p) => ({ ...p, bankAccountId: Number(v) }))}
+              placeholder="اختياري"
+            />
           </div>
           {lockedType === "incoming" && (
             <div className="col-span-2">

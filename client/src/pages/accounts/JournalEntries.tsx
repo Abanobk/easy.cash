@@ -12,6 +12,7 @@ import { toast } from "sonner";
 import { Plus, Trash2 } from "lucide-react";
 import { tenantPath, useTenantSlug } from "@/lib/tenant";
 import EntityPermissionGate from "@/components/EntityPermissionGate";
+import { AccountSearchSelect } from "@/components/AccountSearchSelect";
 
 type JournalLine = {
   accountId: number | undefined;
@@ -162,14 +163,12 @@ export default function JournalEntries() {
                   {lines.map((line, idx) => (
                     <tr key={idx} className="border-b border-slate-100">
                       <td className="px-2 py-1.5">
-                        <Select value={line.accountId?.toString() || ""} onValueChange={v => updateLine(idx, "accountId", Number(v))}>
-                          <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="اختر الحساب" /></SelectTrigger>
-                          <SelectContent>
-                            {accountsList?.filter((a: { isParent?: boolean | null }) => !a.isParent).map((a: { id: number; code: string; name: string }) => (
-                              <SelectItem key={a.id} value={a.id.toString()}>{a.code} - {a.name}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                        <AccountSearchSelect
+                          accounts={accountsList?.filter((a: { isParent?: boolean | null }) => !a.isParent) || []}
+                          value={line.accountId?.toString() || ""}
+                          onChange={(v) => updateLine(idx, "accountId", Number(v))}
+                          placeholder="اختر الحساب"
+                        />
                       </td>
                       <td className="px-2 py-1.5">
                         <Select

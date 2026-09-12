@@ -2,6 +2,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { trpc } from "@/lib/trpc";
+import { AccountSearchSelect } from "@/components/AccountSearchSelect";
 import { Plus, Trash2 } from "lucide-react";
 
 export interface InvoiceTaxLine {
@@ -57,13 +58,12 @@ export function InvoiceTaxList({
             </Select>
           </div>
           <div className="col-span-3">
-            <Select
+            <AccountSearchSelect
+              accounts={leafAccounts}
               value={row.glAccountId?.toString() || ""}
-              onValueChange={(v) => update(idx, { glAccountId: Number(v) })}
-            >
-              <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="الحساب الدائن" /></SelectTrigger>
-              <SelectContent>{leafAccounts.map((a: any) => <SelectItem key={a.id} value={a.id.toString()}>{a.code} - {a.name}</SelectItem>)}</SelectContent>
-            </Select>
+              onChange={(v) => update(idx, { glAccountId: Number(v) })}
+              placeholder="الحساب الدائن"
+            />
           </div>
           <div className="col-span-3">
             <Input value={row.amount} onChange={(e) => update(idx, { amount: e.target.value })} type="number" placeholder="المبلغ" className="h-8 text-xs" />

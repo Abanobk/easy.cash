@@ -30,6 +30,7 @@ import { Link } from "wouter";
 import { toast } from "sonner";
 import { toDateStr } from "@/lib/date";
 import { PartySearchSelect } from "@/components/PartySearchSelect";
+import { BankAccountSearchSelect } from "@/components/BankAccountSearchSelect";
 
 type Severity = "critical" | "warning" | "info";
 type Tab = "report" | "uploads" | "policy";
@@ -302,14 +303,12 @@ export default function AccountingAuditorPage() {
                 <div className="grid gap-3 md:grid-cols-2">
                   <div>
                     <Label className="text-xs">البنك</Label>
-                    <Select value={bankAccountId} onValueChange={setBankAccountId}>
-                      <SelectTrigger className="mt-1 h-9"><SelectValue placeholder="اختر بنك" /></SelectTrigger>
-                      <SelectContent>
-                        {(banksQuery.data || []).map((b) => (
-                          <SelectItem key={b.id} value={String(b.id)}>{b.name}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <BankAccountSearchSelect
+                      accounts={banksQuery.data || []}
+                      value={bankAccountId}
+                      onChange={setBankAccountId}
+                      placeholder="اختر بنك"
+                    />
                   </div>
                   <div>
                     <Label className="text-xs">ملف الكشف</Label>

@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { toDateStr } from "@/lib/date";
 import { PartySearchSelect } from "@/components/PartySearchSelect";
+import { BankAccountSearchSelect } from "@/components/BankAccountSearchSelect";
 
 const TYPE_LABELS: Record<string, string> = {
   incoming_check: "شيك وارد",
@@ -379,15 +380,12 @@ export default function WhatsAppInboxPage() {
                     </div>
                     <div>
                       <Label className="text-xs">البنك</Label>
-                      <Select value={form.bankAccountId || "none"} onValueChange={(v) => setForm({ ...form, bankAccountId: v === "none" ? "" : v })}>
-                        <SelectTrigger className="mt-1 h-9"><SelectValue placeholder="اختياري" /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="none">—</SelectItem>
-                          {banks.map((b: any) => (
-                            <SelectItem key={b.id} value={String(b.id)}>{b.name}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      <BankAccountSearchSelect
+                        accounts={banks}
+                        value={form.bankAccountId || ""}
+                        onChange={(v) => setForm({ ...form, bankAccountId: v })}
+                        placeholder="اختياري"
+                      />
                     </div>
                     <div>
                       <Label className="text-xs">العميل</Label>

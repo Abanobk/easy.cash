@@ -14,7 +14,7 @@ import {
   getBankTypeFromSearch,
   type BankTxType,
 } from "@/config/finance-routes";
-import { formatBankAccountLabel } from "@/lib/bank-label";
+import { BankAccountSearchSelect } from "@/components/BankAccountSearchSelect";
 import { PartySearchSelect } from "@/components/PartySearchSelect";
 
 function buildEmptyForm(type: BankTxType) {
@@ -160,24 +160,12 @@ export default function BankTransactions() {
         <div className="grid grid-cols-2 gap-4">
           <div>
             <Label className="text-xs font-medium text-slate-700 mb-1.5 block">الحساب البنكي *</Label>
-            <Select
+            <BankAccountSearchSelect
+              accounts={bankAccounts || []}
               value={form.bankAccountId?.toString() || ""}
-              onValueChange={(v) => setForm((p) => ({ ...p, bankAccountId: Number(v) }))}
-            >
-              <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="اختر الحساب" /></SelectTrigger>
-              <SelectContent>
-                {bankAccounts?.map((b: any) => (
-                  <SelectItem key={b.id} value={b.id.toString()}>
-                    {formatBankAccountLabel(b)}
-                  </SelectItem>
-                ))}
-                {!bankAccounts?.length && (
-                  <SelectItem value="__empty" disabled>
-                    لا توجد بنوك — أضف حساباً تحت «البنوك» في شجرة الحسابات
-                  </SelectItem>
-                )}
-              </SelectContent>
-            </Select>
+              onChange={(v) => setForm((p) => ({ ...p, bankAccountId: Number(v) }))}
+              placeholder="اختر الحساب"
+            />
           </div>
           <div>
             <Label className="text-xs font-medium text-slate-700 mb-1.5 block">المبلغ *</Label>

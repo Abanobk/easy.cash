@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { Plus, ChevronDown, ChevronLeft, Folder, FileText, RefreshCw } from "lucide-react";
 import { AddActionButton } from "@/components/AddActionButton";
+import { AccountSearchSelect } from "@/components/AccountSearchSelect";
 
 const typeLabels: Record<string, { label: string; color: string }> = {
   asset: { label: "أصول", color: "bg-blue-100 text-blue-700" },
@@ -170,13 +171,12 @@ export default function ChartOfAccounts() {
           </div>
           <div>
             <Label className="text-xs font-medium text-slate-700 mb-1.5 block">الحساب الأب</Label>
-            <Select value={form.parentId?.toString() ?? "none"} onValueChange={v => setForm(p => ({ ...p, parentId: v === "none" ? undefined : Number(v) }))}>
-              <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="حساب رئيسي" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">بدون (حساب رئيسي)</SelectItem>
-                {accounts?.filter(a => a.isParent).map((a: any) => <SelectItem key={a.id} value={a.id.toString()}>{a.code} - {a.name}</SelectItem>)}
-              </SelectContent>
-            </Select>
+            <AccountSearchSelect
+              accounts={accounts?.filter(a => a.isParent) || []}
+              value={form.parentId?.toString() || ""}
+              onChange={(v) => setForm(p => ({ ...p, parentId: v ? Number(v) : undefined }))}
+              placeholder="بدون (حساب رئيسي)"
+            />
           </div>
           <div className="col-span-2">
             <Label className="text-xs font-medium text-slate-700 mb-1.5 block">نوع الحساب</Label>

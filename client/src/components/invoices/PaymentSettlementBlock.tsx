@@ -1,7 +1,7 @@
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { trpc } from "@/lib/trpc";
+import { BankAccountSearchSelect } from "@/components/BankAccountSearchSelect";
 
 export interface Settlement {
   cashAmount: string;
@@ -52,13 +52,12 @@ export function PaymentSettlementBlock({
       </div>
       <div>
         <Label className="text-xs font-medium text-slate-700 mb-1.5 block">حساب البنك</Label>
-        <Select value={value.bankAccountId?.toString() || "none"} onValueChange={(v) => onChange({ ...value, bankAccountId: v === "none" ? undefined : Number(v) })}>
-          <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="اختر البنك" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="none">بدون</SelectItem>
-            {bankAccounts?.map((b) => <SelectItem key={b.id} value={b.id.toString()}>{b.name}</SelectItem>)}
-          </SelectContent>
-        </Select>
+        <BankAccountSearchSelect
+          accounts={bankAccounts || []}
+          value={value.bankAccountId?.toString() || ""}
+          onChange={(v) => onChange({ ...value, bankAccountId: v ? Number(v) : undefined })}
+          placeholder="اختر البنك"
+        />
       </div>
       <div className="rounded-md bg-slate-50 border border-slate-100 px-3 py-2 text-xs space-y-1">
         <div className="flex justify-between text-slate-500"><span>الباقي على {partyLabel}:</span><span className="font-semibold text-slate-700">{onAccount.toLocaleString("en-US", { minimumFractionDigits: 2 })}</span></div>

@@ -14,6 +14,7 @@ import { Eye, RefreshCw } from "lucide-react";
 import EntityPermissionGate from "@/components/EntityPermissionGate";
 import { toDateStr } from "@/lib/date";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
+import { BankAccountSearchSelect } from "@/components/BankAccountSearchSelect";
 
 const emptyForm = {
   type: "received" as "given" | "received",
@@ -257,14 +258,12 @@ export default function Loans() {
           {form.settlementMethod === "bank" && (
             <div>
               <Label className="text-xs font-medium text-slate-700 mb-1.5 block">الحساب البنكي *</Label>
-              <Select value={form.bankAccountId} onValueChange={v => setForm(p => ({ ...p, bankAccountId: v }))}>
-                <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="اختر بنك" /></SelectTrigger>
-                <SelectContent>
-                  {(banksQ.data || []).map((b: any) => (
-                    <SelectItem key={b.id} value={String(b.id)}>{b.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <BankAccountSearchSelect
+                accounts={banksQ.data || []}
+                value={form.bankAccountId}
+                onChange={(v) => setForm(p => ({ ...p, bankAccountId: v }))}
+                placeholder="اختر بنك"
+              />
             </div>
           )}
           <div className="col-span-2 text-xs text-slate-500 font-semibold">

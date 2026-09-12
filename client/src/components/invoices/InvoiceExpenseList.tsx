@@ -1,7 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { trpc } from "@/lib/trpc";
+import { AccountSearchSelect } from "@/components/AccountSearchSelect";
 import { Plus, Trash2 } from "lucide-react";
 
 export interface InvoiceExpenseLine {
@@ -50,10 +50,12 @@ export function InvoiceExpenseList({
             <Input value={row.amount} onChange={(e) => update(idx, { amount: e.target.value })} type="number" placeholder="المبلغ" className="h-8 text-xs" />
           </div>
           <div className="col-span-3">
-            <Select value={row.creditAccountId?.toString() || ""} onValueChange={(v) => update(idx, { creditAccountId: Number(v) })}>
-              <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="الحساب الدائن" /></SelectTrigger>
-              <SelectContent>{leafAccounts.map((a: any) => <SelectItem key={a.id} value={a.id.toString()}>{a.code} - {a.name}</SelectItem>)}</SelectContent>
-            </Select>
+            <AccountSearchSelect
+              accounts={leafAccounts}
+              value={row.creditAccountId?.toString() || ""}
+              onChange={(v) => update(idx, { creditAccountId: Number(v) })}
+              placeholder="الحساب الدائن"
+            />
           </div>
           <div className="col-span-2">
             <Input value={row.notes || ""} onChange={(e) => update(idx, { notes: e.target.value })} placeholder="ملاحظات" className="h-8 text-xs" />
