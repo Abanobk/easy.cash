@@ -34,18 +34,21 @@ export function SearchSelect({
   const [q, setQ] = useState("");
   const selected = options.find((o) => String(o.id) === value);
   const filtered = useMemo(() => {
-    // توحيد عربي (همزات/تاء مربوطة/تشكيل) عشان "احمد" و"أحمد" يتطابقوا في البحث
-    const term = normalizeArabicKey(q);
+    // توحيد عربي (همزات/تاء مربوطة/تشكيل) عشان "احمد" و"أحمد" يتطابقوا في البحث،
+    // وتقسيم كل كلمة لوحدها عشان "TR كرتونة" يلاقي الكود في label والاسم في نفس label
+    // حتى لو مش متجاورين حرفياً (زي "TR-0012 — كرتونة كبيرة")
+    const terms = normalizeArabicKey(q).split(/\s+/).filter(Boolean);
     return options
       .filter((o) => !excludeId || String(o.id) !== excludeId)
       .filter((o) => {
-        if (!term) return true;
-        return (
-          normalizeArabicKey(o.label).includes(term)
-          || normalizeArabicKey(o.sublabel).includes(term)
-          || normalizeArabicKey(o.keywords).includes(term)
-          || String(o.id).includes(term)
-        );
+        if (terms.length === 0) return true;
+        const haystack = [
+          normalizeArabicKey(o.label),
+          normalizeArabicKey(o.sublabel),
+          normalizeArabicKey(o.keywords),
+          String(o.id),
+        ].join(" ");
+        return terms.every((t) => haystack.includes(t));
       })
       .slice(0, 80);
   }, [options, q, excludeId]);
