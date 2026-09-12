@@ -26,6 +26,7 @@ import { findItemByScan } from "@/lib/barcode";
 import { printInvoiceQuick, printWarehouseNote } from "@/lib/print-invoice-quick";
 import { toDateStr } from "@/lib/date";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
+import { ItemSearchSelect } from "@/components/ItemSearchSelect";
 
 interface InvoiceItem {
   itemId: number;
@@ -500,10 +501,14 @@ export default function PurchaseInvoices() {
                       <tr key={idx} className="border-b border-slate-50 align-top">
                         <td className="px-3 py-2">
                           <div className="flex gap-1">
-                            <Select value={item.itemId?.toString() || ""} onValueChange={(v) => updateItem(idx, "itemId", Number(v))}>
-                              <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="اختر الصنف" /></SelectTrigger>
-                              <SelectContent>{allItems?.map((i) => <SelectItem key={i.id} value={i.id.toString()}>{i.name}</SelectItem>)}</SelectContent>
-                            </Select>
+                            <div className="flex-1 min-w-[9rem]">
+                              <ItemSearchSelect
+                                items={allItems || []}
+                                value={item.itemId ? item.itemId.toString() : ""}
+                                onChange={(v) => updateItem(idx, "itemId", Number(v))}
+                                placeholder="اختر الصنف"
+                              />
+                            </div>
                             <Button type="button" variant="outline" size="sm" className="h-8 w-8 p-0 shrink-0" title="إضافة صنف جديد" onClick={() => setQuickAdd({ kind: "item", rowIdx: idx })}><Plus size={12} /></Button>
                           </div>
                           {item.lastPriceHint && (

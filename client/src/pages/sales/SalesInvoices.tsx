@@ -19,6 +19,7 @@ import { isForeignCurrency, toBaseAmount, formatInvoiceListTotal } from "@shared
 import { SerialNumberPicker } from "@/components/SerialNumberPicker";
 import { InvoicePrintButton } from "@/components/InvoicePrintButton";
 import { BatchPicker } from "@/components/BatchPicker";
+import { ItemSearchSelect } from "@/components/ItemSearchSelect";
 import { QuickAddDialog } from "@/components/invoices/QuickAddDialog";
 import { InvoiceTaxList, type InvoiceTaxLine } from "@/components/invoices/InvoiceTaxList";
 import { InvoiceExpenseList, type InvoiceExpenseLine } from "@/components/invoices/InvoiceExpenseList";
@@ -650,12 +651,14 @@ export default function SalesInvoices() {
                       <tr key={idx} className="border-b border-slate-50 align-top">
                         <td className="px-3 py-2">
                           <div className="flex gap-1">
-                            <Select value={item.itemId?.toString() || ""} onValueChange={(v) => updateItem(idx, "itemId", v)}>
-                              <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="اختر الصنف" /></SelectTrigger>
-                              <SelectContent>
-                                {allItems?.map((i) => <SelectItem key={i.id} value={i.id.toString()}>{i.name} ({i.unit})</SelectItem>)}
-                              </SelectContent>
-                            </Select>
+                            <div className="flex-1 min-w-[9rem]">
+                              <ItemSearchSelect
+                                items={allItems || []}
+                                value={item.itemId ? item.itemId.toString() : ""}
+                                onChange={(v) => updateItem(idx, "itemId", v)}
+                                placeholder="اختر الصنف"
+                              />
+                            </div>
                             <Button type="button" variant="outline" size="sm" className="h-8 w-8 p-0 shrink-0" title="إضافة صنف جديد" onClick={() => setQuickAdd({ kind: "item", rowIdx: idx })}><Plus size={12} /></Button>
                           </div>
                           {item.lastPriceHint && (
