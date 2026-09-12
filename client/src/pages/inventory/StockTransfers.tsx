@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useLocation } from "wouter";
 import ERPLayout from "@/components/ERPLayout";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
@@ -14,8 +15,11 @@ import { Plus, ArrowLeftRight, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { AddActionButton } from "@/components/AddActionButton";
 import { ItemSearchSelect } from "@/components/ItemSearchSelect";
+import { useLastActiveRow } from "@/hooks/useLastActiveRow";
 
 export default function StockTransfers() {
+  const [location] = useLocation();
+  const { lastActiveId, markActive } = useLastActiveRow(location);
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ fromWarehouseId: "", toWarehouseId: "", date: new Date().toISOString().split("T")[0], notes: "" });
   const [items, setItems] = useState<{ itemId: string; quantity: string }[]>([{ itemId: "", quantity: "1" }]);
@@ -81,7 +85,11 @@ export default function StockTransfers() {
                 <TableRow><TableCell colSpan={5} className="text-center text-slate-400 py-10">لا توجد تحويلات</TableCell></TableRow>
               )}
               {data?.rows?.map((row: any) => (
-                <TableRow key={row.id} className="hover:bg-slate-50">
+                <TableRow
+                  key={row.id}
+                  className={`hover:bg-slate-50 ${String(row.id) === lastActiveId ? "bg-amber-50" : ""}`}
+                  onClickCapture={() => markActive(row.id)}
+                >
                   <TableCell className="text-sm font-medium text-purple-700">#{row.number}</TableCell>
                   <TableCell className="text-sm text-slate-700">{row.fromWarehouseName}</TableCell>
                   <TableCell className="text-sm text-slate-700">{row.toWarehouseName}</TableCell>

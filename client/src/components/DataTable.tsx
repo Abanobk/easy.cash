@@ -1,4 +1,5 @@
 import { ReactNode } from "react";
+import { useLocation } from "wouter";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -6,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Plus, Search, ChevronRight, ChevronLeft, Loader2 } from "lucide-react";
 import { useEntityAllowed, useEntityPermissions } from "@/hooks/useEntityPermission";
 import { EntityRowActions } from "@/components/EntityRowActions";
+import { useLastActiveRow } from "@/hooks/useLastActiveRow";
 import type { PermActionKey } from "@shared/permission-tree";
 
 export type DataTableEntity = { moduleKey: string; entityKey: string };
@@ -85,6 +87,9 @@ export function DataTable<T extends { id?: number | string }>({
   extraRowActions, actions, emptyMessage = "لا توجد بيانات", headerExtra, onRowClick,
 }: DataTableProps<T>) {
   const totalPages = Math.ceil(total / limit);
+  const [location] = useLocation();
+  /** الصف اللي اشتغلنا عليه آخر مرة في القائمة دي — بيتظلل زي "الخط الغامق" في ميجا كاش عشان نعرف واقفين فين */
+  const { lastActiveId, markActive } = useLastActiveRow(location);
   const { isLoading: permsLoading } = useEntityPermissions();
   const addAllowed = useEntityAllowed(addEntity?.moduleKey ?? "", addEntity?.entityKey ?? "", addAction);
   const canAdd = onAdd && !permsLoading && (!addEntity || addAllowed);
@@ -175,13 +180,17 @@ export function DataTable<T extends { id?: number | string }>({
                   </td>
                 </tr>
               ) : (
-                data.map((row, i) => (
+                data.map((row, i) => {
+                  const rowId = (row as any).id;
+                  const isLastActive = rowId != null && String(rowId) === lastActiveId;
+                  return (
                   <tr
-                    key={(row as any).id || i}
+                    key={rowId || i}
                     className={`border-b border-slate-200 transition-colors ${
-                      i % 2 === 1 ? "bg-slate-50" : "bg-white"
+                      isLastActive ? "bg-amber-50" : i % 2 === 1 ? "bg-slate-50" : "bg-white"
                     } ${onRowClick ? "cursor-pointer" : ""}`}
                     onClick={() => onRowClick?.(row)}
+                    onClickCapture={() => markActive(rowId)}
                   >
                     {columns.map(col => {
                       const raw = (row as any)[col.key];
@@ -201,7 +210,8 @@ export function DataTable<T extends { id?: number | string }>({
                       </td>
                     )}
                   </tr>
-                ))
+                  );
+                })
               )}
             </tbody>
           </table>

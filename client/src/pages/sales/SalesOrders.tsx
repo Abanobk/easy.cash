@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import ERPLayout from "@/components/ERPLayout";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
@@ -18,9 +18,12 @@ import { AddActionButton } from "@/components/AddActionButton";
 import EntityPermissionGate from "@/components/EntityPermissionGate";
 import { useWarehouseOptions } from "@/hooks/useEntityOptions";
 import { PartySearchSelect } from "@/components/PartySearchSelect";
+import { useLastActiveRow } from "@/hooks/useLastActiveRow";
 import { ItemSearchSelect } from "@/components/ItemSearchSelect";
 
 export default function SalesOrders() {
+  const [location] = useLocation();
+  const { lastActiveId, markActive } = useLastActiveRow(location);
   const [open, setOpen] = useState(false);
   const [editId, setEditId] = useState<number | null>(null);
   const [form, setForm] = useState({ customerId: "", warehouseId: "", date: new Date().toISOString().split("T")[0], notes: "", expectedDate: "" });
@@ -115,7 +118,11 @@ export default function SalesOrders() {
                 <TableRow><TableCell colSpan={6} className="text-center text-slate-400 py-10">لا توجد طلبات بيع</TableCell></TableRow>
               )}
               {data?.rows?.map((row: any) => (
-                <TableRow key={row.id} className="hover:bg-slate-50">
+                <TableRow
+                  key={row.id}
+                  className={`hover:bg-slate-50 ${String(row.id) === lastActiveId ? "bg-amber-50" : ""}`}
+                  onClickCapture={() => markActive(row.id)}
+                >
                   <TableCell className="text-sm font-medium text-green-700">
                     <Link href={`/sales/orders/${row.id}`} className="hover:underline">#{row.number}</Link>
                   </TableCell>

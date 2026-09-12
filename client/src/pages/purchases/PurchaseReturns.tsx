@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useLocation } from "wouter";
 import ERPLayout from "@/components/ERPLayout";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
@@ -14,8 +15,11 @@ import { toast } from "sonner";
 import { AddActionButton } from "@/components/AddActionButton";
 import { PartySearchSelect } from "@/components/PartySearchSelect";
 import { ItemSearchSelect } from "@/components/ItemSearchSelect";
+import { useLastActiveRow } from "@/hooks/useLastActiveRow";
 
 export default function PurchaseReturns() {
+  const [location] = useLocation();
+  const { lastActiveId, markActive } = useLastActiveRow(location);
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ supplierId: "", date: new Date().toISOString().split("T")[0], reason: "", notes: "" });
   const [items, setItems] = useState<{ itemId: string; quantity: string; unitPrice: string }[]>([
@@ -80,7 +84,11 @@ export default function PurchaseReturns() {
                 <TableRow><TableCell colSpan={5} className="text-center text-slate-400 py-10">لا توجد مردودات شراء</TableCell></TableRow>
               )}
               {data?.rows?.map((row: any) => (
-                <TableRow key={row.id} className="hover:bg-slate-50">
+                <TableRow
+                  key={row.id}
+                  className={`hover:bg-slate-50 ${String(row.id) === lastActiveId ? "bg-amber-50" : ""}`}
+                  onClickCapture={() => markActive(row.id)}
+                >
                   <TableCell className="text-sm font-medium text-orange-700">#{row.number}</TableCell>
                   <TableCell className="text-sm text-slate-700">{row.supplierName}</TableCell>
                   <TableCell className="text-xs text-slate-500">{row.date ? new Date(row.date).toLocaleDateString("en-GB") : "-"}</TableCell>

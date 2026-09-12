@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useLocation } from "wouter";
 import ERPLayout from "@/components/ERPLayout";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
@@ -14,8 +15,11 @@ import { Plus, DollarSign, CheckCircle } from "lucide-react";
 import { toast } from "sonner";
 import { AddActionButton } from "@/components/AddActionButton";
 import EntityPermissionGate from "@/components/EntityPermissionGate";
+import { useLastActiveRow } from "@/hooks/useLastActiveRow";
 
 export default function Advances() {
+  const [location] = useLocation();
+  const { lastActiveId, markActive } = useLastActiveRow(location);
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ employeeId: "", amount: "", reason: "", date: new Date().toISOString().split("T")[0] });
 
@@ -66,7 +70,11 @@ export default function Advances() {
                 <TableRow><TableCell colSpan={7} className="text-center text-slate-400 py-10">لا توجد سلف</TableCell></TableRow>
               )}
               {(advData as any[])?.map((row: any, i: number) => (
-                <TableRow key={row.id} className="hover:bg-slate-50">
+                <TableRow
+                  key={row.id}
+                  className={`hover:bg-slate-50 ${String(row.id) === lastActiveId ? "bg-amber-50" : ""}`}
+                  onClickCapture={() => markActive(row.id)}
+                >
                   <TableCell className="text-xs text-slate-500">{i + 1}</TableCell>
                   <TableCell className="text-sm font-medium text-slate-800">{row.employeeName}</TableCell>
                   <TableCell className="text-sm font-semibold text-blue-700">{Number(row.amount).toLocaleString("en-US")} ج.م</TableCell>

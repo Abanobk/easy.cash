@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import ERPLayout from "@/components/ERPLayout";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
@@ -19,8 +19,11 @@ import { useWarehouseOptions } from "@/hooks/useEntityOptions";
 import { ConvertOrderDialog } from "@/components/purchases/ConvertOrderDialog";
 import { PartySearchSelect } from "@/components/PartySearchSelect";
 import { ItemSearchSelect } from "@/components/ItemSearchSelect";
+import { useLastActiveRow } from "@/hooks/useLastActiveRow";
 
 export default function PurchaseOrders() {
+  const [location] = useLocation();
+  const { lastActiveId, markActive } = useLastActiveRow(location);
   const [open, setOpen] = useState(false);
   const [editId, setEditId] = useState<number | null>(null);
   const [convertOrderId, setConvertOrderId] = useState<number | null>(null);
@@ -113,7 +116,11 @@ export default function PurchaseOrders() {
                 <TableRow><TableCell colSpan={6} className="text-center text-slate-400 py-10">لا توجد طلبات شراء</TableCell></TableRow>
               )}
               {data?.rows?.map((row: any) => (
-                <TableRow key={row.id} className="hover:bg-slate-50">
+                <TableRow
+                  key={row.id}
+                  className={`hover:bg-slate-50 ${String(row.id) === lastActiveId ? "bg-amber-50" : ""}`}
+                  onClickCapture={() => markActive(row.id)}
+                >
                   <TableCell className="text-sm font-medium text-blue-700">
                     <Link href={`/purchases/orders/${row.id}`} className="hover:underline">#{row.number}</Link>
                   </TableCell>

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useLocation } from "wouter";
 import ERPLayout from "@/components/ERPLayout";
 import { trpc } from "@/lib/trpc";
 import { Input } from "@/components/ui/input";
@@ -11,8 +12,11 @@ import { AddActionButton } from "@/components/AddActionButton";
 import { EntityRowActions } from "@/components/EntityRowActions";
 import { FormModal } from "@/components/FormModal";
 import { FieldLabel, FormSection, entryControlClass } from "@/components/form/EntryForm";
+import { useLastActiveRow } from "@/hooks/useLastActiveRow";
 
 export default function Branches() {
+  const [location] = useLocation();
+  const { lastActiveId, markActive } = useLastActiveRow(location);
   const [search, setSearch] = useState("");
   const [open, setOpen] = useState(false);
   const [editItem, setEditItem] = useState<any>(null);
@@ -74,7 +78,11 @@ export default function Branches() {
                 <TableRow><TableCell colSpan={7} className="text-center text-slate-400 py-10">لا توجد فروع</TableCell></TableRow>
               )}
               {data?.rows?.map((row: any, i: number) => (
-                <TableRow key={row.id} className="hover:bg-slate-50">
+                <TableRow
+                  key={row.id}
+                  className={`hover:bg-slate-50 ${String(row.id) === lastActiveId ? "bg-amber-50" : ""}`}
+                  onClickCapture={() => markActive(row.id)}
+                >
                   <TableCell className="text-xs text-slate-500">{i + 1}</TableCell>
                   <TableCell className="text-sm font-medium text-slate-800">{row.name}</TableCell>
                   <TableCell className="text-xs text-slate-500">{row.code || "-"}</TableCell>

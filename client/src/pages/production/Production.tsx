@@ -5,7 +5,7 @@
  * ملاحظة: Mega ليس فيها قائمة منفصلة باسم «الخلطات».
  */
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useSearch } from "wouter";
+import { useLocation, useSearch } from "wouter";
 import ERPLayout from "@/components/ERPLayout";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
@@ -22,6 +22,7 @@ import EntityPermissionGate from "@/components/EntityPermissionGate";
 import { useEntityAllowed } from "@/hooks/useEntityPermission";
 import { toDateStr } from "@/lib/date";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
+import { useLastActiveRow } from "@/hooks/useLastActiveRow";
 import { ItemSearchSelect } from "@/components/ItemSearchSelect";
 
 type Tab = "orders" | "new";
@@ -114,6 +115,9 @@ export default function Production() {
     window.history.replaceState({}, "", url.pathname + "?" + url.searchParams.toString());
   };
 
+  const [location] = useLocation();
+  /** الصف اللي اشتغلنا عليه آخر مرة في القائمة — بيتظلل زي "الخط الغامق" في ميجا كاش عشان نعرف واقفين فين */
+  const { lastActiveId, markActive } = useLastActiveRow(location);
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
   const debouncedSearch = useDebouncedValue(search);
@@ -132,6 +136,8 @@ export default function Production() {
   const [form, setForm] = useState(emptyForm);
   const [materials, setMaterials] = useState<MaterialRow[]>([]);
   const [addMat, setAddMat] = useState({ itemId: "", quantity: "1", notes: "", warehouseId: "" });
+  /** فهرس سطر الخامة الجاري تعديله عبر فورم الإضافة فوق الجدول — null = إضافة جديدة */
+  const [editingMatIdx, setEditingMatIdx] = useState<number | null>(null);
   const [printAfterSave, setPrintAfterSave] = useState(false);
 
   const listQ = trpc.production.list.useQuery({
@@ -215,7 +221,27 @@ export default function Production() {
     setForm(emptyForm());
     setMaterials([]);
     setAddMat({ itemId: "", quantity: "1", notes: "", warehouseId: "" });
+    setEditingMatIdx(null);
     bomFilledForRef.current = null;
+  };
+
+  const clearAddMat = () => {
+    setAddMat({ itemId: "", quantity: "1", notes: "", warehouseId: "" });
+    setEditingMatIdx(null);
+  };
+
+  /** تحميل سطر خامة لفورم الإضافة فوق عشان تعديله (صنف / كمية / مخزن) بدون مسح وإعادة إدخال */
+  const startEditMaterial = (index: number) => {
+    const m = materials[index];
+    if (!m) return;
+    setEditingMatIdx(index);
+    setAddMat({
+      itemId: m.itemId,
+      quantity: m.quantity || "1",
+      notes: m.notes || "",
+      warehouseId: m.warehouseId || "",
+    });
+    toast.message("عدّل الخامة فوق ثم اضغط تحديث");
   };
 
   /** يبني سطور الخامات من المكونات المرتبطة بالمنتج مضروبة في كمية الإنتاج */
@@ -323,14 +349,40 @@ export default function Production() {
     if (addMat.itemId === form.productId) return toast.error("لا يمكن أن يكون المنتج مادة في نفس الأمر");
     const orderQty = Number(form.quantity || 0);
     const perUnitOf = (qty: number) => (orderQty > 0 ? perUnitStr(qty / orderQty) : perUnitStr(qty));
+    const qty = Number(addMat.quantity || 0);
+
+    // تحديث سطر موجود (زر تعديل) — يستبدل الكمية/المخزن/الصنف بدل ما يضيف كمية فوقها
+    if (editingMatIdx != null && editingMatIdx >= 0 && editingMatIdx < materials.length) {
+      const dupIdx = materials.findIndex((m, i) => i !== editingMatIdx && m.itemId === addMat.itemId);
+      if (dupIdx >= 0) return toast.error("هذه المادة موجودة في سطر آخر — احذف المكرر أولاً");
+      const prev = materials[editingMatIdx];
+      setMaterials((p) => p.map((m, i) => (i === editingMatIdx ? {
+        ...m,
+        itemId: addMat.itemId,
+        quantity: qtyStr(qty),
+        perUnit: perUnitOf(qty),
+        notes: addMat.notes,
+        warehouseId: addMat.warehouseId,
+        // لو غيّر الصنف يبقى يدوي؛ لو نفس الصنف يحافظ على مصدره (مكوّن/يدوي)
+        source: addMat.itemId === prev.itemId ? prev.source : "manual",
+      } : m)));
+      clearAddMat();
+      toast.success("تم تحديث الخامة");
+      return;
+    }
+
     if (materials.some((m) => m.itemId === addMat.itemId)) {
       setMaterials((p) => p.map((m) => {
         if (m.itemId !== addMat.itemId) return m;
-        const qty = Number(m.quantity || 0) + Number(addMat.quantity || 0);
-        return { ...m, quantity: qtyStr(qty), perUnit: perUnitOf(qty) };
+        const nextQty = Number(m.quantity || 0) + qty;
+        return {
+          ...m,
+          quantity: qtyStr(nextQty),
+          perUnit: perUnitOf(nextQty),
+          warehouseId: addMat.warehouseId || m.warehouseId,
+        };
       }));
     } else {
-      const qty = Number(addMat.quantity || 0);
       setMaterials((p) => [...p, {
         itemId: addMat.itemId,
         quantity: qtyStr(qty),
@@ -341,7 +393,7 @@ export default function Production() {
         warehouseId: addMat.warehouseId,
       }]);
     }
-    setAddMat({ itemId: "", quantity: "1", notes: "", warehouseId: "" });
+    clearAddMat();
   };
 
   const openEdit = async (id: number) => {
@@ -561,7 +613,11 @@ export default function Production() {
                     ) : !(listQ.data?.rows || []).length ? (
                       <tr><td colSpan={8} className="py-12 text-center text-slate-400 font-semibold">لا توجد بيانات للعرض</td></tr>
                     ) : (listQ.data?.rows || []).map((row: any, i: number) => (
-                      <tr key={row.id} className={`border-t ${i % 2 ? "bg-slate-50/80" : ""}`}>
+                      <tr
+                        key={row.id}
+                        className={`border-t ${String(row.id) === lastActiveId ? "bg-amber-50" : i % 2 ? "bg-slate-50/80" : ""}`}
+                        onClickCapture={() => markActive(row.id)}
+                      >
                         <td className="px-3 py-2 font-extrabold">{row.number}</td>
                         <td className="px-3 py-2">{toDateStr(row.date, "—")}</td>
                         <td className="px-3 py-2 font-bold">{row.productCode ? `${row.productCode} — ` : ""}{row.productName}</td>
@@ -818,9 +874,14 @@ export default function Production() {
                 </Button>
               </CardHeader>
               <CardContent className="space-y-3">
-                <div className="grid grid-cols-1 sm:grid-cols-5 gap-2 items-end border rounded-xl p-3 bg-slate-50">
+                <div className={`grid grid-cols-1 sm:grid-cols-5 gap-2 items-end border rounded-xl p-3 ${editingMatIdx != null ? "bg-sky-50 border-sky-200" : "bg-slate-50"}`}>
                   <div className="sm:col-span-2 space-y-1">
-                    <Label className="text-xs font-bold">المادة الخام</Label>
+                    <Label className="text-xs font-bold">
+                      المادة الخام
+                      {editingMatIdx != null ? (
+                        <span className="ms-1 text-sky-700">— تعديل السطر {editingMatIdx + 1}</span>
+                      ) : null}
+                    </Label>
                     <ItemSearchSelect items={items} value={addMat.itemId} excludeId={form.productId}
                       onChange={(id) => setAddMat((p) => ({ ...p, itemId: id }))} />
                   </div>
@@ -848,8 +909,12 @@ export default function Production() {
                     )}
                   </div>
                   <div className="flex gap-1">
-                    <Button type="button" className="h-9 flex-1 font-bold" onClick={addMaterialLine}>اضافة</Button>
-                    <Button type="button" variant="outline" className="h-9" onClick={() => setAddMat({ itemId: "", quantity: "1", notes: "", warehouseId: "" })}>تفريغ</Button>
+                    <Button type="button" className={`h-9 flex-1 font-bold ${editingMatIdx != null ? "bg-sky-600 hover:bg-sky-700" : ""}`} onClick={addMaterialLine}>
+                      {editingMatIdx != null ? "تحديث" : "اضافة"}
+                    </Button>
+                    <Button type="button" variant="outline" className="h-9" onClick={clearAddMat}>
+                      {editingMatIdx != null ? "إلغاء" : "تفريغ"}
+                    </Button>
                   </div>
                 </div>
 
@@ -864,7 +929,7 @@ export default function Production() {
                         <th className="px-2 py-2 text-right w-44">تُصرف من مخزن</th>
                         <th className="px-2 py-2 text-right">المتاح</th>
                         <th className="px-2 py-2 text-right">التكلفة</th>
-                        <th className="w-10" />
+                        <th className="w-20" />
                       </tr>
                     </thead>
                     <tbody>
@@ -877,8 +942,9 @@ export default function Production() {
                         const avail = availableFor(m.itemId, m.warehouseId);
                         const short = need > avail + 1e-9;
                         const unitCost = Number(it?.averageCost || 0) || Number(it?.purchasePrice || 0);
+                        const isEditing = editingMatIdx === i;
                         return (
-                          <tr key={`${m.itemId}-${i}`} className={`border-t ${i % 2 ? "bg-slate-50/80" : ""}`}>
+                          <tr key={`${m.itemId}-${i}`} className={`border-t ${isEditing ? "bg-sky-50 ring-1 ring-inset ring-sky-200" : i % 2 ? "bg-slate-50/80" : ""}`}>
                             <td className="px-2 py-2 font-bold">
                               {it ? `${it.code ? `${it.code} — ` : ""}${it.name}` : m.itemId}
                               {m.source === "bom" && (
@@ -917,10 +983,32 @@ export default function Production() {
                             <td className={`px-2 py-2 ${short ? "text-red-600 font-extrabold" : ""}`}>{fmt(avail)}</td>
                             <td className="px-2 py-2 font-bold">{money(need * unitCost)}</td>
                             <td className="px-1">
-                              <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500"
-                                onClick={() => setMaterials((p) => p.filter((_, idx) => idx !== i))}>
-                                <Trash2 size={14} />
-                              </Button>
+                              <div className="flex items-center justify-end gap-0.5">
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  className={`h-8 w-8 ${isEditing ? "text-sky-700 bg-sky-100" : "text-slate-600"}`}
+                                  title="تعديل الخامة"
+                                  onClick={() => startEditMaterial(i)}
+                                >
+                                  <Pencil size={14} />
+                                </Button>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8 text-red-500"
+                                  title="حذف الخامة"
+                                  onClick={() => {
+                                    if (editingMatIdx === i) clearAddMat();
+                                    else if (editingMatIdx != null && editingMatIdx > i) setEditingMatIdx(editingMatIdx - 1);
+                                    setMaterials((p) => p.filter((_, idx) => idx !== i));
+                                  }}
+                                >
+                                  <Trash2 size={14} />
+                                </Button>
+                              </div>
                             </td>
                           </tr>
                         );
