@@ -13,6 +13,7 @@ import type { ReportSectionDef } from "@/config/report-sections";
 import { getReportEntityFilters, type ReportEntityFilter } from "@/config/report-filter-config";
 import { reportColumnLabel, REPORT_TOTAL_COLUMNS } from "@/config/report-column-labels";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
 import { printTableReport, printGroupedInvoiceReport } from "@/lib/print-report";
 
 type ReportProcedure = "accountingBySlug" | "finalBySlug" | "hrBySlug" | "assetsBySlug";
@@ -39,6 +40,8 @@ type FilterInput = {
   paymentStatus?: "paid" | "partial" | "unpaid";
   taxFilter?: "with" | "without";
   discountFilter?: "with" | "without";
+  /** ميجا ميزان المراجعة: اخفاء الارصدة الصفرية (افتراضي غير مفعّل = عرض الأصفار) */
+  hideZeroBalances?: boolean;
 };
 
 function defaultDates() {
@@ -79,6 +82,8 @@ function parseUrlFilters(search: string): Partial<FilterInput> {
   if (tf === "with" || tf === "without") out.taxFilter = tf;
   const discF = params.get("discountFilter");
   if (discF === "with" || discF === "without") out.discountFilter = discF;
+  const hzb = params.get("hideZeroBalances");
+  if (hzb === "1" || hzb === "true") out.hideZeroBalances = true;
   return out;
 }
 
@@ -104,6 +109,7 @@ function buildFilterQueryString(query: FilterInput, includeDates: boolean) {
   if (query.paymentStatus) params.set("paymentStatus", query.paymentStatus);
   if (query.taxFilter) params.set("taxFilter", query.taxFilter);
   if (query.discountFilter) params.set("discountFilter", query.discountFilter);
+  if (query.hideZeroBalances) params.set("hideZeroBalances", "1");
   const qs = params.toString();
   return qs ? `?${qs}` : "";
 }
@@ -166,6 +172,7 @@ export default function ReportHub({ title, section, icon, reports, procedure }: 
   const [paymentStatus, setPaymentStatus] = useState<string>("");
   const [taxFilter, setTaxFilter] = useState<string>("");
   const [discountFilter, setDiscountFilter] = useState<string>("");
+  const [hideZeroBalances, setHideZeroBalances] = useState(false);
   const [query, setQuery] = useState<FilterInput>(() => ({ slug, ...dates }));
 
   useEffect(() => {
@@ -191,6 +198,7 @@ export default function ReportHub({ title, section, icon, reports, procedure }: 
     if (urlFilters.paymentStatus) setPaymentStatus(urlFilters.paymentStatus);
     if (urlFilters.taxFilter) setTaxFilter(urlFilters.taxFilter);
     if (urlFilters.discountFilter) setDiscountFilter(urlFilters.discountFilter);
+    if (urlFilters.hideZeroBalances) setHideZeroBalances(true);
     setQuery({ slug, ...dates, ...urlFilters });
   }, [slug, location]);
 
@@ -251,6 +259,7 @@ export default function ReportHub({ title, section, icon, reports, procedure }: 
     paymentStatus: query.paymentStatus,
     taxFilter: query.taxFilter,
     discountFilter: query.discountFilter,
+    hideZeroBalances: query.hideZeroBalances,
   }), [slug, query, reportMeta?.needsDates]);
 
   const { data: rows = [], isLoading, refetch } = useReportData(procedure, filterInput, !!slug);
@@ -304,6 +313,7 @@ export default function ReportHub({ title, section, icon, reports, procedure }: 
       paymentStatus: paymentStatus === "paid" || paymentStatus === "partial" || paymentStatus === "unpaid" ? paymentStatus : undefined,
       taxFilter: taxFilter === "with" || taxFilter === "without" ? taxFilter : undefined,
       discountFilter: discountFilter === "with" || discountFilter === "without" ? discountFilter : undefined,
+      hideZeroBalances: slug === "finalreports-trialbalance" ? hideZeroBalances : undefined,
     });
     refetch();
   };
@@ -429,7 +439,11 @@ export default function ReportHub({ title, section, icon, reports, procedure }: 
                   (suppliersList?.rows || []).map((s: { id: number; name: string }) => ({ id: s.id, label: s.name })),
                 )}
                 {needs("account") && entitySelect(
-                  "الحساب",
+                  slug === "finalreports-trialbalance" || slug === "finalreports-generalledger"
+                    ? "الحساب الرئيسي"
+                    : slug === "accountingreports-accountstatment"
+                      ? "اسم الحساب"
+                      : "الحساب",
                   accountId,
                   setAccountId,
                   (accountsList || []).map((a: { id: number; name: string; code?: string }) => ({ id: a.id, label: `${a.code || ""} ${a.name}`.trim() })),
@@ -560,6 +574,15 @@ export default function ReportHub({ title, section, icon, reports, procedure }: 
                       </SelectContent>
                     </Select>
                   </div>
+                )}
+                {slug === "finalreports-trialbalance" && (
+                  <label className="flex items-center gap-2 pb-2 cursor-pointer select-none">
+                    <Checkbox
+                      checked={hideZeroBalances}
+                      onCheckedChange={(v) => setHideZeroBalances(v === true)}
+                    />
+                    <span className="text-xs">اخفاء الارصدة الصفرية</span>
+                  </label>
                 )}
                 <div className="flex-1 min-w-[160px]">
                   <Label className="text-xs">بحث</Label>

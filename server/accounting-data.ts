@@ -52,6 +52,8 @@ export type ReportFilters = {
   paymentStatus?: "paid" | "partial" | "unpaid";
   taxFilter?: "with" | "without";
   discountFilter?: "with" | "without";
+  /** ميجا: اخفاء الارصدة الصفرية — افتراضي false (تعرض الأصفار) */
+  hideZeroBalances?: boolean;
 };
 
 function dueDateConds(table: { dueDate: Column<any, object, object> }, from?: string, to?: string) {
@@ -260,9 +262,15 @@ export async function loadPostedJournalLines(db: Db, filters: ReportFilters) {
 }
 
 export async function trialBalanceReport(db: Db, filters: ReportFilters) {
+  // ميجا: فلتر «الحساب الرئيسي» يضيّق الشجرة؛ «اخفاء الارصدة الصفرية» اختياري (افتراضي: إظهار)
   const allAccounts = await db.select().from(accounts)
     .where(tenantWhere(accounts, filters.tenantId, eq(accounts.isActive, true)))
     .orderBy(accounts.code);
+
+  const root = filters.accountId != null
+    ? allAccounts.find((a) => a.id === filters.accountId)
+    : undefined;
+  const rootCode = root?.code;
 
   const openingMovement = filters.dateFrom
     ? await getPostedMovementByAccount(db, filters.tenantId, { before: filters.dateFrom })
@@ -272,8 +280,16 @@ export async function trialBalanceReport(db: Db, filters: ReportFilters) {
     to: filters.dateTo,
   });
 
+  const hideZeroBalances = filters.hideZeroBalances === true;
+
   return allAccounts
     .filter((a) => !a.isParent)
+    .filter((a) => {
+      if (filters.accountId == null) return true;
+      if (a.id === filters.accountId) return true;
+      if (rootCode && a.code?.startsWith(rootCode)) return true;
+      return a.parentId === filters.accountId;
+    })
     .map((a) => {
       const open = openingMovement.get(a.id) || { debit: 0, credit: 0 };
       const period = periodMovement.get(a.id) || { debit: 0, credit: 0 };
@@ -291,7 +307,12 @@ export async function trialBalanceReport(db: Db, filters: ReportFilters) {
         closingCredit: closingNet < 0 ? Math.abs(closingNet) : 0,
       };
     })
-    .filter((r) => r.periodDebit || r.periodCredit || r.openingDebit || r.openingCredit || r.closingDebit || r.closingCredit);
+    .filter((r) => {
+      const nonzero = !!(r.periodDebit || r.periodCredit || r.openingDebit || r.openingCredit || r.closingDebit || r.closingCredit);
+      // ميجا بدون تفعيل الإخفاء: نعرض السطر حتى لو كل الأرصدة صفر (ضمن نطاق الحسابات المختارة)
+      if (!hideZeroBalances) return true;
+      return nonzero;
+    });
 }
 
 export async function generalJournalReport(db: Db, filters: ReportFilters) {

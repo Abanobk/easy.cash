@@ -17,8 +17,10 @@ export type ReportEntityFilter =
   | "discountFilter";
 
 const ACCOUNTING_FILTERS: Record<string, ReportEntityFilter[]> = {
-  "accountingreports-accountstatment": ["account"],
-  "accountingreports-accountstatment-cash": ["account"],
+  // ميجا كشف حساب (AccountStatment.aspx): الفرع، العملة، من/الى، اسم الحساب، مركز التكلفة
+  // (الحساب المقابل / نوع القيد / اعتمد بواسطة / ملاحظات / checkboxes — لاحقاً بعد تأكيد السلوك)
+  "accountingreports-accountstatment": ["branch", "account", "costCenter", "currency"],
+  "accountingreports-accountstatment-cash": ["branch", "account"],
   "accountingreports-customerstatment": ["customer"],
   "accountingreports-vendorstatment": ["supplier"],
   "accountingreports-costcenterstatment": ["costCenter"],
@@ -59,9 +61,11 @@ const ACCOUNTING_FILTERS: Record<string, ReportEntityFilter[]> = {
 
 const FINAL_FILTERS: Record<string, ReportEntityFilter[]> = {
   "accounting-generaljournallist": ["account", "costCenter"],
-  "finalreports-generalledger": ["account", "costCenter"],
+  // ميجا (الاستاذ العام): الفرع + الحساب الرئيسي + مركز التكلفة + من/الى تاريخ
+  "finalreports-generalledger": ["branch", "account", "costCenter"],
   "finalreports-subledger": ["account", "costCenter"],
-  "finalreports-trialbalance": [],
+  // ميجا (ميزان المراجعة): الفرع + الحساب الرئيسي + من/الى تاريخ (+ خيارات تجميع إضافية لاحقاً)
+  "finalreports-trialbalance": ["branch", "account"],
   "finalreports-incomestatment": [],
   "finalreports-balancesheet": [],
   "finalreports-cashflow": [],
