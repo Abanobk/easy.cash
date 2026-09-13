@@ -513,6 +513,9 @@ export default function ReportHub({ title, section, icon, reports, procedure }: 
   ] as const;
 
   const FINAL_STATEMENT_COLUMN_ORDER = ["lineLabel", "amount"] as const;
+  const GENERAL_JOURNAL_COLUMN_ORDER = [
+    "date", "entryNumber", "description", "accountCode", "accountName", "debit", "credit",
+  ] as const;
   const SUBLEDGER_COLUMN_ORDER = [
     "date", "documentNumber", "accountCode", "accountName", "description", "costCenter", "debit", "credit", "balance",
   ] as const;
@@ -603,6 +606,7 @@ export default function ReportHub({ title, section, icon, reports, procedure }: 
     slug === "finalreports-financialstatment" ||
     slug === "finalreports-cashflow";
   const isSubledger = slug === "finalreports-subledger";
+  const isGeneralJournal = slug === "accounting-generaljournallist";
   const isGrossRepSalesByItems = slug === "accountingreports-grossrepsalesbyitems";
   const isRepsCollectings = slug === "accountingreports-repscollectings";
   const isRepDaily = slug === "accountingreports-repdaily";
@@ -703,7 +707,9 @@ export default function ReportHub({ title, section, icon, reports, procedure }: 
                                                                       ? FINAL_STATEMENT_COLUMN_ORDER
                                                                       : isSubledger
                                                                         ? SUBLEDGER_COLUMN_ORDER
-                                                                        : isGrossRepSalesByItems
+                                                                        : isGeneralJournal
+                                                                          ? GENERAL_JOURNAL_COLUMN_ORDER
+                                                                          : isGrossRepSalesByItems
                                                                           ? GROSS_REP_SALES_BY_ITEMS_COLUMN_ORDER
                                                                           : isRepsCollectings
                                                                             ? REPS_COLLECTINGS_COLUMN_ORDER
@@ -735,11 +741,11 @@ export default function ReportHub({ title, section, icon, reports, procedure }: 
     if (!order) return keys;
     const preferred = order.filter((k) => keys.includes(k));
     // لتقارير ميجا ذات ترتيب ثابت: لا نعرض أعمدة إضافية (مثل profit/itemCode) خارج ترتيب ميجا
-    const megaStrict = isCustomersSales || isVendorsPurchases || isGrossSalesByItems || isGrossPurchasesByItems || isSales || isPurchases || isCustomerStatement || isVendorStatement || isCustomersList || isVendorsList || isCustomersSummary || isAreasSummary || isVendorsSummary || isLastPrices || isMatureInvoices || isMatureReceipts || isMonthlySalesByItems || isSalesOrders || isPurchaseOrders || isDebitsAges || isChecks || isCustomersInstallments || isPayments || isDues || isCashStatement || isCostCenterStatement || isDashboard || isBranchesSummary || isMonthlyExpenses || isFinalStatement || isSubledger || isItemsProfits || isCustomersProfits || isInvoiceProfits || isCreditsAges || isGrossRepSalesByItems || isRepsCollectings || isRepDaily || isRepDebit || isProductionOrders || isProductionMaterials || isHrAttendance || isHrVacations || isHrPayroll || isHrPayrollList || isHrUnderRequest || isHrEmployeesList || isHrLoansList || isFixedAssetsDep || isSoldFixedAssets;
+    const megaStrict = isCustomersSales || isVendorsPurchases || isGrossSalesByItems || isGrossPurchasesByItems || isSales || isPurchases || isCustomerStatement || isVendorStatement || isCustomersList || isVendorsList || isCustomersSummary || isAreasSummary || isVendorsSummary || isLastPrices || isMatureInvoices || isMatureReceipts || isMonthlySalesByItems || isSalesOrders || isPurchaseOrders || isDebitsAges || isChecks || isCustomersInstallments || isPayments || isDues || isCashStatement || isCostCenterStatement || isDashboard || isBranchesSummary || isMonthlyExpenses || isFinalStatement || isSubledger || isItemsProfits || isCustomersProfits || isInvoiceProfits || isCreditsAges || isGrossRepSalesByItems || isRepsCollectings || isRepDaily || isRepDebit || isProductionOrders || isProductionMaterials || isHrAttendance || isHrVacations || isHrPayroll || isHrPayrollList || isHrUnderRequest || isHrEmployeesList || isHrLoansList || isFixedAssetsDep || isSoldFixedAssets || isGeneralJournal;
     if (megaStrict) return preferred.length ? preferred : keys;
     const rest = keys.filter((k) => !(order as readonly string[]).includes(k));
     return [...preferred, ...rest];
-  }, [rows, isAccountStatement, isCustomerItemStatement, isSales, isPurchases, isCustomersSales, isVendorsPurchases, isGrossSalesByItems, isGrossPurchasesByItems, isCustomerStatement, isVendorStatement, isCustomersList, isVendorsList, isCustomersSummary, isAreasSummary, isVendorsSummary, isLastPrices, isMatureInvoices, isMatureReceipts, isMonthlySalesByItems, isSalesOrders, isPurchaseOrders, isDebitsAges, isItemsProfits, isCustomersProfits, isInvoiceProfits, isCreditsAges, isChecks, isCustomersInstallments, isPayments, isDues, isCashStatement, isCostCenterStatement, isDashboard, isBranchesSummary, isMonthlyExpenses, isFinalStatement, isSubledger, isGrossRepSalesByItems, isRepsCollectings, isRepDaily, isRepDebit, isProductionOrders, isProductionMaterials, isHrAttendance, isHrVacations, isHrPayroll, isHrPayrollList, isHrUnderRequest, isHrEmployeesList, isHrLoansList, isCardFieldReport, isFixedAssetsDep, isSoldFixedAssets]);
+  }, [rows, isAccountStatement, isCustomerItemStatement, isSales, isPurchases, isCustomersSales, isVendorsPurchases, isGrossSalesByItems, isGrossPurchasesByItems, isCustomerStatement, isVendorStatement, isCustomersList, isVendorsList, isCustomersSummary, isAreasSummary, isVendorsSummary, isLastPrices, isMatureInvoices, isMatureReceipts, isMonthlySalesByItems, isSalesOrders, isPurchaseOrders, isDebitsAges, isItemsProfits, isCustomersProfits, isInvoiceProfits, isCreditsAges, isChecks, isCustomersInstallments, isPayments, isDues, isCashStatement, isCostCenterStatement, isDashboard, isBranchesSummary, isMonthlyExpenses, isFinalStatement, isSubledger, isGeneralJournal, isGrossRepSalesByItems, isRepsCollectings, isRepDaily, isRepDebit, isProductionOrders, isProductionMaterials, isHrAttendance, isHrVacations, isHrPayroll, isHrPayrollList, isHrUnderRequest, isHrEmployeesList, isHrLoansList, isCardFieldReport, isFixedAssetsDep, isSoldFixedAssets]);
 
   const totals = useMemo(() => {
     // ميجا: الإجمالي صف داخل البيانات («اجمالي حركات الفترة») — لا نضاعفه في تذييل الجدول

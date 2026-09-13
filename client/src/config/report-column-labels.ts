@@ -741,6 +741,16 @@ const MEGA_REPORT_COLUMN_LABELS: Record<string, Record<string, string>> = {
     salePrice: "سعر البيع",
     profitLoss: "الربح / الخسارة",
   },
+  // دفتر اليومية — Mega: /Accounting/GeneralJournalList.aspx (شاشة قيود؛ أعمدة Easy الحالية إلى أن يُلتقط PDF/Grid ميجا)
+  "accounting-generaljournallist": {
+    date: "التاريخ",
+    entryNumber: "رقم القيد",
+    description: "البيان",
+    accountCode: "كود الحساب",
+    accountName: "اسم الحساب",
+    debit: "مدين",
+    credit: "دائن",
+  },
 };
 
 export function reportColumnLabelForSlug(slug: string, key: string) {

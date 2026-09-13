@@ -26,7 +26,7 @@ Slugs = `featureKey` من `client/src/config/erp-navigation.ts` (مصدر الح
 | 2 | Sales/purchases remainder | ✅ partial (credits ages gap) |
 | 3 | Inventory ×10 | ✅ partial; itemaging blocked |
 | 4 | Collection / checks / dues / leftovers ×10 | ✅ partial + honesty |
-| **5** | **Final leftovers ×6** | ✅ partial (subledger account capture) |
+| **5** | **Final leftovers ×6 + دفتر اليومية** | ✅ partial (subledger + general journal capture) |
 | **6** | Profits ×3 + credits ages | ✅ partial (credits blocked) |
 | 7 | Reps ×4 | ✅ partial |
 | 8 | Production ×2 | ✅ partial |
@@ -117,6 +117,7 @@ Slugs = `featureKey` من `client/src/config/erp-navigation.ts` (مصدر الح
 | `finalreports-balancesheet` | `/FinalReports/BalanceSheet.aspx` | done | done | `mega-wave5-final/` | Mega line labels |
 | `finalreports-financialstatment` | `/FinalReports/FinancialStatment.aspx` | done | done | `mega-wave5-final/` | Mega line labels |
 | `finalreports-cashflow` | `/FinalReports/CashFlow.aspx` | done | done | `mega-wave5-final/` | Mega line labels |
+| `accounting-generaljournallist` | `/Accounting/GeneralJournalList.aspx` | partial | todo | - | **missed in prior waves** — Mega menu «دفتر اليومية» opens journal voucher list (not FinalReports PDF); Easy has report handler; Mega grid headers not captured yet |
 
 ## Wave 6 — profits + close credits-ages gap
 | Easy slug | Mega path | Filters | Columns | Evidence | Notes |
@@ -196,6 +197,7 @@ Every Easy report slug in this tracker is either:
 | `invreports-itemaging` | Mega StartScreen / blocked on test |
 | `accountingreports-creditsages*` | Mega PDF access denied on test; columns mirrored from DebitsAges |
 | `finalreports-subledger` | Mega requires main account; journal-line columns until account PDF captured |
+| `accounting-generaljournallist` | Mega «دفتر اليومية» = GeneralJournalList voucher screen; columns not PDF-captured yet |
 | Wave 7–10 partials | Documented data/schema approximations (see row Notes) |
 | Earlier wave filter `partial` | Mega has more filter controls than Easy currently exposes |
 
