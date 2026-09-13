@@ -1,75 +1,182 @@
 # Mega ↔ Easy report parity tracker
 
-Goal: Easy Cash reports match Mega Cash (filters + columns + behavior) with **no invented labels**.
+**منهجية العمل (اقرأ أولاً):** [`mega-report-parity-method.md`](./mega-report-parity-method.md)
 
-## Status legend
-- `filters_done` — Mega filter labels verified and wired in Easy
-- `filters_partial` — core Mega filters wired; Mega-only options deferred
-- `columns_unknown` — Mega grid headers not yet observed after عرض
-- `columns_done` — Mega headers verified and Easy columns/labels aligned
-- `menu_aligned` — sidebar grouping matches Mega screenshots
+Goal: Easy matches Mega filters + columns + row shape. **No invented labels.**
 
-## Menu (2026-09-13)
-Full map: `artifacts/mega-report-menu/MENU-MAP.md`  
-Live filters: `artifacts/mega-report-menu/mega-report-filters-scan.json`
+## Legend
+| Value | Meaning |
+|-------|---------|
+| `done` | Mega evidence + wired in Easy |
+| `partial` | Wired with documented gaps |
+| `todo` | Not started |
+| `blocked` | Cannot capture on test Mega |
+| `-` | No evidence yet |
 
-## P0 — accounting core
-| Easy slug | Filters | Columns |
-|-----------|---------|---------|
-| `finalreports-trialbalance` | filters_done | columns_done + PDF |
-| `finalreports-generalledger` | filters_done | columns_done + PDF |
-| `accountingreports-accountstatment` | filters_done | columns_done + PDF |
-| `accountingreports-customeraccountstatementbyitems` | filters_partial | columns_done from PDF |
+Slugs = `featureKey` من `client/src/config/erp-navigation.ts` (مصدر الحقيقة للمسارات).
 
-## Wave 1 — sales / purchases core (6)
-| Easy slug | Status |
-|-----------|--------|
-| `accountingreports-sales` | columns_done (PDF) |
-| `accountingreports-customerssales` | columns_done |
-| `accountingreports-grosscustomersalesbyitems` | columns_done |
-| `accountingreports-purchases` | columns_done |
-| `accountingreports-vendorspurchases` | columns_done |
-| `accountingreports-grossvendorpurchasesbyitems` | columns_done |
+---
 
-Evidence: `artifacts/mega-wave1-sales/`
+## Progress snapshot
 
-## Wave 2 — sales/purchases remainder
-Customer/vendor statement, lists, summaries, areas, last prices, mature, monthly, orders, aging — PDF + reshape.  
-Evidence: `artifacts/mega-wave2-sales/`
+| Wave | Scope | Status |
+|------|--------|--------|
+| P0 | TB / GL / account statement / customer-by-items | ✅ |
+| 1 | Sales/purchases core ×6 | ✅ columns |
+| 2 | Sales/purchases remainder | ✅ partial (credits ages gap) |
+| 3 | Inventory ×10 | ✅ partial; itemaging blocked |
+| 4 | Collection / checks / dues / leftovers ×10 | ✅ partial + honesty |
+| **5** | **Final leftovers ×6** | ⬜ **NEXT** |
+| 6 | Profits ×3 + credits ages gap ×3 | ⬜ |
+| 7 | Reps ×4 | ⬜ |
+| 8 | Production ×2 | ⬜ |
+| 9 | HR ×7 | ⬜ |
+| 10 | Fixed assets ×3 | ⬜ |
 
-## Wave 3 — inventory (2026-09-13)
-| Easy slug | Filters | Columns |
-|-----------|---------|---------|
-| `invreports-inventorysummary` | filters_partial | columns_done (PDF) |
-| `invreports-itemstransferdetails` | filters_partial | columns_done |
-| `invreports-totalinventoryexportimportreport` | filters_partial | columns_done (line-level) |
-| `invreports-inventorytransferdetailsreport` | filters_partial | columns_done |
-| `invreports-itemscosts` | filters_partial | columns_done |
-| `invreports-itemslist` | filters_partial | columns_done |
-| `invreports-itemssummary` | filters_partial | columns_done |
-| `invreports-incomeoutcomeitem` | filters_partial | columns_done |
-| `invreports-stagnantitems` | filters_partial | columns_done |
-| `invreports-itemaging` | filters_partial | columns_unknown (Mega StartScreen) |
+---
 
-Evidence: `artifacts/mega-wave3-inventory/`
+## P0
+| Easy slug | Filters | Columns | Evidence | Notes |
+|-----------|---------|---------|----------|-------|
+| `finalreports-trialbalance` | done | done | `mega-trial-balance/` | |
+| `finalreports-generalledger` | done | done | `mega-general-ledger/` | |
+| `accountingreports-accountstatment` | done | done | `mega-account-statement/` | |
+| `accountingreports-customeraccountstatementbyitems` | partial | done | `mega-customer-statement-by-items/` | |
 
-## Wave 4 — collection / checks / dues / accounting leftovers (2026-09-13)
-| Easy slug | Filters | Columns |
-|-----------|---------|---------|
-| `accountingreports-checks-checkout` | filters_partial | columns_done (PDF) |
-| `accountingreports-checks-checkin` | filters_partial | columns_done (PDF) |
-| `accountingreports-customersinstallments` | filters_partial | columns_done (PDF) |
-| `accountingreports-payments` | filters_partial | columns_done (PDF) |
-| `accountingreports-dues` | filters_partial | columns_done (PDF; data ≈ open sales invoices) |
-| `accountingreports-accountstatment-cash` | filters_partial | columns_done (PDF) |
-| `accountingreports-costcenterstatment` | filters_partial | columns_done (PDF) |
-| `accountingreports-dashboard` | filters_partial | columns_done (PDF cash balances) |
-| `accountingreports-branchessummary` | filters_partial | columns_done (PDF) |
-| `accountingreports-monthlyexpenses` | filters_partial | columns_done (PDF month pivot) |
+## Wave 1
+| Easy slug | Filters | Columns | Evidence | Notes |
+|-----------|---------|---------|----------|-------|
+| `accountingreports-sales` | partial | done | `mega-wave1-sales/` | |
+| `accountingreports-customerssales` | partial | done | `mega-wave1-sales/` | |
+| `accountingreports-grosscustomersalesbyitems` | partial | done | `mega-wave1-sales/` | |
+| `accountingreports-purchases` | partial | done | `mega-wave1-sales/` | |
+| `accountingreports-vendorspurchases` | partial | done | `mega-wave1-sales/` | |
+| `accountingreports-grossvendorpurchasesbyitems` | partial | done | `mega-wave1-sales/` | |
 
-Evidence: `artifacts/mega-wave4-collection/`  
-Honesty: dues approximated from open sales invoices; dashboard Mega-shaped cash balances; check bank/deposit/branch enriched when linked.
+## Wave 2
+| Easy slug | Filters | Columns | Evidence | Notes |
+|-----------|---------|---------|----------|-------|
+| `accountingreports-customerstatment` | partial | done | `mega-wave2-sales/` | |
+| `accountingreports-vendorstatment` | partial | done | `mega-wave2-sales/` | |
+| `accountingreports-vendoraccountstatementbyitems` | partial | partial | `mega-wave2-sales/` | PDF exists; verify label map |
+| `accountingreports-customerslist` | partial | done | `mega-wave2-sales/` | |
+| `accountingreports-vendorslist` | partial | done | `mega-wave2-sales/` | |
+| `accountingreports-customerssummary` | partial | done | `mega-wave2-sales/` | |
+| `accountingreports-vendorssummary` | partial | done | `mega-wave2-sales/` | |
+| `accountingreports-areassummary` | partial | done | `mega-wave2-sales/` | |
+| `accountingreports-lastprices` | partial | done | `mega-wave2-sales/` | |
+| `accountingreports-matureinvoices` | partial | done | `mega-wave2-sales/` | |
+| `accountingreports-maturereceipts` | partial | done | `mega-wave2-sales/` | |
+| `accountingreports-monthlysalesbyitems` | partial | done | `mega-wave2-sales/` | |
+| `accountingreports-monthlysalesbyitemstotals` | partial | done | `mega-wave2-sales/` | |
+| `accountingreports-salesorders` | partial | done | `mega-wave2-sales/` | |
+| `accountingreports-purchaseorders` | partial | done | `mega-wave2-sales/` | |
+| `accountingreports-debitsages` | partial | done | `mega-wave2-sales/` | |
+| `accountingreports-debitsagesbyyear` | partial | done | `mega-wave2-sales/` | |
+| `accountingreports-debitsagesbyhalfyear` | partial | done | `mega-wave2-sales/` | |
+| `accountingreports-creditsages` | partial | todo | - | **gap** |
+| `accountingreports-creditsagesbyyear` | partial | todo | - | **gap** |
+| `accountingreports-creditsagesbyhalfyear` | partial | todo | - | **gap** |
 
-## Remaining waves
-5. Final statements beyond TB/GL  
-6. Profits / reps / production / HR / assets
+## Wave 3 — inventory
+| Easy slug | Filters | Columns | Evidence | Notes |
+|-----------|---------|---------|----------|-------|
+| `invreports-inventorysummary` | partial | done | `mega-wave3-inventory/` | |
+| `invreports-itemstransferdetails` | partial | done | `mega-wave3-inventory/` | |
+| `invreports-totalinventoryexportimportreport` | partial | done | `mega-wave3-inventory/` | |
+| `invreports-inventorytransferdetailsreport` | partial | done | `mega-wave3-inventory/` | |
+| `invreports-itemscosts` | partial | done | `mega-wave3-inventory/` | |
+| `invreports-itemslist` | partial | done | `mega-wave3-inventory/` | |
+| `invreports-itemssummary` | partial | done | `mega-wave3-inventory/` | |
+| `invreports-incomeoutcomeitem` | partial | done | `mega-wave3-inventory/` | |
+| `invreports-stagnantitems` | partial | done | `mega-wave3-inventory/` | |
+| `invreports-itemaging` | partial | blocked | - | Mega StartScreen |
+
+## Wave 4 — collection
+| Easy slug | Filters | Columns | Evidence | Notes |
+|-----------|---------|---------|----------|-------|
+| `accountingreports-checks-checkout` | partial | done | `mega-wave4-collection/` | |
+| `accountingreports-checks-checkin` | partial | done | `mega-wave4-collection/` | |
+| `accountingreports-customersinstallments` | partial | done | `mega-wave4-collection/` | |
+| `accountingreports-payments` | partial | done | `mega-wave4-collection/` | |
+| `accountingreports-dues` | partial | done | `mega-wave4-collection/` | ≈ open invoices |
+| `accountingreports-accountstatment-cash` | partial | done | `mega-wave4-collection/` | |
+| `accountingreports-costcenterstatment` | partial | done | `mega-wave4-collection/` | |
+| `accountingreports-dashboard` | partial | done | `mega-wave4-collection/` | |
+| `accountingreports-branchessummary` | partial | done | `mega-wave4-collection/` | |
+| `accountingreports-monthlyexpenses` | partial | done | `mega-wave4-collection/` | |
+
+---
+
+## Wave 5 — final leftovers ⬅️ NEXT
+| Easy slug | Mega path | Filters | Columns | Evidence | Notes |
+|-----------|-----------|---------|---------|----------|-------|
+| `finalreports-subledger` | `/FinalReports/SubLedger.aspx` | todo | todo | - | أستاذ مساعد |
+| `finalreports-salescost` | `/FinalReports/SalesCost.aspx` | todo | todo | - | تكلفة المبيعات |
+| `finalreports-incomestatment` | `/FinalReports/IncomeStatment.aspx` | todo | todo | - | قائمة الدخل |
+| `finalreports-balancesheet` | `/FinalReports/BalanceSheet.aspx` | todo | todo | - | ميزانية |
+| `finalreports-financialstatment` | `/FinalReports/FinancialStatment.aspx` | todo | todo | - | مركز مالي |
+| `finalreports-cashflow` | `/FinalReports/CashFlow.aspx` | todo | todo | - | تدفقات |
+
+## Wave 6 — profits + close credits-ages gap
+| Easy slug | Mega path | Filters | Columns | Evidence | Notes |
+|-----------|-----------|---------|---------|----------|-------|
+| `accountingreports-itemsprofits` | `/AccountingReports/ItemsProfits.aspx` | todo | todo | - | |
+| `accountingreports-customersprofits` | `/AccountingReports/CustomersProfits.aspx` | todo | todo | - | |
+| `accountingreports-invoiceprofits` | `/AccountingReports/InvoiceProfits.aspx` | todo | todo | - | |
+| `accountingreports-creditsages` | `/AccountingReports/CreditsAges.aspx` | partial | todo | - | Wave 2 gap |
+| `accountingreports-creditsagesbyyear` | `/AccountingReports/CreditsAgesByYear.aspx` | partial | todo | - | |
+| `accountingreports-creditsagesbyhalfyear` | `/AccountingReports/CreditsAgesByHalfYear.aspx` | partial | todo | - | |
+
+## Wave 7 — reps
+| Easy slug | Mega path | Filters | Columns | Evidence | Notes |
+|-----------|-----------|---------|---------|----------|-------|
+| `accountingreports-grossrepsalesbyitems` | `/AccountingReports/GrossRepSalesByItems.aspx` | todo | todo | - | |
+| `accountingreports-repscollectings` | `/AccountingReports/RepsCollectings.aspx` | todo | todo | - | |
+| `accountingreports-repdaily` | `/AccountingReports/RepDaily.aspx` | todo | todo | - | |
+| `accountingreports-repdebit` | `/AccountingReports/RepDebit.aspx` | todo | todo | - | |
+
+## Wave 8 — production
+| Easy slug | Mega path | Filters | Columns | Evidence | Notes |
+|-----------|-----------|---------|---------|----------|-------|
+| `accountingreports-productionorders` | `/AccountingReports/ProductionOrders.aspx` | todo | todo | - | |
+| `accountingreports-productionmaterials` | `/AccountingReports/ProductionMaterials.aspx` | todo | todo | - | |
+
+## Wave 9 — HR
+| Easy slug | Mega path | Filters | Columns | Evidence | Notes |
+|-----------|-----------|---------|---------|----------|-------|
+| `hrreports-attendance` | `/HRReports/Attendance.aspx` | todo | todo | - | |
+| `hrreports-employeesvactions` | `/HRReports/EmployeesVactions.aspx` | todo | todo | - | |
+| `hrreports-employeespayroll` | `/HRReports/EmployeesPayroll.aspx` | todo | todo | - | |
+| `hrreports-employeespayroll-list` | `/HRReports/EmployeesPayroll.aspx/List` | todo | todo | - | |
+| `hrreports-employeesunderrequest` | `/HRReports/EmployeesUnderRequest.aspx` | todo | todo | - | |
+| `hrreports-employeeslist` | `/HRReports/EmployeesList.aspx` | todo | todo | - | |
+| `hrreports-loans-list` | `/HRReports/Loans.aspx/List` | todo | todo | - | |
+
+## Wave 10 — fixed assets
+| Easy slug | Mega path | Filters | Columns | Evidence | Notes |
+|-----------|-----------|---------|---------|----------|-------|
+| `fixedassetsreports-dep` | `/FixedAssetsReports/Dep.aspx` | todo | todo | - | |
+| `fixedassetsreports-depruns` | `/FixedAssetsReports/Dep.aspx` | todo | todo | - | same Mega page family |
+| `fixedassetsreports-soldfixedassets` | `/FixedAssetsReports/SoldFixedAssets.aspx` | todo | todo | - | |
+
+---
+
+## Per-report gate (must all pass)
+
+1. Map slug ↔ Mega URL  
+2. Filters from Mega scan → Easy  
+3. Capture PDF after عرض  
+4. Decode columns (no guessing)  
+5. Labels + column order  
+6. Server row reshape  
+7. Honesty note if approximate  
+8. Update **this** tracker row  
+9. Typecheck / deploy smoke  
+
+Full checklist: `mega-report-parity-method.md`
+
+## Related
+- Method: `mega-report-parity-method.md`
+- Menu: `mega-report-menu/MENU-MAP.md`
+- Inventory: `mega-easy-report-inventory.json`
