@@ -4,6 +4,7 @@
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import type { Db } from "./db";
 import {
+  accounts,
   fiscalYears,
   importCostLines,
   importCostShipments,
@@ -313,6 +314,10 @@ async function auditTrialBalance(
   const filters = { tenantId, dateFrom: period.dateFrom, dateTo: period.dateTo };
   const rows = await trialBalanceReport(db as any, filters);
   const income = await incomeStatementFromData(db as any, filters);
+  const accountRows = await db.select({ code: accounts.code, type: accounts.type })
+    .from(accounts)
+    .where(tenantWhere(accounts, tenantId));
+  const typeByCode = new Map(accountRows.map((a) => [String(a.code), String(a.type || "")]));
 
   let totalClosingDebit = 0;
   let totalClosingCredit = 0;
@@ -321,11 +326,12 @@ async function auditTrialBalance(
   for (const r of rows) {
     totalClosingDebit += n(r.closingDebit);
     totalClosingCredit += n(r.closingCredit);
-    if (isNormalBalanceSuspicious(String(r.accountType), n(r.closingDebit), n(r.closingCredit))) {
+    const accountType = typeByCode.get(String(r.accountCode)) || "";
+    if (isNormalBalanceSuspicious(accountType, n(r.closingDebit), n(r.closingCredit))) {
       reversedNature.push({
         code: String(r.accountCode),
         name: String(r.accountName),
-        type: String(r.accountType),
+        type: accountType,
         closingDebit: n(r.closingDebit),
         closingCredit: n(r.closingCredit),
       });
@@ -339,7 +345,7 @@ async function auditTrialBalance(
     .map((r) => ({
       code: String(r.accountCode),
       name: String(r.accountName),
-      type: String(r.accountType),
+      type: typeByCode.get(String(r.accountCode)) || "",
       closingDebit: n(r.closingDebit),
       closingCredit: n(r.closingCredit),
       abs: Math.max(n(r.closingDebit), n(r.closingCredit)),

@@ -83,6 +83,14 @@ export const REPORT_COLUMN_LABELS: Record<string, string> = {
   debit: "مدين",
   credit: "دائن",
   costCenter: "مركز التكلفة",
+  // ميزان المراجعة — أعمدة ميجا من ملف التصدير «ميزان المراجعة.xlsx»
+  // (كود، اسم، أول المدة م/د، حركة م/د، آخر المدة م/د)
+  openingDebit: "أول المدة مدين",
+  openingCredit: "أول المدة دائن",
+  periodDebit: "حركة مدين",
+  periodCredit: "حركة دائن",
+  closingDebit: "آخر المدة مدين",
+  closingCredit: "آخر المدة دائن",
   openingBalance: "رصيد افتتاحي",
   openingBalanceDate: "تاريخ الرصيد الافتتاحي",
   closingBalance: "رصيد ختامي",
@@ -121,4 +129,6 @@ export const REPORT_TOTAL_COLUMNS = new Set([
   "debit", "credit", "value", "lineAmount", "totalAmount", "postedDepreciation",
   "bookAccumulated", "monthlyTheoretical", "purchasePrice", "currentValue",
   "bookValue", "saleAmount", "gainLoss",
+  "openingDebit", "openingCredit", "periodDebit", "periodCredit",
+  "closingDebit", "closingCredit",
 ]);

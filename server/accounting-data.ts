@@ -270,6 +270,171 @@ export async function loadPostedJournalLines(db: Db, filters: ReportFilters) {
   });
 }
 
+/**
+ * الأستاذ العام — شكل ميجا من ملف التصدير «الاستاذ العام.xlsx»:
+ * لكل حساب: رصيد سابق + حركة يومية مجمّعة + اجمالى
+ * أعمدة الشبكة: التاريخ، مدين، دائن، الرصيد
+ * (كود/اسم الحساب = عنوان القسم في ميجا؛ نعرضهما أعمدة في الجدول المسطّح)
+ */
+export async function generalLedgerReport(db: Db, filters: ReportFilters) {
+  const allAccounts = await db.select().from(accounts)
+    .where(tenantWhere(accounts, filters.tenantId, eq(accounts.isActive, true)))
+    .orderBy(accounts.code);
+
+  const root = filters.accountId != null
+    ? allAccounts.find((a) => a.id === filters.accountId)
+    : undefined;
+  const rootCode = root?.code;
+
+  const childrenOf = new Map<number, number[]>();
+  for (const a of allAccounts) {
+    if (a.parentId == null) continue;
+    const list = childrenOf.get(a.parentId) || [];
+    list.push(a.id);
+    childrenOf.set(a.parentId, list);
+  }
+
+  const leafIdsUnder = (accountId: number): number[] => {
+    const kids = childrenOf.get(accountId) || [];
+    if (!kids.length) return [accountId];
+    const out: number[] = [];
+    for (const kid of kids) out.push(...leafIdsUnder(kid));
+    return out.length ? out : [accountId];
+  };
+
+  const inScope = (a: (typeof allAccounts)[number]) => {
+    if (filters.accountId == null) return true;
+    if (a.id === filters.accountId) return true;
+    if (rootCode && a.code?.startsWith(rootCode)) return true;
+    return a.parentId === filters.accountId;
+  };
+
+  const scoped = allAccounts.filter(inScope);
+  if (!scoped.length) return [];
+
+  const costCenterCond = filters.costCenterId
+    ? eq(journalEntryLines.costCenterId, filters.costCenterId)
+    : undefined;
+
+  // حركات قبل الفترة (لرصيد سابق) — مع احترام مركز التكلفة إن وُجد
+  const openingDateParts = filters.dateFrom
+    ? [lt(journalEntries.date, filters.dateFrom as any)]
+    : [];
+  const openingLines = await db.select({
+    accountId: journalEntryLines.accountId,
+    debit: journalEntryLines.debit,
+    credit: journalEntryLines.credit,
+  }).from(journalEntryLines)
+    .innerJoin(journalEntries, eq(journalEntryLines.entryId, journalEntries.id))
+    .where(tenantWhere(journalEntries, filters.tenantId,
+      and(eq(journalEntries.status, "posted"), ...openingDateParts),
+      costCenterCond));
+
+  const openingByAccount = new Map<number, { debit: number; credit: number }>();
+  for (const l of openingLines) {
+    const cur = openingByAccount.get(l.accountId) || { debit: 0, credit: 0 };
+    cur.debit += num(l.debit);
+    cur.credit += num(l.credit);
+    openingByAccount.set(l.accountId, cur);
+  }
+
+  // حركات الفترة مع التاريخ للتجميع اليومي
+  const periodDateParts = dateConds(journalEntries, filters.dateFrom, filters.dateTo);
+  const periodLines = await db.select({
+    accountId: journalEntryLines.accountId,
+    entryDate: journalEntries.date,
+    debit: journalEntryLines.debit,
+    credit: journalEntryLines.credit,
+  }).from(journalEntryLines)
+    .innerJoin(journalEntries, eq(journalEntryLines.entryId, journalEntries.id))
+    .where(tenantWhere(journalEntries, filters.tenantId,
+      and(eq(journalEntries.status, "posted"), ...(periodDateParts.length ? [and(...periodDateParts)] : [])),
+      costCenterCond))
+    .orderBy(asc(journalEntries.date));
+
+  const periodByAccountDate = new Map<number, Map<string, { debit: number; credit: number }>>();
+  for (const l of periodLines) {
+    const d = dateOnly(l.entryDate);
+    let byDate = periodByAccountDate.get(l.accountId);
+    if (!byDate) {
+      byDate = new Map();
+      periodByAccountDate.set(l.accountId, byDate);
+    }
+    const cur = byDate.get(d) || { debit: 0, credit: 0 };
+    cur.debit += num(l.debit);
+    cur.credit += num(l.credit);
+    byDate.set(d, cur);
+  }
+
+  const useStoredBalance = filters.costCenterId == null;
+  const out: Record<string, unknown>[] = [];
+
+  for (const a of scoped) {
+    const leaves = a.isParent ? leafIdsUnder(a.id) : [a.id];
+    let openingNet = 0;
+    for (const leafId of leaves) {
+      const leaf = allAccounts.find((x) => x.id === leafId);
+      const open = openingByAccount.get(leafId) || { debit: 0, credit: 0 };
+      openingNet += (useStoredBalance ? num(leaf?.balance) : 0) + open.debit - open.credit;
+    }
+
+    const daily = new Map<string, { debit: number; credit: number }>();
+    for (const leafId of leaves) {
+      const byDate = periodByAccountDate.get(leafId);
+      if (!byDate) continue;
+      for (const [d, m] of byDate) {
+        const cur = daily.get(d) || { debit: 0, credit: 0 };
+        cur.debit += m.debit;
+        cur.credit += m.credit;
+        daily.set(d, cur);
+      }
+    }
+
+    if (Math.abs(openingNet) < 0.0001 && daily.size === 0) continue;
+
+    // ميجا: صف «رصيد سابق»
+    out.push({
+      accountCode: a.code,
+      accountName: a.name,
+      date: "رصيد سابق",
+      debit: 0,
+      credit: 0,
+      balance: openingNet,
+    });
+
+    let running = openingNet;
+    let totalDebit = 0;
+    let totalCredit = 0;
+    const dates = [...daily.keys()].sort();
+    for (const d of dates) {
+      const m = daily.get(d)!;
+      running += m.debit - m.credit;
+      totalDebit += m.debit;
+      totalCredit += m.credit;
+      out.push({
+        accountCode: a.code,
+        accountName: a.name,
+        date: d,
+        debit: m.debit,
+        credit: m.credit,
+        balance: running,
+      });
+    }
+
+    // ميجا: صف «اجمالى» لحركة الفترة
+    out.push({
+      accountCode: a.code,
+      accountName: a.name,
+      date: "اجمالى",
+      debit: totalDebit,
+      credit: totalCredit,
+      balance: running,
+    });
+  }
+
+  return out;
+}
+
 export async function trialBalanceReport(db: Db, filters: ReportFilters) {
   // ميجا: فلتر «الحساب الرئيسي» يضيّق الشجرة؛ «اخفاء الارصدة الصفرية» اختياري (افتراضي: إظهار)
   const allAccounts = await db.select().from(accounts)
@@ -291,6 +456,14 @@ export async function trialBalanceReport(db: Db, filters: ReportFilters) {
 
   const hideZeroBalances = filters.hideZeroBalances === true;
   const byId = new Map(allAccounts.map((a) => [a.id, a]));
+  const childrenOf = new Map<number, number[]>();
+  for (const a of allAccounts) {
+    if (a.parentId == null) continue;
+    const list = childrenOf.get(a.parentId) || [];
+    list.push(a.id);
+    childrenOf.set(a.parentId, list);
+  }
+
   const treeDepth = (accountId: number) => {
     let depth = 1;
     let cur = byId.get(accountId);
@@ -304,32 +477,59 @@ export async function trialBalanceReport(db: Db, filters: ReportFilters) {
     return depth;
   };
 
+  const leafIdsUnder = (accountId: number): number[] => {
+    const kids = childrenOf.get(accountId) || [];
+    if (!kids.length) return [accountId];
+    const out: number[] = [];
+    for (const kid of kids) out.push(...leafIdsUnder(kid));
+    return out.length ? out : [accountId];
+  };
+
+  const leafMetrics = (accountId: number) => {
+    const a = byId.get(accountId)!;
+    const open = openingMovement.get(accountId) || { debit: 0, credit: 0 };
+    const period = periodMovement.get(accountId) || { debit: 0, credit: 0 };
+    const openingNet = num(a.balance) + open.debit - open.credit;
+    const closingNet = openingNet + period.debit - period.credit;
+    return { openingNet, periodDebit: period.debit, periodCredit: period.credit, closingNet };
+  };
+
+  const inScope = (a: (typeof allAccounts)[number]) => {
+    if (filters.accountId == null) return true;
+    if (a.id === filters.accountId) return true;
+    if (rootCode && a.code?.startsWith(rootCode)) return true;
+    return a.parentId === filters.accountId;
+  };
+
+  // ميجا من ملف «ميزان المراجعة.xlsx»: يعرض آباء + أوراق (شجرة) وليس الأوراق فقط
   let rows = allAccounts
-    .filter((a) => !a.isParent)
-    .filter((a) => {
-      if (filters.accountId == null) return true;
-      if (a.id === filters.accountId) return true;
-      if (rootCode && a.code?.startsWith(rootCode)) return true;
-      return a.parentId === filters.accountId;
-    })
+    .filter(inScope)
     .filter((a) => {
       // ميجا ddlDisplayLevel: قيم 2..7 — نقيّد بعمق الشجرة عند تحديده
       if (filters.displayLevel == null || !Number.isFinite(filters.displayLevel)) return true;
       return treeDepth(a.id) <= filters.displayLevel!;
     })
     .map((a) => {
-      const open = openingMovement.get(a.id) || { debit: 0, credit: 0 };
-      const period = periodMovement.get(a.id) || { debit: 0, credit: 0 };
-      const openingNet = num(a.balance) + open.debit - open.credit;
-      const closingNet = openingNet + period.debit - period.credit;
+      const leaves = a.isParent ? leafIdsUnder(a.id) : [a.id];
+      let openingNet = 0;
+      let periodDebit = 0;
+      let periodCredit = 0;
+      let closingNet = 0;
+      for (const leafId of leaves) {
+        const m = leafMetrics(leafId);
+        openingNet += m.openingNet;
+        periodDebit += m.periodDebit;
+        periodCredit += m.periodCredit;
+        closingNet += m.closingNet;
+      }
+      // ترتيب الأعمدة مطابق لميجا: كود، اسم، أول مدة م/د، حركة م/د، آخر مدة م/د
       return {
         accountCode: a.code,
         accountName: a.name,
-        accountType: a.type,
         openingDebit: openingNet > 0 ? openingNet : 0,
         openingCredit: openingNet < 0 ? Math.abs(openingNet) : 0,
-        periodDebit: period.debit,
-        periodCredit: period.credit,
+        periodDebit,
+        periodCredit,
         closingDebit: closingNet > 0 ? closingNet : 0,
         closingCredit: closingNet < 0 ? Math.abs(closingNet) : 0,
       };

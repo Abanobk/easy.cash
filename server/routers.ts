@@ -86,6 +86,8 @@ import { opsInboxRouter } from "./ops-inbox-router";
 import { megaReportImportRouter } from "./mega-report-import-router";
 import {
   collectInventoryMovements,
+  toMegaItemMovementDetailRows,
+  computeItemMovementOpenings,
   inventoryStocktakeReport,
   stagnantItemsReport,
   itemAgingReport,
@@ -4136,7 +4138,10 @@ const reportsRouter = router({
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     const scope = await loadUserScopeFromCtx(db, ctx.saasUser);
     const filters = applyScopeToReportFilters({ tenantId: ctx.tenantId, ...input }, scope);
-    return collectInventoryMovements(db, filters);
+    // ميجا: أعمدة «حركة تفصيلية للاصناف» من ملف التصدير الفعلي + رصيد سابق
+    const openings = await computeItemMovementOpenings(db, filters);
+    const movements = await collectInventoryMovements(db, filters);
+    return toMegaItemMovementDetailRows(movements, openings);
   }),
 
   inventoryWarehouseInOut: protectedProcedure.input(z.object({

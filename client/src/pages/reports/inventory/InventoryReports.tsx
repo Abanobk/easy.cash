@@ -21,7 +21,7 @@ import {
 
 const REPORTS = [
   { slug: "stocktake", title: "جرد المخازن", needsDates: false, needsAsOfDate: false },
-  { slug: "item-movements", title: "حركة تفصيلية للأصناف", needsDates: true, needsAsOfDate: false },
+  { slug: "item-movements", title: "حركة تفصيلية للاصناف", needsDates: true, needsAsOfDate: false },
   { slug: "warehouse-in-out", title: "صادر / وارد مخزن", needsDates: true, needsAsOfDate: false },
   { slug: "warehouse-movements", title: "حركة تفصيلية للمخازن", needsDates: true, needsAsOfDate: false },
   { slug: "item-costs", title: "تكاليف الأصناف (قيمة الأصناف)", needsDates: false, needsAsOfDate: true },
@@ -579,6 +579,40 @@ function getTableConfig(slug: ReportSlug): {
       };
 
     case "item-movements":
+      // أعمدة ميجا من ملف «حركة تفصيلية للاصناف.xlsx» (صف عناوين الجدول)
+      return {
+        columns: [
+          { key: "date", label: "التاريخ", render: (r) => r.date },
+          { key: "doc", label: "رقم المستند", render: (r) => r.documentNumber || "—" },
+          { key: "batch", label: "رقم التشغيلة", render: (r) => r.batchNumber || "—" },
+          { key: "in", label: "كمية واردة", render: (r) => r.quantityIn > 0 ? fmt(r.quantityIn, 3) : "—" },
+          { key: "out", label: "كمية صادرة", render: (r) => r.quantityOut > 0 ? fmt(r.quantityOut, 3) : "—" },
+          { key: "balQty", label: "الرصيد", render: (r) => fmt(r.balanceQty, 3) },
+          { key: "val", label: "القيمة", render: (r) => fmt(r.lineValue) },
+          { key: "balVal", label: "رصيد قيمة", render: (r) => fmt(r.balanceValue) },
+          { key: "costIn", label: "تكلفة الوحدة الواردة", render: (r) => r.unitCostIn > 0 ? fmt(r.unitCostIn) : "—" },
+          { key: "costOut", label: "تكلفة الوحدة الصادرة", render: (r) => r.unitCostOut > 0 ? fmt(r.unitCostOut) : "—" },
+          { key: "from", label: "من", render: (r) => r.fromLocation || "—" },
+          { key: "to", label: "إلي", render: (r) => r.toLocation || "—" },
+        ],
+        exportRows: (rows) => rows.map((r) => ({
+          التاريخ: r.date,
+          "رقم المستند": r.documentNumber,
+          "رقم التشغيلة": r.batchNumber,
+          "كمية واردة": r.quantityIn,
+          "كمية صادرة": r.quantityOut,
+          الرصيد: r.balanceQty,
+          القيمة: r.lineValue,
+          "رصيد قيمة": r.balanceValue,
+          "تكلفة الوحدة الواردة": r.unitCostIn,
+          "تكلفة الوحدة الصادرة": r.unitCostOut,
+          من: r.fromLocation,
+          إلي: r.toLocation,
+          "كود الصنف": r.itemCode,
+          الصنف: r.itemName,
+        })),
+      };
+
     case "warehouse-movements":
       return {
         columns: [

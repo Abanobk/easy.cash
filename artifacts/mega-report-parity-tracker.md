@@ -11,13 +11,14 @@ Goal: Easy Cash reports match Mega Cash (filters + columns + behavior) with **no
 ## P0 (in progress)
 | Easy slug | Mega page | Filters | Columns |
 |-----------|-----------|---------|---------|
-| `finalreports-trialbalance` | `/FinalReports/TrialBalance.aspx` | filters_done (partial Mega-only opts pending) | columns_unknown |
-| `finalreports-generalledger` | `/FinalReports/GeneralLedger.aspx` | filters_done | columns_unknown |
+| `finalreports-trialbalance` | `/FinalReports/TrialBalance.aspx` | filters_done (partial Mega-only opts pending) | columns_done (Excel 2026-09-13) |
+| `finalreports-generalledger` | `/FinalReports/GeneralLedger.aspx` | filters_done | columns_done (Excel 2026-09-13) |
 | `accountingreports-accountstatment` | `/AccountingReports/AccountStatment.aspx` | filters_done (partial) | columns_unknown |
 
-## Easy current row shapes (until Mega headers confirmed — do not rename to guessed Mega labels)
-- Trial Balance: `accountCode`, `accountName`, `accountType`, `openingDebit`, `openingCredit`, `periodDebit`, `periodCredit`, `closingDebit`, `closingCredit`
-- GL / Account Statement (`loadPostedJournalLines`): `date`, `documentNumber`, `accountCode`, `accountName`, `description`, `costCenter`, `debit`, `credit`, `balance`
+## Easy current row shapes (Mega-verified where noted — do not invent labels)
+- Trial Balance (from Mega Excel): `accountCode`, `accountName`, `openingDebit`, `openingCredit`, `periodDebit`, `periodCredit`, `closingDebit`, `closingCredit` — see `artifacts/mega-trial-balance/COLUMNS.md`
+- General Ledger (**columns_done** via Mega Excel): `accountCode`, `accountName`, `date`, `debit`, `credit`, `balance` (daily per account + رصيد سابق/اجمالى) — `artifacts/mega-general-ledger/COLUMNS.md`
+- Account Statement (`loadPostedJournalLines`, still columns_unknown vs Mega): `date`, `documentNumber`, `accountCode`, `accountName`, `description`, `costCenter`, `debit`, `credit`, `balance`
 
 ## Blocker for full parity
 Need Mega **grid headers** (screenshot after عرض with data, or Excel export file). Automation reaches filter forms and clicks عرض; result viewer (`ifViewer`) often stays blank in headless/computer-use.
