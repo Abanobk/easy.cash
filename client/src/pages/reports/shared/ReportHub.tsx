@@ -11,9 +11,11 @@ import { Download, Printer, Search } from "lucide-react";
 import * as XLSX from "xlsx";
 import type { ReportSectionDef } from "@/config/report-sections";
 import { getReportEntityFilters, type ReportEntityFilter } from "@/config/report-filter-config";
-import { reportColumnLabel, REPORT_TOTAL_COLUMNS } from "@/config/report-column-labels";
+import { reportColumnLabel, reportColumnLabelForSlug, REPORT_TOTAL_COLUMNS } from "@/config/report-column-labels";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { printTableReport, printGroupedInvoiceReport } from "@/lib/print-report";
+import { Checkbox } from "@/components/ui/checkbox";
+import { printTableReport, printGroupedInvoiceReport, printAccountStatementReport, printFormalAccountingReport } from "@/lib/print-report";
+import { toast } from "sonner";
 
 type ReportProcedure = "accountingBySlug" | "finalBySlug" | "hrBySlug" | "assetsBySlug";
 
@@ -39,6 +41,21 @@ type FilterInput = {
   paymentStatus?: "paid" | "partial" | "unpaid";
   taxFilter?: "with" | "without";
   discountFilter?: "with" | "without";
+  /** ميجا ميزان المراجعة: اخفاء الارصدة الصفرية (افتراضي غير مفعّل = عرض الأصفار) */
+  hideZeroBalances?: boolean;
+  /** ميجا: مستوى العرض (2..7) */
+  displayLevel?: number;
+  /** ميجا: حالة النشاط خلال الفترة */
+  activityStatus?: "active" | "inactive";
+  /** ميجا: ترتيب بـ */
+  orderBy?: "code" | "name" | "balance";
+  /** ميجا ميزان: طريقة تجميع العملاء */
+  customerGrouping?: "all" | "zeroBalances" | "byCategory";
+  /** ميجا كشف حساب */
+  showOpeningMovements?: boolean;
+  showCounterAccounts?: boolean;
+  hideDetails?: boolean;
+  notes?: string;
 };
 
 function defaultDates() {
@@ -79,7 +96,22 @@ function parseUrlFilters(search: string): Partial<FilterInput> {
   if (tf === "with" || tf === "without") out.taxFilter = tf;
   const discF = params.get("discountFilter");
   if (discF === "with" || discF === "without") out.discountFilter = discF;
-  return out;
+  const hzb = params.get("hideZeroBalances");
+  if (hzb === "1" || hzb === "true") out.hideZeroBalances = true;
+  const dl = params.get("displayLevel");
+  if (dl && Number.isFinite(Number(dl))) out.displayLevel = Number(dl);
+  const act = params.get("activityStatus");
+  if (act === "active" || act === "inactive") out.activityStatus = act;
+  const ob = params.get("orderBy");
+  if (ob === "code" || ob === "name" || ob === "balance") out.orderBy = ob;
+    const cg = params.get("customerGrouping");
+  if (cg === "all" || cg === "zeroBalances" || cg === "byCategory") out.customerGrouping = cg;
+  if (params.get("showOpeningMovements") === "1") out.showOpeningMovements = true;
+  if (params.get("showCounterAccounts") === "1") out.showCounterAccounts = true;
+  if (params.get("hideDetails") === "1") out.hideDetails = true;
+  const notesQ = params.get("notes");
+  if (notesQ) out.notes = notesQ;
+return out;
 }
 
 function buildFilterQueryString(query: FilterInput, includeDates: boolean) {
@@ -104,6 +136,15 @@ function buildFilterQueryString(query: FilterInput, includeDates: boolean) {
   if (query.paymentStatus) params.set("paymentStatus", query.paymentStatus);
   if (query.taxFilter) params.set("taxFilter", query.taxFilter);
   if (query.discountFilter) params.set("discountFilter", query.discountFilter);
+  if (query.hideZeroBalances) params.set("hideZeroBalances", "1");
+  if (query.displayLevel != null) params.set("displayLevel", String(query.displayLevel));
+  if (query.activityStatus) params.set("activityStatus", query.activityStatus);
+  if (query.orderBy) params.set("orderBy", query.orderBy);
+  if (query.customerGrouping) params.set("customerGrouping", query.customerGrouping);
+  if (query.showOpeningMovements) params.set("showOpeningMovements", "1");
+  if (query.showCounterAccounts) params.set("showCounterAccounts", "1");
+  if (query.hideDetails) params.set("hideDetails", "1");
+  if (query.notes) params.set("notes", query.notes);
   const qs = params.toString();
   return qs ? `?${qs}` : "";
 }
@@ -166,6 +207,15 @@ export default function ReportHub({ title, section, icon, reports, procedure }: 
   const [paymentStatus, setPaymentStatus] = useState<string>("");
   const [taxFilter, setTaxFilter] = useState<string>("");
   const [discountFilter, setDiscountFilter] = useState<string>("");
+  const [hideZeroBalances, setHideZeroBalances] = useState(false);
+  const [displayLevel, setDisplayLevel] = useState<string>("");
+  const [activityStatus, setActivityStatus] = useState<string>("");
+  const [orderBy, setOrderBy] = useState<string>("code");
+  const [customerGrouping, setCustomerGrouping] = useState<string>("");
+  const [showOpeningMovements, setShowOpeningMovements] = useState(false);
+  const [showCounterAccounts, setShowCounterAccounts] = useState(false);
+  const [hideDetails, setHideDetails] = useState(false);
+  const [notes, setNotes] = useState("");
   const [query, setQuery] = useState<FilterInput>(() => ({ slug, ...dates }));
 
   useEffect(() => {
@@ -191,6 +241,15 @@ export default function ReportHub({ title, section, icon, reports, procedure }: 
     if (urlFilters.paymentStatus) setPaymentStatus(urlFilters.paymentStatus);
     if (urlFilters.taxFilter) setTaxFilter(urlFilters.taxFilter);
     if (urlFilters.discountFilter) setDiscountFilter(urlFilters.discountFilter);
+    if (urlFilters.hideZeroBalances) setHideZeroBalances(true);
+    if (urlFilters.displayLevel != null) setDisplayLevel(String(urlFilters.displayLevel));
+    if (urlFilters.activityStatus) setActivityStatus(urlFilters.activityStatus);
+    if (urlFilters.orderBy) setOrderBy(urlFilters.orderBy);
+    if (urlFilters.customerGrouping) setCustomerGrouping(urlFilters.customerGrouping);
+    if (urlFilters.showOpeningMovements) setShowOpeningMovements(true);
+    if (urlFilters.showCounterAccounts) setShowCounterAccounts(true);
+    if (urlFilters.hideDetails) setHideDetails(true);
+    if (urlFilters.notes) setNotes(urlFilters.notes);
     setQuery({ slug, ...dates, ...urlFilters });
   }, [slug, location]);
 
@@ -216,6 +275,9 @@ export default function ReportHub({ title, section, icon, reports, procedure }: 
     { enabled: needs("warehouse") || needs("branch") },
   );
   const { data: categoriesList } = trpc.items.categories.useQuery(undefined, { enabled: needs("category") });
+  const { data: contactCategoriesList } = trpc.contactCategories.list.useQuery(undefined, {
+    enabled: slug === "finalreports-trialbalance" && customerGrouping === "byCategory",
+  });
   const { data: areasList } = trpc.parity.sales.areas.list.useQuery(undefined, { enabled: needs("area") });
   const { data: exchangeRatesList } = trpc.parity.settings.exchangeRates.list.useQuery(undefined, { enabled: needs("currency") });
 
@@ -251,16 +313,101 @@ export default function ReportHub({ title, section, icon, reports, procedure }: 
     paymentStatus: query.paymentStatus,
     taxFilter: query.taxFilter,
     discountFilter: query.discountFilter,
+    hideZeroBalances: query.hideZeroBalances,
+    displayLevel: query.displayLevel,
+    activityStatus: query.activityStatus,
+    orderBy: query.orderBy,
+    customerGrouping: query.customerGrouping,
+    showOpeningMovements: query.showOpeningMovements,
+    showCounterAccounts: query.showCounterAccounts,
+    hideDetails: query.hideDetails,
+    notes: query.notes,
   }), [slug, query, reportMeta?.needsDates]);
 
   const { data: rows = [], isLoading, refetch } = useReportData(procedure, filterInput, !!slug);
 
+  const isAccountStatement = slug === "accountingreports-accountstatment";
+  const isCustomerItemStatement = slug === "accountingreports-customeraccountstatementbyitems";
+
+  const CUSTOMER_ITEM_STATEMENT_COLUMN_ORDER = [
+    "date", "documentNumber", "description",
+    "outQty", "outPrice", "outTotal",
+    "inQty", "inPrice", "inTotal",
+    "cashBankIn", "cashBankOut", "checkCollected", "checkRejected", "otherOps",
+    "balance",
+  ] as const;
+
+
+  /** ترتيب أعمدة كشف الحساب كما في ميجا (إكسل/PDF) */
+  const ACCOUNT_STATEMENT_COLUMN_ORDER = [
+    "date",
+    "entryNumber",
+    "documentNumber",
+    "debit",
+    "credit",
+    "balance",
+    "exchangeRate",
+    "description",
+  ] as const;
+
+  /**
+   * ترتيب أعمدة فواتير البيع — من PDF ميجا (صف الفاتورة):
+   * مسلسل | التاريخ | العميل | الاجمالي | الخصم | الضريبة | اضافات | الصافي | المصروفات | المستحق تحصيله
+   * (اضافات/المصروفات غير موجودة في Easy بعد — باقي الحقول الإضافية بعد أعمدة ميجا)
+   */
+  const SALES_COLUMN_ORDER = [
+    "documentNumber",
+    "date",
+    "partyName",
+    "subtotal",
+    "discount",
+    "tax",
+    "total",
+    "remaining",
+  ] as const;
+
+  /**
+   * ترتيب أعمدة فواتير الشراء — من PDF ميجا:
+   * مسلسل | رقم المرجع | التاريخ | المورد | الاجمالي | الخصم | الضريبة | الصافي | المستحق سداده
+   */
+  const PURCHASES_COLUMN_ORDER = [
+    "documentNumber",
+    "date",
+    "partyName",
+    "subtotal",
+    "discount",
+    "tax",
+    "total",
+    "remaining",
+  ] as const;
+
+  const isSales = slug === "accountingreports-sales";
+  const isPurchases = slug === "accountingreports-purchases";
+  const isSalesOrPurchases = isSales || isPurchases;
+
+  const columnLabel = (key: string) => reportColumnLabelForSlug(slug, key);
+
   const columns = useMemo(() => {
     if (!rows.length) return [];
-    return Object.keys(rows[0] as object).filter((k) => !["drillSlug", "section"].includes(k));
-  }, [rows]);
+    const keys = Object.keys(rows[0] as object).filter((k) => !["drillSlug", "section"].includes(k));
+    const order = isAccountStatement
+      ? ACCOUNT_STATEMENT_COLUMN_ORDER
+      : isCustomerItemStatement
+        ? CUSTOMER_ITEM_STATEMENT_COLUMN_ORDER
+        : isSales
+          ? SALES_COLUMN_ORDER
+          : isPurchases
+            ? PURCHASES_COLUMN_ORDER
+            : null;
+    if (!order) return keys;
+    const preferred = order.filter((k) => keys.includes(k));
+    const rest = keys.filter((k) => !(order as readonly string[]).includes(k));
+    return [...preferred, ...rest];
+  }, [rows, isAccountStatement, isCustomerItemStatement, isSales, isPurchases]);
 
   const totals = useMemo(() => {
+    // ميجا: الإجمالي صف داخل البيانات («اجمالي حركات الفترة») — لا نضاعفه في تذييل الجدول
+    if (isAccountStatement) return null;
     const result: Record<string, number> = {};
     let hasAny = false;
     for (const col of columns) {
@@ -280,9 +427,14 @@ export default function ReportHub({ title, section, icon, reports, procedure }: 
       }
     }
     return hasAny ? result : null;
-  }, [rows, columns]);
+  }, [rows, columns, isAccountStatement]);
 
   const handleSearch = () => {
+    // ميجا ميزان: «تجميع فئة عملاء» يطلب اختيار فئة قبل العرض
+    if (slug === "finalreports-trialbalance" && customerGrouping === "byCategory" && !categoryId) {
+      toast.error("يجب اختيار فئة عملاء");
+      return;
+    }
     setQuery({
       slug,
       ...(reportMeta?.needsDates ? { dateFrom, dateTo } : {}),
@@ -304,6 +456,27 @@ export default function ReportHub({ title, section, icon, reports, procedure }: 
       paymentStatus: paymentStatus === "paid" || paymentStatus === "partial" || paymentStatus === "unpaid" ? paymentStatus : undefined,
       taxFilter: taxFilter === "with" || taxFilter === "without" ? taxFilter : undefined,
       discountFilter: discountFilter === "with" || discountFilter === "without" ? discountFilter : undefined,
+      hideZeroBalances: slug === "finalreports-trialbalance" ? hideZeroBalances : undefined,
+      displayLevel:
+        slug === "finalreports-trialbalance" && displayLevel
+          ? Number(displayLevel)
+          : undefined,
+      activityStatus:
+        slug === "finalreports-trialbalance" && (activityStatus === "active" || activityStatus === "inactive")
+          ? activityStatus
+          : undefined,
+      orderBy:
+        slug === "finalreports-trialbalance" && (orderBy === "code" || orderBy === "name" || orderBy === "balance")
+          ? orderBy
+          : undefined,
+      customerGrouping:
+        slug === "finalreports-trialbalance" && (customerGrouping === "all" || customerGrouping === "zeroBalances" || customerGrouping === "byCategory")
+          ? customerGrouping
+          : undefined,
+      showOpeningMovements: isAccountStatement && showOpeningMovements ? true : undefined,
+      showCounterAccounts: isAccountStatement && showCounterAccounts ? true : undefined,
+      hideDetails: isAccountStatement && hideDetails ? true : undefined,
+      notes: isAccountStatement && notes.trim() ? notes.trim() : undefined,
     });
     refetch();
   };
@@ -381,11 +554,96 @@ export default function ReportHub({ title, section, icon, reports, procedure }: 
       return;
     }
 
+    if (isAccountStatement) {
+      const selectedAccount = (accountsList || []).find((a: { id: number }) => a.id === query.accountId);
+      const accountLabel = selectedAccount
+        ? `${(selectedAccount as { code?: string }).code || ""} ${(selectedAccount as { name: string }).name}`.trim()
+        : "—";
+      const code = query.currencyCode || company?.currency || "EGP";
+      printAccountStatementReport({
+        dateFrom: query.dateFrom,
+        dateTo: query.dateTo,
+        accountLabel,
+        currencyCode: code,
+        rows: rows as Record<string, unknown>[],
+        companyName: companyProps.companyName,
+        companyAddress: companyProps.companyAddress,
+        companyPhone: companyProps.companyPhone,
+        companyMobile: company?.phone2 ?? undefined,
+        companyLogo: companyProps.companyLogo,
+        notes: query.notes,
+        optionFlags: [
+          query.showOpeningMovements ? "عرض حركات الرصيد الافتتاحي" : "",
+          query.showCounterAccounts ? "عرض الحسابات المقابلة" : "",
+          query.hideDetails ? "اخفاء التفاصيل" : "",
+        ].filter(Boolean),
+      });
+      return;
+    }
+
+    if (isCustomerItemStatement) {
+      const customer = (customersList?.rows || []).find((c: { id: number }) => c.id === query.customerId);
+      printFormalAccountingReport({
+        reportName: "كشف حساب عميل بالاصناف",
+        dateFrom: query.dateFrom,
+        dateTo: query.dateTo,
+        metaLine: customer ? `العميل: ${(customer as { name: string }).name}` : undefined,
+        columns: columns.map((key) => ({ key, label: reportColumnLabel(key) })),
+        rows: rows as Record<string, unknown>[],
+        numericKeys: ["outQty","outPrice","outTotal","inQty","inPrice","inTotal","cashBankIn","cashBankOut","checkCollected","checkRejected","otherOps","balance"],
+        dateKeys: ["date"],
+        isSpecialRow: (row) => {
+          const d = String(row.description ?? "");
+          return d === "الرصيد السابق" || d === "اجمالي حركات الفترة";
+        },
+        companyName: companyProps.companyName,
+        companyAddress: companyProps.companyAddress,
+        companyPhone: companyProps.companyPhone,
+        companyMobile: company?.phone2 ?? undefined,
+        companyLogo: companyProps.companyLogo,
+      });
+      return;
+    }
+
+    const isTrialBalance = slug === "finalreports-trialbalance";
+    const isGeneralLedger = slug === "finalreports-generalledger";
+    const customerGroupingMeta =
+      query.customerGrouping === "all" ? "طريقة تجميع العملاء: كل العملاء"
+      : query.customerGrouping === "zeroBalances" ? "طريقة تجميع العملاء: العملاء ذات الارصدة الصفرية"
+      : query.customerGrouping === "byCategory" ? "طريقة تجميع العملاء: تجميع فئة عملاء"
+      : undefined;
+    if (isTrialBalance || isGeneralLedger) {
+      printFormalAccountingReport({
+        reportName: isTrialBalance ? "ميزان المراجعة" : "الاستاذ العام",
+        dateFrom: query.dateFrom,
+        dateTo: query.dateTo,
+        metaLine: isTrialBalance ? customerGroupingMeta : undefined,
+        columns: columns.map((key) => ({ key, label: reportColumnLabel(key) })),
+        rows: rows as Record<string, unknown>[],
+        numericKeys: isTrialBalance
+          ? ["openingDebit", "openingCredit", "periodDebit", "periodCredit", "closingDebit", "closingCredit"]
+          : ["debit", "credit", "balance"],
+        dateKeys: isGeneralLedger ? ["date"] : [],
+        isSpecialRow: isGeneralLedger
+          ? (row) => {
+              const d = String(row.date ?? "");
+              return d === "رصيد سابق" || d === "اجمالى" || d === "اجمالي";
+            }
+          : undefined,
+        companyName: companyProps.companyName,
+        companyAddress: companyProps.companyAddress,
+        companyPhone: companyProps.companyPhone,
+        companyMobile: company?.phone2 ?? undefined,
+        companyLogo: companyProps.companyLogo,
+      });
+      return;
+    }
+
     printTableReport({
       title: reportMeta?.title || title,
       dateFrom: reportMeta?.needsDates ? query.dateFrom : undefined,
       dateTo: reportMeta?.needsDates ? query.dateTo : undefined,
-      columns: columns.map((key) => ({ key, label: reportColumnLabel(key) })),
+      columns: columns.map((key) => ({ key, label: columnLabel(key) })),
       rows: rows as Record<string, unknown>[],
       totals,
       ...companyProps,
@@ -411,7 +669,7 @@ export default function ReportHub({ title, section, icon, reports, procedure }: 
                       <Input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="w-40" />
                     </div>
                     <div>
-                      <Label className="text-xs">إلى تاريخ</Label>
+                      <Label className="text-xs">الى تاريخ</Label>
                       <Input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="w-40" />
                     </div>
                   </>
@@ -429,7 +687,11 @@ export default function ReportHub({ title, section, icon, reports, procedure }: 
                   (suppliersList?.rows || []).map((s: { id: number; name: string }) => ({ id: s.id, label: s.name })),
                 )}
                 {needs("account") && entitySelect(
-                  "الحساب",
+                  slug === "finalreports-trialbalance" || slug === "finalreports-generalledger"
+                    ? "الحساب الرئيسي"
+                    : slug === "accountingreports-accountstatment"
+                      ? "اسم الحساب"
+                      : "الحساب",
                   accountId,
                   setAccountId,
                   (accountsList || []).map((a: { id: number; name: string; code?: string }) => ({ id: a.id, label: `${a.code || ""} ${a.name}`.trim() })),
@@ -516,7 +778,7 @@ export default function ReportHub({ title, section, icon, reports, procedure }: 
                       <Input type="date" value={dueDateFrom} onChange={(e) => setDueDateFrom(e.target.value)} className="w-40" />
                     </div>
                     <div>
-                      <Label className="text-xs">تاريخ استحقاق إلى</Label>
+                      <Label className="text-xs">تاريخ استحقاق الى</Label>
                       <Input type="date" value={dueDateTo} onChange={(e) => setDueDateTo(e.target.value)} className="w-40" />
                     </div>
                   </>
@@ -561,6 +823,107 @@ export default function ReportHub({ title, section, icon, reports, procedure }: 
                     </Select>
                   </div>
                 )}
+                {slug === "finalreports-trialbalance" && (
+                  <>
+                    <div>
+                      <Label className="text-xs">طريقة تجميع العملاء</Label>
+                      <Select
+                        value={customerGrouping || "none"}
+                        onValueChange={(v) => {
+                          const next = v === "none" ? "" : v;
+                          setCustomerGrouping(next);
+                          // ميجا يطلب فئة فقط مع «تجميع فئة عملاء»
+                          if (next !== "byCategory") setCategoryId("");
+                        }}
+                      >
+                        <SelectTrigger className="w-52"><SelectValue placeholder="اختر" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">اختر</SelectItem>
+                          <SelectItem value="all">كل العملاء</SelectItem>
+                          <SelectItem value="zeroBalances">العملاء ذات الارصدة الصفرية</SelectItem>
+                          <SelectItem value="byCategory">تجميع فئة عملاء</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    {customerGrouping === "byCategory" && (
+                      <div>
+                        <Label className="text-xs">فئة العملاء</Label>
+                        <Select value={categoryId || "none"} onValueChange={(v) => setCategoryId(v === "none" ? "" : v)}>
+                          <SelectTrigger className="w-52"><SelectValue placeholder="اختر فئة" /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="none">اختر فئة</SelectItem>
+                            {(contactCategoriesList || [])
+                              .filter((c: { type?: string }) => !c.type || c.type === "customer" || c.type === "both")
+                              .map((c: { id: number; name: string }) => (
+                                <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>
+                              ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
+                    <div>
+                      <Label className="text-xs">مستوى العرض</Label>
+                      <Select value={displayLevel || "all"} onValueChange={(v) => setDisplayLevel(v === "all" ? "" : v)}>
+                        <SelectTrigger className="w-28"><SelectValue placeholder="اختر" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">اختر</SelectItem>
+                          {[2, 3, 4, 5, 6, 7].map((n) => (
+                            <SelectItem key={n} value={String(n)}>{n}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label className="text-xs">حالة النشاط</Label>
+                      <Select value={activityStatus || "all"} onValueChange={(v) => setActivityStatus(v === "all" ? "" : v)}>
+                        <SelectTrigger className="w-44"><SelectValue placeholder="اختر" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">اختر</SelectItem>
+                          <SelectItem value="active">النشط خلال الفترة</SelectItem>
+                          <SelectItem value="inactive">الغير نشط خلال الفترة</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label className="text-xs">ترتيب بـ</Label>
+                      <Select value={orderBy || "code"} onValueChange={setOrderBy}>
+                        <SelectTrigger className="w-44"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="code">كود شجرة الحسابات</SelectItem>
+                          <SelectItem value="name">الاسم</SelectItem>
+                          <SelectItem value="balance">الاعلى رصيد</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <label className="flex items-center gap-2 pb-2 cursor-pointer select-none">
+                      <Checkbox
+                        checked={hideZeroBalances}
+                        onCheckedChange={(v) => setHideZeroBalances(v === true)}
+                      />
+                      <span className="text-xs">اخفاء الارصدة الصفرية</span>
+                    </label>
+                  </>
+                )}
+                {isAccountStatement && (
+                  <>
+                    <div className="min-w-[180px]">
+                      <Label className="text-xs">ملاحظات</Label>
+                      <Input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="ملاحظات التقرير" />
+                    </div>
+                    <label className="flex items-center gap-2 pb-2 cursor-pointer select-none">
+                      <Checkbox checked={showOpeningMovements} onCheckedChange={(v) => setShowOpeningMovements(v === true)} />
+                      <span className="text-xs">عرض حركات الرصيد الافتتاحي</span>
+                    </label>
+                    <label className="flex items-center gap-2 pb-2 cursor-pointer select-none">
+                      <Checkbox checked={showCounterAccounts} onCheckedChange={(v) => setShowCounterAccounts(v === true)} />
+                      <span className="text-xs">عرض الحسابات المقابلة</span>
+                    </label>
+                    <label className="flex items-center gap-2 pb-2 cursor-pointer select-none">
+                      <Checkbox checked={hideDetails} onCheckedChange={(v) => setHideDetails(v === true)} />
+                      <span className="text-xs">اخفاء التفاصيل</span>
+                    </label>
+                  </>
+                )}
                 <div className="flex-1 min-w-[160px]">
                   <Label className="text-xs">بحث</Label>
                   <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="رقم فاتورة / اسم..." />
@@ -589,13 +952,22 @@ export default function ReportHub({ title, section, icon, reports, procedure }: 
                   <thead>
                     <tr style={{ background: "var(--ink-700)", color: "white" }}>
                       {columns.map((col) => (
-                        <th key={col} className="px-3 py-2 text-right font-medium whitespace-nowrap">{reportColumnLabel(col)}</th>
+                        <th key={col} className="px-3 py-2 text-right font-medium whitespace-nowrap">{columnLabel(col)}</th>
                       ))}
                     </tr>
                   </thead>
                   <tbody>
-                    {(rows as Record<string, unknown>[]).map((row, i) => (
-                      <tr key={i} style={{ background: i % 2 === 0 ? "#ffffff" : "var(--paper-50)" }}>
+                    {(rows as Record<string, unknown>[]).map((row, i) => {
+                      const desc = String(row.description ?? "");
+                      const isSpecial = isAccountStatement && (desc === "رصيد سابق" || desc === "اجمالي حركات الفترة");
+                      return (
+                      <tr
+                        key={i}
+                        style={{
+                          background: isSpecial ? "var(--paper-100)" : i % 2 === 0 ? "#ffffff" : "var(--paper-50)",
+                          fontWeight: isSpecial ? 700 : undefined,
+                        }}
+                      >
                         {columns.map((col) => {
                           const val = row[col];
                           const drillSlug = row.drillSlug as string | undefined;
@@ -620,7 +992,8 @@ export default function ReportHub({ title, section, icon, reports, procedure }: 
                           );
                         })}
                       </tr>
-                    ))}
+                      );
+                    })}
                   </tbody>
                   {totals && (
                     <tfoot>

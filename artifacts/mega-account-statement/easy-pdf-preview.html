@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html dir="rtl" lang="ar">
+<head>
+<meta charset="UTF-8" />
+<title>كشف حساب — معاينة PDF (Easy Cash)</title>
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet" />
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: 'Cairo', Tahoma, sans-serif; font-size: 11px; color: #111; background: #e2e8f0; direction: rtl; padding: 24px; }
+.page { background: #fff; padding: 12px 16px; max-width: 1100px; margin: 0 auto; box-shadow: 0 8px 24px rgba(0,0,0,.12); }
+.print-meta { font-size: 9px; color: #555; margin-bottom: 8px; }
+.header { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid #ccc; }
+.company-info { text-align: right; line-height: 1.55; }
+.company-info .name { font-size: 15px; font-weight: 800; color: #0f172a; margin-bottom: 2px; }
+.company-info .line { font-size: 10px; color: #334155; }
+.company-info .lbl { color: #64748b; margin-left: 4px; }
+.logo-wrap { text-align: left; min-width: 120px; font-size: 12px; color: #64748b; border: 1px dashed #cbd5e1; padding: 16px; }
+.report-title { text-align: center; font-size: 15px; font-weight: 800; margin: 10px 0 6px; color: #0f172a; }
+.report-meta { text-align: center; font-size: 11px; color: #334155; margin-bottom: 10px; }
+.account-banner { border: 2px solid #111; padding: 5px 10px; font-weight: 700; font-size: 12px; background: #f8fafc; }
+table { width: 100%; border-collapse: collapse; border: 1px solid #333; }
+thead th { background: #f1f5f9; color: #0f172a; border: 1px solid #333; padding: 5px 6px; font-size: 10.5px; font-weight: 700; white-space: nowrap; text-align: center; }
+tbody td { border: 1px solid #94a3b8; padding: 4px 6px; font-size: 10px; vertical-align: top; }
+td.center { text-align: center; white-space: nowrap; }
+td.num { text-align: left; font-variant-numeric: tabular-nums; white-space: nowrap; direction: ltr; }
+td.desc { text-align: right; white-space: pre-wrap; max-width: 280px; line-height: 1.35; }
+tr.row-opening td, tr.row-total td { font-weight: 800; background: #f8fafc; }
+tr.row-total td { border-top: 2px solid #111; }
+.footer { text-align: center; font-size: 9px; color: #94a3b8; margin-top: 10px; padding-top: 6px; border-top: 1px solid #e2e8f0; }
+.badge { display:inline-block; background:#12222c; color:#fff; font-size:10px; padding:4px 8px; margin-bottom:12px; }
+</style>
+</head>
+<body>
+<div class="badge">معاينة تخطيط PDF كشف حساب — Easy Cash (مطابق أسلوب ميجا، بيانات تجريبية للتينانت)</div>
+<div class="page">
+  <div class="print-meta">وقت الطباعة: ١٣‏/٩‏/٢٠٢٦، ١٢:٤٠ م</div>
+  <div class="header">
+    <div class="company-info">
+      <div class="name">شركة تجريبية للصناعات</div>
+      <div class="line"><span class="lbl">تليفون:</span>01200000000</div>
+      <div class="line"><span class="lbl">موبايل:</span>01000000000</div>
+      <div class="line"><span class="lbl">العنوان:</span>القاهرة — مصر</div>
+    </div>
+    <div class="logo-wrap">شعار الشركة</div>
+  </div>
+  <div class="report-title">كشف حساب فى الفترة من 01/09/2026 الى 13/09/2026 بالعملة جنيه مصري</div>
+  <div class="report-meta">من تاريخ: 01/09/2026    الى تاريخ: 13/09/2026    اسم الحساب: 1020222 بنك تجارى</div>
+  <div class="account-banner">1020222 بنك تجارى</div>
+  <table>
+    <thead>
+      <tr>
+        <th>التاريخ</th><th>رقم القيد</th><th>رقم المستند</th><th>مدين</th><th>دائن</th><th>الرصيد</th><th>سعر الصرف</th><th>الوصف</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr class="row-opening">
+        <td class="center"></td><td class="center"></td><td class="center"></td>
+        <td class="num"></td><td class="num"></td><td class="num">1,250,000.00</td><td class="num">1.00</td>
+        <td class="desc">رصيد سابق</td>
+      </tr>
+      <tr>
+        <td class="center">01/09/2026</td><td class="center">OP.1001</td><td class="center">BnkWit.10</td>
+        <td class="num"></td><td class="num">70,000.00</td><td class="num">1,180,000.00</td><td class="num">1.00</td>
+        <td class="desc">تحويل بنكي</td>
+      </tr>
+      <tr>
+        <td class="center">05/09/2026</td><td class="center">OP.1008</td><td class="center">BnkDep.4</td>
+        <td class="num">25,000.00</td><td class="num"></td><td class="num">1,205,000.00</td><td class="num">1.00</td>
+        <td class="desc">إيداع نقدية</td>
+      </tr>
+      <tr class="row-total">
+        <td class="center"></td><td class="center"></td><td class="center"></td>
+        <td class="num">25,000.00</td><td class="num">70,000.00</td><td class="num">1,205,000.00</td><td class="num"></td>
+        <td class="desc">اجمالي حركات الفترة</td>
+      </tr>
+    </tbody>
+  </table>
+  <div class="footer"><p>تم إنشاء هذا التقرير بواسطة نظام Easy Cash للمحاسبة والإدارة المتكاملة</p></div>
+</div>
+</body>
+</html>

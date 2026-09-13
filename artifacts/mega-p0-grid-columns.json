@@ -1,0 +1,202 @@
+{
+  "extraction_date": "2026-09-12T14:48:46.826Z",
+  "loginUrl": "https://km.mega-cash.net/",
+  "reports": {
+    "trial_balance": {
+      "url": "https://km.mega-cash.net/FinalReports/TrialBalance.aspx",
+      "status": "UNKNOWN",
+      "headers": null,
+      "blocker": "عرض done; ifViewer blank; no non-calendar headers/excel",
+      "prep": {
+        "ok": true,
+        "from": "01/01/2022",
+        "to": "12/09/2026",
+        "account": null,
+        "accountHf": null
+      },
+      "excel": {
+        "ok": false,
+        "reason": "no-download",
+        "clicked": {
+          "ok": true,
+          "id": "cph_btnExportToExcel"
+        }
+      },
+      "viewerUrl": null,
+      "frameSummary": {
+        "https://km.mega-cash.net/": {
+          "url": "https://km.mega-cash.net/",
+          "ths": [],
+          "tables": 0,
+          "snippet": "القائمةخروجtestالتنبيهات16المستندات المعلقةKM-01_01_2022شاشة الكاشيرEnglish سبتمبر 12 السبت اعدادات عامة العملاء والموردين شئون الموظفين المخازن فواتير الشراء فواتير المبيعات مندوبين البيع معاملات نقد",
+          "iframes": [
+            {
+              "name": "MainIframe",
+              "id": "MainIframe",
+              "src": "https://km.mega-cash.net/FinalReports/TrialBalance.aspx"
+            },
+            {
+              "name": "",
+              "id": "",
+              "src": "https://km.mega-cash.net/Main/SessionRefresh.aspx"
+            }
+          ]
+        },
+        "MainIframe": {
+          "url": "https://km.mega-cash.net/FinalReports/TrialBalance.aspx",
+          "ths": [],
+          "tables": 4,
+          "snippet": "ميزان المراجعة تلقائي (4) تلقائي (3) تلقائي (2) تلقائي (1) 0 1 2 3 4 يسار وسط يمين اكسل بالتنسيق اكسل بدون تنسيق تفعيل الروابط تعطيل الروابط KM-01_01_2022 بحث بحث الفرع من تاريخ الى تاريخ الحساب الرئي",
+          "iframes": [
+            {
+              "name": "ifViewer",
+              "id": "cph_ifViewer",
+              "src": ""
+            }
+          ]
+        },
+        "ifViewer": {
+          "url": "about:blank",
+          "ths": [],
+          "tables": 0,
+          "snippet": "",
+          "iframes": []
+        }
+      },
+      "shot": "/workspace/artifacts/mega-p0-grids/trial_balance-v3.png",
+      "candidates": []
+    },
+    "general_ledger": {
+      "url": "https://km.mega-cash.net/FinalReports/GeneralLedger.aspx",
+      "status": "UNKNOWN",
+      "headers": null,
+      "blocker": "عرض done; ifViewer blank; no non-calendar headers/excel",
+      "prep": {
+        "ok": true,
+        "from": "01/01/2022",
+        "to": "12/09/2026",
+        "account": null,
+        "accountHf": null
+      },
+      "excel": {
+        "ok": false,
+        "reason": "no-download",
+        "clicked": {
+          "ok": true,
+          "id": "cph_btnExportToExcel"
+        }
+      },
+      "viewerUrl": null,
+      "frameSummary": {
+        "https://km.mega-cash.net/": {
+          "url": "https://km.mega-cash.net/",
+          "ths": [],
+          "tables": 0,
+          "snippet": "القائمةخروجtestالتنبيهات16المستندات المعلقةKM-01_01_2022شاشة الكاشيرEnglish سبتمبر 12 السبت اعدادات عامة العملاء والموردين شئون الموظفين المخازن فواتير الشراء فواتير المبيعات مندوبين البيع معاملات نقد",
+          "iframes": [
+            {
+              "name": "MainIframe",
+              "id": "MainIframe",
+              "src": "https://km.mega-cash.net/FinalReports/GeneralLedger.aspx"
+            },
+            {
+              "name": "",
+              "id": "",
+              "src": "https://km.mega-cash.net/Main/SessionRefresh.aspx"
+            }
+          ]
+        },
+        "MainIframe": {
+          "url": "https://km.mega-cash.net/FinalReports/GeneralLedger.aspx",
+          "ths": [],
+          "tables": 4,
+          "snippet": "الاستاذ العام تلقائي (4) تلقائي (3) تلقائي (2) تلقائي (1) 0 1 2 3 4 يسار وسط يمين اكسل بالتنسيق اكسل بدون تنسيق تفعيل الروابط تعطيل الروابط KM-01_01_2022 بحث بحث الفرع الحساب الرئيسى مركز التكلفة من ت",
+          "iframes": [
+            {
+              "name": "ifViewer",
+              "id": "cph_ifViewer",
+              "src": ""
+            }
+          ]
+        },
+        "ifViewer": {
+          "url": "about:blank",
+          "ths": [],
+          "tables": 0,
+          "snippet": "",
+          "iframes": []
+        }
+      },
+      "shot": "/workspace/artifacts/mega-p0-grids/general_ledger-v3.png",
+      "candidates": []
+    },
+    "account_statement": {
+      "url": "https://km.mega-cash.net/AccountingReports/AccountStatment.aspx",
+      "status": "UNKNOWN",
+      "headers": null,
+      "blocker": "عرض done; ifViewer blank; no non-calendar headers/excel",
+      "prep": {
+        "ok": true,
+        "from": "01/01/2022",
+        "to": "12/09/2026",
+        "account": "1",
+        "accountHf": null
+      },
+      "excel": {
+        "ok": false,
+        "reason": "no-download",
+        "clicked": {
+          "ok": true,
+          "id": "cph_btnExportToExcel"
+        }
+      },
+      "viewerUrl": null,
+      "frameSummary": {
+        "https://km.mega-cash.net/": {
+          "url": "https://km.mega-cash.net/",
+          "ths": [],
+          "tables": 0,
+          "snippet": "القائمةخروجtestالتنبيهات16المستندات المعلقةKM-01_01_2022شاشة الكاشيرEnglish سبتمبر 12 السبت اعدادات عامة العملاء والموردين شئون الموظفين المخازن فواتير الشراء فواتير المبيعات مندوبين البيع معاملات نقد",
+          "iframes": [
+            {
+              "name": "MainIframe",
+              "id": "MainIframe",
+              "src": "https://km.mega-cash.net/AccountingReports/AccountStatment.aspx"
+            },
+            {
+              "name": "",
+              "id": "",
+              "src": "https://km.mega-cash.net/Main/SessionRefresh.aspx"
+            }
+          ]
+        },
+        "MainIframe": {
+          "url": "https://km.mega-cash.net/AccountingReports/AccountStatment.aspx",
+          "ths": [],
+          "tables": 4,
+          "snippet": "كشف حساب تلقائي (4) تلقائي (3) تلقائي (2) تلقائي (1) 0 1 2 3 4 يسار وسط يمين اكسل بالتنسيق اكسل بدون تنسيق تفعيل الروابط تعطيل الروابط KM-01_01_2022 بحث بحث الفرع العملة اختر جنيه مصري جنيه استرليني ج",
+          "iframes": [
+            {
+              "name": "ifViewer",
+              "id": "cph_ifViewer",
+              "src": ""
+            }
+          ]
+        },
+        "ifViewer": {
+          "url": "about:blank",
+          "ths": [],
+          "tables": 0,
+          "snippet": "",
+          "iframes": []
+        }
+      },
+      "shot": "/workspace/artifacts/mega-p0-grids/account_statement-v3.png",
+      "candidates": []
+    }
+  },
+  "notes": [
+    "No invented headers",
+    "Calendar noise rejected"
+  ]
+}

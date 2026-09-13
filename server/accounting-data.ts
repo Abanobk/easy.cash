@@ -8,6 +8,7 @@ import {
   cashTransactions,
   checks,
   costCenters,
+  contactCategories,
   customers,
   items,
   journalEntries,
@@ -52,6 +53,33 @@ export type ReportFilters = {
   paymentStatus?: "paid" | "partial" | "unpaid";
   taxFilter?: "with" | "without";
   discountFilter?: "with" | "without";
+  /** ميجا: اخفاء الارصدة الصفرية — افتراضي false (تعرض الأصفار) */
+  hideZeroBalances?: boolean;
+  /**
+   * ميجا ميزان المراجعة — مستوى العرض (2..7 من قائمة ميجا).
+   * نطبّقه كعمق الحساب في الشجرة (الجذر = 1).
+   */
+  displayLevel?: number;
+  /** ميجا: حالة النشاط — النشط/الغير نشط خلال الفترة */
+  activityStatus?: "active" | "inactive";
+  /** ميجا: ترتيب بـ — كود شجرة الحسابات / الاسم / الاعلى رصيد */
+  orderBy?: "code" | "name" | "balance";
+  /**
+   * ميجا ميزان المراجعة — طريقة تجميع العملاء
+   * مرجع PDF ميجا 2026-09-13:
+   * - all: سطر واحد «مجمع العملاء (كل العملاء)»
+   * - zeroBalances: «مجمع العملاء (الارصدة الصفرية)» + تفصيل العملاء غير الصفريين
+   * - byCategory: ميجا يطلب اختيار فئة عملاء (`categoryId`) قبل العرض
+   */
+  customerGrouping?: "all" | "zeroBalances" | "byCategory";
+  /** ميجا كشف حساب: عرض حركات الرصيد الافتتاحي */
+  showOpeningMovements?: boolean;
+  /** ميجا كشف حساب: عرض الحسابات المقابلة */
+  showCounterAccounts?: boolean;
+  /** ميجا كشف حساب: اخفاء التفاصيل (= ملخص الفترة فقط) */
+  hideDetails?: boolean;
+  /** ميجا كشف حساب: ملاحظات (تظهر في رأس PDF) */
+  notes?: string;
 };
 
 function dueDateConds(table: { dueDate: Column<any, object, object> }, from?: string, to?: string) {
@@ -259,10 +287,691 @@ export async function loadPostedJournalLines(db: Db, filters: ReportFilters) {
   });
 }
 
-export async function trialBalanceReport(db: Db, filters: ReportFilters) {
+/**
+ * كشف حساب — شكل ميجا من «كشف حساب.xlsx» (تصميم/تشغيل، على بيانات التينانت):
+ * أعمدة: التاريخ، رقم القيد، رقم المستند، مدين، دائن، الرصيد، سعر الصرف، الوصف
+ * صفوف: رصيد سابق → حركات الفترة → اجمالي حركات الفترة
+ * الحساب مطلوب زي ميجا (اسم الحساب).
+ */
+export async function accountStatementReport(db: Db, filters: ReportFilters) {
+  if (filters.accountId == null) return [];
+
+  const [account] = await db.select().from(accounts)
+    .where(tenantWhere(accounts, filters.tenantId, eq(accounts.id, filters.accountId)));
+  if (!account) return [];
+
+  const costCenterCond = filters.costCenterId
+    ? eq(journalEntryLines.costCenterId, filters.costCenterId)
+    : undefined;
+
+  const hideDetails = filters.hideDetails === true;
+  const showOpeningMovements = filters.showOpeningMovements === true;
+  const showCounterAccounts = filters.showCounterAccounts === true;
+
+  // رصيد سابق قبل dateFrom (نفس أسلوب ميزان/أستاذ عندنا)
+  let openingNet = 0;
+  let openingDetailRows: {
+    entryNumber: string;
+    entryReference: string | null;
+    entryDate: Date | string | null;
+    entryDescription: string | null;
+    debit: unknown;
+    credit: unknown;
+    lineDescription: string | null;
+    entryId: number;
+  }[] = [];
+
+  if (filters.dateFrom) {
+    const openingLines = await db.select({
+      entryId: journalEntries.id,
+      entryNumber: journalEntries.number,
+      entryReference: journalEntries.reference,
+      entryDate: journalEntries.date,
+      entryDescription: journalEntries.description,
+      debit: journalEntryLines.debit,
+      credit: journalEntryLines.credit,
+      lineDescription: journalEntryLines.description,
+    }).from(journalEntryLines)
+      .innerJoin(journalEntries, eq(journalEntryLines.entryId, journalEntries.id))
+      .where(tenantWhere(journalEntries, filters.tenantId,
+        and(
+          eq(journalEntries.status, "posted"),
+          eq(journalEntryLines.accountId, filters.accountId),
+          lt(journalEntries.date, filters.dateFrom as any),
+        ),
+        costCenterCond))
+      .orderBy(asc(journalEntries.date), asc(journalEntries.id));
+    for (const l of openingLines) openingNet += num(l.debit) - num(l.credit);
+    if (filters.costCenterId == null) openingNet += num(account.balance);
+    openingDetailRows = openingLines;
+  } else if (filters.costCenterId == null) {
+    openingNet = num(account.balance);
+  }
+
+  const periodDateParts = dateConds(journalEntries, filters.dateFrom, filters.dateTo);
+  const periodRows = await db.select({
+    entryId: journalEntries.id,
+    entryNumber: journalEntries.number,
+    entryReference: journalEntries.reference,
+    entryDate: journalEntries.date,
+    entryDescription: journalEntries.description,
+    debit: journalEntryLines.debit,
+    credit: journalEntryLines.credit,
+    lineDescription: journalEntryLines.description,
+  }).from(journalEntryLines)
+    .innerJoin(journalEntries, eq(journalEntryLines.entryId, journalEntries.id))
+    .where(tenantWhere(journalEntries, filters.tenantId,
+      and(
+        eq(journalEntries.status, "posted"),
+        eq(journalEntryLines.accountId, filters.accountId),
+        ...(periodDateParts.length ? [and(...periodDateParts)] : []),
+      ),
+      costCenterCond))
+    .orderBy(asc(journalEntries.date), asc(journalEntries.id));
+
+  // ميجا: عرض الحسابات المقابلة — أسماء الحسابات الأخرى في نفس القيد
+  const counterByEntry = new Map<number, string>();
+  if (showCounterAccounts && !hideDetails) {
+    const entryIds = Array.from(new Set([
+      ...openingDetailRows.map((r) => r.entryId),
+      ...periodRows.map((r) => r.entryId),
+    ].filter(Boolean)));
+    if (entryIds.length) {
+      const otherLines = await db.select({
+        entryId: journalEntryLines.entryId,
+        accountId: journalEntryLines.accountId,
+        accountCode: accounts.code,
+        accountName: accounts.name,
+      }).from(journalEntryLines)
+        .innerJoin(accounts, eq(journalEntryLines.accountId, accounts.id))
+        .where(and(
+          tenantWhere(journalEntryLines, filters.tenantId),
+          inArray(journalEntryLines.entryId, entryIds),
+        ));
+      for (const l of otherLines) {
+        if (l.accountId === filters.accountId) continue;
+        const label = `${l.accountCode || ""} ${l.accountName || ""}`.trim();
+        if (!label) continue;
+        const prev = counterByEntry.get(l.entryId);
+        counterByEntry.set(l.entryId, prev ? `${prev}، ${label}` : label);
+      }
+    }
+  }
+
+  const out: Record<string, unknown>[] = [];
+  let running = openingNet;
+  let periodDebit = 0;
+  let periodCredit = 0;
+
+  /**
+   * ميجا PDF مع «اخفاء التفاصيل»: بدون سطور حركات وبدون رصيد سابق —
+   * صف واحد «اجمالي حركات الفترة» (مدين/دائن الفترة + الرصيد الختامي).
+   * المرجع: artifacts/mega-account-statement/كشف-حساب-2-hide-details.pdf
+   */
+  if (hideDetails) {
+    for (const r of periodRows) {
+      periodDebit += num(r.debit);
+      periodCredit += num(r.credit);
+      running += num(r.debit) - num(r.credit);
+    }
+    out.push({
+      date: "",
+      entryNumber: "",
+      documentNumber: "",
+      debit: periodDebit,
+      credit: periodCredit,
+      balance: running,
+      exchangeRate: "",
+      description: "اجمالي حركات الفترة",
+    });
+    return out;
+  }
+
+  // ميجا: صف «رصيد سابق» — أو تفصيل حركات ما قبل الفترة عند تفعيل الخيار
+  if (showOpeningMovements && openingDetailRows.length) {
+    let openRunning = filters.costCenterId == null ? num(account.balance) : 0;
+    // لو الرصيد المخزّن يُضاف للحركات قبل الفترة، نبدأ من المخزّن ثم نراكم الحركات
+    // نفس openingNet النهائي؛ نعرض كل حركة مع رصيد جاري حتى بداية الفترة
+    // أبسط وأوضح: صف رصيد أساس (إن وُجد رصيد مخزّن) ثم حركات ما قبل الفترة
+    if (filters.costCenterId == null && Math.abs(num(account.balance)) > 0.0001) {
+      out.push({
+        date: "",
+        entryNumber: "",
+        documentNumber: "",
+        debit: 0,
+        credit: 0,
+        balance: num(account.balance),
+        exchangeRate: 1,
+        description: "رصيد سابق",
+      });
+      openRunning = num(account.balance);
+    } else {
+      openRunning = 0;
+    }
+    for (const r of openingDetailRows) {
+      const debit = num(r.debit);
+      const credit = num(r.credit);
+      openRunning += debit - credit;
+      const baseDesc = r.lineDescription || r.entryDescription || "";
+      const counter = counterByEntry.get(r.entryId);
+      out.push({
+        date: dateOnly(r.entryDate),
+        entryNumber: r.entryNumber || "",
+        documentNumber: r.entryReference || "",
+        debit,
+        credit,
+        balance: openRunning,
+        exchangeRate: 1,
+        description: counter ? `${baseDesc}${baseDesc ? " — " : ""}مقابل: ${counter}` : baseDesc,
+      });
+    }
+    running = openingNet;
+  } else {
+    out.push({
+      date: "",
+      entryNumber: "",
+      documentNumber: "",
+      debit: 0,
+      credit: 0,
+      balance: openingNet,
+      exchangeRate: 1,
+      description: "رصيد سابق",
+    });
+  }
+
+  for (const r of periodRows) {
+    const debit = num(r.debit);
+    const credit = num(r.credit);
+    running += debit - credit;
+    periodDebit += debit;
+    periodCredit += credit;
+    const baseDesc = r.lineDescription || r.entryDescription || "";
+    const counter = counterByEntry.get(r.entryId);
+    out.push({
+      date: dateOnly(r.entryDate),
+      entryNumber: r.entryNumber || "",
+      documentNumber: r.entryReference || "",
+      debit,
+      credit,
+      balance: running,
+      exchangeRate: 1,
+      description: counter ? `${baseDesc}${baseDesc ? " — " : ""}مقابل: ${counter}` : baseDesc,
+    });
+  }
+
+  out.push({
+    date: "",
+    entryNumber: "",
+    documentNumber: "",
+    debit: periodDebit,
+    credit: periodCredit,
+    balance: running,
+    exchangeRate: "",
+    description: "اجمالي حركات الفترة",
+  });
+
+  return out;
+}
+
+export async function generalLedgerReport(db: Db, filters: ReportFilters) {
   const allAccounts = await db.select().from(accounts)
     .where(tenantWhere(accounts, filters.tenantId, eq(accounts.isActive, true)))
     .orderBy(accounts.code);
+
+  const root = filters.accountId != null
+    ? allAccounts.find((a) => a.id === filters.accountId)
+    : undefined;
+  const rootCode = root?.code;
+
+  const childrenOf = new Map<number, number[]>();
+  for (const a of allAccounts) {
+    if (a.parentId == null) continue;
+    const list = childrenOf.get(a.parentId) || [];
+    list.push(a.id);
+    childrenOf.set(a.parentId, list);
+  }
+
+  const leafIdsUnder = (accountId: number): number[] => {
+    const kids = childrenOf.get(accountId) || [];
+    if (!kids.length) return [accountId];
+    const out: number[] = [];
+    for (const kid of kids) out.push(...leafIdsUnder(kid));
+    return out.length ? out : [accountId];
+  };
+
+  const inScope = (a: (typeof allAccounts)[number]) => {
+    if (filters.accountId == null) return true;
+    if (a.id === filters.accountId) return true;
+    if (rootCode && a.code?.startsWith(rootCode)) return true;
+    return a.parentId === filters.accountId;
+  };
+
+  const scoped = allAccounts.filter(inScope);
+  if (!scoped.length) return [];
+
+  const costCenterCond = filters.costCenterId
+    ? eq(journalEntryLines.costCenterId, filters.costCenterId)
+    : undefined;
+
+  // حركات قبل الفترة (لرصيد سابق) — مع احترام مركز التكلفة إن وُجد
+  const openingDateParts = filters.dateFrom
+    ? [lt(journalEntries.date, filters.dateFrom as any)]
+    : [];
+  const openingLines = await db.select({
+    accountId: journalEntryLines.accountId,
+    debit: journalEntryLines.debit,
+    credit: journalEntryLines.credit,
+  }).from(journalEntryLines)
+    .innerJoin(journalEntries, eq(journalEntryLines.entryId, journalEntries.id))
+    .where(tenantWhere(journalEntries, filters.tenantId,
+      and(eq(journalEntries.status, "posted"), ...openingDateParts),
+      costCenterCond));
+
+  const openingByAccount = new Map<number, { debit: number; credit: number }>();
+  for (const l of openingLines) {
+    const cur = openingByAccount.get(l.accountId) || { debit: 0, credit: 0 };
+    cur.debit += num(l.debit);
+    cur.credit += num(l.credit);
+    openingByAccount.set(l.accountId, cur);
+  }
+
+  // حركات الفترة مع التاريخ للتجميع اليومي
+  const periodDateParts = dateConds(journalEntries, filters.dateFrom, filters.dateTo);
+  const periodLines = await db.select({
+    accountId: journalEntryLines.accountId,
+    entryDate: journalEntries.date,
+    debit: journalEntryLines.debit,
+    credit: journalEntryLines.credit,
+  }).from(journalEntryLines)
+    .innerJoin(journalEntries, eq(journalEntryLines.entryId, journalEntries.id))
+    .where(tenantWhere(journalEntries, filters.tenantId,
+      and(eq(journalEntries.status, "posted"), ...(periodDateParts.length ? [and(...periodDateParts)] : [])),
+      costCenterCond))
+    .orderBy(asc(journalEntries.date));
+
+  const periodByAccountDate = new Map<number, Map<string, { debit: number; credit: number }>>();
+  for (const l of periodLines) {
+    const d = dateOnly(l.entryDate);
+    let byDate = periodByAccountDate.get(l.accountId);
+    if (!byDate) {
+      byDate = new Map();
+      periodByAccountDate.set(l.accountId, byDate);
+    }
+    const cur = byDate.get(d) || { debit: 0, credit: 0 };
+    cur.debit += num(l.debit);
+    cur.credit += num(l.credit);
+    byDate.set(d, cur);
+  }
+
+  const useStoredBalance = filters.costCenterId == null;
+  const out: Record<string, unknown>[] = [];
+
+  for (const a of scoped) {
+    const leaves = a.isParent ? leafIdsUnder(a.id) : [a.id];
+    let openingNet = 0;
+    for (const leafId of leaves) {
+      const leaf = allAccounts.find((x) => x.id === leafId);
+      const open = openingByAccount.get(leafId) || { debit: 0, credit: 0 };
+      openingNet += (useStoredBalance ? num(leaf?.balance) : 0) + open.debit - open.credit;
+    }
+
+    const daily = new Map<string, { debit: number; credit: number }>();
+    for (const leafId of leaves) {
+      const byDate = periodByAccountDate.get(leafId);
+      if (!byDate) continue;
+      for (const [d, m] of byDate) {
+        const cur = daily.get(d) || { debit: 0, credit: 0 };
+        cur.debit += m.debit;
+        cur.credit += m.credit;
+        daily.set(d, cur);
+      }
+    }
+
+    if (Math.abs(openingNet) < 0.0001 && daily.size === 0) continue;
+
+    // ميجا: صف «رصيد سابق»
+    out.push({
+      accountCode: a.code,
+      accountName: a.name,
+      date: "رصيد سابق",
+      debit: 0,
+      credit: 0,
+      balance: openingNet,
+    });
+
+    let running = openingNet;
+    let totalDebit = 0;
+    let totalCredit = 0;
+    const dates = [...daily.keys()].sort();
+    for (const d of dates) {
+      const m = daily.get(d)!;
+      running += m.debit - m.credit;
+      totalDebit += m.debit;
+      totalCredit += m.credit;
+      out.push({
+        accountCode: a.code,
+        accountName: a.name,
+        date: d,
+        debit: m.debit,
+        credit: m.credit,
+        balance: running,
+      });
+    }
+
+    // ميجا: صف «اجمالى» لحركة الفترة
+    out.push({
+      accountCode: a.code,
+      accountName: a.name,
+      date: "اجمالى",
+      debit: totalDebit,
+      credit: totalCredit,
+      balance: running,
+    });
+  }
+
+  return out;
+}
+
+
+type TbRow = {
+  accountCode: string;
+  accountName: string;
+  openingDebit: number;
+  openingCredit: number;
+  periodDebit: number;
+  periodCredit: number;
+  closingDebit: number;
+  closingCredit: number;
+};
+
+function tbRowFromNets(opts: {
+  accountCode: string;
+  accountName: string;
+  openingNet: number;
+  periodDebit: number;
+  periodCredit: number;
+  closingNet: number;
+}): TbRow {
+  return {
+    accountCode: opts.accountCode,
+    accountName: opts.accountName,
+    openingDebit: opts.openingNet > 0 ? opts.openingNet : 0,
+    openingCredit: opts.openingNet < 0 ? Math.abs(opts.openingNet) : 0,
+    periodDebit: opts.periodDebit,
+    periodCredit: opts.periodCredit,
+    closingDebit: opts.closingNet > 0 ? opts.closingNet : 0,
+    closingCredit: opts.closingNet < 0 ? Math.abs(opts.closingNet) : 0,
+  };
+}
+
+function isCustomersArAccountName(name: string) {
+  const n = name.replace(/\s+/g, "");
+  // حساب ذمم العملاء / العملاء — مع تجنب مصروفات مثل «عينات للعملاء»
+  if (/عين|مصروف|ايراد|إيراد|خصم/.test(name)) return false;
+  return /العملاء|حساباتالعملاء|عملاء/.test(n) || /مدينون/.test(name);
+}
+
+/** أرصدة العملاء للميزان — من دفتر الذمم (فواتير/مرتجعات/نقدية/بنك/شيكات) */
+async function loadCustomerArMetricsForTrialBalance(db: Db, filters: ReportFilters) {
+  type M = {
+    id: number;
+    code: string | null;
+    name: string;
+    categoryId: number | null;
+    openingNet: number;
+    periodDebit: number;
+    periodCredit: number;
+    closingNet: number;
+  };
+  const custRows = await db.select({
+    id: customers.id,
+    code: customers.code,
+    name: customers.name,
+    categoryId: customers.categoryId,
+    openingBalance: customers.openingBalance,
+  }).from(customers)
+    .where(tenantWhere(customers, filters.tenantId, eq(customers.isActive, true)));
+
+  const map = new Map<number, M>();
+  for (const c of custRows) {
+    map.set(c.id, {
+      id: c.id,
+      code: c.code,
+      name: c.name,
+      categoryId: c.categoryId,
+      openingNet: num(c.openingBalance),
+      periodDebit: 0,
+      periodCredit: 0,
+      closingNet: 0,
+    });
+  }
+  const ensure = (id: number) => map.get(id);
+
+  const applyBefore = (customerId: number, delta: number) => {
+    const m = ensure(customerId);
+    if (!m) return;
+    m.openingNet += delta;
+  };
+  const applyPeriod = (customerId: number, debit: number, credit: number) => {
+    const m = ensure(customerId);
+    if (!m) return;
+    m.periodDebit += debit;
+    m.periodCredit += credit;
+  };
+
+  const dateFrom = filters.dateFrom;
+  const dateTo = filters.dateTo;
+
+  // مبيعات
+  const salesRows = await db.select({
+    customerId: salesInvoices.customerId,
+    date: salesInvoices.date,
+    total: salesInvoices.total,
+  }).from(salesInvoices)
+    .where(tenantWhere(salesInvoices, filters.tenantId,
+      and(salesPostedFilter(),
+        reportBranchCond(salesInvoices.branchId, filters),
+        filters.currencyCode ? eq(salesInvoices.currencyCode, filters.currencyCode) : undefined)));
+  for (const r of salesRows) {
+    if (r.customerId == null) continue;
+    const d = dateOnly(r.date);
+    const amt = num(r.total);
+    if (dateFrom && d < dateFrom) applyBefore(r.customerId, amt);
+    else if ((!dateFrom || d >= dateFrom) && (!dateTo || d <= dateTo)) applyPeriod(r.customerId, amt, 0);
+  }
+
+  // مرتجعات مبيعات
+  const retRows = await db.select({
+    customerId: salesReturns.customerId,
+    date: salesReturns.date,
+    total: salesReturns.total,
+  }).from(salesReturns)
+    .where(tenantWhere(salesReturns, filters.tenantId));
+  for (const r of retRows) {
+    if (r.customerId == null) continue;
+    const d = dateOnly(r.date);
+    const amt = num(r.total);
+    if (dateFrom && d < dateFrom) applyBefore(r.customerId, -amt);
+    else if ((!dateFrom || d >= dateFrom) && (!dateTo || d <= dateTo)) applyPeriod(r.customerId, 0, amt);
+  }
+
+  // نقدية
+  const cashRows = await db.select({
+    customerId: cashTransactions.customerId,
+    date: cashTransactions.date,
+    amount: cashTransactions.amount,
+    type: cashTransactions.type,
+  }).from(cashTransactions)
+    .where(tenantWhere(cashTransactions, filters.tenantId));
+  for (const r of cashRows) {
+    if (r.customerId == null) continue;
+    const d = dateOnly(r.date);
+    const amt = num(r.amount);
+    const isReceive = String(r.type).includes("receive");
+    const delta = isReceive ? -amt : amt; // قبض يخفض الذمة
+    if (dateFrom && d < dateFrom) applyBefore(r.customerId, delta);
+    else if ((!dateFrom || d >= dateFrom) && (!dateTo || d <= dateTo)) {
+      if (isReceive) applyPeriod(r.customerId, 0, amt);
+      else applyPeriod(r.customerId, amt, 0);
+    }
+  }
+
+  // بنك
+  const bankRows = await db.select({
+    customerId: bankTransactions.customerId,
+    date: bankTransactions.date,
+    amount: bankTransactions.amount,
+    type: bankTransactions.type,
+  }).from(bankTransactions)
+    .where(tenantWhere(bankTransactions, filters.tenantId));
+  for (const r of bankRows) {
+    if (r.customerId == null) continue;
+    const d = dateOnly(r.date);
+    const amt = num(r.amount);
+    const isDeposit = String(r.type).includes("deposit");
+    const delta = isDeposit ? -amt : amt;
+    if (dateFrom && d < dateFrom) applyBefore(r.customerId, delta);
+    else if ((!dateFrom || d >= dateFrom) && (!dateTo || d <= dateTo)) {
+      if (isDeposit) applyPeriod(r.customerId, 0, amt);
+      else applyPeriod(r.customerId, amt, 0);
+    }
+  }
+
+  // شيكات واردة
+  const checkRows = await db.select({
+    customerId: checks.customerId,
+    date: checks.date,
+    amount: checks.amount,
+    status: checks.status,
+    type: checks.type,
+  }).from(checks)
+    .where(tenantWhere(checks, filters.tenantId, eq(checks.type, "incoming")));
+  for (const r of checkRows) {
+    if (r.customerId == null) continue;
+    if (r.status === "bounced" || r.status === "cancelled") continue;
+    const d = dateOnly(r.date);
+    const amt = num(r.amount);
+    if (dateFrom && d < dateFrom) applyBefore(r.customerId, -amt);
+    else if ((!dateFrom || d >= dateFrom) && (!dateTo || d <= dateTo)) applyPeriod(r.customerId, 0, amt);
+  }
+
+  for (const m of map.values()) {
+    m.closingNet = m.openingNet + m.periodDebit - m.periodCredit;
+  }
+  return [...map.values()];
+}
+
+async function applyCustomerGroupingToTrialBalance(
+  db: Db,
+  filters: ReportFilters,
+  rows: TbRow[],
+): Promise<TbRow[]> {
+  const mode = filters.customerGrouping;
+  if (!mode) return rows;
+
+  const arIdxs: number[] = [];
+  for (let i = 0; i < rows.length; i++) {
+    const r = rows[i];
+    if (!isCustomersArAccountName(String(r.accountName || ""))) continue;
+    // تجاهل الآباء الملخصين إن وُجدت ورقة أوضح لاحقاً — نأخذ الأوراق فقط قدر الإمكان
+    const code = String(r.accountCode || "");
+    const isLikelyParent = code.length <= 3 || /^(11|1120)$/.test(code);
+    if (isLikelyParent && rows.some((o, j) => j !== i && isCustomersArAccountName(String(o.accountName || "")) && String(o.accountCode || "").startsWith(code) && String(o.accountCode || "") !== code)) {
+      continue;
+    }
+    arIdxs.push(i);
+  }
+  if (!arIdxs.length) return rows;
+
+  // استبدل أول حساب ذمم عملاء ورقي؛ أزل بقية أوراق الذمم المكررة إن وُجدت
+  const primaryIdx = arIdxs[0];
+  const leaf = rows[primaryIdx];
+  const metrics = await loadCustomerArMetricsForTrialBalance(db, filters);
+  const eps = 0.005;
+
+  const detail: TbRow[] = [];
+  if (mode === "all") {
+    // ميجا PDF «كل العملاء»: سطر مجمّع واحد بمبالغ حساب الذمم
+    detail.push({
+      ...leaf,
+      accountCode: "",
+      accountName: "مجمع العملاء (كل العملاء)",
+    });
+  } else if (mode === "zeroBalances") {
+    const zeros = metrics.filter((m) => Math.abs(m.closingNet) <= eps);
+    const nonzero = metrics.filter((m) => Math.abs(m.closingNet) > eps)
+      .sort((a, b) => a.name.localeCompare(b.name, "ar"));
+    const zOpen = zeros.reduce((s, m) => s + m.openingNet, 0);
+    const zPd = zeros.reduce((s, m) => s + m.periodDebit, 0);
+    const zPc = zeros.reduce((s, m) => s + m.periodCredit, 0);
+    const zClose = zeros.reduce((s, m) => s + m.closingNet, 0);
+    detail.push(tbRowFromNets({
+      accountCode: "",
+      accountName: "مجمع العملاء (الارصدة الصفرية)",
+      openingNet: zOpen,
+      periodDebit: zPd,
+      periodCredit: zPc,
+      closingNet: zClose,
+    }));
+    for (const m of nonzero) {
+      detail.push(tbRowFromNets({
+        accountCode: m.code || "",
+        accountName: m.name,
+        openingNet: m.openingNet,
+        periodDebit: m.periodDebit,
+        periodCredit: m.periodCredit,
+        closingNet: m.closingNet,
+      }));
+    }
+  } else {
+    // byCategory — ميجا يطلب إدخال/اختيار فئة قبل العرض (تأكيد المستخدم 2026-09-13)
+    if (filters.categoryId == null) {
+      // ميجا يمنع العرض بدون فئة — الواجهة تمنع البحث؛ هنا نُبقي الشجرة كما هي
+      return rows;
+    }
+    const [cat] = await db.select({ id: contactCategories.id, name: contactCategories.name })
+      .from(contactCategories)
+      .where(tenantWhere(contactCategories, filters.tenantId, eq(contactCategories.id, filters.categoryId)));
+    const catLabel = cat?.name || `فئة #${filters.categoryId}`;
+    const subset = metrics.filter((m) => m.categoryId === filters.categoryId);
+    const gOpen = subset.reduce((s, m) => s + m.openingNet, 0);
+    const gPd = subset.reduce((s, m) => s + m.periodDebit, 0);
+    const gPc = subset.reduce((s, m) => s + m.periodCredit, 0);
+    const gClose = subset.reduce((s, m) => s + m.closingNet, 0);
+    detail.push(tbRowFromNets({
+      accountCode: "",
+      accountName: `مجمع العملاء (${catLabel})`,
+      openingNet: gOpen,
+      periodDebit: gPd,
+      periodCredit: gPc,
+      closingNet: gClose,
+    }));
+  }
+
+  const remove = new Set(arIdxs);
+  const out: TbRow[] = [];
+  for (let i = 0; i < rows.length; i++) {
+    if (i === primaryIdx) {
+      out.push(...detail);
+      continue;
+    }
+    if (remove.has(i)) continue;
+    out.push(rows[i]);
+  }
+  return out;
+}
+
+
+export async function trialBalanceReport(db: Db, filters: ReportFilters) {
+  // ميجا: فلتر «الحساب الرئيسي» يضيّق الشجرة؛ «اخفاء الارصدة الصفرية» اختياري (افتراضي: إظهار)
+  const allAccounts = await db.select().from(accounts)
+    .where(tenantWhere(accounts, filters.tenantId, eq(accounts.isActive, true)))
+    .orderBy(accounts.code);
+
+  const root = filters.accountId != null
+    ? allAccounts.find((a) => a.id === filters.accountId)
+    : undefined;
+  const rootCode = root?.code;
 
   const openingMovement = filters.dateFrom
     ? await getPostedMovementByAccount(db, filters.tenantId, { before: filters.dateFrom })
@@ -272,26 +981,113 @@ export async function trialBalanceReport(db: Db, filters: ReportFilters) {
     to: filters.dateTo,
   });
 
-  return allAccounts
-    .filter((a) => !a.isParent)
+  const hideZeroBalances = filters.hideZeroBalances === true;
+  const byId = new Map(allAccounts.map((a) => [a.id, a]));
+  const childrenOf = new Map<number, number[]>();
+  for (const a of allAccounts) {
+    if (a.parentId == null) continue;
+    const list = childrenOf.get(a.parentId) || [];
+    list.push(a.id);
+    childrenOf.set(a.parentId, list);
+  }
+
+  const treeDepth = (accountId: number) => {
+    let depth = 1;
+    let cur = byId.get(accountId);
+    const seen = new Set<number>();
+    while (cur?.parentId != null && !seen.has(cur.parentId)) {
+      seen.add(cur.parentId);
+      depth += 1;
+      cur = byId.get(cur.parentId);
+      if (depth > 20) break;
+    }
+    return depth;
+  };
+
+  const leafIdsUnder = (accountId: number): number[] => {
+    const kids = childrenOf.get(accountId) || [];
+    if (!kids.length) return [accountId];
+    const out: number[] = [];
+    for (const kid of kids) out.push(...leafIdsUnder(kid));
+    return out.length ? out : [accountId];
+  };
+
+  const leafMetrics = (accountId: number) => {
+    const a = byId.get(accountId)!;
+    const open = openingMovement.get(accountId) || { debit: 0, credit: 0 };
+    const period = periodMovement.get(accountId) || { debit: 0, credit: 0 };
+    const openingNet = num(a.balance) + open.debit - open.credit;
+    const closingNet = openingNet + period.debit - period.credit;
+    return { openingNet, periodDebit: period.debit, periodCredit: period.credit, closingNet };
+  };
+
+  const inScope = (a: (typeof allAccounts)[number]) => {
+    if (filters.accountId == null) return true;
+    if (a.id === filters.accountId) return true;
+    if (rootCode && a.code?.startsWith(rootCode)) return true;
+    return a.parentId === filters.accountId;
+  };
+
+  // ميجا من ملف «ميزان المراجعة.xlsx»: يعرض آباء + أوراق (شجرة) وليس الأوراق فقط
+  let rows = allAccounts
+    .filter(inScope)
+    .filter((a) => {
+      // ميجا ddlDisplayLevel: قيم 2..7 — نقيّد بعمق الشجرة عند تحديده
+      if (filters.displayLevel == null || !Number.isFinite(filters.displayLevel)) return true;
+      return treeDepth(a.id) <= filters.displayLevel!;
+    })
     .map((a) => {
-      const open = openingMovement.get(a.id) || { debit: 0, credit: 0 };
-      const period = periodMovement.get(a.id) || { debit: 0, credit: 0 };
-      const openingNet = num(a.balance) + open.debit - open.credit;
-      const closingNet = openingNet + period.debit - period.credit;
+      const leaves = a.isParent ? leafIdsUnder(a.id) : [a.id];
+      let openingNet = 0;
+      let periodDebit = 0;
+      let periodCredit = 0;
+      let closingNet = 0;
+      for (const leafId of leaves) {
+        const m = leafMetrics(leafId);
+        openingNet += m.openingNet;
+        periodDebit += m.periodDebit;
+        periodCredit += m.periodCredit;
+        closingNet += m.closingNet;
+      }
+      // ترتيب الأعمدة مطابق لميجا: كود، اسم، أول مدة م/د، حركة م/د، آخر مدة م/د
       return {
         accountCode: a.code,
         accountName: a.name,
-        accountType: a.type,
         openingDebit: openingNet > 0 ? openingNet : 0,
         openingCredit: openingNet < 0 ? Math.abs(openingNet) : 0,
-        periodDebit: period.debit,
-        periodCredit: period.credit,
+        periodDebit,
+        periodCredit,
         closingDebit: closingNet > 0 ? closingNet : 0,
         closingCredit: closingNet < 0 ? Math.abs(closingNet) : 0,
       };
     })
-    .filter((r) => r.periodDebit || r.periodCredit || r.openingDebit || r.openingCredit || r.closingDebit || r.closingCredit);
+    .filter((r) => {
+      const hasPeriod = !!(r.periodDebit || r.periodCredit);
+      // ميجا حالة النشاط: النشط/الغير نشط خلال الفترة
+      if (filters.activityStatus === "active" && !hasPeriod) return false;
+      if (filters.activityStatus === "inactive" && hasPeriod) return false;
+      const nonzero = !!(r.periodDebit || r.periodCredit || r.openingDebit || r.openingCredit || r.closingDebit || r.closingCredit);
+      // ميجا بدون تفعيل الإخفاء: نعرض السطر حتى لو كل الأرصدة صفر (ضمن نطاق الحسابات المختارة)
+      if (!hideZeroBalances) return true;
+      return nonzero;
+    });
+
+  // ميجا ترتيب بـ
+  if (filters.orderBy === "name") {
+    rows = rows.sort((a, b) => String(a.accountName || "").localeCompare(String(b.accountName || ""), "ar"));
+  } else if (filters.orderBy === "balance") {
+    rows = rows.sort((a, b) => {
+      const ba = Math.abs(Number(a.closingDebit || 0) - Number(a.closingCredit || 0));
+      const bb = Math.abs(Number(b.closingDebit || 0) - Number(b.closingCredit || 0));
+      return bb - ba;
+    });
+  } else {
+    rows = rows.sort((a, b) => String(a.accountCode || "").localeCompare(String(b.accountCode || ""), "en", { numeric: true }));
+  }
+
+  // ميجا: طريقة تجميع العملاء (PDF كل العملاء / الارصدة الصفرية — 2026-09-13)
+  rows = await applyCustomerGroupingToTrialBalance(db, filters, rows);
+  return rows;
 }
 
 export async function generalJournalReport(db: Db, filters: ReportFilters) {
@@ -373,6 +1169,13 @@ export async function salesInvoicesReport(db: Db, filters: ReportFilters) {
         filters.repId
           ? sql`(${salesInvoices.salesRepId} = ${filters.repId} OR ${customers.salesRepId} = ${filters.repId})`
           : undefined,
+        // ميجا تقرير البيع: فلتر الصنف / الفئة يقيّد الفواتير التي تحتوي الصنف
+        filters.itemId
+          ? sql`exists (select 1 from sales_invoice_items sii where sii.invoiceId = ${salesInvoices.id} and sii.itemId = ${filters.itemId} and sii.tenantId = ${filters.tenantId})`
+          : undefined,
+        filters.categoryId
+          ? sql`exists (select 1 from sales_invoice_items sii inner join items it on it.id = sii.itemId where sii.invoiceId = ${salesInvoices.id} and it.categoryId = ${filters.categoryId} and sii.tenantId = ${filters.tenantId})`
+          : undefined,
         filters.search
           ? sql`(${salesInvoices.number} LIKE ${`%${filters.search}%`} OR ${customers.name} LIKE ${`%${filters.search}%`})`
           : undefined)))
@@ -439,6 +1242,13 @@ export async function purchasesInvoicesReport(db: Db, filters: ReportFilters) {
         filters.currencyCode ? eq(purchaseInvoices.currencyCode, filters.currencyCode) : undefined,
         taxFilterCond(purchaseInvoices.tax, filters.taxFilter),
         discountFilterCond(purchaseInvoices.discount, filters.discountFilter),
+        // ميجا تقرير الشراء: فلتر الصنف / الفئة يقيّد الفواتير التي تحتوي الصنف
+        filters.itemId
+          ? sql`exists (select 1 from purchase_invoice_items pii where pii.invoiceId = ${purchaseInvoices.id} and pii.itemId = ${filters.itemId} and pii.tenantId = ${filters.tenantId})`
+          : undefined,
+        filters.categoryId
+          ? sql`exists (select 1 from purchase_invoice_items pii inner join items it on it.id = pii.itemId where pii.invoiceId = ${purchaseInvoices.id} and it.categoryId = ${filters.categoryId} and pii.tenantId = ${filters.tenantId})`
+          : undefined,
         filters.search
           ? sql`(${purchaseInvoices.number} LIKE ${`%${filters.search}%`} OR ${suppliers.name} LIKE ${`%${filters.search}%`})`
           : undefined)))
@@ -1146,56 +1956,302 @@ async function buildContactLedger(
 
 export async function customerItemStatementReport(db: Db, filters: ReportFilters) {
   if (!filters.customerId) return [{ message: "يجب اختيار عميل" }];
-  const dateParts = dateConds(salesInvoices, filters.dateFrom, filters.dateTo);
-  const rows = await db.select({
+
+  const [customer] = await db.select().from(customers)
+    .where(tenantWhere(customers, filters.tenantId, eq(customers.id, filters.customerId)));
+  if (!customer) return [];
+
+  type Row = {
+    date: string;
+    sortKey: string;
+    documentNumber: string;
+    description: string;
+    outQty: number | "";
+    outPrice: number | "";
+    outTotal: number | "";
+    inQty: number | "";
+    inPrice: number | "";
+    inTotal: number | "";
+    cashBankIn: number | "";
+    cashBankOut: number | "";
+    checkCollected: number | "";
+    checkRejected: number | "";
+    otherOps: number | "";
+    balanceDelta: number;
+  };
+
+  const emptyAmt = () => ({
+    outQty: "" as const, outPrice: "" as const, outTotal: "" as const,
+    inQty: "" as const, inPrice: "" as const, inTotal: "" as const,
+    cashBankIn: "" as const, cashBankOut: "" as const,
+    checkCollected: "" as const, checkRejected: "" as const, otherOps: "" as const,
+  });
+
+  // —— رصيد سابق قبل dateFrom ——
+  let opening = num(customer.openingBalance);
+  if (filters.dateFrom) {
+    const beforeSales = await db.select({
+      total: salesInvoiceItems.total,
+    }).from(salesInvoiceItems)
+      .innerJoin(salesInvoices, eq(salesInvoiceItems.invoiceId, salesInvoices.id))
+      .where(tenantWhere(salesInvoiceItems, filters.tenantId,
+        and(salesPostedFilter(), eq(salesInvoices.customerId, filters.customerId),
+          lt(salesInvoices.date, filters.dateFrom as any),
+          filters.itemId ? eq(salesInvoiceItems.itemId, filters.itemId) : undefined,
+          reportBranchCond(salesInvoices.branchId, filters),
+          filters.currencyCode ? eq(salesInvoices.currencyCode, filters.currencyCode) : undefined)));
+    for (const r of beforeSales) opening += num(r.total);
+
+    const beforeReturns = await db.select({ total: salesReturnItems.total })
+      .from(salesReturnItems)
+      .innerJoin(salesReturns, eq(salesReturnItems.returnId, salesReturns.id))
+      .where(tenantWhere(salesReturnItems, filters.tenantId,
+        and(eq(salesReturns.customerId, filters.customerId),
+          lt(salesReturns.date, filters.dateFrom as any),
+          filters.itemId ? eq(salesReturnItems.itemId, filters.itemId) : undefined)));
+    for (const r of beforeReturns) opening -= num(r.total);
+
+    const beforeCash = await db.select({ amount: cashTransactions.amount, type: cashTransactions.type })
+      .from(cashTransactions)
+      .where(tenantWhere(cashTransactions, filters.tenantId,
+        and(eq(cashTransactions.customerId, filters.customerId), lt(cashTransactions.date, filters.dateFrom as any))));
+    for (const c of beforeCash) {
+      if (String(c.type).includes("receive")) opening -= num(c.amount);
+      else opening += num(c.amount);
+    }
+
+    const beforeBank = await db.select({ amount: bankTransactions.amount, type: bankTransactions.type })
+      .from(bankTransactions)
+      .where(tenantWhere(bankTransactions, filters.tenantId,
+        and(eq(bankTransactions.customerId, filters.customerId), lt(bankTransactions.date, filters.dateFrom as any))));
+    for (const b of beforeBank) {
+      if (String(b.type).includes("deposit")) opening -= num(b.amount);
+      else opening += num(b.amount);
+    }
+
+    const beforeChecks = await db.select({ amount: checks.amount, status: checks.status, type: checks.type })
+      .from(checks)
+      .where(tenantWhere(checks, filters.tenantId,
+        and(eq(checks.customerId, filters.customerId), lt(checks.date, filters.dateFrom as any))));
+    for (const ch of beforeChecks) {
+      if (ch.type !== "incoming") continue;
+      if (ch.status === "bounced") continue;
+      if (ch.status === "cleared" || ch.status === "deposited" || ch.status === "pending") opening -= num(ch.amount);
+    }
+  } else {
+    opening = num(customer.balance);
+  }
+
+  const periodRows: Row[] = [];
+
+  // فواتير مبيعات → صادر
+  const salesDate = dateConds(salesInvoices, filters.dateFrom, filters.dateTo);
+  const salesLines = await db.select({
     date: salesInvoices.date,
     number: salesInvoices.number,
-    itemCode: items.code,
     itemName: items.name,
     quantity: salesInvoiceItems.quantity,
+    price: salesInvoiceItems.price,
     total: salesInvoiceItems.total,
+    discount: salesInvoiceItems.discount,
   }).from(salesInvoiceItems)
     .innerJoin(salesInvoices, eq(salesInvoiceItems.invoiceId, salesInvoices.id))
     .leftJoin(items, eq(salesInvoiceItems.itemId, items.id))
     .where(tenantWhere(salesInvoiceItems, filters.tenantId,
       and(salesPostedFilter(), eq(salesInvoices.customerId, filters.customerId),
-        ...(dateParts.length ? [and(...dateParts)] : []))));
+        ...(salesDate.length ? [and(...salesDate)] : []),
+        filters.itemId ? eq(salesInvoiceItems.itemId, filters.itemId) : undefined,
+        reportBranchCond(salesInvoices.branchId, filters),
+        filters.currencyCode ? eq(salesInvoices.currencyCode, filters.currencyCode) : undefined)));
 
+  for (const r of salesLines) {
+    const qty = num(r.quantity);
+    const price = num(r.price);
+    const total = num(r.total);
+    periodRows.push({
+      date: dateOnly(r.date),
+      sortKey: `${dateOnly(r.date)}-1-${r.number}`,
+      documentNumber: `Inv.${r.number}`,
+      description: r.itemName || "",
+      ...emptyAmt(),
+      outQty: qty,
+      outPrice: price,
+      outTotal: total,
+      balanceDelta: total,
+    });
+  }
+
+  // مرتجعات → وارد
   const retDate = dateConds(salesReturns, filters.dateFrom, filters.dateTo);
-  const returns = await db.select({
+  const returnLines = await db.select({
     date: salesReturns.date,
     number: salesReturns.number,
-    itemCode: items.code,
     itemName: items.name,
     quantity: salesReturnItems.quantity,
+    price: salesReturnItems.price,
     total: salesReturnItems.total,
   }).from(salesReturnItems)
     .innerJoin(salesReturns, eq(salesReturnItems.returnId, salesReturns.id))
     .leftJoin(items, eq(salesReturnItems.itemId, items.id))
     .where(tenantWhere(salesReturnItems, filters.tenantId,
-      and(eq(salesReturns.customerId, filters.customerId), ...(retDate.length ? [and(...retDate)] : []))));
+      and(eq(salesReturns.customerId, filters.customerId),
+        ...(retDate.length ? [and(...retDate)] : []),
+        filters.itemId ? eq(salesReturnItems.itemId, filters.itemId) : undefined)));
 
-  const ledger: { date: string; sortKey: string; documentNumber: string; itemCode: string; itemName: string; qtyOut: number; qtyIn: number; debit: number; credit: number }[] = [];
-  for (const r of rows) {
-    ledger.push({
-      date: dateOnly(r.date), sortKey: `${dateOnly(r.date)}-1-${r.number}`,
-      documentNumber: r.number, itemCode: r.itemCode || "", itemName: r.itemName || "",
-      qtyOut: num(r.quantity), qtyIn: 0, debit: num(r.total), credit: 0,
+  for (const r of returnLines) {
+    const qty = num(r.quantity);
+    const price = num(r.price);
+    const total = num(r.total);
+    periodRows.push({
+      date: dateOnly(r.date),
+      sortKey: `${dateOnly(r.date)}-2-${r.number}`,
+      documentNumber: `Ret.${r.number}`,
+      description: r.itemName || "",
+      ...emptyAmt(),
+      inQty: qty,
+      inPrice: price,
+      inTotal: total,
+      balanceDelta: -total,
     });
   }
-  for (const r of returns) {
-    ledger.push({
-      date: dateOnly(r.date), sortKey: `${dateOnly(r.date)}-2-${r.number}`,
-      documentNumber: r.number, itemCode: r.itemCode || "", itemName: r.itemName || "",
-      qtyOut: 0, qtyIn: num(r.quantity), debit: 0, credit: num(r.total),
+
+  // نقدية
+  const cashDate = dateConds(cashTransactions, filters.dateFrom, filters.dateTo);
+  const cash = await db.select({
+    number: cashTransactions.number,
+    date: cashTransactions.date,
+    amount: cashTransactions.amount,
+    description: cashTransactions.description,
+    type: cashTransactions.type,
+  }).from(cashTransactions).where(tenantWhere(cashTransactions, filters.tenantId,
+    and(eq(cashTransactions.customerId, filters.customerId),
+      ...(cashDate.length ? [and(...cashDate)] : []))));
+
+  for (const c of cash) {
+    const isReceive = String(c.type).includes("receive");
+    const amount = num(c.amount);
+    periodRows.push({
+      date: dateOnly(c.date),
+      sortKey: `${dateOnly(c.date)}-3-${c.number}`,
+      documentNumber: isReceive ? `CshIn.${c.number}` : `CshOut.${c.number}`,
+      description: c.description || (isReceive ? "اذن استلام نقدية" : "اذن صرف نقدية"),
+      ...emptyAmt(),
+      cashBankIn: isReceive ? amount : "",
+      cashBankOut: isReceive ? "" : amount,
+      balanceDelta: isReceive ? -amount : amount,
     });
   }
-  ledger.sort((a, b) => a.sortKey.localeCompare(b.sortKey));
-  let running = 0;
-  return ledger.map(({ sortKey: _, ...r }) => {
-    running += r.debit - r.credit;
-    return { ...r, balance: running };
+
+  // بنوك
+  const bankDate = dateConds(bankTransactions, filters.dateFrom, filters.dateTo);
+  const bank = await db.select({
+    number: bankTransactions.number,
+    reference: bankTransactions.reference,
+    date: bankTransactions.date,
+    amount: bankTransactions.amount,
+    description: bankTransactions.description,
+    type: bankTransactions.type,
+  }).from(bankTransactions).where(tenantWhere(bankTransactions, filters.tenantId,
+    and(eq(bankTransactions.customerId, filters.customerId),
+      ...(bankDate.length ? [and(...bankDate)] : []))));
+
+  for (const b of bank) {
+    const isDeposit = String(b.type).includes("deposit");
+    const amount = num(b.amount);
+    const ref = b.reference || b.number;
+    periodRows.push({
+      date: dateOnly(b.date),
+      sortKey: `${dateOnly(b.date)}-4-${ref}`,
+      documentNumber: isDeposit ? `BnkDep.${ref}` : `BnkWit.${ref}`,
+      description: b.description || (isDeposit ? "ايداع بنكي" : "سحب بنكي"),
+      ...emptyAmt(),
+      cashBankIn: isDeposit ? amount : "",
+      cashBankOut: isDeposit ? "" : amount,
+      balanceDelta: isDeposit ? -amount : amount,
+    });
+  }
+
+  // شيكات واردة على العميل
+  const checkDate = dateConds(checks, filters.dateFrom, filters.dateTo);
+  const chks = await db.select({
+    number: checks.number,
+    checkNumber: checks.checkNumber,
+    date: checks.date,
+    amount: checks.amount,
+    status: checks.status,
+    type: checks.type,
+    description: checks.description,
+  }).from(checks).where(tenantWhere(checks, filters.tenantId,
+    and(eq(checks.customerId, filters.customerId), eq(checks.type, "incoming"),
+      ...(checkDate.length ? [and(...checkDate)] : []))));
+
+  for (const ch of chks) {
+    const amount = num(ch.amount);
+    const bounced = ch.status === "bounced";
+    periodRows.push({
+      date: dateOnly(ch.date),
+      sortKey: `${dateOnly(ch.date)}-5-${ch.number}`,
+      documentNumber: `Chk.${ch.checkNumber || ch.number}`,
+      description: ch.description || (bounced ? "شيك مرفوض" : "شيك"),
+      ...emptyAmt(),
+      checkCollected: bounced ? "" : amount,
+      checkRejected: bounced ? amount : "",
+      balanceDelta: bounced ? 0 : -amount,
+    });
+  }
+
+  periodRows.sort((a, b) => a.sortKey.localeCompare(b.sortKey));
+
+  const out: Record<string, unknown>[] = [];
+  out.push({
+    date: "",
+    documentNumber: "",
+    description: "الرصيد السابق",
+    outQty: "", outPrice: "", outTotal: "",
+    inQty: "", inPrice: "", inTotal: "",
+    cashBankIn: "", cashBankOut: "",
+    checkCollected: "", checkRejected: "", otherOps: "",
+    balance: opening,
   });
+
+  let running = opening;
+  let sumOutQty = 0, sumOutTotal = 0, sumInQty = 0, sumInTotal = 0;
+  let sumCashIn = 0, sumCashOut = 0, sumChk = 0, sumChkRej = 0, sumOther = 0;
+
+  for (const r of periodRows) {
+    running += r.balanceDelta;
+    if (typeof r.outQty === "number") sumOutQty += r.outQty;
+    if (typeof r.outTotal === "number") sumOutTotal += r.outTotal;
+    if (typeof r.inQty === "number") sumInQty += r.inQty;
+    if (typeof r.inTotal === "number") sumInTotal += r.inTotal;
+    if (typeof r.cashBankIn === "number") sumCashIn += r.cashBankIn;
+    if (typeof r.cashBankOut === "number") sumCashOut += r.cashBankOut;
+    if (typeof r.checkCollected === "number") sumChk += r.checkCollected;
+    if (typeof r.checkRejected === "number") sumChkRej += r.checkRejected;
+    if (typeof r.otherOps === "number") sumOther += r.otherOps;
+    const { sortKey: _s, balanceDelta: _d, ...rest } = r;
+    out.push({ ...rest, balance: running });
+  }
+
+  out.push({
+    date: "",
+    documentNumber: "",
+    description: "اجمالي حركات الفترة",
+    outQty: sumOutQty || "",
+    outPrice: "",
+    outTotal: sumOutTotal || "",
+    inQty: sumInQty || "",
+    inPrice: "",
+    inTotal: sumInTotal || "",
+    cashBankIn: sumCashIn || "",
+    cashBankOut: sumCashOut || "",
+    checkCollected: sumChk || "",
+    checkRejected: sumChkRej || "",
+    otherOps: sumOther || "",
+    balance: running,
+  });
+
+  return out;
 }
 
 export async function vendorItemStatementReport(db: Db, filters: ReportFilters) {

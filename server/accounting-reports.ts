@@ -19,6 +19,7 @@ import {
   itemsProfitsReport,
   lastPricesReport,
   loadPostedJournalLines,
+  accountStatementReport,
   matureInvoicesReport,
   matureReceiptsReport,
   monthlyExpensesReport,
@@ -156,7 +157,7 @@ async function productionMaterialsReport(db: Db, f: ReportFilters) {
 }
 
 const HANDLERS: Record<string, (db: Db, f: ReportFilters) => Promise<ReportRow[]>> = {
-  "accountingreports-accountstatment": (db, f) => loadPostedJournalLines(db, f),
+  "accountingreports-accountstatment": (db, f) => accountStatementReport(db, f),
   "accountingreports-customerstatment": customerStatementReport,
   "accountingreports-vendorstatment": vendorStatementReport,
   "accountingreports-sales": salesInvoicesReport,
@@ -177,6 +178,8 @@ const HANDLERS: Record<string, (db: Db, f: ReportFilters) => Promise<ReportRow[]
   "accountingreports-monthlysalesbyitems": (db, f) => salesByItemsReport(db, f, true),
   "accountingreports-monthlysalesbyitemstotals": monthlySalesTotalsReport,
   "accountingreports-payments": paymentsReport,
+  /** ميجا `/AccountingReports/Dues.aspx` — فلاتر مؤكدة؛ لا جدول استحقاقات في Easy بعد — رجّع فاضي لحد ما يتبني الكيان */
+  "accountingreports-dues": async () => [],
   "accountingreports-dashboard": async (db, f) => {
     const sales = await salesInvoicesReport(db, f);
     const purchases = await purchasesInvoicesReport(db, f);

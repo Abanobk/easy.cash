@@ -1,6 +1,7 @@
 /** تسميات عربية لأعمدة التقارير الديناميكية */
 export const REPORT_COLUMN_LABELS: Record<string, string> = {
   documentNumber: "رقم المستند",
+  entryNumber: "رقم القيد",
   date: "التاريخ",
   partyCode: "كود الطرف",
   partyName: "العميل / المورد",
@@ -30,6 +31,20 @@ export const REPORT_COLUMN_LABELS: Record<string, string> = {
   phone: "الهاتف",
   email: "البريد",
   balance: "الرصيد",
+
+  // كشف حساب عميل بالأصناف — أعمدة ميجا (PDF 2026-09-13)
+  outQty: "صادر كمية",
+  outPrice: "صادر سعر",
+  outTotal: "صادر اجمالي",
+  inQty: "وارد كمية",
+  inPrice: "وارد سعر",
+  inTotal: "وارد اجمالي",
+  cashBankIn: "استلام نقدية / ايداع بنكي",
+  cashBankOut: "صرف نقدية / سحب بنكي",
+  checkCollected: "شيك محصل / تحت التحصيل",
+  checkRejected: "شيك مرفوض",
+  otherOps: "عمليات اخرى",
+
   creditLimit: "حد الائتمان",
   category: "التصنيف",
   metric: "المؤشر",
@@ -83,6 +98,14 @@ export const REPORT_COLUMN_LABELS: Record<string, string> = {
   debit: "مدين",
   credit: "دائن",
   costCenter: "مركز التكلفة",
+  // ميزان المراجعة — أعمدة ميجا من ملف التصدير «ميزان المراجعة.xlsx»
+  // (كود، اسم، أول المدة م/د، حركة م/د، آخر المدة م/د)
+  openingDebit: "أول المدة مدين",
+  openingCredit: "أول المدة دائن",
+  periodDebit: "حركة مدين",
+  periodCredit: "حركة دائن",
+  closingDebit: "آخر المدة مدين",
+  closingCredit: "آخر المدة دائن",
   openingBalance: "رصيد افتتاحي",
   openingBalanceDate: "تاريخ الرصيد الافتتاحي",
   closingBalance: "رصيد ختامي",
@@ -108,6 +131,86 @@ export function reportColumnLabel(key: string) {
   return REPORT_COLUMN_LABELS[key] || key;
 }
 
+/**
+ * تسميات أعمدة ميجا حسب التقرير — من PDF بعد عرض (فترة قصيرة).
+ * لا اختراع: فقط ما ظهر في رؤوس جداول ميجا.
+ */
+const MEGA_REPORT_COLUMN_LABELS: Record<string, Record<string, string>> = {
+  // البيع — صف الفاتورة: مسلسل التاريخ العميل الاجمالي الخصم الضريبة اضافات الصافي المصروفات المستحق تحصيله
+  "accountingreports-sales": {
+    documentNumber: "مسلسل",
+    date: "التاريخ",
+    partyName: "العميل",
+    subtotal: "الاجمالي",
+    discount: "الخصم",
+    tax: "الضريبة",
+    total: "الصافي",
+    remaining: "المستحق تحصيله",
+  },
+  // الشراء — صف الفاتورة: مسلسل رقم المرجع التاريخ المورد الاجمالي الخصم الضريبة الصافي المستحق سداده
+  "accountingreports-purchases": {
+    documentNumber: "مسلسل",
+    date: "التاريخ",
+    partyName: "المورد",
+    subtotal: "الاجمالي",
+    discount: "الخصم",
+    tax: "الضريبة",
+    total: "الصافي",
+    remaining: "المستحق سداده",
+  },
+  // المبيعات بالعملاء
+  "accountingreports-customerssales": {
+    documentNumber: "مسلسل",
+    areaName: "المنطقة",
+    customerName: "العميل",
+    total: "الاجمالي",
+    discount: "الخصومات",
+    tax: "الضرائب",
+    net: "الصافي",
+    remaining: "المديونية",
+    lastSaleDate: "اخر بيع",
+    lastCollectionDate: "اخر تحصيل",
+  },
+  // المشتريات بالموردين
+  "accountingreports-vendorspurchases": {
+    documentNumber: "مسلسل",
+    vendorName: "المورد",
+    total: "الاجمالي",
+    discount: "الخصومات",
+    tax: "الضرائب",
+    net: "الصافي",
+    remaining: "المديونية",
+    lastPurchaseDate: "اخر شراء",
+    lastPaymentDate: "اخر سداد",
+  },
+  // المبيعات بالأصناف
+  "accountingreports-grosscustomersalesbyitems": {
+    itemName: "الصنف",
+    salesQty: "مبيعات",
+    returnQty: "مردود",
+    quantity: "الكمية",
+    unitName: "وحدة القياس",
+    unitPrice: "سعر الوحدة",
+    discount: "الخصم",
+    total: "القيمة",
+  },
+  // المشتريات بالأصناف
+  "accountingreports-grossvendorpurchasesbyitems": {
+    itemName: "الصنف",
+    purchaseQty: "مشتريات",
+    returnQty: "مردود",
+    quantity: "الكمية",
+    unitName: "وحدة القياس",
+    unitPrice: "سعر الوحدة",
+    discount: "الخصم",
+    total: "القيمة",
+  },
+};
+
+export function reportColumnLabelForSlug(slug: string, key: string) {
+  return MEGA_REPORT_COLUMN_LABELS[slug]?.[key] || reportColumnLabel(key);
+}
+
 /** أعمدة رقمية تُجمَّع في صف الإجمالي */
 export const REPORT_TOTAL_COLUMNS = new Set([
   "total", "subtotal", "discount", "tax", "paid", "remaining", "amount",
@@ -121,4 +224,6 @@ export const REPORT_TOTAL_COLUMNS = new Set([
   "debit", "credit", "value", "lineAmount", "totalAmount", "postedDepreciation",
   "bookAccumulated", "monthlyTheoretical", "purchasePrice", "currentValue",
   "bookValue", "saleAmount", "gainLoss",
+  "openingDebit", "openingCredit", "periodDebit", "periodCredit",
+  "closingDebit", "closingCredit",
 ]);

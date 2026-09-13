@@ -17,18 +17,24 @@ export type ReportEntityFilter =
   | "discountFilter";
 
 const ACCOUNTING_FILTERS: Record<string, ReportEntityFilter[]> = {
-  "accountingreports-accountstatment": ["account"],
-  "accountingreports-accountstatment-cash": ["account"],
+  // ميجا كشف حساب (AccountStatment.aspx): الفرع، العملة، من/الى، اسم الحساب، مركز التكلفة
+  // (الحساب المقابل / نوع القيد / اعتمد بواسطة / ملاحظات / checkboxes — لاحقاً بعد تأكيد السلوك)
+  "accountingreports-accountstatment": ["branch", "account", "costCenter", "currency"],
+  "accountingreports-accountstatment-cash": ["branch", "account"],
   "accountingreports-customerstatment": ["customer"],
   "accountingreports-vendorstatment": ["supplier"],
   "accountingreports-costcenterstatment": ["costCenter"],
-  "accountingreports-customeraccountstatementbyitems": ["customer", "item"],
+  "accountingreports-customeraccountstatementbyitems": ["branch", "customer", "currency", "item"],
   "accountingreports-vendoraccountstatementbyitems": ["supplier", "item"],
-  "accountingreports-sales": ["customer", "branch", "warehouse", "rep", "area", "paymentType", "currency", "dueDate", "paymentStatus", "taxFilter", "discountFilter"],
-  "accountingreports-purchases": ["supplier", "branch", "warehouse", "paymentType", "currency", "dueDate", "paymentStatus", "taxFilter", "discountFilter"],
+  // ميجا Sales.aspx: فرع، عملة، تواريخ، استحقاق، مخزن، فئة، صنف، مندوب، منطقة، عميل، ضريبة، خصم، دفع، تحصيل…
+  "accountingreports-sales": ["customer", "branch", "warehouse", "rep", "area", "item", "category", "paymentType", "currency", "dueDate", "paymentStatus", "taxFilter", "discountFilter"],
+  // ميجا Purchases.aspx: نفس روح فلاتر البيع للمشتريات (+ مورد بدل عميل)
+  "accountingreports-purchases": ["supplier", "branch", "warehouse", "item", "category", "paymentType", "currency", "dueDate", "paymentStatus", "taxFilter", "discountFilter"],
   "accountingreports-customerssales": ["customer", "branch", "area", "rep", "paymentType"],
   "accountingreports-vendorspurchases": ["supplier", "branch", "paymentType"],
   "accountingreports-payments": ["customer", "supplier", "branch"],
+  // ميجا Dues.aspx: الفرع، العملة، من/الى، اسم الحساب، رقم المرجع، حالة السداد
+  "accountingreports-dues": ["branch", "currency", "account", "paymentStatus"],
   "accountingreports-checks-checkin": ["customer"],
   "accountingreports-checks-checkout": ["supplier"],
   "accountingreports-matureinvoices": ["customer", "branch"],
@@ -59,9 +65,11 @@ const ACCOUNTING_FILTERS: Record<string, ReportEntityFilter[]> = {
 
 const FINAL_FILTERS: Record<string, ReportEntityFilter[]> = {
   "accounting-generaljournallist": ["account", "costCenter"],
-  "finalreports-generalledger": ["account", "costCenter"],
+  // ميجا (الاستاذ العام): الفرع + الحساب الرئيسي + مركز التكلفة + من/الى تاريخ
+  "finalreports-generalledger": ["branch", "account", "costCenter"],
   "finalreports-subledger": ["account", "costCenter"],
-  "finalreports-trialbalance": [],
+  // ميجا (ميزان المراجعة): الفرع + الحساب الرئيسي + من/الى تاريخ (+ خيارات تجميع إضافية لاحقاً)
+  "finalreports-trialbalance": ["branch", "account"],
   "finalreports-incomestatment": [],
   "finalreports-balancesheet": [],
   "finalreports-cashflow": [],

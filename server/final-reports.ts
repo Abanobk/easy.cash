@@ -6,6 +6,7 @@ import {
   generalJournalReport,
   getPostedMovementByAccount,
   incomeStatementFromData,
+  generalLedgerReport,
   loadPostedJournalLines,
   paymentsReport,
   purchasesInvoicesReport,
@@ -21,7 +22,8 @@ export type ReportRow = Record<string, unknown>;
 
 const HANDLERS: Record<string, (db: Db, f: ReportFilters) => Promise<ReportRow[]>> = {
   "accounting-generaljournallist": generalJournalReport,
-  "finalreports-generalledger": loadPostedJournalLines,
+  // ميجا من «الاستاذ العام.xlsx»: رصيد سابق + حركة يومية مجمّعة + اجمالى لكل حساب
+  "finalreports-generalledger": generalLedgerReport,
   "finalreports-subledger": subLedgerReport,
   "finalreports-trialbalance": trialBalanceReport,
   "finalreports-salescost": async (db, f) => {

@@ -1,0 +1,313 @@
+{
+  "count": 77,
+  "items": [
+    {
+      "featureKey": "inv-mega-report-import",
+      "megaUrl": ""
+    },
+    {
+      "featureKey": "invreports-inventorysummary",
+      "megaUrl": "/InvReports/InventorySummary.aspx"
+    },
+    {
+      "featureKey": "invreports-itemstransferdetails",
+      "megaUrl": "/InvReports/ItemsTransferDetails.aspx"
+    },
+    {
+      "featureKey": "invreports-totalinventoryexportimportreport",
+      "megaUrl": "/InvReports/TotalInventoryExportImportReport.aspx"
+    },
+    {
+      "featureKey": "invreports-inventorytransferdetailsreport",
+      "megaUrl": "/InvReports/InventoryTransferDetailsReport.aspx"
+    },
+    {
+      "featureKey": "invreports-itemscosts",
+      "megaUrl": "/InvReports/ItemsCosts.aspx"
+    },
+    {
+      "featureKey": "invreports-itemslist",
+      "megaUrl": "/InvReports/ItemsList.aspx"
+    },
+    {
+      "featureKey": "invreports-itemssummary",
+      "megaUrl": "/InvReports/ItemsSummary.aspx"
+    },
+    {
+      "featureKey": "invreports-incomeoutcomeitem",
+      "megaUrl": "/InvReports/IncomeOutcomeItem.aspx"
+    },
+    {
+      "featureKey": "invreports-stagnantitems",
+      "megaUrl": "/InvReports/StagnantItems.aspx"
+    },
+    {
+      "featureKey": "invreports-itemaging",
+      "megaUrl": "/InvReports/ItemAging.aspx"
+    },
+    {
+      "featureKey": "accountingreports-accountstatment",
+      "megaUrl": "/AccountingReports/AccountStatment.aspx"
+    },
+    {
+      "featureKey": "accountingreports-customerstatment",
+      "megaUrl": "/AccountingReports/CustomerStatment.aspx"
+    },
+    {
+      "featureKey": "accountingreports-vendorstatment",
+      "megaUrl": "/AccountingReports/VendorStatment.aspx"
+    },
+    {
+      "featureKey": "accountingreports-customeraccountstatementbyitems",
+      "megaUrl": "/AccountingReports/CustomerAccountStatementByItems.aspx"
+    },
+    {
+      "featureKey": "accountingreports-vendoraccountstatementbyitems",
+      "megaUrl": "/AccountingReports/VendorAccountStatementByItems.aspx"
+    },
+    {
+      "featureKey": "accountingreports-itemsprofits",
+      "megaUrl": "/AccountingReports/ItemsProfits.aspx"
+    },
+    {
+      "featureKey": "accountingreports-grosscustomersalesbyitems",
+      "megaUrl": "/AccountingReports/GrossCustomerSalesByItems.aspx"
+    },
+    {
+      "featureKey": "accountingreports-sales",
+      "megaUrl": "/AccountingReports/Sales.aspx"
+    },
+    {
+      "featureKey": "accountingreports-purchases",
+      "megaUrl": "/AccountingReports/Purchases.aspx"
+    },
+    {
+      "featureKey": "accountingreports-checks-checkout",
+      "megaUrl": "/AccountingReports/Checks.aspx/CheckOut"
+    },
+    {
+      "featureKey": "accountingreports-checks-checkin",
+      "megaUrl": "/AccountingReports/Checks.aspx/CheckIn"
+    },
+    {
+      "featureKey": "accountingreports-grossrepsalesbyitems",
+      "megaUrl": "/AccountingReports/GrossRepSalesByItems.aspx"
+    },
+    {
+      "featureKey": "accountingreports-repscollectings",
+      "megaUrl": "/AccountingReports/RepsCollectings.aspx"
+    },
+    {
+      "featureKey": "accountingreports-customerslist",
+      "megaUrl": "/AccountingReports/CustomersList.aspx"
+    },
+    {
+      "featureKey": "accountingreports-vendorslist",
+      "megaUrl": "/AccountingReports/VendorsList.aspx"
+    },
+    {
+      "featureKey": "accountingreports-costcenterstatment",
+      "megaUrl": "/AccountingReports/CostCenterStatment.aspx"
+    },
+    {
+      "featureKey": "accountingreports-debitsages",
+      "megaUrl": "/AccountingReports/DebitsAges.aspx"
+    },
+    {
+      "featureKey": "accountingreports-debitsagesbyyear",
+      "megaUrl": "/AccountingReports/DebitsAgesByYear.aspx"
+    },
+    {
+      "featureKey": "accountingreports-debitsagesbyhalfyear",
+      "megaUrl": "/AccountingReports/DebitsAgesByHalfYear.aspx"
+    },
+    {
+      "featureKey": "accountingreports-creditsages",
+      "megaUrl": "/AccountingReports/CreditsAges.aspx"
+    },
+    {
+      "featureKey": "accountingreports-creditsagesbyyear",
+      "megaUrl": "/AccountingReports/CreditsAgesByYear.aspx"
+    },
+    {
+      "featureKey": "accountingreports-creditsagesbyhalfyear",
+      "megaUrl": "/AccountingReports/CreditsAgesByHalfYear.aspx"
+    },
+    {
+      "featureKey": "accountingreports-productionorders",
+      "megaUrl": "/AccountingReports/ProductionOrders.aspx"
+    },
+    {
+      "featureKey": "accountingreports-matureinvoices",
+      "megaUrl": "/AccountingReports/MatureInvoices.aspx"
+    },
+    {
+      "featureKey": "accountingreports-maturereceipts",
+      "megaUrl": "/AccountingReports/MatureReceipts.aspx"
+    },
+    {
+      "featureKey": "accountingreports-dashboard",
+      "megaUrl": "/AccountingReports/Dashboard.aspx"
+    },
+    {
+      "featureKey": "accountingreports-grossvendorpurchasesbyitems",
+      "megaUrl": "/AccountingReports/GrossVendorPurchasesByItems.aspx"
+    },
+    {
+      "featureKey": "accountingreports-salesorders",
+      "megaUrl": "/AccountingReports/SalesOrders.aspx"
+    },
+    {
+      "featureKey": "accountingreports-accountstatment-cash",
+      "megaUrl": "/AccountingReports/AccountStatment.aspx/Cash"
+    },
+    {
+      "featureKey": "accountingreports-areassummary",
+      "megaUrl": "/AccountingReports/AreasSummary.aspx"
+    },
+    {
+      "featureKey": "accountingreports-customerssummary",
+      "megaUrl": "/AccountingReports/CustomersSummary.aspx"
+    },
+    {
+      "featureKey": "accountingreports-vendorssummary",
+      "megaUrl": "/AccountingReports/VendorsSummary.aspx"
+    },
+    {
+      "featureKey": "accountingreports-repdaily",
+      "megaUrl": "/AccountingReports/RepDaily.aspx"
+    },
+    {
+      "featureKey": "accountingreports-monthlysalesbyitems",
+      "megaUrl": "/AccountingReports/MonthlySalesByItems.aspx"
+    },
+    {
+      "featureKey": "accountingreports-monthlysalesbyitemstotals",
+      "megaUrl": "/AccountingReports/MonthlySalesByItemsTotals.aspx"
+    },
+    {
+      "featureKey": "accountingreports-repdebit",
+      "megaUrl": "/AccountingReports/RepDebit.aspx"
+    },
+    {
+      "featureKey": "accountingreports-customersinstallments",
+      "megaUrl": "/AccountingReports/CustomersInstallments.aspx"
+    },
+    {
+      "featureKey": "accountingreports-productionmaterials",
+      "megaUrl": "/AccountingReports/ProductionMaterials.aspx"
+    },
+    {
+      "featureKey": "accountingreports-customersprofits",
+      "megaUrl": "/AccountingReports/CustomersProfits.aspx"
+    },
+    {
+      "featureKey": "accountingreports-branchessummary",
+      "megaUrl": "/AccountingReports/BranchesSummary.aspx"
+    },
+    {
+      "featureKey": "accountingreports-payments",
+      "megaUrl": "/AccountingReports/Payments.aspx"
+    },
+    {
+      "featureKey": "accountingreports-invoiceprofits",
+      "megaUrl": "/AccountingReports/InvoiceProfits.aspx"
+    },
+    {
+      "featureKey": "accountingreports-lastprices",
+      "megaUrl": "/AccountingReports/LastPrices.aspx"
+    },
+    {
+      "featureKey": "accountingreports-customerssales",
+      "megaUrl": "/AccountingReports/CustomersSales.aspx"
+    },
+    {
+      "featureKey": "accountingreports-vendorspurchases",
+      "megaUrl": "/AccountingReports/VendorsPurchases.aspx"
+    },
+    {
+      "featureKey": "accountingreports-monthlyexpenses",
+      "megaUrl": "/AccountingReports/MonthlyExpenses.aspx"
+    },
+    {
+      "featureKey": "accountingreports-purchaseorders",
+      "megaUrl": "/AccountingReports/PurchaseOrders.aspx"
+    },
+    {
+      "featureKey": "hrreports-attendance",
+      "megaUrl": "/HRReports/Attendance.aspx"
+    },
+    {
+      "featureKey": "hrreports-employeesvactions",
+      "megaUrl": "/HRReports/EmployeesVactions.aspx"
+    },
+    {
+      "featureKey": "hrreports-employeespayroll",
+      "megaUrl": "/HRReports/EmployeesPayroll.aspx"
+    },
+    {
+      "featureKey": "hrreports-employeespayroll-list",
+      "megaUrl": "/HRReports/EmployeesPayroll.aspx/List"
+    },
+    {
+      "featureKey": "hrreports-employeesunderrequest",
+      "megaUrl": "/HRReports/EmployeesUnderRequest.aspx"
+    },
+    {
+      "featureKey": "hrreports-employeeslist",
+      "megaUrl": "/HRReports/EmployeesList.aspx"
+    },
+    {
+      "featureKey": "hrreports-loans-list",
+      "megaUrl": "/HRReports/Loans.aspx/List"
+    },
+    {
+      "featureKey": "fixedassetsreports-dep",
+      "megaUrl": "/FixedAssetsReports/Dep.aspx"
+    },
+    {
+      "featureKey": "fixedassetsreports-depruns",
+      "megaUrl": "/FixedAssetsReports/Dep.aspx"
+    },
+    {
+      "featureKey": "fixedassetsreports-soldfixedassets",
+      "megaUrl": "/FixedAssetsReports/SoldFixedAssets.aspx"
+    },
+    {
+      "featureKey": "finalreports-generalledger",
+      "megaUrl": "/FinalReports/GeneralLedger.aspx"
+    },
+    {
+      "featureKey": "finalreports-subledger",
+      "megaUrl": "/FinalReports/SubLedger.aspx"
+    },
+    {
+      "featureKey": "finalreports-trialbalance",
+      "megaUrl": "/FinalReports/TrialBalance.aspx"
+    },
+    {
+      "featureKey": "finalreports-salescost",
+      "megaUrl": "/FinalReports/SalesCost.aspx"
+    },
+    {
+      "featureKey": "finalreports-incomestatment",
+      "megaUrl": "/FinalReports/IncomeStatment.aspx"
+    },
+    {
+      "featureKey": "finalreports-balancesheet",
+      "megaUrl": "/FinalReports/BalanceSheet.aspx"
+    },
+    {
+      "featureKey": "finalreports-financialstatment",
+      "megaUrl": "/FinalReports/FinancialStatment.aspx"
+    },
+    {
+      "featureKey": "finalreports-cashflow",
+      "megaUrl": "/FinalReports/CashFlow.aspx"
+    },
+    {
+      "featureKey": "accountingreports-dues",
+      "megaUrl": "/AccountingReports/Dues.aspx"
+    }
+  ]
+}

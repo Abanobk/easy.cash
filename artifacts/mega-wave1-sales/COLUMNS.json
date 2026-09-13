@@ -1,0 +1,118 @@
+{
+  "extraction_date": "2026-09-13T12:13:54.213Z",
+  "company": "KM-01_01_2022",
+  "loginUrl": "https://km.mega-cash.net/",
+  "reports": {
+    "sales": {
+      "featureKey": "accountingreports-sales",
+      "url": "https://km.mega-cash.net/AccountingReports/Sales.aspx",
+      "status": "UNKNOWN",
+      "headers": null,
+      "blocker": "no-download",
+      "prep": {
+        "ok": true
+      },
+      "excel": {
+        "ok": false,
+        "reason": "no-download",
+        "clicked": {
+          "ok": true,
+          "text": "تصدير لاكسل"
+        }
+      }
+    },
+    "customers_sales": {
+      "featureKey": "accountingreports-customerssales",
+      "url": "https://km.mega-cash.net/AccountingReports/CustomersSales.aspx",
+      "status": "UNKNOWN",
+      "headers": null,
+      "blocker": "no-download",
+      "prep": {
+        "ok": true
+      },
+      "excel": {
+        "ok": false,
+        "reason": "no-download",
+        "clicked": {
+          "ok": true,
+          "text": "تصدير لاكسل"
+        }
+      }
+    },
+    "gross_customer_sales_by_items": {
+      "featureKey": "accountingreports-grosscustomersalesbyitems",
+      "url": "https://km.mega-cash.net/AccountingReports/GrossCustomerSalesByItems.aspx",
+      "status": "UNKNOWN",
+      "headers": null,
+      "blocker": "no-download",
+      "prep": {
+        "ok": true
+      },
+      "excel": {
+        "ok": false,
+        "reason": "no-download",
+        "clicked": {
+          "ok": true,
+          "text": "تصدير لاكسل"
+        }
+      }
+    },
+    "purchases": {
+      "featureKey": "accountingreports-purchases",
+      "url": "https://km.mega-cash.net/AccountingReports/Purchases.aspx",
+      "status": "UNKNOWN",
+      "headers": null,
+      "blocker": "no-download",
+      "prep": {
+        "ok": true
+      },
+      "excel": {
+        "ok": false,
+        "reason": "no-download",
+        "clicked": {
+          "ok": true,
+          "text": "تصدير لاكسل"
+        }
+      }
+    },
+    "vendors_purchases": {
+      "featureKey": "accountingreports-vendorspurchases",
+      "url": "https://km.mega-cash.net/AccountingReports/VendorsPurchases.aspx",
+      "status": "UNKNOWN",
+      "headers": null,
+      "blocker": "no-download",
+      "prep": {
+        "ok": true
+      },
+      "excel": {
+        "ok": false,
+        "reason": "no-download",
+        "clicked": {
+          "ok": true,
+          "text": "تصدير لاكسل"
+        }
+      }
+    },
+    "gross_vendor_purchases_by_items": {
+      "featureKey": "accountingreports-grossvendorpurchasesbyitems",
+      "url": "https://km.mega-cash.net/AccountingReports/GrossVendorPurchasesByItems.aspx",
+      "status": "UNKNOWN",
+      "headers": null,
+      "blocker": "no-download",
+      "prep": {
+        "ok": true
+      },
+      "excel": {
+        "ok": false,
+        "reason": "no-download",
+        "clicked": {
+          "ok": true,
+          "text": "تصدير لاكسل"
+        }
+      }
+    }
+  },
+  "notes": [
+    "No invented headers — Excel after عرض only"
+  ]
+}

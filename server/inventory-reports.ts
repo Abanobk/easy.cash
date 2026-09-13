@@ -21,6 +21,8 @@ import {
   suppliers,
   warehouses,
   beginningInventory,
+  productionOrderMaterials,
+  productionOrders,
 } from "../drizzle/schema";
 import { tenantWhere } from "./tenant-scope";
 
@@ -85,17 +87,210 @@ export type InventoryMovementRow = {
   quantityOut: number;
   unitCost: number;
   totalValue: number;
+  batchNumber?: string;
 };
 
-const DOC_LABELS: Record<string, string> = {
-  purchase: "فاتورة شراء",
-  sale: "فاتورة بيع",
-  purchase_return: "مرتجع شراء",
-  sale_return: "مرتجع بيع",
-  transfer_in: "تحويل وارد",
-  transfer_out: "تحويل صادر",
-  adjustment: "تسوية مخزنية",
+/**
+ * صفوف مطابقة لأعمدة ميجا في تقرير «حركة تفصيلية للاصناف»
+ * (من ملف التصدير الفعلي — بدون اختراع عناوين).
+ */
+export type MegaItemMovementDetailRow = {
+  date: string;
+  documentNumber: string;
+  batchNumber: string;
+  quantityIn: number;
+  quantityOut: number;
+  balanceQty: number;
+  lineValue: number;
+  balanceValue: number;
+  unitCostIn: number;
+  unitCostOut: number;
+  fromLocation: string;
+  toLocation: string;
+  itemId: number;
+  itemCode: string;
+  itemName: string;
+  unit: string;
 };
+
+/** تسميات «رقم المستند» كما في تصدير ميجا (حركة تفصيلية للاصناف.xlsx) */
+const DOC_LABELS: Record<string, string> = {
+  purchase: "فاتورة مشتريات",
+  sale: "فاتورة مبيعات",
+  purchase_return: "فاتورة مردود مشتريات",
+  sale_return: "فاتورة مردود مبيعات",
+  transfer_in: "تحويل مخزني",
+  transfer_out: "تحويل مخزني",
+  adjustment: "تسوية مخزنية",
+  production_in: "امر انتاج",
+  production_out: "امر انتاج",
+};
+
+function dayBeforeIso(iso: string): string {
+  const d = new Date(`${iso}T00:00:00.000Z`);
+  d.setUTCDate(d.getUTCDate() - 1);
+  return d.toISOString().slice(0, 10);
+}
+
+/** من/إلي حسب نوع الحركة — مطابق لعينات ملف ميجا */
+function megaFromTo(
+  m: InventoryMovementRow,
+  qtyIn: number,
+  qtyOut: number,
+): { fromLocation: string; toLocation: string } {
+  const wh = m.warehouseName || "";
+  const party = m.partyName && m.partyName !== "—" ? m.partyName : "";
+  switch (m.documentType) {
+    case "transfer_out":
+      return { fromLocation: wh, toLocation: party };
+    case "transfer_in":
+      // partyName = مخزن المصدر، warehouseName = مخزن الوجهة
+      return { fromLocation: party, toLocation: wh };
+    case "production_out":
+      return { fromLocation: wh, toLocation: "" };
+    case "production_in":
+      return { fromLocation: "", toLocation: wh };
+    case "purchase":
+    case "sale_return":
+      return { fromLocation: party, toLocation: wh };
+    case "sale":
+    case "purchase_return":
+      return { fromLocation: wh, toLocation: party };
+    case "adjustment":
+      if (qtyOut > 0) return { fromLocation: wh, toLocation: party };
+      if (qtyIn > 0) return { fromLocation: party, toLocation: wh };
+      return { fromLocation: wh, toLocation: party };
+    default:
+      if (qtyIn > 0) return { fromLocation: party, toLocation: wh };
+      if (qtyOut > 0) return { fromLocation: wh, toLocation: party };
+      return { fromLocation: wh, toLocation: party };
+  }
+}
+
+/** يحوّل حركات Easy إلى شكل أعمدة ميجا مع رصيد كمّي/قيمة تراكمي لكل صنف */
+export function toMegaItemMovementDetailRows(
+  movements: InventoryMovementRow[],
+  openings?: Map<number, { qty: number; val: number }>,
+): MegaItemMovementDetailRow[] {
+  const sorted = [...movements].sort((a, b) => {
+    const byItem = String(a.itemCode || "").localeCompare(String(b.itemCode || ""), "en", { numeric: true })
+      || String(a.itemName || "").localeCompare(String(b.itemName || ""), "ar");
+    if (byItem !== 0) return byItem;
+    const byDate = String(a.date).localeCompare(String(b.date));
+    if (byDate !== 0) return byDate;
+    return (a.documentId || 0) - (b.documentId || 0);
+  });
+
+  const qtyBal = new Map<number, number>();
+  const valBal = new Map<number, number>();
+  if (openings) {
+    for (const [itemId, o] of openings) {
+      qtyBal.set(itemId, num(o.qty));
+      valBal.set(itemId, num(o.val));
+    }
+  }
+  const out: MegaItemMovementDetailRow[] = [];
+
+  for (const m of sorted) {
+    const qtyIn = num(m.quantityIn);
+    const qtyOut = num(m.quantityOut);
+    const unitCost = num(m.unitCost);
+    // ميجا: القيمة بإشارة (سالب للصرف)
+    const lineValue = qtyIn > 0 ? qtyIn * unitCost : qtyOut > 0 ? -(qtyOut * unitCost) : num(m.totalValue);
+    const nextQty = (qtyBal.get(m.itemId) || 0) + qtyIn - qtyOut;
+    const nextVal = (valBal.get(m.itemId) || 0) + lineValue;
+    qtyBal.set(m.itemId, nextQty);
+    valBal.set(m.itemId, nextVal);
+
+    const { fromLocation, toLocation } = megaFromTo(m, qtyIn, qtyOut);
+    // ميجا: عمود «رقم المستند» يعرض نوع المستند (امر انتاج / فاتورة مبيعات / …)
+    const documentNumber = m.documentTypeLabel || m.documentNumber || "";
+
+    out.push({
+      date: m.date,
+      documentNumber,
+      batchNumber: m.batchNumber || "",
+      quantityIn: qtyIn,
+      quantityOut: qtyOut,
+      balanceQty: nextQty,
+      lineValue,
+      balanceValue: nextVal,
+      unitCostIn: qtyIn > 0 ? unitCost : 0,
+      unitCostOut: qtyOut > 0 ? unitCost : 0,
+      fromLocation,
+      toLocation,
+      itemId: m.itemId,
+      itemCode: m.itemCode,
+      itemName: m.itemName,
+      unit: m.unit,
+    });
+  }
+
+  return out;
+}
+
+/**
+ * رصيد سابق لكل صنف قبل dateFrom = مخزون أول المدة + صافي الحركات حتى اليوم السابق.
+ */
+export async function computeItemMovementOpenings(
+  db: Db,
+  filters: InventoryReportFilters,
+): Promise<Map<number, { qty: number; val: number }>> {
+  const map = new Map<number, { qty: number; val: number }>();
+  if (!filters.dateFrom) return map;
+  const dateFrom = filters.dateFrom;
+  filters = await expandInventoryBranchFilter(db, filters);
+  const asOf = dayBeforeIso(dateFrom);
+  const add = (itemId: number, qty: number, val: number) => {
+    const cur = map.get(itemId) || { qty: 0, val: 0 };
+    cur.qty += qty;
+    cur.val += val;
+    map.set(itemId, cur);
+  };
+
+  const biRows = await db.select({
+    itemId: beginningInventory.itemId,
+    warehouseId: beginningInventory.warehouseId,
+    quantity: beginningInventory.quantity,
+    unitCost: beginningInventory.unitCost,
+    categoryId: items.categoryId,
+    code: items.code,
+    name: items.name,
+    barcode: items.barcode,
+    purchasePrice: items.purchasePrice,
+    averageCost: items.averageCost,
+  }).from(beginningInventory)
+    .innerJoin(items, and(eq(beginningInventory.itemId, items.id), eq(items.isActive, true)))
+    .where(tenantWhere(beginningInventory, filters.tenantId, lte(beginningInventory.date, asOf as any)));
+
+  const categoryIdMap = new Map(biRows.map((r) => [r.itemId, r.categoryId ?? null]));
+  for (const r of biRows) {
+    if (!matchesItemFilters(
+      { itemId: r.itemId, categoryId: r.categoryId, itemName: r.name, itemCode: r.code || "", barcode: r.barcode || "" },
+      filters,
+      categoryIdMap,
+    )) continue;
+    if (!warehouseAllowed(r.warehouseId, filters)) continue;
+    const qty = num(r.quantity);
+    const unitCost = num(r.unitCost) || num(r.averageCost) || num(r.purchasePrice);
+    add(r.itemId, qty, qty * unitCost);
+  }
+
+  const prior = await collectInventoryMovements(db, {
+    ...filters,
+    dateFrom: undefined,
+    dateTo: asOf,
+  });
+  for (const m of prior) {
+    const qtyIn = num(m.quantityIn);
+    const qtyOut = num(m.quantityOut);
+    const unitCost = num(m.unitCost);
+    const lineValue = qtyIn > 0 ? qtyIn * unitCost : qtyOut > 0 ? -(qtyOut * unitCost) : num(m.totalValue);
+    add(m.itemId, qtyIn - qtyOut, lineValue);
+  }
+
+  return map;
+}
 
 function num(v: unknown) {
   return Number(v ?? 0);
@@ -408,6 +603,84 @@ export async function collectInventoryMovements(
       unitCost: cost,
       totalValue: Math.abs(diff) * cost,
     });
+  }
+
+  // أوامر الإنتاج المكتملة — ميجا: «امر انتاج» (صرف خامات + استلام منتج)
+  const productionRows = await db.select({
+    id: productionOrders.id,
+    number: productionOrders.number,
+    date: productionOrders.date,
+    warehouseId: productionOrders.warehouseId,
+    productId: productionOrders.productId,
+    quantity: productionOrders.quantity,
+    batchNumber: productionOrders.batchNumber,
+    wipCostAmount: productionOrders.wipCostAmount,
+  }).from(productionOrders)
+    .where(tenantWhere(productionOrders, tenantId, eq(productionOrders.status, "completed")));
+
+  const orderIds = productionRows.map((r) => r.id);
+  const materialRows = orderIds.length
+    ? await db.select({
+        orderId: productionOrderMaterials.orderId,
+        itemId: productionOrderMaterials.itemId,
+        quantity: productionOrderMaterials.quantity,
+        scrapPercent: productionOrderMaterials.scrapPercent,
+        warehouseId: productionOrderMaterials.warehouseId,
+      }).from(productionOrderMaterials)
+        .where(tenantWhere(productionOrderMaterials, tenantId, inArray(productionOrderMaterials.orderId, orderIds)))
+    : [];
+  const materialsByOrder = new Map<number, typeof materialRows>();
+  for (const m of materialRows) {
+    const list = materialsByOrder.get(m.orderId) || [];
+    list.push(m);
+    materialsByOrder.set(m.orderId, list);
+  }
+
+  for (const order of productionRows) {
+    const mats = materialsByOrder.get(order.id) || [];
+    for (const m of mats) {
+      const qty = num(m.quantity) * (1 + num(m.scrapPercent) / 100);
+      if (qty <= 0) continue;
+      const item = itemMap.get(m.itemId);
+      const cost = num(item?.purchasePrice);
+      const whId = m.warehouseId ?? order.warehouseId;
+      push({
+        date: dateStr(order.date),
+        documentType: "production_out",
+        documentTypeLabel: DOC_LABELS.production_out,
+        documentNumber: order.number,
+        documentId: order.id,
+        warehouseId: whId,
+        warehouseName: whName(whId),
+        itemId: m.itemId,
+        partyName: "—",
+        quantityIn: 0,
+        quantityOut: qty,
+        unitCost: cost,
+        totalValue: qty * cost,
+        batchNumber: order.batchNumber || "",
+      });
+    }
+    const finishedQty = num(order.quantity);
+    if (finishedQty > 0) {
+      const unitCost = finishedQty > 0 ? num(order.wipCostAmount) / finishedQty : 0;
+      push({
+        date: dateStr(order.date),
+        documentType: "production_in",
+        documentTypeLabel: DOC_LABELS.production_in,
+        documentNumber: order.number,
+        documentId: order.id,
+        warehouseId: order.warehouseId,
+        warehouseName: whName(order.warehouseId),
+        itemId: order.productId,
+        partyName: "—",
+        quantityIn: finishedQty,
+        quantityOut: 0,
+        unitCost,
+        totalValue: finishedQty * unitCost,
+        batchNumber: order.batchNumber || "",
+      });
+    }
   }
 
   return rows.sort((a, b) => a.date.localeCompare(b.date) || a.documentNumber.localeCompare(b.documentNumber));

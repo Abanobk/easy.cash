@@ -1156,6 +1156,24 @@ export const ERP_NAVIGATION: NavItemConfig[] = [
                     "icon": "file-text",
                     "path": "/reports/accounting/accountingreports-purchaseorders", "status": "done",
                     "featureKey": "accountingreports-purchaseorders"
+                  },
+                  {
+                    "label": "اعمار ديون الموردين",
+                    "icon": "file-text",
+                    "path": "/reports/accounting/accountingreports-creditsages", "status": "done",
+                    "featureKey": "accountingreports-creditsages"
+                  },
+                  {
+                    "label": "اعمار ديون الموردين سنوي",
+                    "icon": "file-text",
+                    "path": "/reports/accounting/accountingreports-creditsagesbyyear", "status": "done",
+                    "featureKey": "accountingreports-creditsagesbyyear"
+                  },
+                  {
+                    "label": "اعمار ديون الموردين نصف سنوي",
+                    "icon": "file-text",
+                    "path": "/reports/accounting/accountingreports-creditsagesbyhalfyear", "status": "done",
+                    "featureKey": "accountingreports-creditsagesbyhalfyear"
                   }
         ]
       },
@@ -1188,22 +1206,10 @@ export const ERP_NAVIGATION: NavItemConfig[] = [
                     "featureKey": "accountingreports-payments"
                   },
                   {
-                    "label": "اعمار ديون الموردين",
+                    "label": "الاستحقاقات",
                     "icon": "file-text",
-                    "path": "/reports/accounting/accountingreports-creditsages", "status": "done",
-                    "featureKey": "accountingreports-creditsages"
-                  },
-                  {
-                    "label": "اعمار ديون الموردين سنوي",
-                    "icon": "file-text",
-                    "path": "/reports/accounting/accountingreports-creditsagesbyyear", "status": "done",
-                    "featureKey": "accountingreports-creditsagesbyyear"
-                  },
-                  {
-                    "label": "اعمار ديون الموردين نصف سنوي",
-                    "icon": "file-text",
-                    "path": "/reports/accounting/accountingreports-creditsagesbyhalfyear", "status": "done",
-                    "featureKey": "accountingreports-creditsagesbyhalfyear"
+                    "path": "/reports/accounting/accountingreports-dues", "status": "partial",
+                    "featureKey": "accountingreports-dues"
                   }
         ]
       },
@@ -2510,6 +2516,13 @@ export const FEATURE_REGISTRY: Record<string, { label: string; module: string; m
     "megaUrl": "/AccountingReports/CreditsAgesByHalfYear.aspx",
     "status": "done",
     "path": "/reports/accounting/accountingreports-creditsagesbyhalfyear"
+  },
+  "accountingreports-dues": {
+    "label": "الاستحقاقات",
+    "module": "تقارير الحسابات",
+    "megaUrl": "/AccountingReports/Dues.aspx",
+    "status": "partial",
+    "path": "/reports/accounting/accountingreports-dues"
   },
   "accountingreports-productionorders": {
     "label": "اوامر الانتاج",

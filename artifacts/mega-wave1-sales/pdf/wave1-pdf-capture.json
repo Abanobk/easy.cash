@@ -1,0 +1,184 @@
+{
+  "at": "2026-09-13T13:43:01.791Z",
+  "results": [
+    {
+      "key": "customers-sales",
+      "featureKey": "accountingreports-customerssales",
+      "path": "/AccountingReports/CustomersSales.aspx",
+      "prep": {
+        "okFrom": true,
+        "okTo": true,
+        "from": "1/1/2022",
+        "to": "3/1/2022",
+        "hasBtn": true,
+        "hasViewer": true,
+        "dateIds": [
+          "cph_txtDateFrom",
+          "cph_txtDateTo"
+        ]
+      },
+      "foundUrls": [
+        "/showreport/uKQIe0yOYpwXROsdgF1lZKlUiQWKHDWqAaDX3KxZLL_fuOfpfQZPo5ZIZTNcedmMejDwXTFSADbIQ08w46WSd7u3z1_9xI0Okrxnb6n5aMvp6aMXDb2oGLqq0-oyUJ2cr9cfCg2/المبيعات",
+        "https://km.mega-cash.net/showreport/uKQIe0yOYpwXROsdgF1lZKlUiQWKHDWqAaDX3KxZLL_fuOfpfQZPo5ZIZTNcedmMejDwXTFSADbIQ08w46WSd7u3z1_9xI0Okrxnb6n5aMvp6aMXDb2oGLqq0-oyUJ2cr9cfCg2/%D8%A7%D9%84%D9%85%D8%A8%D9%8A%D8%B9%D8%A7%D8%AA%20%D8%A8%D8%A7%D9%84%D8%B9%D9%85%D9%84%D8%A7%D8%A1.ashx?show=1",
+        "https://km.mega-cash.net/downloadreport/uKQIe0yOYpwXROsdgF1lZKlUiQWKHDWqAaDX3KxZLL_fuOfpfQZPo5ZIZTNcedmMejDwXTFSADbIQ08w46WSd7u3z1_9xI0Okrxnb6n5aMvp6aMXDb2oGLqq0-oyUJ2cr9cfCg2/%D8%A7%D9%84%D9%85%D8%A8%D9%8A%D8%B9%D8%A7%D8%AA%20%D8%A8%D8%A7%D9%84%D8%B9%D9%85%D9%84%D8%A7%D8%A1.ashx?show=1",
+        "/showreport/uKQIe0yOYpwXROsdgF1lZKlUiQWKHDWqAaDX3KxZLL_fuOfpfQZPo5ZIZTNcedmMejDwXTFSADbIQ08w46WSd7u3z1_9xI0Okrxnb6n5aMvp6aMXDb2oGLqq0-oyUJ2cr9cfCg2/المبيعات بالعملاء.ashx?show=1"
+      ],
+      "finalSrc": "/showreport/uKQIe0yOYpwXROsdgF1lZKlUiQWKHDWqAaDX3KxZLL_fuOfpfQZPo5ZIZTNcedmMejDwXTFSADbIQ08w46WSd7u3z1_9xI0Okrxnb6n5aMvp6aMXDb2oGLqq0-oyUJ2cr9cfCg2/المبيعات بالعملاء.ashx?show=1",
+      "pdfPath": "artifacts/mega-wave1-sales/pdf/customers-sales.pdf",
+      "saved": [
+        {
+          "vu": "https://km.mega-cash.net/showreport/uKQIe0yOYpwXROsdgF1lZKlUiQWKHDWqAaDX3KxZLL_fuOfpfQZPo5ZIZTNcedmMejDwXTFSADbIQ08w46WSd7u3z1_9xI0Okrxnb6n5aMvp6aMXDb2oGLqq0-oyUJ2cr9cfCg2/المبيعات",
+          "status": 200,
+          "size": 71953,
+          "name": "customers-sales.pdf"
+        }
+      ],
+      "netHits": 3
+    },
+    {
+      "key": "gross-customer-sales-by-items",
+      "featureKey": "accountingreports-grosscustomersalesbyitems",
+      "path": "/AccountingReports/GrossCustomerSalesByItems.aspx",
+      "prep": {
+        "okFrom": true,
+        "okTo": true,
+        "from": "1/1/2022",
+        "to": "3/1/2022",
+        "hasBtn": true,
+        "hasViewer": true,
+        "dateIds": [
+          "cph_txtDateFrom",
+          "cph_txtDateTo",
+          "cph_txtMatDateFrom",
+          "cph_txtMatDateTo"
+        ]
+      },
+      "foundUrls": [
+        "/showreport/fkx8d2r6JbG9_u_JqVNQIqbaxCA0g-fA7LRvi2YQsNg24AWedpvps3sSUXx8CP1r6WMpWqGIHvWDXOvnlxpLChuz8HFnjgEeYq6zTWFe-g65RVgcA63oBUCJFhoK3hmmsz0kkMsXy2A8lpUsITxQjJmyc5Y1/المبيعات",
+        "https://km.mega-cash.net/showreport/fkx8d2r6JbG9_u_JqVNQIqbaxCA0g-fA7LRvi2YQsNg24AWedpvps3sSUXx8CP1r6WMpWqGIHvWDXOvnlxpLChuz8HFnjgEeYq6zTWFe-g65RVgcA63oBUCJFhoK3hmmsz0kkMsXy2A8lpUsITxQjJmyc5Y1/%D8%A7%D9%84%D9%85%D8%A8%D9%8A%D8%B9%D8%A7%D8%AA%20%D8%A8%D8%A7%D9%84%D8%A7%D8%B5%D9%86%D8%A7%D9%81.ashx?show=1",
+        "/showreport/fkx8d2r6JbG9_u_JqVNQIqbaxCA0g-fA7LRvi2YQsNg24AWedpvps3sSUXx8CP1r6WMpWqGIHvWDXOvnlxpLChuz8HFnjgEeYq6zTWFe-g65RVgcA63oBUCJFhoK3hmmsz0kkMsXy2A8lpUsITxQjJmyc5Y1/%D8%A7%D9%84%D9%85%D8%A8%D9%8A%D8%B9%D8%A7%D8%AA%20%D8%A8%D8%A7%D9%84%D8%A7%D8%B5%D9%86%D8%A7%D9%81.ashx?show=1",
+        "https://km.mega-cash.net/downloadreport/fkx8d2r6JbG9_u_JqVNQIqbaxCA0g-fA7LRvi2YQsNg24AWedpvps3sSUXx8CP1r6WMpWqGIHvWDXOvnlxpLChuz8HFnjgEeYq6zTWFe-g65RVgcA63oBUCJFhoK3hmmsz0kkMsXy2A8lpUsITxQjJmyc5Y1/%D8%A7%D9%84%D9%85%D8%A8%D9%8A%D8%B9%D8%A7%D8%AA%20%D8%A8%D8%A7%D9%84%D8%A7%D8%B5%D9%86%D8%A7%D9%81.ashx?show=1",
+        "/showreport/fkx8d2r6JbG9_u_JqVNQIqbaxCA0g-fA7LRvi2YQsNg24AWedpvps3sSUXx8CP1r6WMpWqGIHvWDXOvnlxpLChuz8HFnjgEeYq6zTWFe-g65RVgcA63oBUCJFhoK3hmmsz0kkMsXy2A8lpUsITxQjJmyc5Y1/المبيعات بالاصناف.ashx?show=1"
+      ],
+      "finalSrc": "/showreport/fkx8d2r6JbG9_u_JqVNQIqbaxCA0g-fA7LRvi2YQsNg24AWedpvps3sSUXx8CP1r6WMpWqGIHvWDXOvnlxpLChuz8HFnjgEeYq6zTWFe-g65RVgcA63oBUCJFhoK3hmmsz0kkMsXy2A8lpUsITxQjJmyc5Y1/المبيعات بالاصناف.ashx?show=1",
+      "pdfPath": "artifacts/mega-wave1-sales/pdf/gross-customer-sales-by-items.pdf",
+      "saved": [
+        {
+          "vu": "https://km.mega-cash.net/showreport/fkx8d2r6JbG9_u_JqVNQIqbaxCA0g-fA7LRvi2YQsNg24AWedpvps3sSUXx8CP1r6WMpWqGIHvWDXOvnlxpLChuz8HFnjgEeYq6zTWFe-g65RVgcA63oBUCJFhoK3hmmsz0kkMsXy2A8lpUsITxQjJmyc5Y1/المبيعات",
+          "status": 200,
+          "size": 101444,
+          "name": "gross-customer-sales-by-items.pdf"
+        }
+      ],
+      "netHits": 3
+    },
+    {
+      "key": "purchases",
+      "featureKey": "accountingreports-purchases",
+      "path": "/AccountingReports/Purchases.aspx",
+      "prep": {
+        "okFrom": true,
+        "okTo": true,
+        "from": "1/1/2022",
+        "to": "3/1/2022",
+        "hasBtn": true,
+        "hasViewer": true,
+        "dateIds": [
+          "cph_txtDateFrom",
+          "cph_txtDateTo",
+          "cph_txtMatDateFrom",
+          "cph_txtMatDateTo"
+        ]
+      },
+      "foundUrls": [
+        "/showreport/RpR4xz5qa6lu7n01HSLjUb1cF0Be7DsNXHtse5XM1iZWxjEULlfky_OPBvfTwESCZAfZAGg1v-i1N8-zPH9yfBCx8jeRdrmykJuzzNV5PlNQDKD8DeZrfbJLRDpaG5hBYVdyaA2/الشراء.ashx?show=1",
+        "https://km.mega-cash.net/showreport/RpR4xz5qa6lu7n01HSLjUb1cF0Be7DsNXHtse5XM1iZWxjEULlfky_OPBvfTwESCZAfZAGg1v-i1N8-zPH9yfBCx8jeRdrmykJuzzNV5PlNQDKD8DeZrfbJLRDpaG5hBYVdyaA2/%D8%A7%D9%84%D8%B4%D8%B1%D8%A7%D8%A1.ashx?show=1",
+        "/showreport/RpR4xz5qa6lu7n01HSLjUb1cF0Be7DsNXHtse5XM1iZWxjEULlfky_OPBvfTwESCZAfZAGg1v-i1N8-zPH9yfBCx8jeRdrmykJuzzNV5PlNQDKD8DeZrfbJLRDpaG5hBYVdyaA2/%D8%A7%D9%84%D8%B4%D8%B1%D8%A7%D8%A1.ashx?show=1",
+        "https://km.mega-cash.net/downloadreport/RpR4xz5qa6lu7n01HSLjUb1cF0Be7DsNXHtse5XM1iZWxjEULlfky_OPBvfTwESCZAfZAGg1v-i1N8-zPH9yfBCx8jeRdrmykJuzzNV5PlNQDKD8DeZrfbJLRDpaG5hBYVdyaA2/%D8%A7%D9%84%D8%B4%D8%B1%D8%A7%D8%A1.ashx?show=1"
+      ],
+      "finalSrc": "/showreport/RpR4xz5qa6lu7n01HSLjUb1cF0Be7DsNXHtse5XM1iZWxjEULlfky_OPBvfTwESCZAfZAGg1v-i1N8-zPH9yfBCx8jeRdrmykJuzzNV5PlNQDKD8DeZrfbJLRDpaG5hBYVdyaA2/الشراء.ashx?show=1",
+      "pdfPath": "artifacts/mega-wave1-sales/pdf/purchases.pdf",
+      "saved": [
+        {
+          "vu": "https://km.mega-cash.net/showreport/RpR4xz5qa6lu7n01HSLjUb1cF0Be7DsNXHtse5XM1iZWxjEULlfky_OPBvfTwESCZAfZAGg1v-i1N8-zPH9yfBCx8jeRdrmykJuzzNV5PlNQDKD8DeZrfbJLRDpaG5hBYVdyaA2/الشراء.ashx?show=1",
+          "status": 200,
+          "size": 100116,
+          "name": "purchases.pdf"
+        }
+      ],
+      "netHits": 3
+    },
+    {
+      "key": "vendors-purchases",
+      "featureKey": "accountingreports-vendorspurchases",
+      "path": "/AccountingReports/VendorsPurchases.aspx",
+      "prep": {
+        "okFrom": true,
+        "okTo": true,
+        "from": "1/1/2022",
+        "to": "3/1/2022",
+        "hasBtn": true,
+        "hasViewer": true,
+        "dateIds": [
+          "cph_txtDateFrom",
+          "cph_txtDateTo"
+        ]
+      },
+      "foundUrls": [
+        "/showreport/uamIQgs15dqd06Rh4CHgUMt-MFHHXB_BByXg1uVdJHJM-KlmEFa8kQYziRcv6nM_GyZTiSPQ0wTGmB2aWCOrG3PtbF3mAPrqSP7YFnfZXUdrKbHeMxdJoq5PHwmW0EMTzCkuyA2/المشتريات",
+        "https://km.mega-cash.net/showreport/uamIQgs15dqd06Rh4CHgUMt-MFHHXB_BByXg1uVdJHJM-KlmEFa8kQYziRcv6nM_GyZTiSPQ0wTGmB2aWCOrG3PtbF3mAPrqSP7YFnfZXUdrKbHeMxdJoq5PHwmW0EMTzCkuyA2/%D8%A7%D9%84%D9%85%D8%B4%D8%AA%D8%B1%D9%8A%D8%A7%D8%AA%20%D8%A8%D8%A7%D9%84%D9%85%D9%88%D8%B1%D8%AF%D9%8A%D9%86.ashx?show=1",
+        "/showreport/uamIQgs15dqd06Rh4CHgUMt-MFHHXB_BByXg1uVdJHJM-KlmEFa8kQYziRcv6nM_GyZTiSPQ0wTGmB2aWCOrG3PtbF3mAPrqSP7YFnfZXUdrKbHeMxdJoq5PHwmW0EMTzCkuyA2/%D8%A7%D9%84%D9%85%D8%B4%D8%AA%D8%B1%D9%8A%D8%A7%D8%AA%20%D8%A8%D8%A7%D9%84%D9%85%D9%88%D8%B1%D8%AF%D9%8A%D9%86.ashx?show=1",
+        "https://km.mega-cash.net/downloadreport/uamIQgs15dqd06Rh4CHgUMt-MFHHXB_BByXg1uVdJHJM-KlmEFa8kQYziRcv6nM_GyZTiSPQ0wTGmB2aWCOrG3PtbF3mAPrqSP7YFnfZXUdrKbHeMxdJoq5PHwmW0EMTzCkuyA2/%D8%A7%D9%84%D9%85%D8%B4%D8%AA%D8%B1%D9%8A%D8%A7%D8%AA%20%D8%A8%D8%A7%D9%84%D9%85%D9%88%D8%B1%D8%AF%D9%8A%D9%86.ashx?show=1",
+        "/showreport/uamIQgs15dqd06Rh4CHgUMt-MFHHXB_BByXg1uVdJHJM-KlmEFa8kQYziRcv6nM_GyZTiSPQ0wTGmB2aWCOrG3PtbF3mAPrqSP7YFnfZXUdrKbHeMxdJoq5PHwmW0EMTzCkuyA2/المشتريات بالموردين.ashx?show=1"
+      ],
+      "finalSrc": "/showreport/uamIQgs15dqd06Rh4CHgUMt-MFHHXB_BByXg1uVdJHJM-KlmEFa8kQYziRcv6nM_GyZTiSPQ0wTGmB2aWCOrG3PtbF3mAPrqSP7YFnfZXUdrKbHeMxdJoq5PHwmW0EMTzCkuyA2/المشتريات بالموردين.ashx?show=1",
+      "pdfPath": "artifacts/mega-wave1-sales/pdf/vendors-purchases.pdf",
+      "saved": [
+        {
+          "vu": "https://km.mega-cash.net/showreport/uamIQgs15dqd06Rh4CHgUMt-MFHHXB_BByXg1uVdJHJM-KlmEFa8kQYziRcv6nM_GyZTiSPQ0wTGmB2aWCOrG3PtbF3mAPrqSP7YFnfZXUdrKbHeMxdJoq5PHwmW0EMTzCkuyA2/المشتريات",
+          "status": 200,
+          "size": 70694,
+          "name": "vendors-purchases.pdf"
+        }
+      ],
+      "netHits": 3
+    },
+    {
+      "key": "gross-vendor-purchases-by-items",
+      "featureKey": "accountingreports-grossvendorpurchasesbyitems",
+      "path": "/AccountingReports/GrossVendorPurchasesByItems.aspx",
+      "prep": {
+        "okFrom": true,
+        "okTo": true,
+        "from": "1/1/2022",
+        "to": "3/1/2022",
+        "hasBtn": true,
+        "hasViewer": true,
+        "dateIds": [
+          "cph_txtDateFrom",
+          "cph_txtDateTo",
+          "cph_txtMatDateFrom",
+          "cph_txtMatDateTo"
+        ]
+      },
+      "foundUrls": [
+        "/showreport/I59X4ldMAA3RUTnoDyYTm3uwysjn9bu0ruH7j4nx1OT1o0PK74qbFX3Q_Hyp0PjEgovCc7t8YdgjjO_s4PN6dAWL--ykxPNdiJZmEEd3sq5EgTC0A0wxxd5J-pj_dDLjP5p9E9EsvOUNVisW4WU_pF3qUew1/المشتريات",
+        "https://km.mega-cash.net/showreport/I59X4ldMAA3RUTnoDyYTm3uwysjn9bu0ruH7j4nx1OT1o0PK74qbFX3Q_Hyp0PjEgovCc7t8YdgjjO_s4PN6dAWL--ykxPNdiJZmEEd3sq5EgTC0A0wxxd5J-pj_dDLjP5p9E9EsvOUNVisW4WU_pF3qUew1/%D8%A7%D9%84%D9%85%D8%B4%D8%AA%D8%B1%D9%8A%D8%A7%D8%AA%20%D8%A8%D8%A7%D9%84%D8%A7%D8%B5%D9%86%D8%A7%D9%81.ashx?show=1",
+        "/showreport/I59X4ldMAA3RUTnoDyYTm3uwysjn9bu0ruH7j4nx1OT1o0PK74qbFX3Q_Hyp0PjEgovCc7t8YdgjjO_s4PN6dAWL--ykxPNdiJZmEEd3sq5EgTC0A0wxxd5J-pj_dDLjP5p9E9EsvOUNVisW4WU_pF3qUew1/%D8%A7%D9%84%D9%85%D8%B4%D8%AA%D8%B1%D9%8A%D8%A7%D8%AA%20%D8%A8%D8%A7%D9%84%D8%A7%D8%B5%D9%86%D8%A7%D9%81.ashx?show=1",
+        "https://km.mega-cash.net/downloadreport/I59X4ldMAA3RUTnoDyYTm3uwysjn9bu0ruH7j4nx1OT1o0PK74qbFX3Q_Hyp0PjEgovCc7t8YdgjjO_s4PN6dAWL--ykxPNdiJZmEEd3sq5EgTC0A0wxxd5J-pj_dDLjP5p9E9EsvOUNVisW4WU_pF3qUew1/%D8%A7%D9%84%D9%85%D8%B4%D8%AA%D8%B1%D9%8A%D8%A7%D8%AA%20%D8%A8%D8%A7%D9%84%D8%A7%D8%B5%D9%86%D8%A7%D9%81.ashx?show=1",
+        "/showreport/I59X4ldMAA3RUTnoDyYTm3uwysjn9bu0ruH7j4nx1OT1o0PK74qbFX3Q_Hyp0PjEgovCc7t8YdgjjO_s4PN6dAWL--ykxPNdiJZmEEd3sq5EgTC0A0wxxd5J-pj_dDLjP5p9E9EsvOUNVisW4WU_pF3qUew1/المشتريات بالاصناف.ashx?show=1"
+      ],
+      "finalSrc": "/showreport/I59X4ldMAA3RUTnoDyYTm3uwysjn9bu0ruH7j4nx1OT1o0PK74qbFX3Q_Hyp0PjEgovCc7t8YdgjjO_s4PN6dAWL--ykxPNdiJZmEEd3sq5EgTC0A0wxxd5J-pj_dDLjP5p9E9EsvOUNVisW4WU_pF3qUew1/المشتريات بالاصناف.ashx?show=1",
+      "pdfPath": "artifacts/mega-wave1-sales/pdf/gross-vendor-purchases-by-items.pdf",
+      "saved": [
+        {
+          "vu": "https://km.mega-cash.net/showreport/I59X4ldMAA3RUTnoDyYTm3uwysjn9bu0ruH7j4nx1OT1o0PK74qbFX3Q_Hyp0PjEgovCc7t8YdgjjO_s4PN6dAWL--ykxPNdiJZmEEd3sq5EgTC0A0wxxd5J-pj_dDLjP5p9E9EsvOUNVisW4WU_pF3qUew1/المشتريات",
+          "status": 200,
+          "size": 97936,
+          "name": "gross-vendor-purchases-by-items.pdf"
+        }
+      ],
+      "netHits": 3
+    }
+  ]
+}

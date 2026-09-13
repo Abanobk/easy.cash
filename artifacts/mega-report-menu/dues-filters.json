@@ -1,0 +1,156 @@
+{
+  "controls": [
+    {
+      "id": "txtHidden",
+      "type": "text",
+      "tag": "input",
+      "nearby": ""
+    },
+    {
+      "id": "ddlNumDecimals",
+      "type": "select",
+      "tag": "select",
+      "nearby": "تلقائي (4) تلقائي (3) تلقائي (2) تلقائي (1) 0 1 2 3 4",
+      "options": [
+        "تلقائي (4)",
+        "تلقائي (3)",
+        "تلقائي (2)",
+        "تلقائي (1)",
+        "0",
+        "1",
+        "2",
+        "3",
+        "4"
+      ]
+    },
+    {
+      "id": "ddlNumAlign",
+      "type": "select",
+      "tag": "select",
+      "nearby": "يسار وسط يمين",
+      "options": [
+        "يسار",
+        "وسط",
+        "يمين"
+      ]
+    },
+    {
+      "id": "ddlExcelFormat",
+      "type": "select",
+      "tag": "select",
+      "nearby": "اكسل بالتنسيق اكسل بدون تنسيق",
+      "options": [
+        "اكسل بالتنسيق",
+        "اكسل بدون تنسيق"
+      ]
+    },
+    {
+      "id": "ddlDisableLinks",
+      "type": "select",
+      "tag": "select",
+      "nearby": "تفعيل الروابط تعطيل الروابط",
+      "options": [
+        "تفعيل الروابط",
+        "تعطيل الروابط"
+      ]
+    },
+    {
+      "id": "ddlOverrideDatabases",
+      "type": "select",
+      "tag": "select",
+      "nearby": "KM-01_01_2022",
+      "options": [
+        "KM-01_01_2022"
+      ]
+    },
+    {
+      "id": "txtComment",
+      "type": "textarea",
+      "tag": "textarea",
+      "nearby": ""
+    },
+    {
+      "id": "cph_acBranch_txtAutoCompleteText",
+      "type": "text",
+      "tag": "input",
+      "nearby": "الفرع"
+    },
+    {
+      "id": "cph_acBranch_hfAutocomplete",
+      "type": "text",
+      "tag": "input",
+      "nearby": "الفرع"
+    },
+    {
+      "id": "cph_ddlCurrency",
+      "type": "select",
+      "tag": "select",
+      "nearby": "العملة جنيه مصري جنيه استرليني جنيه سوداني درهم اماراتي درهم",
+      "options": [
+        "جنيه مصري",
+        "جنيه استرليني",
+        "جنيه سوداني",
+        "درهم اماراتي",
+        "درهم مغربي",
+        "دولار امريكي",
+        "دينار اردني",
+        "دينار عراقي",
+        "دينار كويتي",
+        "دينار ليبي",
+        "روبل روسي",
+        "روبية هندي",
+        "ريال ايراني",
+        "ريال سعودي",
+        "ريال عماني",
+        "ريال قطري",
+        "ريال يمني",
+        "ين ياباني",
+        "يوان صيني",
+        "يورو"
+      ]
+    },
+    {
+      "id": "cph_txtDateFrom",
+      "type": "text",
+      "tag": "input",
+      "nearby": "من تاريخ"
+    },
+    {
+      "id": "cph_txtDateTo",
+      "type": "text",
+      "tag": "input",
+      "nearby": "الى تاريخ"
+    },
+    {
+      "id": "cph_acAccount_txtAutoCompleteText",
+      "type": "text",
+      "tag": "input",
+      "nearby": "اسم الحساب"
+    },
+    {
+      "id": "cph_acAccount_hfAutocomplete",
+      "type": "text",
+      "tag": "input",
+      "nearby": "اسم الحساب"
+    },
+    {
+      "id": "cph_txtUserRefNo",
+      "type": "text",
+      "tag": "input",
+      "nearby": "رقم المرجع"
+    },
+    {
+      "id": "cph_ddlPaidStatus",
+      "type": "select",
+      "tag": "select",
+      "nearby": "حالة السداد اختر تحت السداد مسدد",
+      "options": [
+        "اختر",
+        "تحت السداد",
+        "مسدد"
+      ]
+    }
+  ],
+  "rows": [],
+  "text": "الاستحقاقات تلقائي (4) تلقائي (3) تلقائي (2) تلقائي (1) 0 1 2 3 4 يسار وسط يمين اكسل بالتنسيق اكسل بدون تنسيق تفعيل الروابط تعطيل الروابط KM-01_01_2022 بحث بحث الفرع العملة جنيه مصري جنيه استرليني جنيه سوداني درهم اماراتي درهم مغربي دولار امريكي دينار اردني دينار عراقي دينار كويتي دينار ليبي روبل روسي روبية هندي ريال ايراني ريال سعودي ريال عماني ريال قطري ريال يمني ين ياباني يوان صيني يورو من تاريخ الى تاريخ اسم الحساب رقم المرجع حالة السداد اختر تحت السداد مسدد"
+}

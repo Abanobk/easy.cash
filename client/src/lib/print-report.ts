@@ -212,6 +212,390 @@ export function printGroupedInvoiceReport(opts: PrintGroupedReportOptions) {
   printWindow.document.close();
 }
 
+/** تنسيق تاريخ عرض ميجا: DD/MM/YYYY */
+function fmtDateMega(d?: string) {
+  if (!d) return "";
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(d);
+  if (m) return `${m[3]}/${m[2]}/${m[1]}`;
+  const dt = new Date(d);
+  if (Number.isNaN(dt.getTime())) return d;
+  const dd = String(dt.getDate()).padStart(2, "0");
+  const mm = String(dt.getMonth() + 1).padStart(2, "0");
+  const yyyy = dt.getFullYear();
+  return `${dd}/${mm}/${yyyy}`;
+}
+
+function escHtml(v: unknown) {
+  return String(v ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+const CURRENCY_AR: Record<string, string> = {
+  EGP: "جنيه مصري",
+  USD: "دولار أمريكي",
+  EUR: "يورو",
+  SAR: "ريال سعودي",
+  AED: "درهم إماراتي",
+};
+
+export type PrintAccountStatementOptions = {
+  dateFrom?: string;
+  dateTo?: string;
+  accountLabel: string;
+  currencyCode?: string;
+  currencyLabel?: string;
+  rows: Record<string, unknown>[];
+  companyName?: string;
+  companyAddress?: string;
+  companyPhone?: string;
+  companyMobile?: string;
+  companyLogo?: string | null;
+  printedBy?: string;
+  notes?: string;
+  optionFlags?: string[];
+};
+
+/**
+ * طباعة/PDF كشف حساب — نفس أسلوب عرض ميجا (ترويسة شركة + عنوان الفترة/العملة + جدول الحركات).
+ * المرجع: artifacts/mega-account-statement/كشف-حساب.pdf + لقطة العرض.
+ */
+export function printAccountStatementReport(opts: PrintAccountStatementOptions) {
+  const {
+    dateFrom,
+    dateTo,
+    accountLabel,
+    currencyCode = "EGP",
+    currencyLabel,
+    rows,
+    companyName = "Easy Cash",
+    companyAddress,
+    companyPhone,
+    companyMobile,
+    companyLogo,
+    printedBy,
+    notes,
+    optionFlags = [],
+  } = opts;
+
+  const currencyName = currencyLabel || CURRENCY_AR[currencyCode] || currencyCode || "جنيه مصري";
+  const fromStr = fmtDateMega(dateFrom);
+  const toStr = fmtDateMega(dateTo);
+  // ميجا: «كشف حساب فى الفترة من … الى … بالعملة …»
+  const title = `كشف حساب فى الفترة من ${fromStr || "—"} الى ${toStr || "—"} بالعملة ${currencyName}`;
+  const optionsText = optionFlags.length ? `    ${optionFlags.join("    ")}` : "";
+  const notesText = notes ? `    ملاحظات: ${notes}` : "";
+  const metaLine = `من تاريخ: ${fromStr || "—"}    الى تاريخ: ${toStr || "—"}    اسم الحساب: ${accountLabel}${optionsText}${notesText}`;
+  const printedAt = new Date().toLocaleString("ar-EG", {
+    year: "numeric",
+    month: "numeric",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+
+  const logoHtml = companyLogo
+    ? `<img src="${escHtml(companyLogo)}" alt="logo" class="logo" />`
+    : "";
+
+  const columns: PrintReportColumn[] = [
+    { key: "date", label: "التاريخ" },
+    { key: "entryNumber", label: "رقم القيد" },
+    { key: "documentNumber", label: "رقم المستند" },
+    { key: "debit", label: "مدين" },
+    { key: "credit", label: "دائن" },
+    { key: "balance", label: "الرصيد" },
+    { key: "exchangeRate", label: "سعر الصرف" },
+    { key: "description", label: "الوصف" },
+  ];
+
+  const fmtAsCell = (key: string, v: unknown, isSpecial: boolean) => {
+    if (key === "date" && typeof v === "string" && v) return escHtml(fmtDateMega(v));
+    if (key === "description") {
+      return escHtml(v == null ? "" : String(v)).replace(/\n/g, "<br/>");
+    }
+    if ((key === "debit" || key === "credit") && isSpecial && (v === 0 || v === "0")) return "";
+    if (typeof v === "number") {
+      if (Number.isNaN(v)) return "";
+      if ((key === "debit" || key === "credit") && v === 0) return "";
+      return v.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+    if (v == null || v === "") return "";
+    return escHtml(v);
+  };
+
+  const bodyRows = rows.map((r) => {
+    const desc = String(r.description ?? "");
+    const isOpening = desc === "رصيد سابق";
+    const isTotal = desc === "اجمالي حركات الفترة";
+    const cls = isOpening ? "row-opening" : isTotal ? "row-total" : "";
+    const isSpecial = isOpening || isTotal;
+    return `<tr class="${cls}">${columns
+      .map((c) => {
+        const align = ["debit", "credit", "balance", "exchangeRate"].includes(c.key)
+          ? "num"
+          : c.key === "description"
+            ? "desc"
+            : "center";
+        return `<td class="${align}">${fmtAsCell(c.key, r[c.key], isSpecial)}</td>`;
+      })
+      .join("")}</tr>`;
+  }).join("");
+
+  const headRow = columns.map((c) => `<th>${c.label}</th>`).join("");
+
+  const printWindow = window.open("", "_blank", "width=1100,height=800");
+  if (!printWindow) {
+    window.alert("المتصفح منع نافذة الطباعة. اسمح بالنوافذ المنبثقة ثم أعد المحاولة.");
+    return;
+  }
+
+  printWindow.document.write(`
+    <!DOCTYPE html>
+    <html dir="rtl" lang="ar">
+    <head>
+      <meta charset="UTF-8" />
+      <title>${escHtml(title)}</title>
+      <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet" />
+      <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Cairo', Tahoma, sans-serif; font-size: 11px; color: #111; background: #fff; direction: rtl; }
+        @page { size: A4 landscape; margin: 8mm; }
+        .page { padding: 12px 16px; }
+        .print-meta { font-size: 9px; color: #555; margin-bottom: 8px; }
+        .header {
+          display: flex; justify-content: space-between; align-items: flex-start;
+          gap: 16px; margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid #ccc;
+        }
+        .company-info { text-align: right; line-height: 1.55; }
+        .company-info .name { font-size: 15px; font-weight: 800; color: #0f172a; margin-bottom: 2px; }
+        .company-info .line { font-size: 10px; color: #334155; }
+        .company-info .lbl { color: #64748b; margin-left: 4px; }
+        .logo-wrap { text-align: left; min-width: 120px; }
+        .logo { max-height: 64px; max-width: 140px; object-fit: contain; }
+        .report-title { text-align: center; font-size: 15px; font-weight: 800; margin: 10px 0 6px; color: #0f172a; }
+        .report-meta { text-align: center; font-size: 11px; color: #334155; margin-bottom: 10px; }
+        .account-banner {
+          border: 2px solid #111; padding: 5px 10px; font-weight: 700; font-size: 12px;
+          margin-bottom: 0; background: #f8fafc;
+        }
+        table { width: 100%; border-collapse: collapse; border: 1px solid #333; }
+        thead th {
+          background: #f1f5f9; color: #0f172a; border: 1px solid #333;
+          padding: 5px 6px; font-size: 10.5px; font-weight: 700; white-space: nowrap; text-align: center;
+        }
+        tbody td {
+          border: 1px solid #94a3b8; padding: 4px 6px; font-size: 10px; vertical-align: top;
+        }
+        td.center { text-align: center; white-space: nowrap; }
+        td.num { text-align: left; font-variant-numeric: tabular-nums; white-space: nowrap; direction: ltr; }
+        td.desc { text-align: right; white-space: pre-wrap; max-width: 280px; line-height: 1.35; }
+        tr.row-opening td, tr.row-total td { font-weight: 800; background: #f8fafc; }
+        tr.row-total td { border-top: 2px solid #111; }
+        .footer { text-align: center; font-size: 9px; color: #94a3b8; margin-top: 10px; padding-top: 6px; border-top: 1px solid #e2e8f0; }
+        @media print {
+          body { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+        }
+      </style>
+    </head>
+    <body>
+      <div class="page">
+        <div class="print-meta">وقت الطباعة: ${escHtml(printedAt)}${printedBy ? `  -  بواسطة: ${escHtml(printedBy)}` : ""}</div>
+        <div class="header">
+          <div class="company-info">
+            <div class="name">${escHtml(companyName)}</div>
+            ${companyPhone ? `<div class="line"><span class="lbl">تليفون:</span>${escHtml(companyPhone)}</div>` : ""}
+            ${companyMobile ? `<div class="line"><span class="lbl">موبايل:</span>${escHtml(companyMobile)}</div>` : ""}
+            ${companyAddress ? `<div class="line"><span class="lbl">العنوان:</span>${escHtml(companyAddress)}</div>` : ""}
+          </div>
+          <div class="logo-wrap">${logoHtml}</div>
+        </div>
+        <div class="report-title">${escHtml(title)}</div>
+        <div class="report-meta">${escHtml(metaLine)}</div>
+        <div class="account-banner">${escHtml(accountLabel)}</div>
+        <table>
+          <thead><tr>${headRow}</tr></thead>
+          <tbody>${bodyRows}</tbody>
+        </table>
+        <div class="footer"><p>تم إنشاء هذا التقرير بواسطة نظام Easy Cash للمحاسبة والإدارة المتكاملة</p></div>
+      </div>
+      <script>window.onload = () => { window.print(); }</script>
+    </body>
+    </html>
+  `);
+  printWindow.document.close();
+}
+
+export type PrintFormalAccountingOptions = {
+  /** عنوان التقرير بدون الفترة — تُكمَّل تلقائياً إن وُجدت التواريخ */
+  reportName: string;
+  dateFrom?: string;
+  dateTo?: string;
+  metaLine?: string;
+  columns: PrintReportColumn[];
+  rows: Record<string, unknown>[];
+  /** مفاتيح أعمدة رقمية */
+  numericKeys?: string[];
+  /** كشف صف خاص (رصيد سابق / اجمالى / …) */
+  isSpecialRow?: (row: Record<string, unknown>) => boolean;
+  /** أعمدة تاريخية تُنسَّق DD/MM/YYYY إن كانت ISO */
+  dateKeys?: string[];
+  companyName?: string;
+  companyAddress?: string;
+  companyPhone?: string;
+  companyMobile?: string;
+  companyLogo?: string | null;
+};
+
+/**
+ * طباعة/PDF رسمية بأسلوب ميجا لتقارير مثل ميزان المراجعة والأستاذ العام.
+ * (كشف الحساب له دالة أخصّ بسبب شريط اسم الحساب.)
+ */
+export function printFormalAccountingReport(opts: PrintFormalAccountingOptions) {
+  const {
+    reportName,
+    dateFrom,
+    dateTo,
+    metaLine,
+    columns,
+    rows,
+    numericKeys = ["debit", "credit", "balance", "openingDebit", "openingCredit", "periodDebit", "periodCredit", "closingDebit", "closingCredit"],
+    isSpecialRow,
+    dateKeys = ["date"],
+    companyName = "Easy Cash",
+    companyAddress,
+    companyPhone,
+    companyMobile,
+    companyLogo,
+  } = opts;
+
+  const fromStr = fmtDateMega(dateFrom);
+  const toStr = fmtDateMega(dateTo);
+  const title = dateFrom || dateTo
+    ? `${reportName} فى الفترة من ${fromStr || "—"} الى ${toStr || "—"}`
+    : reportName;
+  const meta = metaLine || (dateFrom || dateTo
+    ? `من تاريخ: ${fromStr || "—"}    الى تاريخ: ${toStr || "—"}`
+    : "");
+  const printedAt = new Date().toLocaleString("ar-EG", {
+    year: "numeric",
+    month: "numeric",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+
+  const logoHtml = companyLogo
+    ? `<img src="${escHtml(companyLogo)}" alt="logo" class="logo" />`
+    : "";
+
+  const fmtAsCell = (key: string, v: unknown) => {
+    if (dateKeys.includes(key) && typeof v === "string" && v) {
+      if (v === "رصيد سابق" || v === "اجمالى" || v === "اجمالي" || v.includes("رصيد") || v.includes("اجمال")) {
+        return escHtml(v);
+      }
+      return escHtml(fmtDateMega(v));
+    }
+    if (typeof v === "number") {
+      if (Number.isNaN(v)) return "";
+      if (numericKeys.includes(key) && v === 0) return "";
+      return v.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+    if (v == null || v === "") return "";
+    return escHtml(v);
+  };
+
+  const bodyRows = rows.map((r) => {
+    const special = isSpecialRow?.(r) ?? false;
+    const cls = special ? "row-special" : "";
+    return `<tr class="${cls}">${columns
+      .map((c) => {
+        const align = numericKeys.includes(c.key) ? "num" : dateKeys.includes(c.key) ? "center" : "text";
+        return `<td class="${align}">${fmtAsCell(c.key, r[c.key])}</td>`;
+      })
+      .join("")}</tr>`;
+  }).join("");
+
+  const headRow = columns.map((c) => `<th>${escHtml(c.label)}</th>`).join("");
+
+  const printWindow = window.open("", "_blank", "width=1100,height=800");
+  if (!printWindow) {
+    window.alert("المتصفح منع نافذة الطباعة. اسمح بالنوافذ المنبثقة ثم أعد المحاولة.");
+    return;
+  }
+
+  printWindow.document.write(`
+    <!DOCTYPE html>
+    <html dir="rtl" lang="ar">
+    <head>
+      <meta charset="UTF-8" />
+      <title>${escHtml(title)}</title>
+      <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet" />
+      <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Cairo', Tahoma, sans-serif; font-size: 11px; color: #111; background: #fff; direction: rtl; }
+        @page { size: A4 landscape; margin: 8mm; }
+        .page { padding: 12px 16px; }
+        .print-meta { font-size: 9px; color: #555; margin-bottom: 8px; }
+        .header {
+          display: flex; justify-content: space-between; align-items: flex-start;
+          gap: 16px; margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid #ccc;
+        }
+        .company-info { text-align: right; line-height: 1.55; }
+        .company-info .name { font-size: 15px; font-weight: 800; color: #0f172a; margin-bottom: 2px; }
+        .company-info .line { font-size: 10px; color: #334155; }
+        .company-info .lbl { color: #64748b; margin-left: 4px; }
+        .logo-wrap { text-align: left; min-width: 120px; }
+        .logo { max-height: 64px; max-width: 140px; object-fit: contain; }
+        .report-title { text-align: center; font-size: 15px; font-weight: 800; margin: 10px 0 6px; color: #0f172a; }
+        .report-meta { text-align: center; font-size: 11px; color: #334155; margin-bottom: 10px; }
+        table { width: 100%; border-collapse: collapse; border: 1px solid #333; }
+        thead th {
+          background: #f1f5f9; color: #0f172a; border: 1px solid #333;
+          padding: 5px 6px; font-size: 10.5px; font-weight: 700; white-space: nowrap; text-align: center;
+        }
+        tbody td {
+          border: 1px solid #94a3b8; padding: 4px 6px; font-size: 10px; vertical-align: top;
+        }
+        td.center { text-align: center; white-space: nowrap; }
+        td.num { text-align: left; font-variant-numeric: tabular-nums; white-space: nowrap; direction: ltr; }
+        td.text { text-align: right; white-space: nowrap; }
+        tr.row-special td { font-weight: 800; background: #f8fafc; }
+        .footer { text-align: center; font-size: 9px; color: #94a3b8; margin-top: 10px; padding-top: 6px; border-top: 1px solid #e2e8f0; }
+        @media print {
+          body { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+        }
+      </style>
+    </head>
+    <body>
+      <div class="page">
+        <div class="print-meta">وقت الطباعة: ${escHtml(printedAt)}</div>
+        <div class="header">
+          <div class="company-info">
+            <div class="name">${escHtml(companyName)}</div>
+            ${companyPhone ? `<div class="line"><span class="lbl">تليفون:</span>${escHtml(companyPhone)}</div>` : ""}
+            ${companyMobile ? `<div class="line"><span class="lbl">موبايل:</span>${escHtml(companyMobile)}</div>` : ""}
+            ${companyAddress ? `<div class="line"><span class="lbl">العنوان:</span>${escHtml(companyAddress)}</div>` : ""}
+          </div>
+          <div class="logo-wrap">${logoHtml}</div>
+        </div>
+        <div class="report-title">${escHtml(title)}</div>
+        ${meta ? `<div class="report-meta">${escHtml(meta)}</div>` : ""}
+        <table>
+          <thead><tr>${headRow}</tr></thead>
+          <tbody>${bodyRows}</tbody>
+        </table>
+        <div class="footer"><p>تم إنشاء هذا التقرير بواسطة نظام Easy Cash للمحاسبة والإدارة المتكاملة</p></div>
+      </div>
+      <script>window.onload = () => { window.print(); }</script>
+    </body>
+    </html>
+  `);
+  printWindow.document.close();
+}
+
 export function printTableReport(opts: PrintReportOptions) {
   const {
     title, dateFrom, dateTo, columns, rows, totals,
