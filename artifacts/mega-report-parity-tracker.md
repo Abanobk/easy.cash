@@ -26,7 +26,7 @@ Slugs = `featureKey` من `client/src/config/erp-navigation.ts` (مصدر الح
 | 2 | Sales/purchases remainder | ✅ partial (credits ages gap) |
 | 3 | Inventory ×10 | ✅ partial; itemaging blocked |
 | 4 | Collection / checks / dues / leftovers ×10 | ✅ partial + honesty |
-| **5** | **Final leftovers ×6** | ⬜ **NEXT** |
+| **5** | **Final leftovers ×6** | ✅ partial (subledger account capture) |
 | 6 | Profits ×3 + credits ages gap ×3 | ⬜ |
 | 7 | Reps ×4 | ⬜ |
 | 8 | Production ×2 | ⬜ |
@@ -108,15 +108,15 @@ Slugs = `featureKey` من `client/src/config/erp-navigation.ts` (مصدر الح
 
 ---
 
-## Wave 5 — final leftovers ⬅️ NEXT
+## Wave 5 — final leftovers
 | Easy slug | Mega path | Filters | Columns | Evidence | Notes |
 |-----------|-----------|---------|---------|----------|-------|
-| `finalreports-subledger` | `/FinalReports/SubLedger.aspx` | todo | todo | - | أستاذ مساعد |
-| `finalreports-salescost` | `/FinalReports/SalesCost.aspx` | todo | todo | - | تكلفة المبيعات |
-| `finalreports-incomestatment` | `/FinalReports/IncomeStatment.aspx` | todo | todo | - | قائمة الدخل |
-| `finalreports-balancesheet` | `/FinalReports/BalanceSheet.aspx` | todo | todo | - | ميزانية |
-| `finalreports-financialstatment` | `/FinalReports/FinancialStatment.aspx` | todo | todo | - | مركز مالي |
-| `finalreports-cashflow` | `/FinalReports/CashFlow.aspx` | todo | todo | - | تدفقات |
+| `finalreports-subledger` | `/FinalReports/SubLedger.aspx` | partial | partial | `mega-wave5-final/` | needs account; journal-line cols |
+| `finalreports-salescost` | `/FinalReports/SalesCost.aspx` | done | done | `mega-wave5-final/` | Mega line labels |
+| `finalreports-incomestatment` | `/FinalReports/IncomeStatment.aspx` | done | done | `mega-wave5-final/` | Mega line labels |
+| `finalreports-balancesheet` | `/FinalReports/BalanceSheet.aspx` | done | done | `mega-wave5-final/` | Mega line labels |
+| `finalreports-financialstatment` | `/FinalReports/FinancialStatment.aspx` | done | done | `mega-wave5-final/` | Mega line labels |
+| `finalreports-cashflow` | `/FinalReports/CashFlow.aspx` | done | done | `mega-wave5-final/` | Mega line labels |
 
 ## Wave 6 — profits + close credits-ages gap
 | Easy slug | Mega path | Filters | Columns | Evidence | Notes |

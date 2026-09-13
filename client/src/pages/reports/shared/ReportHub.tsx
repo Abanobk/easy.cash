@@ -498,6 +498,11 @@ export default function ReportHub({ title, section, icon, reports, procedure }: 
     "accountName", "jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec", "total",
   ] as const;
 
+  const FINAL_STATEMENT_COLUMN_ORDER = ["lineLabel", "amount"] as const;
+  const SUBLEDGER_COLUMN_ORDER = [
+    "date", "documentNumber", "accountCode", "accountName", "description", "costCenter", "debit", "credit", "balance",
+  ] as const;
+
   const isSales = slug === "accountingreports-sales";
   const isPurchases = slug === "accountingreports-purchases";
   const isCustomersSales = slug === "accountingreports-customerssales";
@@ -527,6 +532,13 @@ export default function ReportHub({ title, section, icon, reports, procedure }: 
   const isDashboard = slug === "accountingreports-dashboard";
   const isBranchesSummary = slug === "accountingreports-branchessummary";
   const isMonthlyExpenses = slug === "accountingreports-monthlyexpenses";
+  const isFinalStatement =
+    slug === "finalreports-salescost" ||
+    slug === "finalreports-incomestatment" ||
+    slug === "finalreports-balancesheet" ||
+    slug === "finalreports-financialstatment" ||
+    slug === "finalreports-cashflow";
+  const isSubledger = slug === "finalreports-subledger";
 
   const isSalesOrPurchases = isSales || isPurchases;
 
@@ -599,19 +611,23 @@ export default function ReportHub({ title, section, icon, reports, procedure }: 
                                                                 ? BRANCHES_SUMMARY_COLUMN_ORDER
                                                                 : isMonthlyExpenses
                                                                   ? MONTHLY_EXPENSES_COLUMN_ORDER
-                                                                  : null;
+                                                                    : isFinalStatement
+                                                                      ? FINAL_STATEMENT_COLUMN_ORDER
+                                                                      : isSubledger
+                                                                        ? SUBLEDGER_COLUMN_ORDER
+                                                                        : null;
     if (!order) return keys;
     const preferred = order.filter((k) => keys.includes(k));
     // لتقارير ميجا ذات ترتيب ثابت: لا نعرض أعمدة إضافية (مثل profit/itemCode) خارج ترتيب ميجا
-    const megaStrict = isCustomersSales || isVendorsPurchases || isGrossSalesByItems || isGrossPurchasesByItems || isSales || isPurchases || isCustomerStatement || isVendorStatement || isCustomersList || isVendorsList || isCustomersSummary || isAreasSummary || isVendorsSummary || isLastPrices || isMatureInvoices || isMatureReceipts || isMonthlySalesByItems || isSalesOrders || isPurchaseOrders || isDebitsAges || isChecks || isCustomersInstallments || isPayments || isDues || isCashStatement || isCostCenterStatement || isDashboard || isBranchesSummary || isMonthlyExpenses;
+    const megaStrict = isCustomersSales || isVendorsPurchases || isGrossSalesByItems || isGrossPurchasesByItems || isSales || isPurchases || isCustomerStatement || isVendorStatement || isCustomersList || isVendorsList || isCustomersSummary || isAreasSummary || isVendorsSummary || isLastPrices || isMatureInvoices || isMatureReceipts || isMonthlySalesByItems || isSalesOrders || isPurchaseOrders || isDebitsAges || isChecks || isCustomersInstallments || isPayments || isDues || isCashStatement || isCostCenterStatement || isDashboard || isBranchesSummary || isMonthlyExpenses || isFinalStatement || isSubledger;
     if (megaStrict) return preferred.length ? preferred : keys;
     const rest = keys.filter((k) => !(order as readonly string[]).includes(k));
     return [...preferred, ...rest];
-  }, [rows, isAccountStatement, isCustomerItemStatement, isSales, isPurchases, isCustomersSales, isVendorsPurchases, isGrossSalesByItems, isGrossPurchasesByItems, isCustomerStatement, isVendorStatement, isCustomersList, isVendorsList, isCustomersSummary, isAreasSummary, isVendorsSummary, isLastPrices, isMatureInvoices, isMatureReceipts, isMonthlySalesByItems, isSalesOrders, isPurchaseOrders, isDebitsAges, isChecks, isCustomersInstallments, isPayments, isDues, isCashStatement, isCostCenterStatement, isDashboard, isBranchesSummary, isMonthlyExpenses]);
+  }, [rows, isAccountStatement, isCustomerItemStatement, isSales, isPurchases, isCustomersSales, isVendorsPurchases, isGrossSalesByItems, isGrossPurchasesByItems, isCustomerStatement, isVendorStatement, isCustomersList, isVendorsList, isCustomersSummary, isAreasSummary, isVendorsSummary, isLastPrices, isMatureInvoices, isMatureReceipts, isMonthlySalesByItems, isSalesOrders, isPurchaseOrders, isDebitsAges, isChecks, isCustomersInstallments, isPayments, isDues, isCashStatement, isCostCenterStatement, isDashboard, isBranchesSummary, isMonthlyExpenses, isFinalStatement, isSubledger]);
 
   const totals = useMemo(() => {
     // ميجا: الإجمالي صف داخل البيانات («اجمالي حركات الفترة») — لا نضاعفه في تذييل الجدول
-    if (isAccountStatement) return null;
+    if (isAccountStatement || isFinalStatement) return null;
     const result: Record<string, number> = {};
     let hasAny = false;
     for (const col of columns) {

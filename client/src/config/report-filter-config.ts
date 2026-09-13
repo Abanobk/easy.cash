@@ -77,14 +77,14 @@ const FINAL_FILTERS: Record<string, ReportEntityFilter[]> = {
   "accounting-generaljournallist": ["account", "costCenter"],
   // ميجا (الاستاذ العام): الفرع + الحساب الرئيسي + مركز التكلفة + من/الى تاريخ
   "finalreports-generalledger": ["branch", "account", "costCenter"],
-  "finalreports-subledger": ["account", "costCenter"],
+  "finalreports-subledger": ["branch", "account", "costCenter"],
   // ميجا (ميزان المراجعة): الفرع + الحساب الرئيسي + من/الى تاريخ (+ خيارات تجميع إضافية لاحقاً)
   "finalreports-trialbalance": ["branch", "account"],
-  "finalreports-incomestatment": [],
-  "finalreports-balancesheet": [],
-  "finalreports-cashflow": [],
-  "finalreports-salescost": [],
-  "finalreports-financialstatment": [],
+  "finalreports-incomestatment": ["branch"],
+  "finalreports-balancesheet": ["branch"],
+  "finalreports-cashflow": ["branch"],
+  "finalreports-salescost": ["branch"],
+  "finalreports-financialstatment": ["branch"],
 };
 
 const ASSETS_FILTERS: Record<string, ReportEntityFilter[]> = {

@@ -1,6 +1,6 @@
 /**
- * Capture Mega wave-5 final statement leftovers PDFs (short date range + عرض).
- * Evidence only — do not invent column labels.
+ * Capture Mega wave-5 final statement leftover PDFs.
+ * Evidence only — never invent column labels.
  */
 import puppeteer from "puppeteer";
 import fs from "fs";
@@ -14,11 +14,11 @@ const PASS = "112233445566";
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 const REPORTS = [
-  { key: "subledger", featureKey: "finalreports-subledger", path: "/FinalReports/SubLedger.aspx" },
+  { key: "subledger", featureKey: "finalreports-subledger", path: "/FinalReports/SubLedger.aspx", needsAccount: true },
   { key: "salescost", featureKey: "finalreports-salescost", path: "/FinalReports/SalesCost.aspx" },
   { key: "incomestatment", featureKey: "finalreports-incomestatment", path: "/FinalReports/IncomeStatment.aspx" },
-  { key: "balancesheet", featureKey: "finalreports-balancesheet", path: "/FinalReports/BalanceSheet.aspx" },
-  { key: "financialstatment", featureKey: "finalreports-financialstatment", path: "/FinalReports/FinancialStatment.aspx" },
+  { key: "balancesheet", featureKey: "finalreports-balancesheet", path: "/FinalReports/BalanceSheet.aspx", asOf: true },
+  { key: "financialstatment", featureKey: "finalreports-financialstatment", path: "/FinalReports/FinancialStatment.aspx", asOf: true },
   { key: "cashflow", featureKey: "finalreports-cashflow", path: "/FinalReports/CashFlow.aspx" },
 ];
 
@@ -28,7 +28,7 @@ function extractUrls(text) {
     /\/(?:show|download)report\/[^\s"'<>\\]+/gi,
     /https?:\/\/[^"'\\\s]+\/(?:show|download)report\/[^"'\\\s]+/gi,
   ]) {
-    for (const m of text.matchAll(re)) urls.add(m[0].replace(/&amp;/g, "&"));
+    for (const m of String(text).matchAll(re)) urls.add(m[0].replace(/&amp;/g, "&"));
   }
   return [...urls];
 }
@@ -91,7 +91,7 @@ async function openReport(page, reportPath) {
 }
 
 async function captureOne(page, report) {
-  const frame = await openReport(page, report.path);
+  let frame = await openReport(page, report.path);
   if (!frame) return { key: report.key, error: "no-MainIframe" };
 
   const netHits = [];
@@ -103,13 +103,12 @@ async function captureOne(page, report) {
       const interesting =
         /showreport|downloadreport|\.pdf/i.test(url) ||
         /pdf/i.test(ct) ||
-        (method === "POST" && /(?:Inv|Accounting|Final)Reports\/.+\.aspx/i.test(url));
+        (method === "POST" && /FinalReports\/.+\.aspx/i.test(url));
       if (!interesting) return;
       const buf = await res.buffer().catch(() => null);
-      const item = { url, method, ct, status: res.status(), size: buf?.length || 0, urls: [] };
+      const item = { url, method, ct, status: res.status(), size: buf?.length || 0, urls: [], saved: null };
       if (buf) {
-        const isPdf = buf.slice(0, 5).toString() === "%PDF-";
-        if (isPdf) {
+        if (buf.slice(0, 5).toString() === "%PDF-") {
           const fname = `${report.key}-net.pdf`;
           fs.writeFileSync(path.join(OUT, fname), buf);
           item.saved = fname;
@@ -118,12 +117,14 @@ async function captureOne(page, report) {
         }
       }
       netHits.push(item);
-      console.log("NET", report.key, method, res.status(), url.slice(0, 120), item.urls);
-    } catch {}
+      console.log("NET", report.key, method, res.status(), url.slice(0, 120), item.saved || item.urls.length || 0);
+    } catch {
+      /* ignore */
+    }
   };
   page.on("response", onResponse);
 
-  const prep = await frame.evaluate(() => {
+  const prep = await frame.evaluate((needsAccount, asOf) => {
     const setDate = (id, val) => {
       const el = document.getElementById(id);
       if (!el) return false;
@@ -133,16 +134,41 @@ async function captureOne(page, report) {
       for (const ev of ["focus", "input", "change", "blur"]) el.dispatchEvent(new Event(ev, { bubbles: true }));
       return true;
     };
-    // Inventory reports use FromDateSrch/ToDateSrch or single txtDate (as-of)
-    const okFrom =
-      setDate("cph_txtFromDateSrch", "1/1/2022") ||
-      setDate("cph_txtDateFrom", "1/1/2022") ||
-      setDate("cph_txtFromDate", "1/1/2022");
-    const okTo =
-      setDate("cph_txtToDateSrch", "3/1/2022") ||
-      setDate("cph_txtDateTo", "3/1/2022") ||
-      setDate("cph_txtToDate", "3/1/2022") ||
-      setDate("cph_txtDate", "3/1/2022");
+
+    let okFrom = false;
+    let okTo = false;
+    if (asOf) {
+      okFrom = okTo =
+        setDate("cph_txtDate", "3/1/2022") ||
+        setDate("cph_txtDateSrch", "3/1/2022") ||
+        setDate("cph_txtDateToSrch", "3/1/2022") ||
+        setDate("cph_txtDateTo", "3/1/2022");
+    } else {
+      okFrom =
+        setDate("cph_txtDateFromSrch", "1/1/2022") ||
+        setDate("cph_txtFromDateSrch", "1/1/2022") ||
+        setDate("cph_txtDateFrom", "1/1/2022") ||
+        setDate("cph_txtFromDate", "1/1/2022");
+      okTo =
+        setDate("cph_txtDateToSrch", "3/1/2022") ||
+        setDate("cph_txtToDateSrch", "3/1/2022") ||
+        setDate("cph_txtDateTo", "3/1/2022") ||
+        setDate("cph_txtToDate", "3/1/2022");
+    }
+
+    let account = null;
+    if (needsAccount) {
+      for (const sel of document.querySelectorAll("select")) {
+        const opt = [...sel.options].find((o) => o.value && o.value !== "0" && !/اختر|^$|الكل|^All$/i.test(o.text.trim()));
+        if (opt) {
+          sel.value = opt.value;
+          sel.dispatchEvent(new Event("change", { bubbles: true }));
+          account = `${sel.id}=${opt.text.trim()}`;
+          break;
+        }
+      }
+    }
+
     document.body.click();
     try {
       if (typeof Page_Validators !== "undefined") {
@@ -154,31 +180,39 @@ async function captureOne(page, report) {
       window.Page_ValidationActive = false;
       window.ValidatorOnSubmit = () => true;
       window.Page_ClientValidate = () => true;
-    } catch {}
+    } catch {
+      /* ignore */
+    }
+
     const btn =
       document.getElementById("cph_btnShow") ||
       [...document.querySelectorAll("input[type=submit],input[type=button],button")].find((el) =>
         /عرض|Show/i.test((el.value || el.innerText || "") + "")
       );
+
     return {
       okFrom,
       okTo,
+      account,
       from:
-        document.getElementById("cph_txtFromDateSrch")?.value ||
-        document.getElementById("cph_txtDateFrom")?.value,
+        document.getElementById("cph_txtDateFromSrch")?.value ||
+        document.getElementById("cph_txtDateFrom")?.value ||
+        document.getElementById("cph_txtDate")?.value,
       to:
-        document.getElementById("cph_txtToDateSrch")?.value ||
+        document.getElementById("cph_txtDateToSrch")?.value ||
         document.getElementById("cph_txtDateTo")?.value ||
         document.getElementById("cph_txtDate")?.value,
       hasBtn: !!btn,
       btnId: btn?.id || null,
       hasViewer: !!document.getElementById("cph_ifViewer"),
       dateIds: [...document.querySelectorAll("input[id*='Date']")].map((el) => el.id).slice(0, 20),
+      selectIds: [...document.querySelectorAll("select")].map((el) => el.id).slice(0, 25),
     };
-  });
+  }, !!report.needsAccount, !!report.asOf);
   console.log("prep", report.key, prep);
 
-  // Prefer real click (avoids ASP.NET strict-mode caller error inside evaluate)
+  await page.screenshot({ path: path.join(OUT, `${report.key}-before.png`), fullPage: true }).catch(() => null);
+
   let btn = await frame.$("#cph_btnShow");
   if (!btn) {
     const handle = await frame.evaluateHandle(() =>
@@ -212,20 +246,30 @@ async function captureOne(page, report) {
 
   let foundUrls = [];
   let finalSrc = null;
-  for (let i = 0; i < 40; i++) {
+  for (let i = 0; i < 45; i++) {
     await sleep(2000);
+    frame = (await getMain(page)) || frame;
     const snap = await frame
       .evaluate(() => {
         const v = document.getElementById("cph_ifViewer");
         const waitText = /برجاء الانتظار|انتظر/i.test(document.body?.innerText || "");
+        const validation = /مطلوب|يجب اختيار|اختر الحساب/i.test(document.body?.innerText || "");
         const lnk = [...document.querySelectorAll("a[href*='downloadreport'],a[href*='showreport']")].map((a) => a.href);
-        return { src: v?.getAttribute("src"), srcProp: v?.src, waitText, lnk };
+        return {
+          src: v?.getAttribute("src"),
+          srcProp: v?.src,
+          waitText,
+          validation,
+          lnk,
+          hint: (document.body?.innerText || "").replace(/\s+/g, " ").slice(0, 280),
+        };
       })
-      .catch((e) => ({ err: String(e) }));
+      .catch((e) => ({ errMsg: String(e) }));
 
     for (const h of netHits) {
       if (h.urls?.length) foundUrls.push(...h.urls);
-      if (/showreport|downloadreport/i.test(h.url)) foundUrls.push(h.url);
+      if (/showreport|downloadreport/i.test(h.url || "")) foundUrls.push(h.url);
+      if (h.saved) foundUrls.push(`file:${h.saved}`);
     }
     if (snap.lnk?.length) foundUrls.push(...snap.lnk);
     if (snap.src && snap.src !== "about:blank") {
@@ -235,9 +279,29 @@ async function captureOne(page, report) {
     const viewer = page.frames().find((f) => f.name() === "ifViewer");
     if (viewer && viewer.url() !== "about:blank") foundUrls.push(viewer.url());
 
-    console.log(report.key, "tick", i, "wait", !!snap.waitText, "src", snap.src || snap.srcProp, "urls", foundUrls.length);
+    console.log(
+      report.key,
+      "tick",
+      i,
+      "wait",
+      !!snap.waitText,
+      "val",
+      !!snap.validation,
+      "src",
+      snap.src || snap.srcProp || snap.errMsg,
+      "urls",
+      foundUrls.length
+    );
     if (foundUrls.length) break;
-    if (i === 4 && btn) await btn.click({ delay: 40 });
+    if (i === 5) {
+      try {
+        frame = await getMain(page);
+        const b2 = await frame?.$("#cph_btnShow");
+        if (b2) await b2.click({ delay: 40 });
+      } catch {
+        /* ignore */
+      }
+    }
   }
 
   foundUrls = [...new Set(foundUrls)];
@@ -246,6 +310,11 @@ async function captureOne(page, report) {
   let pdfPath = null;
   const saved = [];
   for (const u of foundUrls) {
+    if (u.startsWith("file:")) {
+      pdfPath = path.join(OUT, u.slice(5));
+      saved.push({ u, local: true });
+      break;
+    }
     const abs = u.startsWith("http") ? u : `${BASE}${u.startsWith("/") ? "" : "/"}${u}`;
     const variants = [abs];
     if (/showreport/i.test(abs)) variants.push(abs.replace(/\/showreport\//i, "/downloadreport/"));
@@ -253,8 +322,7 @@ async function captureOne(page, report) {
       try {
         const r = await fetch(vu, { headers: { Cookie: cookieHeader } });
         const buf = Buffer.from(await r.arrayBuffer());
-        const isPdf = buf.slice(0, 5).toString() === "%PDF-";
-        if (!isPdf) continue;
+        if (buf.slice(0, 5).toString() !== "%PDF-") continue;
         const name = `${report.key}.pdf`;
         fs.writeFileSync(path.join(OUT, name), buf);
         pdfPath = path.join(OUT, name);
@@ -288,7 +356,7 @@ async function captureOne(page, report) {
   fs.mkdirSync(OUT, { recursive: true });
   const browser = await puppeteer.launch({
     headless: true,
-    executablePath: "/usr/local/bin/google-chrome",
+    executablePath: "/usr/bin/google-chrome-stable",
     args: ["--no-sandbox", "--disable-setuid-sandbox", "--window-size=1400,900"],
     defaultViewport: { width: 1400, height: 900 },
   });
@@ -310,7 +378,14 @@ async function captureOne(page, report) {
   }
 
   fs.writeFileSync(path.join(OUT, "wave5-pdf-capture.json"), JSON.stringify({ at: new Date().toISOString(), results }, null, 2));
-  console.log("SUMMARY", JSON.stringify(results.map((r) => ({ key: r.key, pdf: !!r.pdfPath, err: r.error, prep: r.prep })), null, 2));
+  console.log(
+    "SUMMARY",
+    JSON.stringify(
+      results.map((r) => ({ key: r.key, pdf: !!r.pdfPath, err: r.error, from: r.prep?.from, to: r.prep?.to, account: r.prep?.account })),
+      null,
+      2
+    )
+  );
   await browser.close();
 })().catch((e) => {
   console.error(e);

@@ -1,0 +1,252 @@
+{
+  "at": "2026-09-13T19:10:36.692Z",
+  "results": [
+    {
+      "key": "subledger",
+      "featureKey": "finalreports-subledger",
+      "path": "/FinalReports/SubLedger.aspx",
+      "prep": {
+        "okFrom": true,
+        "okTo": true,
+        "account": "ddlNumDecimals=تلقائي (4)",
+        "from": "1/1/2022",
+        "to": "3/1/2022",
+        "hasBtn": true,
+        "btnId": "cph_btnShow",
+        "hasViewer": true,
+        "dateIds": [
+          "cph_txtDateFromSrch",
+          "cph_txtDateToSrch"
+        ],
+        "selectIds": [
+          "ddlNumDecimals",
+          "ddlNumAlign",
+          "ddlExcelFormat",
+          "ddlDisableLinks",
+          "ddlOverrideDatabases",
+          "cph_ddlCurrency"
+        ]
+      },
+      "foundUrls": [],
+      "finalSrc": null,
+      "pdfPath": null,
+      "saved": [],
+      "netHits": 1
+    },
+    {
+      "key": "salescost",
+      "featureKey": "finalreports-salescost",
+      "path": "/FinalReports/SalesCost.aspx",
+      "prep": {
+        "okFrom": true,
+        "okTo": true,
+        "account": null,
+        "from": "1/1/2022",
+        "to": "3/1/2022",
+        "hasBtn": true,
+        "btnId": "cph_btnShow",
+        "hasViewer": true,
+        "dateIds": [
+          "cph_txtDateFromSrch",
+          "cph_txtDateToSrch"
+        ],
+        "selectIds": [
+          "ddlNumDecimals",
+          "ddlNumAlign",
+          "ddlExcelFormat",
+          "ddlDisableLinks",
+          "ddlOverrideDatabases"
+        ]
+      },
+      "foundUrls": [
+        "/showreport/cmFmO8mBqWm62QDB8oJ_T1GqETy6zjn1Gxj9YLXlRkjCj2NkoIQyOn0reX2sFcFBRkx97Ch6H7ce5CnaycYWp5klTot3Bsx8aTtR4i45O76ZlkG-uBGg5VF_SNGhbm6t5UXObQ2/تكلفة",
+        "https://km.mega-cash.net/showreport/cmFmO8mBqWm62QDB8oJ_T1GqETy6zjn1Gxj9YLXlRkjCj2NkoIQyOn0reX2sFcFBRkx97Ch6H7ce5CnaycYWp5klTot3Bsx8aTtR4i45O76ZlkG-uBGg5VF_SNGhbm6t5UXObQ2/%D8%AA%D9%83%D9%84%D9%81%D8%A9%20%D8%A7%D9%84%D9%85%D8%A8%D9%8A%D8%B9%D8%A7%D8%AA.ashx?show=1",
+        "/showreport/cmFmO8mBqWm62QDB8oJ_T1GqETy6zjn1Gxj9YLXlRkjCj2NkoIQyOn0reX2sFcFBRkx97Ch6H7ce5CnaycYWp5klTot3Bsx8aTtR4i45O76ZlkG-uBGg5VF_SNGhbm6t5UXObQ2/%D8%AA%D9%83%D9%84%D9%81%D8%A9%20%D8%A7%D9%84%D9%85%D8%A8%D9%8A%D8%B9%D8%A7%D8%AA.ashx?show=1",
+        "https://km.mega-cash.net/downloadreport/cmFmO8mBqWm62QDB8oJ_T1GqETy6zjn1Gxj9YLXlRkjCj2NkoIQyOn0reX2sFcFBRkx97Ch6H7ce5CnaycYWp5klTot3Bsx8aTtR4i45O76ZlkG-uBGg5VF_SNGhbm6t5UXObQ2/%D8%AA%D9%83%D9%84%D9%81%D8%A9%20%D8%A7%D9%84%D9%85%D8%A8%D9%8A%D8%B9%D8%A7%D8%AA.ashx?show=1",
+        "/showreport/cmFmO8mBqWm62QDB8oJ_T1GqETy6zjn1Gxj9YLXlRkjCj2NkoIQyOn0reX2sFcFBRkx97Ch6H7ce5CnaycYWp5klTot3Bsx8aTtR4i45O76ZlkG-uBGg5VF_SNGhbm6t5UXObQ2/تكلفة المبيعات.ashx?show=1"
+      ],
+      "finalSrc": "/showreport/cmFmO8mBqWm62QDB8oJ_T1GqETy6zjn1Gxj9YLXlRkjCj2NkoIQyOn0reX2sFcFBRkx97Ch6H7ce5CnaycYWp5klTot3Bsx8aTtR4i45O76ZlkG-uBGg5VF_SNGhbm6t5UXObQ2/تكلفة المبيعات.ashx?show=1",
+      "pdfPath": "artifacts/mega-wave5-final/pdf/salescost.pdf",
+      "saved": [
+        {
+          "vu": "https://km.mega-cash.net/showreport/cmFmO8mBqWm62QDB8oJ_T1GqETy6zjn1Gxj9YLXlRkjCj2NkoIQyOn0reX2sFcFBRkx97Ch6H7ce5CnaycYWp5klTot3Bsx8aTtR4i45O76ZlkG-uBGg5VF_SNGhbm6t5UXObQ2/تكلفة",
+          "status": 200,
+          "size": 66517,
+          "name": "salescost.pdf"
+        }
+      ],
+      "netHits": 3
+    },
+    {
+      "key": "incomestatment",
+      "featureKey": "finalreports-incomestatment",
+      "path": "/FinalReports/IncomeStatment.aspx",
+      "prep": {
+        "okFrom": true,
+        "okTo": true,
+        "account": null,
+        "from": "1/1/2022",
+        "to": "3/1/2022",
+        "hasBtn": true,
+        "btnId": "cph_btnShow",
+        "hasViewer": true,
+        "dateIds": [
+          "cph_txtDateFromSrch",
+          "cph_txtDateToSrch"
+        ],
+        "selectIds": [
+          "ddlNumDecimals",
+          "ddlNumAlign",
+          "ddlExcelFormat",
+          "ddlDisableLinks",
+          "ddlOverrideDatabases"
+        ]
+      },
+      "foundUrls": [
+        "/showreport/u_BY63YZyQCw3FF6IxAU4TjZouB2ESTG0G32ZdZuuqAkm7Yd3u6g2OWZ_WlXZM7AdH3wgd6EUfSbThM6EPvArsW_AlJtDhtroz41F_lI0Nc6112QMANIOeEWylWOEnaqjF0FBQ2/قائمة",
+        "https://km.mega-cash.net/showreport/u_BY63YZyQCw3FF6IxAU4TjZouB2ESTG0G32ZdZuuqAkm7Yd3u6g2OWZ_WlXZM7AdH3wgd6EUfSbThM6EPvArsW_AlJtDhtroz41F_lI0Nc6112QMANIOeEWylWOEnaqjF0FBQ2/%D9%82%D8%A7%D8%A6%D9%85%D8%A9%20%D8%A7%D9%84%D8%AF%D8%AE%D9%84.ashx?show=1",
+        "https://km.mega-cash.net/downloadreport/u_BY63YZyQCw3FF6IxAU4TjZouB2ESTG0G32ZdZuuqAkm7Yd3u6g2OWZ_WlXZM7AdH3wgd6EUfSbThM6EPvArsW_AlJtDhtroz41F_lI0Nc6112QMANIOeEWylWOEnaqjF0FBQ2/%D9%82%D8%A7%D8%A6%D9%85%D8%A9%20%D8%A7%D9%84%D8%AF%D8%AE%D9%84.ashx?show=1",
+        "/showreport/u_BY63YZyQCw3FF6IxAU4TjZouB2ESTG0G32ZdZuuqAkm7Yd3u6g2OWZ_WlXZM7AdH3wgd6EUfSbThM6EPvArsW_AlJtDhtroz41F_lI0Nc6112QMANIOeEWylWOEnaqjF0FBQ2/قائمة الدخل.ashx?show=1"
+      ],
+      "finalSrc": "/showreport/u_BY63YZyQCw3FF6IxAU4TjZouB2ESTG0G32ZdZuuqAkm7Yd3u6g2OWZ_WlXZM7AdH3wgd6EUfSbThM6EPvArsW_AlJtDhtroz41F_lI0Nc6112QMANIOeEWylWOEnaqjF0FBQ2/قائمة الدخل.ashx?show=1",
+      "pdfPath": "artifacts/mega-wave5-final/pdf/incomestatment.pdf",
+      "saved": [
+        {
+          "vu": "https://km.mega-cash.net/showreport/u_BY63YZyQCw3FF6IxAU4TjZouB2ESTG0G32ZdZuuqAkm7Yd3u6g2OWZ_WlXZM7AdH3wgd6EUfSbThM6EPvArsW_AlJtDhtroz41F_lI0Nc6112QMANIOeEWylWOEnaqjF0FBQ2/قائمة",
+          "status": 200,
+          "size": 78362,
+          "name": "incomestatment.pdf"
+        }
+      ],
+      "netHits": 3
+    },
+    {
+      "key": "balancesheet",
+      "featureKey": "finalreports-balancesheet",
+      "path": "/FinalReports/BalanceSheet.aspx",
+      "prep": {
+        "okFrom": true,
+        "okTo": true,
+        "account": null,
+        "to": "3/1/2022",
+        "hasBtn": true,
+        "btnId": "cph_btnShow",
+        "hasViewer": true,
+        "dateIds": [
+          "cph_txtDateToSrch"
+        ],
+        "selectIds": [
+          "ddlNumDecimals",
+          "ddlNumAlign",
+          "ddlExcelFormat",
+          "ddlDisableLinks",
+          "ddlOverrideDatabases"
+        ]
+      },
+      "foundUrls": [
+        "/showreport/44xhggmhH2nQTncJX5NxQG-R4AF4f8lz0lMtW0I141dYfEgL-qp-Fm1HjRwH2XJAE1ZXDapFXWC_6X57Qx4uDDSf4g7h3qFmCYhmArpy4boP5OmSYpg7x2KwRZfMoGMeYTZCpg2/الميزانية",
+        "https://km.mega-cash.net/showreport/44xhggmhH2nQTncJX5NxQG-R4AF4f8lz0lMtW0I141dYfEgL-qp-Fm1HjRwH2XJAE1ZXDapFXWC_6X57Qx4uDDSf4g7h3qFmCYhmArpy4boP5OmSYpg7x2KwRZfMoGMeYTZCpg2/%D8%A7%D9%84%D9%85%D9%8A%D8%B2%D8%A7%D9%86%D9%8A%D8%A9%20%D8%A7%D9%84%D8%B9%D9%85%D9%88%D9%85%D9%8A%D8%A9.ashx?show=1",
+        "/showreport/44xhggmhH2nQTncJX5NxQG-R4AF4f8lz0lMtW0I141dYfEgL-qp-Fm1HjRwH2XJAE1ZXDapFXWC_6X57Qx4uDDSf4g7h3qFmCYhmArpy4boP5OmSYpg7x2KwRZfMoGMeYTZCpg2/%D8%A7%D9%84%D9%85%D9%8A%D8%B2%D8%A7%D9%86%D9%8A%D8%A9%20%D8%A7%D9%84%D8%B9%D9%85%D9%88%D9%85%D9%8A%D8%A9.ashx?show=1",
+        "https://km.mega-cash.net/downloadreport/44xhggmhH2nQTncJX5NxQG-R4AF4f8lz0lMtW0I141dYfEgL-qp-Fm1HjRwH2XJAE1ZXDapFXWC_6X57Qx4uDDSf4g7h3qFmCYhmArpy4boP5OmSYpg7x2KwRZfMoGMeYTZCpg2/%D8%A7%D9%84%D9%85%D9%8A%D8%B2%D8%A7%D9%86%D9%8A%D8%A9%20%D8%A7%D9%84%D8%B9%D9%85%D9%88%D9%85%D9%8A%D8%A9.ashx?show=1",
+        "/showreport/44xhggmhH2nQTncJX5NxQG-R4AF4f8lz0lMtW0I141dYfEgL-qp-Fm1HjRwH2XJAE1ZXDapFXWC_6X57Qx4uDDSf4g7h3qFmCYhmArpy4boP5OmSYpg7x2KwRZfMoGMeYTZCpg2/الميزانية العمومية.ashx?show=1"
+      ],
+      "finalSrc": "/showreport/44xhggmhH2nQTncJX5NxQG-R4AF4f8lz0lMtW0I141dYfEgL-qp-Fm1HjRwH2XJAE1ZXDapFXWC_6X57Qx4uDDSf4g7h3qFmCYhmArpy4boP5OmSYpg7x2KwRZfMoGMeYTZCpg2/الميزانية العمومية.ashx?show=1",
+      "pdfPath": "artifacts/mega-wave5-final/pdf/balancesheet.pdf",
+      "saved": [
+        {
+          "vu": "https://km.mega-cash.net/showreport/44xhggmhH2nQTncJX5NxQG-R4AF4f8lz0lMtW0I141dYfEgL-qp-Fm1HjRwH2XJAE1ZXDapFXWC_6X57Qx4uDDSf4g7h3qFmCYhmArpy4boP5OmSYpg7x2KwRZfMoGMeYTZCpg2/الميزانية",
+          "status": 200,
+          "size": 75966,
+          "name": "balancesheet.pdf"
+        }
+      ],
+      "netHits": 3
+    },
+    {
+      "key": "financialstatment",
+      "featureKey": "finalreports-financialstatment",
+      "path": "/FinalReports/FinancialStatment.aspx",
+      "prep": {
+        "okFrom": true,
+        "okTo": true,
+        "account": null,
+        "to": "3/1/2022",
+        "hasBtn": true,
+        "btnId": "cph_btnShow",
+        "hasViewer": true,
+        "dateIds": [
+          "cph_txtDateToSrch"
+        ],
+        "selectIds": [
+          "ddlNumDecimals",
+          "ddlNumAlign",
+          "ddlExcelFormat",
+          "ddlDisableLinks",
+          "ddlOverrideDatabases"
+        ]
+      },
+      "foundUrls": [
+        "/showreport/2jPJJ1P1ihXNHHffwjR8zCEBQdYWgjVU_8W49lJtoWt2ppiYZ5u2_SRAdQKthUdKxuRKcFCjvzs-nS5L-wsmx5s88ujD26931uiHXHKX2QDBjbtaPoqNr31LkcfNTM_Ukb83hg2/قائمة",
+        "https://km.mega-cash.net/showreport/2jPJJ1P1ihXNHHffwjR8zCEBQdYWgjVU_8W49lJtoWt2ppiYZ5u2_SRAdQKthUdKxuRKcFCjvzs-nS5L-wsmx5s88ujD26931uiHXHKX2QDBjbtaPoqNr31LkcfNTM_Ukb83hg2/%D9%82%D8%A7%D8%A6%D9%85%D8%A9%20%D8%A7%D9%84%D9%85%D8%B1%D9%83%D8%B2%20%D8%A7%D9%84%D9%85%D8%A7%D9%84%D9%89.ashx?show=1",
+        "/showreport/2jPJJ1P1ihXNHHffwjR8zCEBQdYWgjVU_8W49lJtoWt2ppiYZ5u2_SRAdQKthUdKxuRKcFCjvzs-nS5L-wsmx5s88ujD26931uiHXHKX2QDBjbtaPoqNr31LkcfNTM_Ukb83hg2/%D9%82%D8%A7%D8%A6%D9%85%D8%A9%20%D8%A7%D9%84%D9%85%D8%B1%D9%83%D8%B2%20%D8%A7%D9%84%D9%85%D8%A7%D9%84%D9%89.ashx?show=1",
+        "https://km.mega-cash.net/downloadreport/2jPJJ1P1ihXNHHffwjR8zCEBQdYWgjVU_8W49lJtoWt2ppiYZ5u2_SRAdQKthUdKxuRKcFCjvzs-nS5L-wsmx5s88ujD26931uiHXHKX2QDBjbtaPoqNr31LkcfNTM_Ukb83hg2/%D9%82%D8%A7%D8%A6%D9%85%D8%A9%20%D8%A7%D9%84%D9%85%D8%B1%D9%83%D8%B2%20%D8%A7%D9%84%D9%85%D8%A7%D9%84%D9%89.ashx?show=1",
+        "/showreport/2jPJJ1P1ihXNHHffwjR8zCEBQdYWgjVU_8W49lJtoWt2ppiYZ5u2_SRAdQKthUdKxuRKcFCjvzs-nS5L-wsmx5s88ujD26931uiHXHKX2QDBjbtaPoqNr31LkcfNTM_Ukb83hg2/قائمة المركز المالى.ashx?show=1"
+      ],
+      "finalSrc": "/showreport/2jPJJ1P1ihXNHHffwjR8zCEBQdYWgjVU_8W49lJtoWt2ppiYZ5u2_SRAdQKthUdKxuRKcFCjvzs-nS5L-wsmx5s88ujD26931uiHXHKX2QDBjbtaPoqNr31LkcfNTM_Ukb83hg2/قائمة المركز المالى.ashx?show=1",
+      "pdfPath": "artifacts/mega-wave5-final/pdf/financialstatment.pdf",
+      "saved": [
+        {
+          "vu": "https://km.mega-cash.net/showreport/2jPJJ1P1ihXNHHffwjR8zCEBQdYWgjVU_8W49lJtoWt2ppiYZ5u2_SRAdQKthUdKxuRKcFCjvzs-nS5L-wsmx5s88ujD26931uiHXHKX2QDBjbtaPoqNr31LkcfNTM_Ukb83hg2/قائمة",
+          "status": 200,
+          "size": 78860,
+          "name": "financialstatment.pdf"
+        }
+      ],
+      "netHits": 3
+    },
+    {
+      "key": "cashflow",
+      "featureKey": "finalreports-cashflow",
+      "path": "/FinalReports/CashFlow.aspx",
+      "prep": {
+        "okFrom": true,
+        "okTo": true,
+        "account": null,
+        "from": "1/1/2022",
+        "to": "3/1/2022",
+        "hasBtn": true,
+        "btnId": "cph_btnShow",
+        "hasViewer": true,
+        "dateIds": [
+          "cph_txtDateFromSrch",
+          "cph_txtDateToSrch"
+        ],
+        "selectIds": [
+          "ddlNumDecimals",
+          "ddlNumAlign",
+          "ddlExcelFormat",
+          "ddlDisableLinks",
+          "ddlOverrideDatabases"
+        ]
+      },
+      "foundUrls": [
+        "/showreport/cbN0edvlvlvVXbXvi5yxjiV_dU58-w_fbKiwV86stqmozAi5wlQwtgz7zTs3ePjaPqjFfSVY32YqZti7uMc7ZmBuURYDNRRKigmVnmnNo1i3GOEnvHoBzjyDr1obipCGUQx1Vg2/التدفقات",
+        "https://km.mega-cash.net/showreport/cbN0edvlvlvVXbXvi5yxjiV_dU58-w_fbKiwV86stqmozAi5wlQwtgz7zTs3ePjaPqjFfSVY32YqZti7uMc7ZmBuURYDNRRKigmVnmnNo1i3GOEnvHoBzjyDr1obipCGUQx1Vg2/%D8%A7%D9%84%D8%AA%D8%AF%D9%81%D9%82%D8%A7%D8%AA%20%D8%A7%D9%84%D9%86%D9%82%D8%AF%D9%8A%D8%A9.ashx?show=1",
+        "/showreport/cbN0edvlvlvVXbXvi5yxjiV_dU58-w_fbKiwV86stqmozAi5wlQwtgz7zTs3ePjaPqjFfSVY32YqZti7uMc7ZmBuURYDNRRKigmVnmnNo1i3GOEnvHoBzjyDr1obipCGUQx1Vg2/%D8%A7%D9%84%D8%AA%D8%AF%D9%81%D9%82%D8%A7%D8%AA%20%D8%A7%D9%84%D9%86%D9%82%D8%AF%D9%8A%D8%A9.ashx?show=1",
+        "https://km.mega-cash.net/downloadreport/cbN0edvlvlvVXbXvi5yxjiV_dU58-w_fbKiwV86stqmozAi5wlQwtgz7zTs3ePjaPqjFfSVY32YqZti7uMc7ZmBuURYDNRRKigmVnmnNo1i3GOEnvHoBzjyDr1obipCGUQx1Vg2/%D8%A7%D9%84%D8%AA%D8%AF%D9%81%D9%82%D8%A7%D8%AA%20%D8%A7%D9%84%D9%86%D9%82%D8%AF%D9%8A%D8%A9.ashx?show=1",
+        "/showreport/cbN0edvlvlvVXbXvi5yxjiV_dU58-w_fbKiwV86stqmozAi5wlQwtgz7zTs3ePjaPqjFfSVY32YqZti7uMc7ZmBuURYDNRRKigmVnmnNo1i3GOEnvHoBzjyDr1obipCGUQx1Vg2/التدفقات النقدية.ashx?show=1"
+      ],
+      "finalSrc": "/showreport/cbN0edvlvlvVXbXvi5yxjiV_dU58-w_fbKiwV86stqmozAi5wlQwtgz7zTs3ePjaPqjFfSVY32YqZti7uMc7ZmBuURYDNRRKigmVnmnNo1i3GOEnvHoBzjyDr1obipCGUQx1Vg2/التدفقات النقدية.ashx?show=1",
+      "pdfPath": "artifacts/mega-wave5-final/pdf/cashflow.pdf",
+      "saved": [
+        {
+          "vu": "https://km.mega-cash.net/showreport/cbN0edvlvlvVXbXvi5yxjiV_dU58-w_fbKiwV86stqmozAi5wlQwtgz7zTs3ePjaPqjFfSVY32YqZti7uMc7ZmBuURYDNRRKigmVnmnNo1i3GOEnvHoBzjyDr1obipCGUQx1Vg2/التدفقات",
+          "status": 200,
+          "size": 74616,
+          "name": "cashflow.pdf"
+        }
+      ],
+      "netHits": 3
+    }
+  ]
+}

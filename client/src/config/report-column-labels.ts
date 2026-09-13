@@ -1,5 +1,6 @@
 /** تسميات عربية لأعمدة التقارير الديناميكية */
 export const REPORT_COLUMN_LABELS: Record<string, string> = {
+  lineLabel: "البيان",
   documentNumber: "رقم المستند",
   entryNumber: "رقم القيد",
   date: "التاريخ",
@@ -473,6 +474,38 @@ const MEGA_REPORT_COLUMN_LABELS: Record<string, Record<string, string>> = {
     nov: "نوفمبر",
     dec: "ديسمبر",
     total: "المجموع",
+  },
+  // Wave 5 — FinalReports statements (Mega PDF labels)
+  "finalreports-salescost": {
+    lineLabel: "البيان",
+    amount: "المبلغ",
+  },
+  "finalreports-incomestatment": {
+    lineLabel: "البيان",
+    amount: "المبلغ",
+  },
+  "finalreports-balancesheet": {
+    lineLabel: "البيان",
+    amount: "المبلغ",
+  },
+  "finalreports-financialstatment": {
+    lineLabel: "البيان",
+    amount: "المبلغ",
+  },
+  "finalreports-cashflow": {
+    lineLabel: "البيان",
+    amount: "المبلغ",
+  },
+  "finalreports-subledger": {
+    date: "التاريخ",
+    documentNumber: "رقم المستند",
+    accountCode: "كود الحساب",
+    accountName: "اسم الحساب",
+    description: "البيان",
+    costCenter: "مركز التكلفة",
+    debit: "مدين",
+    credit: "دائن",
+    balance: "الرصيد",
   },
 };
 
