@@ -1,6 +1,6 @@
 import { useState, ReactNode, useEffect, useMemo } from "react";
 import { getTenantSlugFromPath, tenantPath } from "@/lib/tenant";
-import { Link, useLocation } from "wouter";
+import { Link, useLocation, useSearch } from "wouter";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { getLoginUrl } from "@/const";
 import {
@@ -92,24 +92,50 @@ function configToNav(items: NavItemConfig[]): NavItem[] {
 
 const baseNavItems = configToNav(ERP_NAVIGATION);
 
-function pathMatches(location: string, tenantSlug: string, path: string): boolean {
-  const [base, query] = path.split("?");
-  const href = tenantPath(tenantSlug, base || "/");
-  if (location === href) return true;
-  if (!location.startsWith(href)) return false;
-  if (query) return location.includes(query.split("=")[0] || "");
+/** قوائم لها أيقونة إنشاء منفصلة `/…/new` زي ميجا (أصناف / بيع / شراء). */
+const LIST_BASES_WITH_CREATE = new Set([
+  "/items",
+  "/sales/orders",
+  "/sales/invoices",
+  "/sales/returns",
+  "/purchases/orders",
+  "/purchases/invoices",
+  "/purchases/returns",
+]);
 
-  // Mega: صنف = بطاقة جديدة (/items/new) · قائمة الاصناف = الجدول (/items)
-  // لا تفعّل «قائمة الاصناف» على /items/new
-  if (base === "/items") {
-    const rest = location.slice(href.length);
+function pathMatches(location: string, search: string, tenantSlug: string, path: string): boolean {
+  const [base, query = ""] = path.split("?");
+  const href = tenantPath(tenantSlug, base || "/");
+  if (!location.startsWith(href)) return false;
+
+  const rest = location.slice(href.length);
+  const exactPath = rest === "" || rest === "/";
+  const searchParams = new URLSearchParams(search.replace(/^\?/, ""));
+  const wantParams = new URLSearchParams(query);
+
+  for (const [key, value] of wantParams.entries()) {
+    if (searchParams.get(key) !== value) return false;
+  }
+
+  // فاتورة بيع vs فاتورة نقدية: بدون mode=cash لا تفعّل أيقونة النقدي والعكس
+  if (!wantParams.has("mode") && searchParams.get("mode") === "cash" && base.includes("/sales/invoices")) {
+    return false;
+  }
+
+  if (query) {
+    return exactPath;
+  }
+
+  // Mega: إنشاء = `/…/new` · قائمة = الجدول — لا تفعّل القائمة على /new
+  if (LIST_BASES_WITH_CREATE.has(base)) {
+    if (exactPath) return true;
     return /^\/\d+(\/|$)/.test(rest);
   }
-  if (base === "/items/new") {
-    return location === href;
+  if (base.endsWith("/new")) {
+    return exactPath;
   }
 
-  return base !== "/" && (location === href || location.startsWith(`${href}/`));
+  return exactPath || (base !== "/" && rest.startsWith("/"));
 }
 
 interface SidebarItemProps {
@@ -120,6 +146,7 @@ interface SidebarItemProps {
 
 function SidebarItem({ item, level = 0, onNavigate, tenantSlug }: SidebarItemProps & { tenantSlug: string }) {
   const [location] = useLocation();
+  const search = useSearch();
   const rawPath = item.path || "/";
   const [basePath, query] = rawPath.split("?");
   const href = tenantPath(tenantSlug, basePath || "/");
@@ -128,14 +155,14 @@ function SidebarItem({ item, level = 0, onNavigate, tenantSlug }: SidebarItemPro
     if (!item.children) return false;
     return item.children.some((c) => {
       const match = (child: NavItem): boolean => {
-        if (child.path && pathMatches(location, tenantSlug, child.path)) return true;
+        if (child.path && pathMatches(location, search, tenantSlug, child.path)) return true;
         return (child.children ?? []).some(match);
       };
       return match(c);
     });
   });
 
-  const isActive = item.path && pathMatches(location, tenantSlug, item.path);
+  const isActive = item.path && pathMatches(location, search, tenantSlug, item.path);
 
   if (!item.children) {
     return (

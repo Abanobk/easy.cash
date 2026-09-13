@@ -155,13 +155,19 @@ function Router() {
       <Route path={T("/inventory/beginning-inventory/smart-import")} component={wrap(BeginningInventorySmartImport)} />
       <Route path={T("/inventory/mega-report-import")} component={wrap(MegaReportImportPage)} />
       <Route path={T("/inventory/beginning-inventory")} component={wrap(BeginningInventoryPage)} />
+      <Route path={T("/sales/invoices/new")} component={wrap(SalesInvoices)} />
       <Route path={T("/sales/invoices")} component={wrap(SalesInvoices)} />
+      <Route path={T("/sales/orders/new")} component={wrap(SalesOrders)} />
       <Route path={T("/sales/orders")} component={wrap(SalesOrders)} />
+      <Route path={T("/sales/returns/new")} component={wrap(SalesReturns)} />
       <Route path={T("/sales/returns")} component={wrap(SalesReturns)} />
       <Route path={T("/sales/reps")} component={wrap(SalesReps)} />
       <Route path={T("/sales/areas")} component={wrap(SalesAreasPage)} />
+      <Route path={T("/purchases/invoices/new")} component={wrap(PurchaseInvoices)} />
       <Route path={T("/purchases/invoices")} component={wrap(PurchaseInvoices)} />
+      <Route path={T("/purchases/orders/new")} component={wrap(PurchaseOrders)} />
       <Route path={T("/purchases/orders")} component={wrap(PurchaseOrders)} />
+      <Route path={T("/purchases/returns/new")} component={wrap(PurchaseReturns)} />
       <Route path={T("/purchases/returns")} component={wrap(PurchaseReturns)} />
       <Route path={T("/cash/receive")} component={wrap(CashTransactions)} />
       <Route path={T("/cash/pay")} component={wrap(CashTransactions)} />

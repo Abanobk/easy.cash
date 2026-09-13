@@ -14,6 +14,7 @@ import EntityPermissionGate from "@/components/EntityPermissionGate";
 
 import { useLocation, useSearch } from "wouter";
 import { tenantPath, useTenantSlug } from "@/lib/tenant";
+import { useMegaCreateRoute } from "@/hooks/useMegaCreateRoute";
 import { InvoicePaymentDialog } from "@/components/InvoicePaymentDialog";
 import { isForeignCurrency, toBaseAmount, formatInvoiceListTotal } from "@shared/currency";
 import { SerialNumberPicker } from "@/components/SerialNumberPicker";
@@ -118,11 +119,12 @@ export default function SalesInvoices() {
   const tenantSlug = useTenantSlug();
   const searchString = useSearch();
   const isCashMode = useMemo(() => new URLSearchParams(searchString).get("mode") === "cash", [searchString]);
+  const { isNewRoute, goToList, goToCreate } = useMegaCreateRoute("/sales/invoices");
 
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
   const debouncedSearch = useDebouncedValue(search);
-  const [showForm, setShowForm] = useState(false);
+  const [showForm, setShowForm] = useState(isNewRoute);
   const [editId, setEditId] = useState<number | null>(null);
   const [form, setForm] = useState(emptyForm);
   const [invoiceItems, setInvoiceItems] = useState<InvoiceItem[]>([]);
@@ -143,6 +145,10 @@ export default function SalesInvoices() {
       setForm((f) => ({ ...f, paymentType: "cash" }));
     }
   }, [isCashMode]);
+
+  useEffect(() => {
+    if (isNewRoute) setShowForm(true);
+  }, [isNewRoute]);
 
   const pageTitle = isCashMode ? "فواتير المبيعات النقدية" : "فواتير المبيعات";
   const newInvoiceLabel = isCashMode ? "فاتورة نقدية جديدة" : "فاتورة جديدة";
@@ -169,8 +175,7 @@ export default function SalesInvoices() {
       if (shouldPrint) firePrint(res.number);
       if (printNote && !res.pendingApproval) fireWarehouseNote(res.number);
       refetch();
-      setShowForm(false);
-      resetForm();
+      closeForm();
     },
     onError: (e) => toast.error(e.message),
   });
@@ -178,8 +183,7 @@ export default function SalesInvoices() {
     onSuccess: (res) => {
       toast.success(lastApproveNow ? `تم حفظ واعتماد الفاتورة ${res.number}` : "تم حفظ التعديلات");
       refetch();
-      setShowForm(false);
-      resetForm();
+      closeForm();
     },
     onError: (e) => toast.error(e.message),
   });
@@ -284,9 +288,19 @@ export default function SalesInvoices() {
     });
   };
 
-  const openNewForm = () => {
+  const closeForm = () => {
+    setShowForm(false);
     resetForm();
-    setShowForm(true);
+    if (isNewRoute) goToList();
+  };
+
+  const openNewForm = () => {
+    if (isNewRoute) {
+      resetForm();
+      setShowForm(true);
+      return;
+    }
+    goToCreate(isCashMode ? "mode=cash" : undefined);
   };
 
   /** نسخ فاتورة موجودة كنقطة بداية لفاتورة جديدة — زي "نسخ" في ميجا كاش (نفس فكرة فواتير الشراء) */
@@ -483,7 +497,7 @@ export default function SalesInvoices() {
       <ERPLayout title={editId ? "تعديل فاتورة مبيعات" : (isCashMode ? "فاتورة مبيعات نقدية جديدة" : "فاتورة مبيعات جديدة")}>
         <div className="space-y-4">
           <div className="flex items-center gap-2">
-            <Button variant="ghost" size="sm" onClick={() => { setShowForm(false); resetForm(); }} className="gap-1 text-slate-600">
+            <Button variant="ghost" size="sm" onClick={closeForm} className="gap-1 text-slate-600">
               <ArrowRight size={16} />
               العودة للقائمة
             </Button>
@@ -780,7 +794,7 @@ export default function SalesInvoices() {
           </Card>
 
           <div className="flex gap-3 justify-end">
-            <Button variant="outline" onClick={() => { setShowForm(false); resetForm(); }}>إلغاء</Button>
+            <Button variant="outline" onClick={closeForm}>إلغاء</Button>
             <EntityPermissionGate moduleKey="sales" entityKey={isCashMode ? "cashSaleInvoice" : "saleInvoice"} action="add">
               <Button onClick={() => handleSubmit(false)} disabled={createMut.isPending || updateMut.isPending} variant="outline" className="px-6">
                 {(createMut.isPending || updateMut.isPending) ? "جاري الحفظ..." : "حفظ"}

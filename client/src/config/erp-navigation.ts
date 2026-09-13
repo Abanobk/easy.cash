@@ -424,7 +424,7 @@ export const ERP_NAVIGATION: NavItemConfig[] = [
       {
         "label": "طلب شراء",
         "icon": "file-text",
-        "path": "/purchases/orders",
+        "path": "/purchases/orders/new",
         "status": "done",
         "featureKey": "purchases-purchaseorder"
       },
@@ -438,7 +438,7 @@ export const ERP_NAVIGATION: NavItemConfig[] = [
       {
         "label": "فاتورة شراء",
         "icon": "file-text",
-        "path": "/purchases/invoices",
+        "path": "/purchases/invoices/new",
         "status": "done",
         "featureKey": "purchases-receipt"
       },
@@ -452,7 +452,7 @@ export const ERP_NAVIGATION: NavItemConfig[] = [
       {
         "label": "فاتورة مردود شراء",
         "icon": "file-text",
-        "path": "/purchases/returns",
+        "path": "/purchases/returns/new",
         "status": "done",
         "featureKey": "purchases-returnreceipt"
       },
@@ -472,7 +472,7 @@ export const ERP_NAVIGATION: NavItemConfig[] = [
       {
         "label": "طلب بيع",
         "icon": "file-text",
-        "path": "/sales/orders",
+        "path": "/sales/orders/new",
         "status": "done",
         "featureKey": "sales-salesorder"
       },
@@ -486,14 +486,14 @@ export const ERP_NAVIGATION: NavItemConfig[] = [
       {
         "label": "فاتورة مبيعات نقدية",
         "icon": "file-text",
-        "path": "/sales/invoices?mode=cash",
+        "path": "/sales/invoices/new?mode=cash",
         "status": "done",
         "featureKey": "sales-invoice-cash"
       },
       {
         "label": "فاتورة بيع",
         "icon": "file-text",
-        "path": "/sales/invoices",
+        "path": "/sales/invoices/new",
         "status": "done",
         "featureKey": "sales-invoice"
       },
@@ -507,7 +507,7 @@ export const ERP_NAVIGATION: NavItemConfig[] = [
       {
         "label": "فاتورة مردود بيع",
         "icon": "file-text",
-        "path": "/sales/returns",
+        "path": "/sales/returns/new",
         "status": "done",
         "featureKey": "sales-returninvoice"
       },
@@ -1892,7 +1892,7 @@ export const FEATURE_REGISTRY: Record<string, { label: string; module: string; m
     "module": "فواتير الشراء",
     "megaUrl": "/Purchases/PurchaseOrder.aspx",
     "status": "done",
-    "path": "/purchases/orders"
+    "path": "/purchases/orders/new"
   },
   "purchases-receiptslist-purchaseorder": {
     "label": "قائمة طلبات الشراء",
@@ -1906,7 +1906,7 @@ export const FEATURE_REGISTRY: Record<string, { label: string; module: string; m
     "module": "فواتير الشراء",
     "megaUrl": "/Purchases/Receipt.aspx",
     "status": "done",
-    "path": "/purchases/invoices"
+    "path": "/purchases/invoices/new"
   },
   "purchases-receiptslist-receipt": {
     "label": "قائمة فواتير الشراء",
@@ -1920,7 +1920,7 @@ export const FEATURE_REGISTRY: Record<string, { label: string; module: string; m
     "module": "فواتير الشراء",
     "megaUrl": "/Purchases/ReturnReceipt.aspx",
     "status": "done",
-    "path": "/purchases/returns"
+    "path": "/purchases/returns/new"
   },
   "purchases-returnreceiptslist": {
     "label": "قائمة فواتير مردود شراء",
@@ -1934,7 +1934,7 @@ export const FEATURE_REGISTRY: Record<string, { label: string; module: string; m
     "module": "فواتير المبيعات",
     "megaUrl": "/Sales/SalesOrder.aspx",
     "status": "done",
-    "path": "/sales/orders"
+    "path": "/sales/orders/new"
   },
   "sales-invoiceslist-salesorder": {
     "label": "قائمة طلبات البيع",
@@ -1948,14 +1948,14 @@ export const FEATURE_REGISTRY: Record<string, { label: string; module: string; m
     "module": "فواتير المبيعات",
     "megaUrl": "/Sales/Invoice.aspx/Cash",
     "status": "done",
-    "path": "/sales/invoices?mode=cash"
+    "path": "/sales/invoices/new?mode=cash"
   },
   "sales-invoice": {
     "label": "فاتورة بيع",
     "module": "فواتير المبيعات",
     "megaUrl": "/Sales/Invoice.aspx",
     "status": "done",
-    "path": "/sales/invoices"
+    "path": "/sales/invoices/new"
   },
   "sales-invoiceslist-invoice": {
     "label": "قائمة فواتير البيع",
@@ -1969,7 +1969,7 @@ export const FEATURE_REGISTRY: Record<string, { label: string; module: string; m
     "module": "فواتير المبيعات",
     "megaUrl": "/Sales/ReturnInvoice.aspx",
     "status": "done",
-    "path": "/sales/returns"
+    "path": "/sales/returns/new"
   },
   "sales-returninvoiceslist": {
     "label": "قائمة فواتير مردود بيع",

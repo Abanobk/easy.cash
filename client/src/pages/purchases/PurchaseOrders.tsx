@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useMegaCreateRoute } from "@/hooks/useMegaCreateRoute";
 import { Link } from "wouter";
 import ERPLayout from "@/components/ERPLayout";
 import { trpc } from "@/lib/trpc";
@@ -21,7 +22,8 @@ import { PartySearchSelect } from "@/components/PartySearchSelect";
 import { ItemSearchSelect } from "@/components/ItemSearchSelect";
 
 export default function PurchaseOrders() {
-  const [open, setOpen] = useState(false);
+  const { isNewRoute, goToList, goToCreate } = useMegaCreateRoute("/purchases/orders");
+  const [open, setOpen] = useState(isNewRoute);
   const [editId, setEditId] = useState<number | null>(null);
   const [convertOrderId, setConvertOrderId] = useState<number | null>(null);
   const [form, setForm] = useState({ supplierId: "", warehouseId: "", date: new Date().toISOString().split("T")[0], notes: "", expectedDate: "" });
@@ -34,8 +36,8 @@ export default function PurchaseOrders() {
   const { data: suppliers } = trpc.suppliers.list.useQuery({ page: 1, limit: 200 });
   const { data: itemsList } = trpc.items.list.useQuery({ page: 1, limit: 200 });
   const warehouses = useWarehouseOptions();
-  const createMut = trpc.purchases.orders.create.useMutation({ onSuccess: () => { toast.success("تم إنشاء طلب الشراء"); refetch(); setOpen(false); resetForm(); } });
-  const updateMut = trpc.purchases.orders.update.useMutation({ onSuccess: () => { toast.success("تم حفظ التعديلات"); refetch(); setOpen(false); resetForm(); }, onError: (e) => toast.error(e.message) });
+  const createMut = trpc.purchases.orders.create.useMutation({ onSuccess: () => { toast.success("تم إنشاء طلب الشراء"); refetch(); closeDialog(); } });
+  const updateMut = trpc.purchases.orders.update.useMutation({ onSuccess: () => { toast.success("تم حفظ التعديلات"); refetch(); closeDialog(); }, onError: (e) => toast.error(e.message) });
   const approveMut = trpc.purchases.orders.approve.useMutation({ onSuccess: () => { toast.success("تم اعتماد الطلب"); refetch(); } });
   const unapproveMut = trpc.purchases.orders.unapprove.useMutation({ onSuccess: () => { toast.success("تم فك الاعتماد"); refetch(); }, onError: (e) => toast.error(e.message) });
 
@@ -43,6 +45,21 @@ export default function PurchaseOrders() {
     setEditId(null);
     setForm({ supplierId: "", warehouseId: "", date: new Date().toISOString().split("T")[0], notes: "", expectedDate: "" });
     setItems([{ itemId: "", quantity: "1", unitPrice: "0", notes: "" }]);
+  };
+
+  const closeDialog = () => {
+    setOpen(false);
+    resetForm();
+    if (isNewRoute) goToList();
+  };
+
+  const openNewDialog = () => {
+    if (isNewRoute) {
+      resetForm();
+      setOpen(true);
+      return;
+    }
+    goToCreate();
   };
 
   const openEdit = async (id: number) => {
@@ -91,7 +108,7 @@ export default function PurchaseOrders() {
             <CardTitle className="text-base font-semibold text-slate-800 flex items-center gap-2">
               <ShoppingCart size={18} className="text-blue-600" /> طلبات الشراء
             </CardTitle>
-            <AddActionButton moduleKey="purchases" entityKey="purchaseOrder" size="sm" className="bg-blue-600 hover:bg-blue-700 text-white gap-1" onClick={() => { resetForm(); setOpen(true); }}>
+            <AddActionButton moduleKey="purchases" entityKey="purchaseOrder" size="sm" className="bg-blue-600 hover:bg-blue-700 text-white gap-1" onClick={openNewDialog}>
               <Plus size={14} /> طلب شراء جديد
             </AddActionButton>
           </div>
@@ -158,7 +175,7 @@ export default function PurchaseOrders() {
         </CardContent>
       </Card>
 
-      <Dialog open={open} onOpenChange={v => { setOpen(v); if (!v) resetForm(); }}>
+      <Dialog open={open} onOpenChange={v => { if (!v) closeDialog(); else setOpen(true); }}>
         <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto" dir="rtl">
           <DialogHeader><DialogTitle>{editId ? "تعديل طلب شراء" : "طلب شراء جديد"}</DialogTitle></DialogHeader>
           <div className="grid gap-4 py-2">
@@ -239,7 +256,7 @@ export default function PurchaseOrders() {
             </div>
           </div>
           <DialogFooter className="gap-2">
-            <Button variant="outline" size="sm" onClick={() => { setOpen(false); resetForm(); }}>إلغاء</Button>
+            <Button variant="outline" size="sm" onClick={() => { closeDialog(); }}>إلغاء</Button>
             <Button size="sm" className="bg-blue-600 hover:bg-blue-700 text-white" onClick={handleSubmit} disabled={createMut.isPending || updateMut.isPending}>{editId ? "حفظ التعديلات" : "حفظ الطلب"}</Button>
           </DialogFooter>
         </DialogContent>

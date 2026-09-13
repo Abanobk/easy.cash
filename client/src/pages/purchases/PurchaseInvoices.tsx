@@ -15,6 +15,7 @@ import { InvoicePrintButton } from "@/components/InvoicePrintButton";
 
 import { useLocation } from "wouter";
 import { tenantPath, useTenantSlug } from "@/lib/tenant";
+import { useMegaCreateRoute } from "@/hooks/useMegaCreateRoute";
 import { InvoicePaymentDialog } from "@/components/InvoicePaymentDialog";
 import { isForeignCurrency, toBaseAmount, formatInvoiceListTotal } from "@shared/currency";
 import { QuickAddDialog } from "@/components/invoices/QuickAddDialog";
@@ -73,7 +74,13 @@ export default function PurchaseInvoices() {
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
   const debouncedSearch = useDebouncedValue(search);
-  const [showForm, setShowForm] = useState(false);
+  const { isNewRoute, goToList, goToCreate } = useMegaCreateRoute("/purchases/invoices");
+
+  const [showForm, setShowForm] = useState(isNewRoute);
+
+  useEffect(() => {
+    if (isNewRoute) setShowForm(true);
+  }, [isNewRoute]);
   const [editId, setEditId] = useState<number | null>(null);
   const [form, setForm] = useState(emptyForm);
   const [invoiceItems, setInvoiceItems] = useState<InvoiceItem[]>([]);
@@ -106,8 +113,7 @@ export default function PurchaseInvoices() {
       if (shouldPrint) firePrint(res.number);
       if (printNote) fireWarehouseNote(res.number);
       refetch();
-      setShowForm(false);
-      resetForm();
+      closeForm();
     },
     onError: (e) => toast.error(e.message),
   });
@@ -115,8 +121,7 @@ export default function PurchaseInvoices() {
     onSuccess: (res) => {
       toast.success(lastApproveNow ? `تم حفظ واعتماد الفاتورة ${res.number}` : "تم حفظ التعديلات");
       refetch();
-      setShowForm(false);
-      resetForm();
+      closeForm();
     },
     onError: (e) => toast.error(e.message),
   });
@@ -150,6 +155,21 @@ export default function PurchaseInvoices() {
     setEditId(null);
     setForm(emptyForm); setInvoiceItems([]); setInvoiceTaxes([]); setInvoiceExpenses([]);
     setSettlement(emptySettlement); setPrintAfterSave(false); setPrintAfterApprove(false); setPrintNote(false); setBarcode("");
+  };
+
+  const closeForm = () => {
+    setShowForm(false);
+    resetForm();
+    if (isNewRoute) goToList();
+  };
+
+  const openNewForm = () => {
+    if (isNewRoute) {
+      resetForm();
+      setShowForm(true);
+      return;
+    }
+    goToCreate();
   };
 
   /** فتح فاتورة مسودة (بعد فك اعتماد أو معلقة أصلاً) للتعديل — بنعيد استخدام نفس فورم الإنشاء الغني */
@@ -375,7 +395,7 @@ export default function PurchaseInvoices() {
     return (
       <ERPLayout title={editId ? "تعديل فاتورة شراء" : "فاتورة شراء جديدة"}>
         <div className="space-y-4">
-          <Button variant="ghost" size="sm" onClick={() => { setShowForm(false); resetForm(); }} className="gap-1 text-slate-600"><ArrowRight size={16} />العودة للقائمة</Button>
+          <Button variant="ghost" size="sm" onClick={closeForm} className="gap-1 text-slate-600"><ArrowRight size={16} />العودة للقائمة</Button>
           <Card className="border-0 shadow-sm">
             <CardHeader className="pb-3 border-b border-slate-100"><CardTitle className="text-sm font-semibold text-slate-800">بيانات الفاتورة</CardTitle></CardHeader>
             <CardContent className="pt-4">
@@ -594,7 +614,7 @@ export default function PurchaseInvoices() {
           </Card>
 
           <div className="flex gap-3 justify-end">
-            <Button variant="outline" onClick={() => { setShowForm(false); resetForm(); }}>إلغاء</Button>
+            <Button variant="outline" onClick={closeForm}>إلغاء</Button>
             <EntityPermissionGate moduleKey="purchases" entityKey="purchaseInvoice" action="add">
               <Button onClick={() => handleSubmit(false)} disabled={createMut.isPending || updateMut.isPending} variant="outline" className="px-6">{(createMut.isPending || updateMut.isPending) ? "جاري الحفظ..." : "حفظ"}</Button>
               <Button onClick={() => handleSubmit(true)} disabled={createMut.isPending || updateMut.isPending} className="bg-blue-600 hover:bg-blue-700 text-white px-8 gap-1"><CheckCircle2 size={15} />{(createMut.isPending || updateMut.isPending) ? "جاري الحفظ..." : "حفظ واعتماد"}</Button>
@@ -627,7 +647,7 @@ export default function PurchaseInvoices() {
         onPageChange={setPage}
         search={search}
         onSearch={setSearch}
-        onAdd={() => setShowForm(true)}
+        onAdd={openNewForm}
         addLabel="فاتورة جديدة"
         addEntity={{ moduleKey: "purchases", entityKey: "purchaseInvoice" }}
         columns={[

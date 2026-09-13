@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useMegaCreateRoute } from "@/hooks/useMegaCreateRoute";
 import ERPLayout from "@/components/ERPLayout";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
@@ -16,7 +17,8 @@ import { PartySearchSelect } from "@/components/PartySearchSelect";
 import { ItemSearchSelect } from "@/components/ItemSearchSelect";
 
 export default function SalesReturns() {
-  const [open, setOpen] = useState(false);
+  const { isNewRoute, goToList, goToCreate } = useMegaCreateRoute("/sales/returns");
+  const [open, setOpen] = useState(isNewRoute);
   const [form, setForm] = useState({ customerId: "", date: new Date().toISOString().split("T")[0], reason: "", notes: "" });
   const [items, setItems] = useState<{ itemId: string; quantity: string; unitPrice: string }[]>([
     { itemId: "", quantity: "1", unitPrice: "0" }
@@ -25,11 +27,26 @@ export default function SalesReturns() {
   const { data, refetch } = trpc.sales.returns.list.useQuery({ page: 1, limit: 50 });
   const { data: customers } = trpc.customers.list.useQuery({ page: 1, limit: 200 });
   const { data: itemsList } = trpc.items.list.useQuery({ page: 1, limit: 200 });
-  const createMut = trpc.sales.returns.create.useMutation({ onSuccess: () => { toast.success("تم تسجيل مردود البيع"); refetch(); setOpen(false); resetForm(); } });
+  const createMut = trpc.sales.returns.create.useMutation({ onSuccess: () => { toast.success("تم تسجيل مردود البيع"); refetch(); closeDialog(); } });
 
   const resetForm = () => {
     setForm({ customerId: "", date: new Date().toISOString().split("T")[0], reason: "", notes: "" });
     setItems([{ itemId: "", quantity: "1", unitPrice: "0" }]);
+  };
+
+  const closeDialog = () => {
+    setOpen(false);
+    resetForm();
+    if (isNewRoute) goToList();
+  };
+
+  const openNewDialog = () => {
+    if (isNewRoute) {
+      resetForm();
+      setOpen(true);
+      return;
+    }
+    goToCreate();
   };
 
   const addItem = () => setItems(prev => [...prev, { itemId: "", quantity: "1", unitPrice: "0" }]);
@@ -57,7 +74,7 @@ export default function SalesReturns() {
             <CardTitle className="text-base font-semibold text-slate-800 flex items-center gap-2">
               <RotateCcw size={18} className="text-red-600" /> مردودات البيع
             </CardTitle>
-            <AddActionButton moduleKey="sales" entityKey="saleReturnInvoice" size="sm" className="bg-red-600 hover:bg-red-700 text-white gap-1" onClick={() => { resetForm(); setOpen(true); }}>
+            <AddActionButton moduleKey="sales" entityKey="saleReturnInvoice" size="sm" className="bg-red-600 hover:bg-red-700 text-white gap-1" onClick={openNewDialog}>
               <Plus size={14} /> مردود بيع جديد
             </AddActionButton>
           </div>
@@ -91,7 +108,7 @@ export default function SalesReturns() {
         </CardContent>
       </Card>
 
-      <Dialog open={open} onOpenChange={v => { setOpen(v); if (!v) resetForm(); }}>
+      <Dialog open={open} onOpenChange={v => { if (!v) closeDialog(); else setOpen(true); }}>
         <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto" dir="rtl">
           <DialogHeader><DialogTitle>مردود بيع جديد</DialogTitle></DialogHeader>
           <div className="grid gap-4 py-2">
@@ -160,7 +177,7 @@ export default function SalesReturns() {
             </div>
           </div>
           <DialogFooter className="gap-2">
-            <Button variant="outline" size="sm" onClick={() => { setOpen(false); resetForm(); }}>إلغاء</Button>
+            <Button variant="outline" size="sm" onClick={() => { closeDialog(); }}>إلغاء</Button>
             <Button size="sm" className="bg-red-600 hover:bg-red-700 text-white" onClick={handleSubmit} disabled={createMut.isPending}>حفظ المردود</Button>
           </DialogFooter>
         </DialogContent>
