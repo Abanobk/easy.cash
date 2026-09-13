@@ -557,11 +557,17 @@ export default function ReportHub({ title, section, icon, reports, procedure }: 
 
     const isTrialBalance = slug === "finalreports-trialbalance";
     const isGeneralLedger = slug === "finalreports-generalledger";
+    const customerGroupingMeta =
+      query.customerGrouping === "all" ? "طريقة تجميع العملاء: كل العملاء"
+      : query.customerGrouping === "zeroBalances" ? "طريقة تجميع العملاء: العملاء ذات الارصدة الصفرية"
+      : query.customerGrouping === "byCategory" ? "طريقة تجميع العملاء: تجميع فئة عملاء"
+      : undefined;
     if (isTrialBalance || isGeneralLedger) {
       printFormalAccountingReport({
         reportName: isTrialBalance ? "ميزان المراجعة" : "الاستاذ العام",
         dateFrom: query.dateFrom,
         dateTo: query.dateTo,
+        metaLine: isTrialBalance ? customerGroupingMeta : undefined,
         columns: columns.map((key) => ({ key, label: reportColumnLabel(key) })),
         rows: rows as Record<string, unknown>[],
         numericKeys: isTrialBalance

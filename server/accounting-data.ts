@@ -8,6 +8,7 @@ import {
   cashTransactions,
   checks,
   costCenters,
+  contactCategories,
   customers,
   items,
   journalEntries,
@@ -65,7 +66,10 @@ export type ReportFilters = {
   orderBy?: "code" | "name" | "balance";
   /**
    * ميجا ميزان المراجعة — طريقة تجميع العملاء
-   * (قيم القائمة من لقطة ميجا 2026-09-13؛ تأثير الصفوف يحتاج إكسل بعد الاختيار)
+   * مرجع PDF ميجا 2026-09-13:
+   * - all: سطر واحد «مجمع العملاء (كل العملاء)»
+   * - zeroBalances: «مجمع العملاء (الارصدة الصفرية)» + تفصيل العملاء غير الصفريين
+   * - byCategory: تجميع حسب فئة العميل (بانتظار PDF ميجا لتأكيد التسمية)
    */
   customerGrouping?: "all" | "zeroBalances" | "byCategory";
   /** ميجا كشف حساب: عرض حركات الرصيد الافتتاحي */
@@ -668,6 +672,304 @@ export async function generalLedgerReport(db: Db, filters: ReportFilters) {
   return out;
 }
 
+
+type TbRow = {
+  accountCode: string;
+  accountName: string;
+  openingDebit: number;
+  openingCredit: number;
+  periodDebit: number;
+  periodCredit: number;
+  closingDebit: number;
+  closingCredit: number;
+};
+
+function tbRowFromNets(opts: {
+  accountCode: string;
+  accountName: string;
+  openingNet: number;
+  periodDebit: number;
+  periodCredit: number;
+  closingNet: number;
+}): TbRow {
+  return {
+    accountCode: opts.accountCode,
+    accountName: opts.accountName,
+    openingDebit: opts.openingNet > 0 ? opts.openingNet : 0,
+    openingCredit: opts.openingNet < 0 ? Math.abs(opts.openingNet) : 0,
+    periodDebit: opts.periodDebit,
+    periodCredit: opts.periodCredit,
+    closingDebit: opts.closingNet > 0 ? opts.closingNet : 0,
+    closingCredit: opts.closingNet < 0 ? Math.abs(opts.closingNet) : 0,
+  };
+}
+
+function isCustomersArAccountName(name: string) {
+  const n = name.replace(/\s+/g, "");
+  // حساب ذمم العملاء / العملاء — مع تجنب مصروفات مثل «عينات للعملاء»
+  if (/عين|مصروف|ايراد|إيراد|خصم/.test(name)) return false;
+  return /العملاء|حساباتالعملاء|عملاء/.test(n) || /مدينون/.test(name);
+}
+
+/** أرصدة العملاء للميزان — من دفتر الذمم (فواتير/مرتجعات/نقدية/بنك/شيكات) */
+async function loadCustomerArMetricsForTrialBalance(db: Db, filters: ReportFilters) {
+  type M = {
+    id: number;
+    code: string | null;
+    name: string;
+    categoryId: number | null;
+    openingNet: number;
+    periodDebit: number;
+    periodCredit: number;
+    closingNet: number;
+  };
+  const custRows = await db.select({
+    id: customers.id,
+    code: customers.code,
+    name: customers.name,
+    categoryId: customers.categoryId,
+    openingBalance: customers.openingBalance,
+  }).from(customers)
+    .where(tenantWhere(customers, filters.tenantId, eq(customers.isActive, true)));
+
+  const map = new Map<number, M>();
+  for (const c of custRows) {
+    map.set(c.id, {
+      id: c.id,
+      code: c.code,
+      name: c.name,
+      categoryId: c.categoryId,
+      openingNet: num(c.openingBalance),
+      periodDebit: 0,
+      periodCredit: 0,
+      closingNet: 0,
+    });
+  }
+  const ensure = (id: number) => map.get(id);
+
+  const applyBefore = (customerId: number, delta: number) => {
+    const m = ensure(customerId);
+    if (!m) return;
+    m.openingNet += delta;
+  };
+  const applyPeriod = (customerId: number, debit: number, credit: number) => {
+    const m = ensure(customerId);
+    if (!m) return;
+    m.periodDebit += debit;
+    m.periodCredit += credit;
+  };
+
+  const dateFrom = filters.dateFrom;
+  const dateTo = filters.dateTo;
+
+  // مبيعات
+  const salesRows = await db.select({
+    customerId: salesInvoices.customerId,
+    date: salesInvoices.date,
+    total: salesInvoices.total,
+  }).from(salesInvoices)
+    .where(tenantWhere(salesInvoices, filters.tenantId,
+      and(salesPostedFilter(),
+        reportBranchCond(salesInvoices.branchId, filters),
+        filters.currencyCode ? eq(salesInvoices.currencyCode, filters.currencyCode) : undefined)));
+  for (const r of salesRows) {
+    if (r.customerId == null) continue;
+    const d = dateOnly(r.date);
+    const amt = num(r.total);
+    if (dateFrom && d < dateFrom) applyBefore(r.customerId, amt);
+    else if ((!dateFrom || d >= dateFrom) && (!dateTo || d <= dateTo)) applyPeriod(r.customerId, amt, 0);
+  }
+
+  // مرتجعات مبيعات
+  const retRows = await db.select({
+    customerId: salesReturns.customerId,
+    date: salesReturns.date,
+    total: salesReturns.total,
+  }).from(salesReturns)
+    .where(tenantWhere(salesReturns, filters.tenantId));
+  for (const r of retRows) {
+    if (r.customerId == null) continue;
+    const d = dateOnly(r.date);
+    const amt = num(r.total);
+    if (dateFrom && d < dateFrom) applyBefore(r.customerId, -amt);
+    else if ((!dateFrom || d >= dateFrom) && (!dateTo || d <= dateTo)) applyPeriod(r.customerId, 0, amt);
+  }
+
+  // نقدية
+  const cashRows = await db.select({
+    customerId: cashTransactions.customerId,
+    date: cashTransactions.date,
+    amount: cashTransactions.amount,
+    type: cashTransactions.type,
+  }).from(cashTransactions)
+    .where(tenantWhere(cashTransactions, filters.tenantId));
+  for (const r of cashRows) {
+    if (r.customerId == null) continue;
+    const d = dateOnly(r.date);
+    const amt = num(r.amount);
+    const isReceive = String(r.type).includes("receive");
+    const delta = isReceive ? -amt : amt; // قبض يخفض الذمة
+    if (dateFrom && d < dateFrom) applyBefore(r.customerId, delta);
+    else if ((!dateFrom || d >= dateFrom) && (!dateTo || d <= dateTo)) {
+      if (isReceive) applyPeriod(r.customerId, 0, amt);
+      else applyPeriod(r.customerId, amt, 0);
+    }
+  }
+
+  // بنك
+  const bankRows = await db.select({
+    customerId: bankTransactions.customerId,
+    date: bankTransactions.date,
+    amount: bankTransactions.amount,
+    type: bankTransactions.type,
+  }).from(bankTransactions)
+    .where(tenantWhere(bankTransactions, filters.tenantId));
+  for (const r of bankRows) {
+    if (r.customerId == null) continue;
+    const d = dateOnly(r.date);
+    const amt = num(r.amount);
+    const isDeposit = String(r.type).includes("deposit");
+    const delta = isDeposit ? -amt : amt;
+    if (dateFrom && d < dateFrom) applyBefore(r.customerId, delta);
+    else if ((!dateFrom || d >= dateFrom) && (!dateTo || d <= dateTo)) {
+      if (isDeposit) applyPeriod(r.customerId, 0, amt);
+      else applyPeriod(r.customerId, amt, 0);
+    }
+  }
+
+  // شيكات واردة
+  const checkRows = await db.select({
+    customerId: checks.customerId,
+    date: checks.date,
+    amount: checks.amount,
+    status: checks.status,
+    type: checks.type,
+  }).from(checks)
+    .where(tenantWhere(checks, filters.tenantId, eq(checks.type, "incoming")));
+  for (const r of checkRows) {
+    if (r.customerId == null) continue;
+    if (r.status === "bounced" || r.status === "cancelled") continue;
+    const d = dateOnly(r.date);
+    const amt = num(r.amount);
+    if (dateFrom && d < dateFrom) applyBefore(r.customerId, -amt);
+    else if ((!dateFrom || d >= dateFrom) && (!dateTo || d <= dateTo)) applyPeriod(r.customerId, 0, amt);
+  }
+
+  for (const m of map.values()) {
+    m.closingNet = m.openingNet + m.periodDebit - m.periodCredit;
+  }
+  return [...map.values()];
+}
+
+async function applyCustomerGroupingToTrialBalance(
+  db: Db,
+  filters: ReportFilters,
+  rows: TbRow[],
+): Promise<TbRow[]> {
+  const mode = filters.customerGrouping;
+  if (!mode) return rows;
+
+  const arIdxs: number[] = [];
+  for (let i = 0; i < rows.length; i++) {
+    const r = rows[i];
+    if (!isCustomersArAccountName(String(r.accountName || ""))) continue;
+    // تجاهل الآباء الملخصين إن وُجدت ورقة أوضح لاحقاً — نأخذ الأوراق فقط قدر الإمكان
+    const code = String(r.accountCode || "");
+    const isLikelyParent = code.length <= 3 || /^(11|1120)$/.test(code);
+    if (isLikelyParent && rows.some((o, j) => j !== i && isCustomersArAccountName(String(o.accountName || "")) && String(o.accountCode || "").startsWith(code) && String(o.accountCode || "") !== code)) {
+      continue;
+    }
+    arIdxs.push(i);
+  }
+  if (!arIdxs.length) return rows;
+
+  // استبدل أول حساب ذمم عملاء ورقي؛ أزل بقية أوراق الذمم المكررة إن وُجدت
+  const primaryIdx = arIdxs[0];
+  const leaf = rows[primaryIdx];
+  const metrics = await loadCustomerArMetricsForTrialBalance(db, filters);
+  const eps = 0.005;
+
+  const detail: TbRow[] = [];
+  if (mode === "all") {
+    // ميجا PDF «كل العملاء»: سطر مجمّع واحد بمبالغ حساب الذمم
+    detail.push({
+      ...leaf,
+      accountCode: "",
+      accountName: "مجمع العملاء (كل العملاء)",
+    });
+  } else if (mode === "zeroBalances") {
+    const zeros = metrics.filter((m) => Math.abs(m.closingNet) <= eps);
+    const nonzero = metrics.filter((m) => Math.abs(m.closingNet) > eps)
+      .sort((a, b) => a.name.localeCompare(b.name, "ar"));
+    const zOpen = zeros.reduce((s, m) => s + m.openingNet, 0);
+    const zPd = zeros.reduce((s, m) => s + m.periodDebit, 0);
+    const zPc = zeros.reduce((s, m) => s + m.periodCredit, 0);
+    const zClose = zeros.reduce((s, m) => s + m.closingNet, 0);
+    detail.push(tbRowFromNets({
+      accountCode: "",
+      accountName: "مجمع العملاء (الارصدة الصفرية)",
+      openingNet: zOpen,
+      periodDebit: zPd,
+      periodCredit: zPc,
+      closingNet: zClose,
+    }));
+    for (const m of nonzero) {
+      detail.push(tbRowFromNets({
+        accountCode: m.code || "",
+        accountName: m.name,
+        openingNet: m.openingNet,
+        periodDebit: m.periodDebit,
+        periodCredit: m.periodCredit,
+        closingNet: m.closingNet,
+      }));
+    }
+  } else {
+    // byCategory — تجميع حسب فئة العميل (تسمية الصف بانتظار PDF ميجا)
+    const cats = await db.select({ id: contactCategories.id, name: contactCategories.name })
+      .from(contactCategories)
+      .where(tenantWhere(contactCategories, filters.tenantId));
+    const catName = new Map(cats.map((c) => [c.id, c.name]));
+    const groups = new Map<string, { openingNet: number; periodDebit: number; periodCredit: number; closingNet: number }>();
+    for (const m of metrics) {
+      const label = m.categoryId != null && catName.has(m.categoryId)
+        ? `مجمع العملاء (${catName.get(m.categoryId)})`
+        : "مجمع العملاء (بدون فئة)";
+      const g = groups.get(label) || { openingNet: 0, periodDebit: 0, periodCredit: 0, closingNet: 0 };
+      g.openingNet += m.openingNet;
+      g.periodDebit += m.periodDebit;
+      g.periodCredit += m.periodCredit;
+      g.closingNet += m.closingNet;
+      groups.set(label, g);
+    }
+    for (const [name, g] of [...groups.entries()].sort((a, b) => a[0].localeCompare(b[0], "ar"))) {
+      detail.push(tbRowFromNets({
+        accountCode: "",
+        accountName: name,
+        openingNet: g.openingNet,
+        periodDebit: g.periodDebit,
+        periodCredit: g.periodCredit,
+        closingNet: g.closingNet,
+      }));
+    }
+    if (!detail.length) {
+      detail.push({ ...leaf, accountCode: "", accountName: "مجمع العملاء (كل العملاء)" });
+    }
+  }
+
+  const remove = new Set(arIdxs);
+  const out: TbRow[] = [];
+  for (let i = 0; i < rows.length; i++) {
+    if (i === primaryIdx) {
+      out.push(...detail);
+      continue;
+    }
+    if (remove.has(i)) continue;
+    out.push(rows[i]);
+  }
+  return out;
+}
+
+
 export async function trialBalanceReport(db: Db, filters: ReportFilters) {
   // ميجا: فلتر «الحساب الرئيسي» يضيّق الشجرة؛ «اخفاء الارصدة الصفرية» اختياري (افتراضي: إظهار)
   const allAccounts = await db.select().from(accounts)
@@ -791,6 +1093,8 @@ export async function trialBalanceReport(db: Db, filters: ReportFilters) {
     rows = rows.sort((a, b) => String(a.accountCode || "").localeCompare(String(b.accountCode || ""), "en", { numeric: true }));
   }
 
+  // ميجا: طريقة تجميع العملاء (PDF كل العملاء / الارصدة الصفرية — 2026-09-13)
+  rows = await applyCustomerGroupingToTrialBalance(db, filters, rows);
   return rows;
 }
 

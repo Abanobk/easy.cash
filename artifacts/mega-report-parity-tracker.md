@@ -11,7 +11,7 @@ Goal: Easy Cash reports match Mega Cash (filters + columns + behavior) with **no
 ## P0 (in progress)
 | Easy slug | Mega page | Filters | Columns |
 |-----------|-----------|---------|---------|
-| `finalreports-trialbalance` | `/FinalReports/TrialBalance.aspx` | filters_done (partial Mega-only opts pending) | columns_done (Excel 2026-09-13) + PDF formal print |
+| `finalreports-trialbalance` | TrialBalance | filters_done (customerGrouping wired from Mega PDFs 2026-09-13) | columns_done + PDF formal print + customer grouping rows |
 | `finalreports-generalledger` | `/FinalReports/GeneralLedger.aspx` | filters_done | columns_done (Excel 2026-09-13) + PDF formal print |
 | `accountingreports-accountstatment` | `/AccountingReports/AccountStatment.aspx` | filters_done + 3 checkboxes (opening/counter/hideDetails) | columns_done + PDF print Mega-style |
 | `accountingreports-customeraccountstatementbyitems` | CustomerAccountStatementByItems | filters_partial (branch/currency/customer/item) | columns_done from PDF 2026-09-13 |
