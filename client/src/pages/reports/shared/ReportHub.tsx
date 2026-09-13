@@ -421,6 +421,42 @@ export default function ReportHub({ title, section, icon, reports, procedure }: 
     "total",
   ] as const;
 
+
+  const CUSTOMER_STATEMENT_COLUMN_ORDER = [
+    "date", "debit", "credit", "balance", "description", "exchangeRate", "documentNumber", "entryNumber",
+  ] as const;
+  const VENDOR_STATEMENT_COLUMN_ORDER = CUSTOMER_STATEMENT_COLUMN_ORDER;
+  const CUSTOMERS_LIST_COLUMN_ORDER = [
+    "name", "balance", "creditLimit", "areaName", "documentNumber", "phone", "address", "category", "debtAge",
+  ] as const;
+  const VENDORS_LIST_COLUMN_ORDER = [
+    "name", "balance", "phone", "address", "category", "maxDebtAge",
+  ] as const;
+  const CUSTOMERS_SUMMARY_COLUMN_ORDER = [
+    "name", "sales", "salesReturns", "collections", "otherOps", "balanceToDate", "previousBalance", "documentNumber", "netSales",
+  ] as const;
+  const AREAS_SUMMARY_COLUMN_ORDER = CUSTOMERS_SUMMARY_COLUMN_ORDER;
+  const VENDORS_SUMMARY_COLUMN_ORDER = [
+    "name", "purchases", "purchaseReturns", "payments", "otherOps", "balanceToDate", "previousBalance", "documentNumber", "netPurchases",
+  ] as const;
+  const LAST_PRICES_COLUMN_ORDER = [
+    "itemName", "lastSalePrice", "lastPurchasePrice", "category", "barcode", "documentNumber", "lastSaleDiscount", "lastPurchaseDiscount",
+  ] as const;
+  const MATURE_INVOICES_COLUMN_ORDER = [
+    "date", "documentNumber", "dueDate", "invoiceNet", "collectedPaid", "returns", "netDue", "repName", "lastSettlement",
+  ] as const;
+  const MATURE_RECEIPTS_COLUMN_ORDER = MATURE_INVOICES_COLUMN_ORDER;
+  const MONTHLY_SALES_BY_ITEMS_COLUMN_ORDER = [
+    "itemName", "jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec", "total",
+  ] as const;
+  const SALES_ORDERS_COLUMN_ORDER = [
+    "value", "unitName", "itemName", "quantity", "unitPrice", "batchNumber", "discount",
+  ] as const;
+  const PURCHASE_ORDERS_COLUMN_ORDER = SALES_ORDERS_COLUMN_ORDER;
+  const DEBITS_AGES_COLUMN_ORDER = [
+    "documentNumber", "customerName", "current", "days30", "days60", "days90", "over90", "total",
+  ] as const;
+
   const GROSS_PURCHASES_BY_ITEMS_COLUMN_ORDER = [
     "itemName",
     "purchaseQty",
@@ -438,6 +474,20 @@ export default function ReportHub({ title, section, icon, reports, procedure }: 
   const isVendorsPurchases = slug === "accountingreports-vendorspurchases";
   const isGrossSalesByItems = slug === "accountingreports-grosscustomersalesbyitems";
   const isGrossPurchasesByItems = slug === "accountingreports-grossvendorpurchasesbyitems";
+  const isCustomerStatement = slug === "accountingreports-customerstatment";
+  const isVendorStatement = slug === "accountingreports-vendorstatment";
+  const isCustomersList = slug === "accountingreports-customerslist";
+  const isVendorsList = slug === "accountingreports-vendorslist";
+  const isCustomersSummary = slug === "accountingreports-customerssummary";
+  const isAreasSummary = slug === "accountingreports-areassummary";
+  const isVendorsSummary = slug === "accountingreports-vendorssummary";
+  const isLastPrices = slug === "accountingreports-lastprices";
+  const isMatureInvoices = slug === "accountingreports-matureinvoices";
+  const isMatureReceipts = slug === "accountingreports-maturereceipts";
+  const isMonthlySalesByItems = slug === "accountingreports-monthlysalesbyitems" || slug === "accountingreports-monthlysalesbyitemstotals";
+  const isSalesOrders = slug === "accountingreports-salesorders";
+  const isPurchaseOrders = slug === "accountingreports-purchaseorders";
+  const isDebitsAges = slug === "accountingreports-debitsages" || slug === "accountingreports-debitsagesbyyear" || slug === "accountingreports-debitsagesbyhalfyear";
   const isSalesOrPurchases = isSales || isPurchases;
 
   const columnLabel = (key: string) => reportColumnLabelForSlug(slug, key);
@@ -463,15 +513,43 @@ export default function ReportHub({ title, section, icon, reports, procedure }: 
                   ? GROSS_SALES_BY_ITEMS_COLUMN_ORDER
                   : isGrossPurchasesByItems
                     ? GROSS_PURCHASES_BY_ITEMS_COLUMN_ORDER
-                    : null;
+                    : isCustomerStatement
+                      ? CUSTOMER_STATEMENT_COLUMN_ORDER
+                      : isVendorStatement
+                        ? VENDOR_STATEMENT_COLUMN_ORDER
+                        : isCustomersList
+                          ? CUSTOMERS_LIST_COLUMN_ORDER
+                          : isVendorsList
+                            ? VENDORS_LIST_COLUMN_ORDER
+                            : isCustomersSummary
+                              ? CUSTOMERS_SUMMARY_COLUMN_ORDER
+                              : isAreasSummary
+                                ? AREAS_SUMMARY_COLUMN_ORDER
+                                : isVendorsSummary
+                                  ? VENDORS_SUMMARY_COLUMN_ORDER
+                                  : isLastPrices
+                                    ? LAST_PRICES_COLUMN_ORDER
+                                    : isMatureInvoices
+                                      ? MATURE_INVOICES_COLUMN_ORDER
+                                      : isMatureReceipts
+                                        ? MATURE_RECEIPTS_COLUMN_ORDER
+                                        : isMonthlySalesByItems
+                                          ? MONTHLY_SALES_BY_ITEMS_COLUMN_ORDER
+                                          : isSalesOrders
+                                            ? SALES_ORDERS_COLUMN_ORDER
+                                            : isPurchaseOrders
+                                              ? PURCHASE_ORDERS_COLUMN_ORDER
+                                              : isDebitsAges
+                                                ? DEBITS_AGES_COLUMN_ORDER
+                                                : null;
     if (!order) return keys;
     const preferred = order.filter((k) => keys.includes(k));
     // لتقارير ميجا ذات ترتيب ثابت: لا نعرض أعمدة إضافية (مثل profit/itemCode) خارج ترتيب ميجا
-    const megaStrict = isCustomersSales || isVendorsPurchases || isGrossSalesByItems || isGrossPurchasesByItems || isSales || isPurchases;
+    const megaStrict = isCustomersSales || isVendorsPurchases || isGrossSalesByItems || isGrossPurchasesByItems || isSales || isPurchases || isCustomerStatement || isVendorStatement || isCustomersList || isVendorsList || isCustomersSummary || isAreasSummary || isVendorsSummary || isLastPrices || isMatureInvoices || isMatureReceipts || isMonthlySalesByItems || isSalesOrders || isPurchaseOrders || isDebitsAges;
     if (megaStrict) return preferred.length ? preferred : keys;
     const rest = keys.filter((k) => !(order as readonly string[]).includes(k));
     return [...preferred, ...rest];
-  }, [rows, isAccountStatement, isCustomerItemStatement, isSales, isPurchases, isCustomersSales, isVendorsPurchases, isGrossSalesByItems, isGrossPurchasesByItems]);
+  }, [rows, isAccountStatement, isCustomerItemStatement, isSales, isPurchases, isCustomersSales, isVendorsPurchases, isGrossSalesByItems, isGrossPurchasesByItems, isCustomerStatement, isVendorStatement, isCustomersList, isVendorsList, isCustomersSummary, isAreasSummary, isVendorsSummary, isLastPrices, isMatureInvoices, isMatureReceipts, isMonthlySalesByItems, isSalesOrders, isPurchaseOrders, isDebitsAges]);
 
   const totals = useMemo(() => {
     // ميجا: الإجمالي صف داخل البيانات («اجمالي حركات الفترة») — لا نضاعفه في تذييل الجدول

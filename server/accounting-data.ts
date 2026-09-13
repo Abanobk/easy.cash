@@ -1589,6 +1589,7 @@ export async function customersListReport(db: Db, filters: ReportFilters) {
     name: customers.name,
     phone: customers.phone,
     email: customers.email,
+    address: customers.address,
     balance: customers.balance,
     creditLimit: customers.creditLimit,
     branchName: branches.name,
@@ -1604,16 +1605,16 @@ export async function customersListReport(db: Db, filters: ReportFilters) {
         filters.areaId ? eq(customers.areaId, filters.areaId) : undefined,
         filters.repId ? eq(customers.salesRepId, filters.repId) : undefined)))
     .orderBy(customers.name);
-  return rows.map((c) => ({
-    code: c.code || "",
+  return rows.map((c, idx) => ({
     name: c.name,
-    phone: c.phone || "",
-    email: c.email || "",
-    branchName: c.branchName || "",
-    areaName: c.areaName || "",
-    repName: c.repName || "",
     balance: num(c.balance),
     creditLimit: num(c.creditLimit),
+    areaName: c.areaName || "",
+    documentNumber: idx + 1,
+    phone: c.phone || "",
+    address: c.address || "",
+    category: "",
+    debtAge: "",
   }));
 }
 
@@ -1674,22 +1675,21 @@ export async function customersSummaryReport(db: Db, filters: ReportFilters) {
     collectMap.set(c.customerId, (collectMap.get(c.customerId) || 0) + num(c.amount));
   }
 
-  return custRows.map((c) => {
+  return custRows.map((c, idx) => {
     const s = salesMap.get(c.id) || { total: 0, paid: 0, remaining: 0, count: 0 };
+    const collected = collectMap.get(c.id) || 0;
+    const sales = s.total;
+    const salesReturns = 0;
     return {
-      code: c.code || "",
       name: c.name,
-      phone: c.phone || "",
-      branchName: c.branchName || "",
-      areaName: c.areaName || "",
-      repName: c.repName || "",
-      balance: num(c.balance),
-      creditLimit: num(c.creditLimit),
-      totalSales: s.total,
-      totalPaid: s.paid,
-      remaining: s.remaining,
-      totalCollected: collectMap.get(c.id) || 0,
-      invoiceCount: s.count,
+      sales,
+      salesReturns,
+      collections: collected,
+      otherOps: 0,
+      balanceToDate: num(c.balance),
+      previousBalance: 0,
+      documentNumber: idx + 1,
+      netSales: sales - salesReturns,
     };
   });
 }
@@ -1740,19 +1740,21 @@ export async function vendorsSummaryReport(db: Db, filters: ReportFilters) {
     payMap.set(p.supplierId, (payMap.get(p.supplierId) || 0) + num(p.amount));
   }
 
-  return vendorRows.map((v) => {
+  return vendorRows.map((v, idx) => {
     const p = purchaseMap.get(v.id) || { total: 0, paid: 0, remaining: 0, count: 0 };
+    const paidCash = payMap.get(v.id) || 0;
+    const purchaseTotal = p.total;
+    const purchaseReturns = 0;
     return {
-      code: v.code || "",
       name: v.name,
-      phone: v.phone || "",
-      branchName: v.branchName || "",
-      balance: num(v.balance),
-      totalPurchases: p.total,
-      totalPaid: p.paid,
-      remaining: p.remaining,
-      totalPaidCash: payMap.get(v.id) || 0,
-      invoiceCount: p.count,
+      purchases: purchaseTotal,
+      purchaseReturns,
+      payments: paidCash,
+      otherOps: 0,
+      balanceToDate: num(v.balance),
+      previousBalance: 0,
+      documentNumber: idx + 1,
+      netPurchases: purchaseTotal - purchaseReturns,
     };
   });
 }
@@ -1763,6 +1765,7 @@ export async function vendorsListReport(db: Db, filters: ReportFilters) {
     name: suppliers.name,
     phone: suppliers.phone,
     email: suppliers.email,
+    address: suppliers.address,
     balance: suppliers.balance,
     branchName: branches.name,
   }).from(suppliers)
@@ -1771,12 +1774,12 @@ export async function vendorsListReport(db: Db, filters: ReportFilters) {
       and(eq(suppliers.isActive, true), reportBranchCond(suppliers.branchId, filters))))
     .orderBy(suppliers.name);
   return rows.map((s) => ({
-    code: s.code || "",
     name: s.name,
-    phone: s.phone || "",
-    email: s.email || "",
-    branchName: s.branchName || "",
     balance: num(s.balance),
+    phone: s.phone || "",
+    address: s.address || "",
+    category: "",
+    maxDebtAge: "",
   }));
 }
 
@@ -2179,9 +2182,18 @@ async function buildContactLedger(
 
   rows.sort((a, b) => a.sortKey.localeCompare(b.sortKey));
   let running = 0;
-  return rows.map(({ sortKey: _, ...r }) => {
+  return rows.map(({ sortKey: _, documentType, ...r }, idx) => {
     running += r.debit - r.credit;
-    return { ...r, runningBalance: running };
+    return {
+      date: r.date,
+      debit: r.debit,
+      credit: r.credit,
+      balance: running,
+      description: r.description || documentType || "",
+      exchangeRate: 1,
+      documentNumber: r.documentNumber,
+      entryNumber: String(idx + 1),
+    };
   });
 }
 
@@ -2637,37 +2649,35 @@ export async function lastPricesReport(db: Db, filters: ReportFilters) {
     const key = String(r.itemCode || r.itemName);
     if (!map.has(key)) {
       map.set(key, {
-        itemCode: r.itemCode || "",
         itemName: r.itemName || "",
         lastSalePrice: num(r.price),
-        lastSaleDate: dateOnly(r.date),
-        lastSaleInvoice: r.invoiceNumber,
         lastPurchasePrice: 0,
-        lastPurchaseDate: "",
-        lastPurchaseInvoice: "",
+        category: "",
+        barcode: "",
+        documentNumber: 0,
+        lastSaleDiscount: 0,
+        lastPurchaseDiscount: 0,
       });
     }
   }
   for (const r of purchases) {
     const key = String(r.itemCode || r.itemName);
     const cur = map.get(key) || {
-      itemCode: r.itemCode || "",
       itemName: r.itemName || "",
       lastSalePrice: 0,
-      lastSaleDate: "",
-      lastSaleInvoice: "",
       lastPurchasePrice: 0,
-      lastPurchaseDate: "",
-      lastPurchaseInvoice: "",
+      category: "",
+      barcode: "",
+      documentNumber: 0,
+      lastSaleDiscount: 0,
+      lastPurchaseDiscount: 0,
     };
     if (!cur.lastPurchasePrice) {
       cur.lastPurchasePrice = num(r.price);
-      cur.lastPurchaseDate = dateOnly(r.date);
-      cur.lastPurchaseInvoice = r.invoiceNumber;
       map.set(key, cur);
     }
   }
-  return Array.from(map.values());
+  return Array.from(map.values()).map((r, idx) => ({ ...r, documentNumber: idx + 1 }));
 }
 
 export async function customersProfitsReport(db: Db, filters: ReportFilters) {
@@ -2727,12 +2737,15 @@ export async function matureInvoicesReport(db: Db, filters: ReportFilters) {
       return due <= today;
     })
     .map((r) => ({
-      documentNumber: r.number,
       date: dateOnly(r.date),
+      documentNumber: r.number,
       dueDate: dateOnly(r.dueDate),
-      customerName: r.customerName || "",
-      total: num(r.total),
-      remaining: num(r.remaining),
+      invoiceNet: num(r.total),
+      collectedPaid: num(r.total) - num(r.remaining),
+      returns: 0,
+      netDue: num(r.remaining),
+      repName: "",
+      lastSettlement: "",
     }));
 }
 
@@ -2764,12 +2777,15 @@ export async function matureReceiptsReport(db: Db, filters: ReportFilters) {
       return due <= today;
     })
     .map((r) => ({
-      documentNumber: r.number,
       date: dateOnly(r.date),
+      documentNumber: r.number,
       dueDate: dateOnly(r.dueDate),
-      supplierName: r.supplierName || "",
-      total: num(r.total),
-      remaining: num(r.remaining),
+      invoiceNet: num(r.total),
+      collectedPaid: num(r.total) - num(r.remaining),
+      returns: 0,
+      netDue: num(r.remaining),
+      repName: "",
+      lastSettlement: "",
     }));
 }
 
@@ -2898,17 +2914,20 @@ export async function areasSummaryReport(db: Db, filters: ReportFilters) {
     .groupBy(customers.areaId);
   const custMap = new Map(custCounts.map((c) => [c.areaId!, Number(c.count)]));
 
-  return areaRows.map((a) => {
+  return areaRows.map((a, idx) => {
     const t = totals.get(a.id) || { sales: 0, paid: 0, remaining: 0, invoices: 0 };
+    const sales = t.sales;
+    const salesReturns = 0;
     return {
-      areaName: a.name,
-      description: a.description || "",
-      customersCount: custMap.get(a.id) || 0,
-      invoicesCount: t.invoices,
-      salesTotal: t.sales,
-      salesPaid: t.paid,
-      salesRemaining: t.remaining,
-      isActive: a.isActive ? "نعم" : "لا",
+      name: a.name,
+      sales,
+      salesReturns,
+      collections: t.paid,
+      otherOps: 0,
+      balanceToDate: t.remaining,
+      previousBalance: 0,
+      documentNumber: idx + 1,
+      netSales: sales - salesReturns,
     };
   });
 }
