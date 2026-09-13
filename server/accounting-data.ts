@@ -271,6 +271,113 @@ export async function loadPostedJournalLines(db: Db, filters: ReportFilters) {
 }
 
 /**
+ * كشف حساب — شكل ميجا من «كشف حساب.xlsx» (تصميم/تشغيل، على بيانات التينانت):
+ * أعمدة: التاريخ، رقم القيد، رقم المستند، مدين، دائن، الرصيد، سعر الصرف، الوصف
+ * صفوف: رصيد سابق → حركات الفترة → اجمالي حركات الفترة
+ * الحساب مطلوب زي ميجا (اسم الحساب).
+ */
+export async function accountStatementReport(db: Db, filters: ReportFilters) {
+  if (filters.accountId == null) return [];
+
+  const [account] = await db.select().from(accounts)
+    .where(tenantWhere(accounts, filters.tenantId, eq(accounts.id, filters.accountId)));
+  if (!account) return [];
+
+  const costCenterCond = filters.costCenterId
+    ? eq(journalEntryLines.costCenterId, filters.costCenterId)
+    : undefined;
+
+  // رصيد سابق قبل dateFrom (نفس أسلوب ميزان/أستاذ عندنا)
+  let openingNet = 0;
+  if (filters.dateFrom) {
+    const openingLines = await db.select({
+      debit: journalEntryLines.debit,
+      credit: journalEntryLines.credit,
+    }).from(journalEntryLines)
+      .innerJoin(journalEntries, eq(journalEntryLines.entryId, journalEntries.id))
+      .where(tenantWhere(journalEntries, filters.tenantId,
+        and(
+          eq(journalEntries.status, "posted"),
+          eq(journalEntryLines.accountId, filters.accountId),
+          lt(journalEntries.date, filters.dateFrom as any),
+        ),
+        costCenterCond));
+    for (const l of openingLines) openingNet += num(l.debit) - num(l.credit);
+    if (filters.costCenterId == null) openingNet += num(account.balance);
+  } else if (filters.costCenterId == null) {
+    openingNet = num(account.balance);
+  }
+
+  const periodDateParts = dateConds(journalEntries, filters.dateFrom, filters.dateTo);
+  const periodRows = await db.select({
+    entryNumber: journalEntries.number,
+    entryReference: journalEntries.reference,
+    entryDate: journalEntries.date,
+    entryDescription: journalEntries.description,
+    debit: journalEntryLines.debit,
+    credit: journalEntryLines.credit,
+    lineDescription: journalEntryLines.description,
+  }).from(journalEntryLines)
+    .innerJoin(journalEntries, eq(journalEntryLines.entryId, journalEntries.id))
+    .where(tenantWhere(journalEntries, filters.tenantId,
+      and(
+        eq(journalEntries.status, "posted"),
+        eq(journalEntryLines.accountId, filters.accountId),
+        ...(periodDateParts.length ? [and(...periodDateParts)] : []),
+      ),
+      costCenterCond))
+    .orderBy(asc(journalEntries.date), asc(journalEntries.id));
+
+  const out: Record<string, unknown>[] = [];
+  // ميجا: صف «رصيد سابق»
+  out.push({
+    date: "",
+    entryNumber: "",
+    documentNumber: "",
+    debit: 0,
+    credit: 0,
+    balance: openingNet,
+    exchangeRate: 1,
+    description: "رصيد سابق",
+  });
+
+  let running = openingNet;
+  let periodDebit = 0;
+  let periodCredit = 0;
+  for (const r of periodRows) {
+    const debit = num(r.debit);
+    const credit = num(r.credit);
+    running += debit - credit;
+    periodDebit += debit;
+    periodCredit += credit;
+    out.push({
+      date: dateOnly(r.entryDate),
+      entryNumber: r.entryNumber || "",
+      documentNumber: r.entryReference || "",
+      debit,
+      credit,
+      balance: running,
+      exchangeRate: 1,
+      description: r.lineDescription || r.entryDescription || "",
+    });
+  }
+
+  // ميجا: صف «اجمالي حركات الفترة»
+  out.push({
+    date: "",
+    entryNumber: "",
+    documentNumber: "",
+    debit: periodDebit,
+    credit: periodCredit,
+    balance: running,
+    exchangeRate: "",
+    description: "اجمالي حركات الفترة",
+  });
+
+  return out;
+}
+
+/**
  * الأستاذ العام — شكل ميجا من ملف التصدير «الاستاذ العام.xlsx»:
  * لكل حساب: رصيد سابق + حركة يومية مجمّعة + اجمالى
  * أعمدة الشبكة: التاريخ، مدين، دائن، الرصيد

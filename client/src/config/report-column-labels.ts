@@ -1,6 +1,7 @@
 /** تسميات عربية لأعمدة التقارير الديناميكية */
 export const REPORT_COLUMN_LABELS: Record<string, string> = {
   documentNumber: "رقم المستند",
+  entryNumber: "رقم القيد",
   date: "التاريخ",
   partyCode: "كود الطرف",
   partyName: "العميل / المورد",

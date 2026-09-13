@@ -14,7 +14,7 @@ import { getReportEntityFilters, type ReportEntityFilter } from "@/config/report
 import { reportColumnLabel, REPORT_TOTAL_COLUMNS } from "@/config/report-column-labels";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import { printTableReport, printGroupedInvoiceReport } from "@/lib/print-report";
+import { printTableReport, printGroupedInvoiceReport, printAccountStatementReport } from "@/lib/print-report";
 
 type ReportProcedure = "accountingBySlug" | "finalBySlug" | "hrBySlug" | "assetsBySlug";
 
@@ -288,12 +288,32 @@ export default function ReportHub({ title, section, icon, reports, procedure }: 
 
   const { data: rows = [], isLoading, refetch } = useReportData(procedure, filterInput, !!slug);
 
+  const isAccountStatement = slug === "accountingreports-accountstatment";
+
+  /** ترتيب أعمدة كشف الحساب كما في ميجا (إكسل/PDF) */
+  const ACCOUNT_STATEMENT_COLUMN_ORDER = [
+    "date",
+    "entryNumber",
+    "documentNumber",
+    "debit",
+    "credit",
+    "balance",
+    "exchangeRate",
+    "description",
+  ] as const;
+
   const columns = useMemo(() => {
     if (!rows.length) return [];
-    return Object.keys(rows[0] as object).filter((k) => !["drillSlug", "section"].includes(k));
-  }, [rows]);
+    const keys = Object.keys(rows[0] as object).filter((k) => !["drillSlug", "section"].includes(k));
+    if (!isAccountStatement) return keys;
+    const preferred = ACCOUNT_STATEMENT_COLUMN_ORDER.filter((k) => keys.includes(k));
+    const rest = keys.filter((k) => !(ACCOUNT_STATEMENT_COLUMN_ORDER as readonly string[]).includes(k));
+    return [...preferred, ...rest];
+  }, [rows, isAccountStatement]);
 
   const totals = useMemo(() => {
+    // ميجا: الإجمالي صف داخل البيانات («اجمالي حركات الفترة») — لا نضاعفه في تذييل الجدول
+    if (isAccountStatement) return null;
     const result: Record<string, number> = {};
     let hasAny = false;
     for (const col of columns) {
@@ -313,7 +333,7 @@ export default function ReportHub({ title, section, icon, reports, procedure }: 
       }
     }
     return hasAny ? result : null;
-  }, [rows, columns]);
+  }, [rows, columns, isAccountStatement]);
 
   const handleSearch = () => {
     setQuery({
@@ -424,6 +444,27 @@ export default function ReportHub({ title, section, icon, reports, procedure }: 
       } finally {
         setPrinting(false);
       }
+      return;
+    }
+
+    if (isAccountStatement) {
+      const selectedAccount = (accountsList || []).find((a: { id: number }) => a.id === query.accountId);
+      const accountLabel = selectedAccount
+        ? `${(selectedAccount as { code?: string }).code || ""} ${(selectedAccount as { name: string }).name}`.trim()
+        : "—";
+      const code = query.currencyCode || company?.currency || "EGP";
+      printAccountStatementReport({
+        dateFrom: query.dateFrom,
+        dateTo: query.dateTo,
+        accountLabel,
+        currencyCode: code,
+        rows: rows as Record<string, unknown>[],
+        companyName: companyProps.companyName,
+        companyAddress: companyProps.companyAddress,
+        companyPhone: companyProps.companyPhone,
+        companyMobile: company?.phone2 ?? undefined,
+        companyLogo: companyProps.companyLogo,
+      });
       return;
     }
 
@@ -689,8 +730,17 @@ export default function ReportHub({ title, section, icon, reports, procedure }: 
                     </tr>
                   </thead>
                   <tbody>
-                    {(rows as Record<string, unknown>[]).map((row, i) => (
-                      <tr key={i} style={{ background: i % 2 === 0 ? "#ffffff" : "var(--paper-50)" }}>
+                    {(rows as Record<string, unknown>[]).map((row, i) => {
+                      const desc = String(row.description ?? "");
+                      const isSpecial = isAccountStatement && (desc === "رصيد سابق" || desc === "اجمالي حركات الفترة");
+                      return (
+                      <tr
+                        key={i}
+                        style={{
+                          background: isSpecial ? "var(--paper-100)" : i % 2 === 0 ? "#ffffff" : "var(--paper-50)",
+                          fontWeight: isSpecial ? 700 : undefined,
+                        }}
+                      >
                         {columns.map((col) => {
                           const val = row[col];
                           const drillSlug = row.drillSlug as string | undefined;
@@ -715,7 +765,8 @@ export default function ReportHub({ title, section, icon, reports, procedure }: 
                           );
                         })}
                       </tr>
-                    ))}
+                      );
+                    })}
                   </tbody>
                   {totals && (
                     <tfoot>

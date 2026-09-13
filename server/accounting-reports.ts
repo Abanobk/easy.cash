@@ -19,6 +19,7 @@ import {
   itemsProfitsReport,
   lastPricesReport,
   loadPostedJournalLines,
+  accountStatementReport,
   matureInvoicesReport,
   matureReceiptsReport,
   monthlyExpensesReport,
@@ -156,7 +157,7 @@ async function productionMaterialsReport(db: Db, f: ReportFilters) {
 }
 
 const HANDLERS: Record<string, (db: Db, f: ReportFilters) => Promise<ReportRow[]>> = {
-  "accountingreports-accountstatment": (db, f) => loadPostedJournalLines(db, f),
+  "accountingreports-accountstatment": (db, f) => accountStatementReport(db, f),
   "accountingreports-customerstatment": customerStatementReport,
   "accountingreports-vendorstatment": vendorStatementReport,
   "accountingreports-sales": salesInvoicesReport,
