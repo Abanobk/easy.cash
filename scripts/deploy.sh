@@ -115,6 +115,7 @@ _pack() {
   if command -v gtar >/dev/null 2>&1; then
     gtar -czf - --format=gnu --owner=0 --group=0 \
       --exclude=node_modules \
+      --exclude=.pnpm-store \
       --exclude=dist \
       --exclude=.git \
       --exclude=.manus-logs \
@@ -130,6 +131,7 @@ _pack() {
   else
     tar czf - \
       --exclude=node_modules \
+      --exclude=.pnpm-store \
       --exclude=dist \
       --exclude=.git \
       --exclude=.manus-logs \
@@ -165,6 +167,7 @@ _upload_rsync() {
 
 RSYNC_EXCLUDES=(
   --exclude=node_modules/
+  --exclude=.pnpm-store/
   --exclude=dist/
   --exclude=.git/
   --exclude=.manus-logs/
