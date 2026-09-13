@@ -743,6 +743,8 @@ export async function inventoryStocktakeReport(db: Db, filters: InventoryReportF
           purchasePrice: num(r.purchasePrice),
           salePrice: num(r.salePrice),
           stockValue: qty * num(r.purchasePrice),
+          reservedQty: 0,
+          netQty: qty,
           status: (qty <= 0 ? "zero" : (min > 0 && qty <= min ? "low" : "ok")) as "low" | "ok" | "zero",
         };
       })
@@ -787,6 +789,8 @@ export async function inventoryStocktakeReport(db: Db, filters: InventoryReportF
     purchasePrice: number;
     salePrice: number;
     stockValue: number;
+    reservedQty: number;
+    netQty: number;
     status: "low" | "ok" | "zero";
   }> = [];
 
@@ -827,6 +831,8 @@ export async function inventoryStocktakeReport(db: Db, filters: InventoryReportF
       purchasePrice: cost,
       salePrice: num(r.salePrice),
       stockValue: qty * cost,
+      reservedQty: 0,
+      netQty: qty,
       status: qty <= 0 ? "zero" : (min > 0 && qty <= min ? "low" : "ok"),
     });
   }
@@ -834,49 +840,122 @@ export async function inventoryStocktakeReport(db: Db, filters: InventoryReportF
   return result.sort((a, b) => a.name.localeCompare(b.name, "ar") || a.warehouseName.localeCompare(b.warehouseName, "ar"));
 }
 
-export function warehouseInOutReport(movements: InventoryMovementRow[]) {
-  const map = new Map<number, {
-    warehouseId: number | null;
-    warehouseName: string;
-    totalIn: number;
-    totalOut: number;
-    inValue: number;
-    outValue: number;
-  }>();
+/**
+ * ميجا «صادر / وارد مخزن»: صفوف حركة تفصيلية (مش تجميع بالمخزن).
+ * أعمدة PDF: رقم التشغيلة | من | رصيد | صادر | الباركود | التاريخ | رقم المستند | اسم الصنف | وحدة القياس | وارد | الى
+ */
+export function warehouseInOutReport(
+  movements: InventoryMovementRow[],
+  openings?: Map<string, number>,
+  barcodeByItemId?: Map<number, string>,
+) {
+  const sorted = [...movements].sort((a, b) => {
+    const byWh = String(a.warehouseName || "").localeCompare(String(b.warehouseName || ""), "ar");
+    if (byWh) return byWh;
+    const byItem = String(a.itemName || "").localeCompare(String(b.itemName || ""), "ar");
+    if (byItem) return byItem;
+    return String(a.date).localeCompare(String(b.date));
+  });
 
-  for (const m of movements) {
-    const key = m.warehouseId ?? 0;
-    if (!map.has(key)) {
-      map.set(key, {
-        warehouseId: m.warehouseId,
-        warehouseName: m.warehouseName,
-        totalIn: 0,
-        totalOut: 0,
-        inValue: 0,
-        outValue: 0,
-      });
-    }
-    const row = map.get(key)!;
-    row.totalIn += m.quantityIn;
-    row.totalOut += m.quantityOut;
-    row.inValue += m.quantityIn * m.unitCost;
-    row.outValue += m.quantityOut * m.unitCost;
+  const bal = new Map<string, number>();
+  if (openings) {
+    for (const [k, v] of openings) bal.set(k, v);
   }
 
-  return [...map.values()].map((r) => ({
-    ...r,
-    netQty: r.totalIn - r.totalOut,
-    netValue: r.inValue - r.outValue,
-  }));
+  return sorted.map((m) => {
+    const key = `${m.warehouseId ?? 0}:${m.itemId}`;
+    const qtyIn = num(m.quantityIn);
+    const qtyOut = num(m.quantityOut);
+    const next = (bal.get(key) || 0) + qtyIn - qtyOut;
+    bal.set(key, next);
+    const { fromLocation, toLocation } = megaFromTo(m, qtyIn, qtyOut);
+    return {
+      date: m.date,
+      documentNumber: m.documentTypeLabel || m.documentNumber || "",
+      itemName: m.itemName,
+      barcode: barcodeByItemId?.get(m.itemId) || m.itemCode || "",
+      unit: m.unit,
+      batchNumber: m.batchNumber || "",
+      quantityIn: qtyIn,
+      quantityOut: qtyOut,
+      balanceQty: next,
+      fromLocation,
+      toLocation,
+      warehouseId: m.warehouseId,
+      warehouseName: m.warehouseName,
+      itemId: m.itemId,
+    };
+  });
 }
 
-export function itemMovementSummaryReport(movements: InventoryMovementRow[]) {
+/**
+ * ميجا «حركة تفصيلية للمخازن»: رصيد/قيم وارد وصادر + نوع العملية.
+ */
+export function toMegaWarehouseMovementRows(
+  movements: InventoryMovementRow[],
+  openings?: Map<string, { qty: number; val: number }>,
+) {
+  const sorted = [...movements].sort((a, b) => {
+    const byWh = String(a.warehouseName || "").localeCompare(String(b.warehouseName || ""), "ar");
+    if (byWh) return byWh;
+    const byItem = String(a.itemName || "").localeCompare(String(b.itemName || ""), "ar");
+    if (byItem) return byItem;
+    return String(a.date).localeCompare(String(b.date));
+  });
+
+  const qtyBal = new Map<string, number>();
+  const valBal = new Map<string, number>();
+  if (openings) {
+    for (const [k, o] of openings) {
+      qtyBal.set(k, num(o.qty));
+      valBal.set(k, num(o.val));
+    }
+  }
+
+  return sorted.map((m) => {
+    const key = `${m.warehouseId ?? 0}:${m.itemId}`;
+    const qtyIn = num(m.quantityIn);
+    const qtyOut = num(m.quantityOut);
+    const unitCost = num(m.unitCost);
+    const inValue = qtyIn * unitCost;
+    const outValue = qtyOut * unitCost;
+    const nextQty = (qtyBal.get(key) || 0) + qtyIn - qtyOut;
+    const nextVal = (valBal.get(key) || 0) + inValue - outValue;
+    qtyBal.set(key, nextQty);
+    valBal.set(key, nextVal);
+    return {
+      date: m.date,
+      operationType: m.documentTypeLabel || m.documentType,
+      warehouseName: m.warehouseName,
+      itemName: m.itemName,
+      unit: m.unit,
+      quantityIn: qtyIn,
+      quantityOut: qtyOut,
+      balanceQty: nextQty,
+      inValue,
+      outValue,
+      balanceValue: nextVal,
+      documentNumber: m.documentNumber,
+      itemId: m.itemId,
+      warehouseId: m.warehouseId,
+    };
+  });
+}
+
+export function itemMovementSummaryReport(
+  movements: InventoryMovementRow[],
+  openings?: Map<number, { qty: number; val: number }>,
+  barcodeByItemId?: Map<number, string>,
+) {
   const map = new Map<number, {
     itemId: number;
     itemCode: string;
     itemName: string;
+    barcode: string;
     categoryName: string;
     unit: string;
+    openingQty: number;
+    openingValue: number;
     totalIn: number;
     totalOut: number;
     inValue: number;
@@ -885,12 +964,16 @@ export function itemMovementSummaryReport(movements: InventoryMovementRow[]) {
 
   for (const m of movements) {
     if (!map.has(m.itemId)) {
+      const open = openings?.get(m.itemId);
       map.set(m.itemId, {
         itemId: m.itemId,
         itemCode: m.itemCode,
         itemName: m.itemName,
+        barcode: barcodeByItemId?.get(m.itemId) || m.itemCode || "",
         categoryName: m.categoryName,
         unit: m.unit,
+        openingQty: num(open?.qty),
+        openingValue: num(open?.val),
         totalIn: 0,
         totalOut: 0,
         inValue: 0,
@@ -904,15 +987,110 @@ export function itemMovementSummaryReport(movements: InventoryMovementRow[]) {
     row.outValue += m.quantityOut * m.unitCost;
   }
 
+  // أصناف لها رصيد سابق بدون حركة في الفترة
+  if (openings) {
+    for (const [itemId, open] of openings) {
+      if (map.has(itemId)) continue;
+      if (!open.qty && !open.val) continue;
+      map.set(itemId, {
+        itemId,
+        itemCode: "",
+        itemName: `#${itemId}`,
+        barcode: barcodeByItemId?.get(itemId) || "",
+        categoryName: "",
+        unit: "",
+        openingQty: num(open.qty),
+        openingValue: num(open.val),
+        totalIn: 0,
+        totalOut: 0,
+        inValue: 0,
+        outValue: 0,
+      });
+    }
+  }
+
   return [...map.values()].map((r) => ({
     ...r,
+    balanceQty: r.openingQty + r.totalIn - r.totalOut,
+    balanceValue: r.openingValue + r.inValue - r.outValue,
     netQty: r.totalIn - r.totalOut,
     netValue: r.inValue - r.outValue,
   })).sort((a, b) => a.itemName.localeCompare(b.itemName, "ar"));
 }
 
-export function itemInOutReport(movements: InventoryMovementRow[]) {
-  return itemMovementSummaryReport(movements);
+/**
+ * ميجا «صادر / وارد صنف»: تفصيل مشتريات/مبيعات/مردود/انتاج + كمية متاحة.
+ */
+export function itemInOutReport(
+  movements: InventoryMovementRow[],
+  availableQtyByItemId?: Map<number, number>,
+  barcodeByItemId?: Map<number, string>,
+) {
+  const map = new Map<number, {
+    itemId: number;
+    itemName: string;
+    barcode: string;
+    unit: string;
+    purchases: number;
+    purchaseReturns: number;
+    sales: number;
+    salesReturns: number;
+    production: number;
+  }>();
+
+  const ensure = (m: InventoryMovementRow) => {
+    if (!map.has(m.itemId)) {
+      map.set(m.itemId, {
+        itemId: m.itemId,
+        itemName: m.itemName,
+        barcode: barcodeByItemId?.get(m.itemId) || m.itemCode || "",
+        unit: m.unit,
+        purchases: 0,
+        purchaseReturns: 0,
+        sales: 0,
+        salesReturns: 0,
+        production: 0,
+      });
+    }
+    return map.get(m.itemId)!;
+  };
+
+  for (const m of movements) {
+    const row = ensure(m);
+    const qtyIn = num(m.quantityIn);
+    const qtyOut = num(m.quantityOut);
+    switch (m.documentType) {
+      case "purchase":
+        row.purchases += qtyIn;
+        break;
+      case "purchase_return":
+        row.purchaseReturns += qtyOut;
+        break;
+      case "sale":
+        row.sales += qtyOut;
+        break;
+      case "sale_return":
+        row.salesReturns += qtyIn;
+        break;
+      case "production_in":
+      case "production_out":
+        row.production += qtyIn - qtyOut;
+        break;
+      default:
+        break;
+    }
+  }
+
+  return [...map.values()].map((r) => {
+    const netSales = r.sales - r.salesReturns;
+    const netPurchases = r.purchases - r.purchaseReturns;
+    return {
+      ...r,
+      netSales,
+      netPurchases,
+      availableQty: availableQtyByItemId?.get(r.itemId) ?? (netPurchases - netSales + r.production),
+    };
+  }).sort((a, b) => a.itemName.localeCompare(b.itemName, "ar"));
 }
 
 export async function itemCostsReport(db: Db, filters: InventoryReportFilters) {
@@ -1196,7 +1374,7 @@ export async function itemsListReport(db: Db, filters: InventoryReportFilters) {
     conditions.push(or(like(items.name, `%${search}%`), like(items.code, `%${search}%`))!);
   }
 
-  return db.select({
+  const rows = await db.select({
     id: items.id,
     code: items.code,
     barcode: items.barcode,
@@ -1213,6 +1391,13 @@ export async function itemsListReport(db: Db, filters: InventoryReportFilters) {
     .leftJoin(itemCategories, eq(items.categoryId, itemCategories.id))
     .where(and(...conditions))
     .orderBy(items.name);
+  return rows.map((r, idx) => ({
+    ...r,
+    serial: idx + 1,
+    altCategoryName: "",
+    discountPercent: 0,
+    discountCash: 0,
+  }));
 }
 
 /** أصناف راكدة — بدون حركة خلال N يوم (افتراضي 90) */
@@ -1225,21 +1410,52 @@ export async function stagnantItemsReport(
   cutoff.setDate(cutoff.getDate() - staleDays);
   const cutoffStr = cutoff.toISOString().split("T")[0];
 
-  const movements = await collectInventoryMovements(db, {
+  const recent = await collectInventoryMovements(db, {
     ...filters,
     dateFrom: cutoffStr,
     dateTo: new Date().toISOString().split("T")[0],
   });
-
   const lastMove = new Map<number, string>();
-  for (const m of movements) {
+  for (const m of recent) {
     const prev = lastMove.get(m.itemId);
     if (!prev || m.date > prev) lastMove.set(m.itemId, m.date);
   }
 
-  const stock = await inventoryStocktakeReport(db, filters);
-  const merged = new Map<number, (typeof stock)[0] & { lastMovementDate: string | null; daysStagnant: number }>();
+  // عدّادات الحركات (ميجا PDF)
+  const lifetime = await collectInventoryMovements(db, { ...filters, dateFrom: undefined, dateTo: undefined });
+  type MoveCounts = {
+    purchaseMoves: number;
+    purchaseReturnMoves: number;
+    saleMoves: number;
+    saleReturnMoves: number;
+    productionMoves: number;
+    totalMoves: number;
+  };
+  const counts = new Map<number, MoveCounts>();
+  for (const mv of lifetime) {
+    const cur = counts.get(mv.itemId) || {
+      purchaseMoves: 0,
+      purchaseReturnMoves: 0,
+      saleMoves: 0,
+      saleReturnMoves: 0,
+      productionMoves: 0,
+      totalMoves: 0,
+    };
+    cur.totalMoves += 1;
+    switch (mv.documentType) {
+      case "purchase": cur.purchaseMoves += 1; break;
+      case "purchase_return": cur.purchaseReturnMoves += 1; break;
+      case "sale": cur.saleMoves += 1; break;
+      case "sale_return": cur.saleReturnMoves += 1; break;
+      case "production_in":
+      case "production_out": cur.productionMoves += 1; break;
+      default: break;
+    }
+    counts.set(mv.itemId, cur);
+  }
 
+  const stock = await inventoryStocktakeReport(db, filters);
+  const merged = new Map<number, (typeof stock)[0] & { lastMovementDate: string | null; daysStagnant: number } & MoveCounts & { serial: number }>();
   for (const r of stock) {
     if (r.quantity <= 0) continue;
     const last = lastMove.get(r.itemId) ?? null;
@@ -1247,15 +1463,20 @@ export async function stagnantItemsReport(
       ? Math.floor((Date.now() - new Date(last).getTime()) / 86400000)
       : staleDays + 1;
     if (daysStagnant < staleDays) continue;
+    const c = counts.get(r.itemId) || {
+      purchaseMoves: 0, purchaseReturnMoves: 0, saleMoves: 0, saleReturnMoves: 0, productionMoves: 0, totalMoves: 0,
+    };
     if (!merged.has(r.itemId)) {
-      merged.set(r.itemId, { ...r, quantity: 0, stockValue: 0, lastMovementDate: last, daysStagnant });
+      merged.set(r.itemId, { ...r, quantity: 0, stockValue: 0, lastMovementDate: last, daysStagnant, serial: 0, ...c });
     }
     const row = merged.get(r.itemId)!;
     row.quantity += r.quantity;
     row.stockValue += r.stockValue;
   }
 
-  return [...merged.values()].sort((a, b) => b.daysStagnant - a.daysStagnant);
+  return [...merged.values()]
+    .sort((a, b) => b.daysStagnant - a.daysStagnant)
+    .map((r, idx) => ({ ...r, serial: idx + 1 }));
 }
 
 /** أعمار الأصناف — أيام منذ آخر حركة وارد */

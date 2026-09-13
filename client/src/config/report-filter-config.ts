@@ -88,9 +88,26 @@ const ASSETS_FILTERS: Record<string, ReportEntityFilter[]> = {
   "fixedassetsreports-soldfixedassets": [],
 };
 
+/** فلاتر تقارير المخازن من مسح ميجا (artifacts/mega-report-menu/FILTERS-BY-REPORT.md) */
+const INVENTORY_FILTERS: Record<string, ReportEntityFilter[]> = {
+  "invreports-inventorysummary": ["branch", "warehouse", "category", "item"],
+  "invreports-itemstransferdetails": ["branch", "warehouse", "category", "item", "costCenter"],
+  "invreports-totalinventoryexportimportreport": ["branch", "warehouse", "category", "item", "costCenter"],
+  "invreports-inventorytransferdetailsreport": ["branch", "warehouse", "category", "item", "costCenter"],
+  "invreports-itemscosts": ["branch", "warehouse", "category", "item"],
+  "invreports-itemslist": ["branch", "warehouse", "category", "item", "currency"],
+  "invreports-itemssummary": ["branch", "warehouse", "category", "item", "costCenter"],
+  "invreports-incomeoutcomeitem": ["branch", "warehouse", "category", "item"],
+  "invreports-stagnantitems": ["branch", "warehouse", "category", "item"],
+  "invreports-itemaging": ["branch", "warehouse", "category", "item"],
+};
+
 export function getReportEntityFilters(section: string, slug: string): ReportEntityFilter[] {
   if (section === "accounting") return ACCOUNTING_FILTERS[slug] || [];
   if (section === "final") return FINAL_FILTERS[slug] || [];
   if (section === "assets") return ASSETS_FILTERS[slug] || [];
+  if (section === "inventory") return INVENTORY_FILTERS[slug] || [];
+  // featureKey-style slugs also used from hub
+  if (slug.startsWith("invreports-")) return INVENTORY_FILTERS[slug] || [];
   return [];
 }

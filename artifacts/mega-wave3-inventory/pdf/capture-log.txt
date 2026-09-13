@@ -1,0 +1,355 @@
+logged in https://km.mega-cash.net/
+=== inventory-summary
+prep inventory-summary {
+  okFrom: false,
+  okTo: true,
+  to: '3/1/2022',
+  hasBtn: true,
+  btnId: 'cph_btnShow',
+  hasViewer: true,
+  dateIds: [
+    'cph_txtDate',
+    'cph_txtProductionDateFrom',
+    'cph_txtProductionDateTo',
+    'cph_txtExpirationDateFrom',
+    'cph_txtExpirationDateTo'
+  ]
+}
+inventory-summary tick 0 wait true src  urls 0
+inventory-summary tick 1 wait true src  urls 0
+inventory-summary tick 2 wait true src  urls 0
+NET inventory-summary POST 200 https://km.mega-cash.net/InvReports/InventorySummary.aspx [
+  '/showreport/5N29toS7k9y4j70NPipx2SDceJf7EaCu0QVfzVQ9JD03ENhZjBbOmMQHEByE8rY_V1TZmcNzriwDf5A19Fe4muelZ-mycLdPM1cgHXIpM5pEO-z7Bn4rXJyyP7M9ZyIv_BYE1w2/جرد'
+]
+NET inventory-summary GET 200 https://km.mega-cash.net/showreport/5N29toS7k9y4j70NPipx2SDceJf7EaCu0QVfzVQ9JD03ENhZjBbOmMQHEByE8rY_V1TZmcNzriwDf5A19Fe4 []
+NET inventory-summary GET 200 https://km.mega-cash.net/showreport/5N29toS7k9y4j70NPipx2SDceJf7EaCu0QVfzVQ9JD03ENhZjBbOmMQHEByE8rY_V1TZmcNzriwDf5A19Fe4 [
+  '/showreport/5N29toS7k9y4j70NPipx2SDceJf7EaCu0QVfzVQ9JD03ENhZjBbOmMQHEByE8rY_V1TZmcNzriwDf5A19Fe4muelZ-mycLdPM1cgHXIpM5pEO-z7Bn4rXJyyP7M9ZyIv_BYE1w2/%D8%AC%D8%B1%D8%AF%20%D8%A7%D9%84%D9%85%D8%AE%D8%A7%D8%B2%D9%86.ashx?show=1',
+  'https://km.mega-cash.net/showreport/5N29toS7k9y4j70NPipx2SDceJf7EaCu0QVfzVQ9JD03ENhZjBbOmMQHEByE8rY_V1TZmcNzriwDf5A19Fe4muelZ-mycLdPM1cgHXIpM5pEO-z7Bn4rXJyyP7M9ZyIv_BYE1w2/%D8%AC%D8%B1%D8%AF%20%D8%A7%D9%84%D9%85%D8%AE%D8%A7%D8%B2%D9%86.ashx?show=1'
+]
+inventory-summary tick 3 wait false src /showreport/5N29toS7k9y4j70NPipx2SDceJf7EaCu0QVfzVQ9JD03ENhZjBbOmMQHEByE8rY_V1TZmcNzriwDf5A19Fe4muelZ-mycLdPM1cgHXIpM5pEO-z7Bn4rXJyyP7M9ZyIv_BYE1w2/جرد المخازن.ashx?show=1 urls 9
+saved inventory-summary.pdf 104206
+=== items-transfer-details
+prep items-transfer-details {
+  okFrom: true,
+  okTo: true,
+  from: '1/1/2022',
+  to: '3/1/2022',
+  hasBtn: true,
+  btnId: 'cph_btnShow',
+  hasViewer: true,
+  dateIds: [ 'cph_txtFromDateSrch', 'cph_txtToDateSrch' ]
+}
+items-transfer-details tick 0 wait true src  urls 0
+NET items-transfer-details POST 200 https://km.mega-cash.net/InvReports/ItemsTransferDetails.aspx [
+  '/showreport/19VqfrEkmyV1NQDUbRREiY2CM3iVp0BFuJffjAd1rFTO2P-CBWiMT3mf3C8iAcmLGPXSy3k6n1Lg_f3DAByoNHg487X_6Z3JzNDGNClwsjG5ut4vtlIbiY5dijdLXKoX6Z6QOA2/حركة'
+]
+NET items-transfer-details GET 200 https://km.mega-cash.net/showreport/19VqfrEkmyV1NQDUbRREiY2CM3iVp0BFuJffjAd1rFTO2P-CBWiMT3mf3C8iAcmLGPXSy3k6n1Lg_f3DAByo []
+items-transfer-details tick 1 wait false src /showreport/19VqfrEkmyV1NQDUbRREiY2CM3iVp0BFuJffjAd1rFTO2P-CBWiMT3mf3C8iAcmLGPXSy3k6n1Lg_f3DAByoNHg487X_6Z3JzNDGNClwsjG5ut4vtlIbiY5dijdLXKoX6Z6QOA2/حركة تفصيلية للاصناف.ashx?show=1 urls 6
+NET items-transfer-details GET 200 https://km.mega-cash.net/showreport/19VqfrEkmyV1NQDUbRREiY2CM3iVp0BFuJffjAd1rFTO2P-CBWiMT3mf3C8iAcmLGPXSy3k6n1Lg_f3DAByo [
+  '/showreport/19VqfrEkmyV1NQDUbRREiY2CM3iVp0BFuJffjAd1rFTO2P-CBWiMT3mf3C8iAcmLGPXSy3k6n1Lg_f3DAByoNHg487X_6Z3JzNDGNClwsjG5ut4vtlIbiY5dijdLXKoX6Z6QOA2/%D8%AD%D8%B1%D9%83%D8%A9%20%D8%AA%D9%81%D8%B5%D9%8A%D9%84%D9%8A%D8%A9%20%D9%84%D9%84%D8%A7%D8%B5%D9%86%D8%A7%D9%81.ashx?show=1',
+  'https://km.mega-cash.net/showreport/19VqfrEkmyV1NQDUbRREiY2CM3iVp0BFuJffjAd1rFTO2P-CBWiMT3mf3C8iAcmLGPXSy3k6n1Lg_f3DAByoNHg487X_6Z3JzNDGNClwsjG5ut4vtlIbiY5dijdLXKoX6Z6QOA2/%D8%AD%D8%B1%D9%83%D8%A9%20%D8%AA%D9%81%D8%B5%D9%8A%D9%84%D9%8A%D8%A9%20%D9%84%D9%84%D8%A7%D8%B5%D9%86%D8%A7%D9%81.ashx?show=1'
+]
+saved items-transfer-details.pdf 317940
+=== warehouse-export-import
+prep warehouse-export-import {
+  okFrom: true,
+  okTo: true,
+  from: '1/1/2022',
+  to: '3/1/2022',
+  hasBtn: true,
+  btnId: 'cph_btnShow',
+  hasViewer: true,
+  dateIds: [ 'cph_txtFromDateSrch', 'cph_txtToDateSrch' ]
+}
+warehouse-export-import tick 0 wait true src  urls 0
+NET warehouse-export-import POST 200 https://km.mega-cash.net/InvReports/TotalInventoryExportImportReport.aspx [
+  '/showreport/kpG454mz40YeL-J0UQSRKxAu7DZcWzBpzl7mKtuyVT58R99zqd2C_hrlxh7A0vWgVX52jax7CqwQe_JUiEkgXOFzvbLzF_AU9ALBPbxS5U3s1uF7KVdNILUtND_xYN-8svrRhYX0NDlIQGcXjsVrQvmf14s1/صادر'
+]
+NET warehouse-export-import GET 200 https://km.mega-cash.net/showreport/kpG454mz40YeL-J0UQSRKxAu7DZcWzBpzl7mKtuyVT58R99zqd2C_hrlxh7A0vWgVX52jax7CqwQe_JUiEkg []
+NET warehouse-export-import GET 200 https://km.mega-cash.net/showreport/kpG454mz40YeL-J0UQSRKxAu7DZcWzBpzl7mKtuyVT58R99zqd2C_hrlxh7A0vWgVX52jax7CqwQe_JUiEkg [
+  '/showreport/kpG454mz40YeL-J0UQSRKxAu7DZcWzBpzl7mKtuyVT58R99zqd2C_hrlxh7A0vWgVX52jax7CqwQe_JUiEkgXOFzvbLzF_AU9ALBPbxS5U3s1uF7KVdNILUtND_xYN-8svrRhYX0NDlIQGcXjsVrQvmf14s1/%D8%B5%D8%A7%D8%AF%D8%B1%20-%20%D9%88%D8%A7%D8%B1%D8%AF%20%D9%85%D8%AE%D8%B2%D9%86.ashx?show=1',
+  'https://km.mega-cash.net/showreport/kpG454mz40YeL-J0UQSRKxAu7DZcWzBpzl7mKtuyVT58R99zqd2C_hrlxh7A0vWgVX52jax7CqwQe_JUiEkgXOFzvbLzF_AU9ALBPbxS5U3s1uF7KVdNILUtND_xYN-8svrRhYX0NDlIQGcXjsVrQvmf14s1/%D8%B5%D8%A7%D8%AF%D8%B1%20-%20%D9%88%D8%A7%D8%B1%D8%AF%20%D9%85%D8%AE%D8%B2%D9%86.ashx?show=1'
+]
+warehouse-export-import tick 1 wait false src /showreport/kpG454mz40YeL-J0UQSRKxAu7DZcWzBpzl7mKtuyVT58R99zqd2C_hrlxh7A0vWgVX52jax7CqwQe_JUiEkgXOFzvbLzF_AU9ALBPbxS5U3s1uF7KVdNILUtND_xYN-8svrRhYX0NDlIQGcXjsVrQvmf14s1/صادر - وارد مخزن.ashx?show=1 urls 9
+saved warehouse-export-import.pdf 239172
+=== inventory-transfer-details
+prep inventory-transfer-details {
+  okFrom: true,
+  okTo: true,
+  from: '1/1/2022',
+  to: '3/1/2022',
+  hasBtn: true,
+  btnId: 'cph_btnShow',
+  hasViewer: true,
+  dateIds: [ 'cph_txtFromDateSrch', 'cph_txtToDateSrch' ]
+}
+inventory-transfer-details tick 0 wait true src  urls 0
+NET inventory-transfer-details POST 200 https://km.mega-cash.net/InvReports/InventoryTransferDetailsReport.aspx [
+  '/showreport/NoXZw8pQK2sCwSJ2Z-P_HRMWqbdpopb6IofgrGySoQxtoO2lkSNZl5l7LKcc45ZiZbGkHyh7aS90k-tZSpLq6EGLxfpd0IRbf2vmjvlzGC2nr0ZfUl-TYPV4Zqb6LGoqew5YiF7UrkDhu6HONFTzBw7-hTg1/حركة'
+]
+NET inventory-transfer-details GET 200 https://km.mega-cash.net/showreport/NoXZw8pQK2sCwSJ2Z-P_HRMWqbdpopb6IofgrGySoQxtoO2lkSNZl5l7LKcc45ZiZbGkHyh7aS90k-tZSpLq []
+NET inventory-transfer-details GET 200 https://km.mega-cash.net/showreport/NoXZw8pQK2sCwSJ2Z-P_HRMWqbdpopb6IofgrGySoQxtoO2lkSNZl5l7LKcc45ZiZbGkHyh7aS90k-tZSpLq [
+  '/showreport/NoXZw8pQK2sCwSJ2Z-P_HRMWqbdpopb6IofgrGySoQxtoO2lkSNZl5l7LKcc45ZiZbGkHyh7aS90k-tZSpLq6EGLxfpd0IRbf2vmjvlzGC2nr0ZfUl-TYPV4Zqb6LGoqew5YiF7UrkDhu6HONFTzBw7-hTg1/%D8%AD%D8%B1%D9%83%D8%A9%20%D8%AA%D9%81%D8%B5%D9%8A%D9%84%D9%8A%D8%A9%20%D9%84%D9%84%D9%85%D8%AE%D8%A7%D8%B2%D9%86.ashx?show=1',
+  'https://km.mega-cash.net/showreport/NoXZw8pQK2sCwSJ2Z-P_HRMWqbdpopb6IofgrGySoQxtoO2lkSNZl5l7LKcc45ZiZbGkHyh7aS90k-tZSpLq6EGLxfpd0IRbf2vmjvlzGC2nr0ZfUl-TYPV4Zqb6LGoqew5YiF7UrkDhu6HONFTzBw7-hTg1/%D8%AD%D8%B1%D9%83%D8%A9%20%D8%AA%D9%81%D8%B5%D9%8A%D9%84%D9%8A%D8%A9%20%D9%84%D9%84%D9%85%D8%AE%D8%A7%D8%B2%D9%86.ashx?show=1'
+]
+inventory-transfer-details tick 1 wait false src /showreport/NoXZw8pQK2sCwSJ2Z-P_HRMWqbdpopb6IofgrGySoQxtoO2lkSNZl5l7LKcc45ZiZbGkHyh7aS90k-tZSpLq6EGLxfpd0IRbf2vmjvlzGC2nr0ZfUl-TYPV4Zqb6LGoqew5YiF7UrkDhu6HONFTzBw7-hTg1/حركة تفصيلية للمخازن.ashx?show=1 urls 9
+saved inventory-transfer-details.pdf 235685
+=== items-costs
+prep items-costs {
+  okFrom: false,
+  okTo: true,
+  to: '3/1/2022',
+  hasBtn: true,
+  btnId: 'cph_btnShow',
+  hasViewer: true,
+  dateIds: [ 'cph_txtDate' ]
+}
+NET items-costs POST 200 https://km.mega-cash.net/InvReports/ItemsCosts.aspx [
+  '/showreport/2DLtsGCA0I7Mq2mFukZeqwU9_4KKW9XyptubQ-P7Iexfr_XwHLg9W71aFZ1TcewfzlaR2xC9JXY7Kj5hyUL6hlDH71F4d2nsC0BEl_ADzmdDimxloXoQvEZYsO9DWsGxe9Vs0w2/تكاليف'
+]
+items-costs tick 0 wait false src /showreport/2DLtsGCA0I7Mq2mFukZeqwU9_4KKW9XyptubQ-P7Iexfr_XwHLg9W71aFZ1TcewfzlaR2xC9JXY7Kj5hyUL6hlDH71F4d2nsC0BEl_ADzmdDimxloXoQvEZYsO9DWsGxe9Vs0w2/تكاليف الاصناف.ashx?show=1 urls 4
+NET items-costs GET 200 https://km.mega-cash.net/showreport/2DLtsGCA0I7Mq2mFukZeqwU9_4KKW9XyptubQ-P7Iexfr_XwHLg9W71aFZ1TcewfzlaR2xC9JXY7Kj5hyUL6 []
+NET items-costs GET 200 https://km.mega-cash.net/showreport/2DLtsGCA0I7Mq2mFukZeqwU9_4KKW9XyptubQ-P7Iexfr_XwHLg9W71aFZ1TcewfzlaR2xC9JXY7Kj5hyUL6 [
+  '/showreport/2DLtsGCA0I7Mq2mFukZeqwU9_4KKW9XyptubQ-P7Iexfr_XwHLg9W71aFZ1TcewfzlaR2xC9JXY7Kj5hyUL6hlDH71F4d2nsC0BEl_ADzmdDimxloXoQvEZYsO9DWsGxe9Vs0w2/%D8%AA%D9%83%D8%A7%D9%84%D9%8A%D9%81%20%D8%A7%D9%84%D8%A7%D8%B5%D9%86%D8%A7%D9%81.ashx?show=1',
+  'https://km.mega-cash.net/showreport/2DLtsGCA0I7Mq2mFukZeqwU9_4KKW9XyptubQ-P7Iexfr_XwHLg9W71aFZ1TcewfzlaR2xC9JXY7Kj5hyUL6hlDH71F4d2nsC0BEl_ADzmdDimxloXoQvEZYsO9DWsGxe9Vs0w2/%D8%AA%D9%83%D8%A7%D9%84%D9%8A%D9%81%20%D8%A7%D9%84%D8%A7%D8%B5%D9%86%D8%A7%D9%81.ashx?show=1'
+]
+saved items-costs.pdf 109973
+=== items-list
+prep items-list {
+  okFrom: false,
+  okTo: true,
+  to: '3/1/2022',
+  hasBtn: true,
+  btnId: 'cph_btnShow',
+  hasViewer: true,
+  dateIds: [ 'cph_txtDate' ]
+}
+items-list tick 0 wait true src  urls 0
+NET items-list POST 200 https://km.mega-cash.net/InvReports/ItemsList.aspx [
+  '/showreport/Jh7llxbcVvx9UJ9NriSVWbusbbqXeBSPBQCyZSKqvIV_98VITKti-r-hcy-EyjR9RipaKIbpYw-Rcz_tadXmQC--AmSC-dpItfWQf4rNsCmUibzBM1_tOAi4VwxdPu1mN9uofA2/قائمة'
+]
+NET items-list GET 200 https://km.mega-cash.net/showreport/Jh7llxbcVvx9UJ9NriSVWbusbbqXeBSPBQCyZSKqvIV_98VITKti-r-hcy-EyjR9RipaKIbpYw-Rcz_tadXm []
+NET items-list GET 200 https://km.mega-cash.net/showreport/Jh7llxbcVvx9UJ9NriSVWbusbbqXeBSPBQCyZSKqvIV_98VITKti-r-hcy-EyjR9RipaKIbpYw-Rcz_tadXm [
+  '/showreport/Jh7llxbcVvx9UJ9NriSVWbusbbqXeBSPBQCyZSKqvIV_98VITKti-r-hcy-EyjR9RipaKIbpYw-Rcz_tadXmQC--AmSC-dpItfWQf4rNsCmUibzBM1_tOAi4VwxdPu1mN9uofA2/%D9%82%D8%A7%D8%A6%D9%85%D8%A9%20%D8%A7%D9%84%D8%A7%D8%B5%D9%86%D8%A7%D9%81.ashx?show=1',
+  'https://km.mega-cash.net/showreport/Jh7llxbcVvx9UJ9NriSVWbusbbqXeBSPBQCyZSKqvIV_98VITKti-r-hcy-EyjR9RipaKIbpYw-Rcz_tadXmQC--AmSC-dpItfWQf4rNsCmUibzBM1_tOAi4VwxdPu1mN9uofA2/%D9%82%D8%A7%D8%A6%D9%85%D8%A9%20%D8%A7%D9%84%D8%A7%D8%B5%D9%86%D8%A7%D9%81.ashx?show=1'
+]
+items-list tick 1 wait false src /showreport/Jh7llxbcVvx9UJ9NriSVWbusbbqXeBSPBQCyZSKqvIV_98VITKti-r-hcy-EyjR9RipaKIbpYw-Rcz_tadXmQC--AmSC-dpItfWQf4rNsCmUibzBM1_tOAi4VwxdPu1mN9uofA2/قائمة الاصناف.ashx?show=1 urls 9
+saved items-list.pdf 131107
+=== items-summary
+prep items-summary {
+  okFrom: true,
+  okTo: true,
+  from: '1/1/2022',
+  to: '3/1/2022',
+  hasBtn: true,
+  btnId: 'cph_btnShow',
+  hasViewer: true,
+  dateIds: [ 'cph_txtFromDateSrch', 'cph_txtToDateSrch' ]
+}
+items-summary tick 0 wait true src  urls 0
+NET items-summary POST 200 https://km.mega-cash.net/InvReports/ItemsSummary.aspx [
+  '/showreport/_WhvOfMh3ACc4wevfLJo75oWHK7r2WDWFDO6Hq73588oxHh6hYlHxRtaRPN_qmgqjoOfl0WXPbdLbbTacljXbZl9DUy8jbcqtB3mIYPTDXrXGGGvWO86XM8z2B7ye6vyylgkjA2/ملخص'
+]
+NET items-summary GET 200 https://km.mega-cash.net/showreport/_WhvOfMh3ACc4wevfLJo75oWHK7r2WDWFDO6Hq73588oxHh6hYlHxRtaRPN_qmgqjoOfl0WXPbdLbbTacljX []
+NET items-summary GET 200 https://km.mega-cash.net/showreport/_WhvOfMh3ACc4wevfLJo75oWHK7r2WDWFDO6Hq73588oxHh6hYlHxRtaRPN_qmgqjoOfl0WXPbdLbbTacljX [
+  '/showreport/_WhvOfMh3ACc4wevfLJo75oWHK7r2WDWFDO6Hq73588oxHh6hYlHxRtaRPN_qmgqjoOfl0WXPbdLbbTacljXbZl9DUy8jbcqtB3mIYPTDXrXGGGvWO86XM8z2B7ye6vyylgkjA2/%D9%85%D9%84%D8%AE%D8%B5%20%D8%AD%D8%B1%D9%83%D8%A9%20%D8%A7%D9%84%D8%A7%D8%B5%D9%86%D8%A7%D9%81.ashx?show=1',
+  'https://km.mega-cash.net/showreport/_WhvOfMh3ACc4wevfLJo75oWHK7r2WDWFDO6Hq73588oxHh6hYlHxRtaRPN_qmgqjoOfl0WXPbdLbbTacljXbZl9DUy8jbcqtB3mIYPTDXrXGGGvWO86XM8z2B7ye6vyylgkjA2/%D9%85%D9%84%D8%AE%D8%B5%20%D8%AD%D8%B1%D9%83%D8%A9%20%D8%A7%D9%84%D8%A7%D8%B5%D9%86%D8%A7%D9%81.ashx?show=1'
+]
+items-summary tick 1 wait false src /showreport/_WhvOfMh3ACc4wevfLJo75oWHK7r2WDWFDO6Hq73588oxHh6hYlHxRtaRPN_qmgqjoOfl0WXPbdLbbTacljXbZl9DUy8jbcqtB3mIYPTDXrXGGGvWO86XM8z2B7ye6vyylgkjA2/ملخص حركة الاصناف.ashx?show=1 urls 9
+saved items-summary.pdf 111598
+=== income-outcome-item
+prep income-outcome-item {
+  okFrom: true,
+  okTo: true,
+  from: '1/1/2022',
+  to: '3/1/2022',
+  hasBtn: true,
+  btnId: 'cph_btnShow',
+  hasViewer: true,
+  dateIds: [ 'cph_txtFromDateSrch', 'cph_txtToDateSrch' ]
+}
+NET income-outcome-item POST 200 https://km.mega-cash.net/InvReports/IncomeOutcomeItem.aspx [
+  '/showreport/HAFg6W6M5fPqyJMfZGKnil2CV4mxglSozpPKYtxsNwOBpJMwO-VXrRDTyDpvcj3OuGNapMIo3SxVOyrURm53YhRok1n6hH63Tg76ZZj3fIFvTYgysNZBn8lJdeb0JMCDw3XLbw2/صادر'
+]
+NET income-outcome-item GET 200 https://km.mega-cash.net/showreport/HAFg6W6M5fPqyJMfZGKnil2CV4mxglSozpPKYtxsNwOBpJMwO-VXrRDTyDpvcj3OuGNapMIo3SxVOyrURm53 []
+NET income-outcome-item GET 200 https://km.mega-cash.net/showreport/HAFg6W6M5fPqyJMfZGKnil2CV4mxglSozpPKYtxsNwOBpJMwO-VXrRDTyDpvcj3OuGNapMIo3SxVOyrURm53 [
+  '/showreport/HAFg6W6M5fPqyJMfZGKnil2CV4mxglSozpPKYtxsNwOBpJMwO-VXrRDTyDpvcj3OuGNapMIo3SxVOyrURm53YhRok1n6hH63Tg76ZZj3fIFvTYgysNZBn8lJdeb0JMCDw3XLbw2/%D8%B5%D8%A7%D8%AF%D8%B1%20-%20%D9%88%D8%A7%D8%B1%D8%AF%20%D8%B5%D9%86%D9%81.ashx?show=1',
+  'https://km.mega-cash.net/showreport/HAFg6W6M5fPqyJMfZGKnil2CV4mxglSozpPKYtxsNwOBpJMwO-VXrRDTyDpvcj3OuGNapMIo3SxVOyrURm53YhRok1n6hH63Tg76ZZj3fIFvTYgysNZBn8lJdeb0JMCDw3XLbw2/%D8%B5%D8%A7%D8%AF%D8%B1%20-%20%D9%88%D8%A7%D8%B1%D8%AF%20%D8%B5%D9%86%D9%81.ashx?show=1'
+]
+income-outcome-item tick 0 wait false src /showreport/HAFg6W6M5fPqyJMfZGKnil2CV4mxglSozpPKYtxsNwOBpJMwO-VXrRDTyDpvcj3OuGNapMIo3SxVOyrURm53YhRok1n6hH63Tg76ZZj3fIFvTYgysNZBn8lJdeb0JMCDw3XLbw2/صادر - وارد صنف.ashx?show=1 urls 9
+saved income-outcome-item.pdf 106016
+=== stagnant-items
+prep stagnant-items {
+  okFrom: true,
+  okTo: true,
+  from: '1/1/2022',
+  to: '3/1/2022',
+  hasBtn: true,
+  btnId: 'cph_btnShow',
+  hasViewer: true,
+  dateIds: [ 'cph_txtFromDateSrch', 'cph_txtToDateSrch' ]
+}
+stagnant-items tick 0 wait true src  urls 0
+NET stagnant-items POST 200 https://km.mega-cash.net/InvReports/StagnantItems.aspx [
+  '/showreport/IqPp90CmhXH4wxbI94ybAofmUaYKyqwFsbA0DuX630XtdiQeLxyHONMx7_TJOa9UjYGFj8N-b7ImvhZP7LzZ5SbWMNvWXfKlZ1PFA2qEkDMqj5nY9TPN771hHyB04J_2nT_Dhw2/الاصناف'
+]
+NET stagnant-items GET 200 https://km.mega-cash.net/showreport/IqPp90CmhXH4wxbI94ybAofmUaYKyqwFsbA0DuX630XtdiQeLxyHONMx7_TJOa9UjYGFj8N-b7ImvhZP7LzZ []
+NET stagnant-items GET 200 https://km.mega-cash.net/showreport/IqPp90CmhXH4wxbI94ybAofmUaYKyqwFsbA0DuX630XtdiQeLxyHONMx7_TJOa9UjYGFj8N-b7ImvhZP7LzZ [
+  '/showreport/IqPp90CmhXH4wxbI94ybAofmUaYKyqwFsbA0DuX630XtdiQeLxyHONMx7_TJOa9UjYGFj8N-b7ImvhZP7LzZ5SbWMNvWXfKlZ1PFA2qEkDMqj5nY9TPN771hHyB04J_2nT_Dhw2/%D8%A7%D9%84%D8%A7%D8%B5%D9%86%D8%A7%D9%81%20%D8%A7%D9%84%D8%B1%D8%A7%D9%83%D8%AF%D8%A9.ashx?show=1',
+  'https://km.mega-cash.net/showreport/IqPp90CmhXH4wxbI94ybAofmUaYKyqwFsbA0DuX630XtdiQeLxyHONMx7_TJOa9UjYGFj8N-b7ImvhZP7LzZ5SbWMNvWXfKlZ1PFA2qEkDMqj5nY9TPN771hHyB04J_2nT_Dhw2/%D8%A7%D9%84%D8%A7%D8%B5%D9%86%D8%A7%D9%81%20%D8%A7%D9%84%D8%B1%D8%A7%D9%83%D8%AF%D8%A9.ashx?show=1'
+]
+stagnant-items tick 1 wait false src /showreport/IqPp90CmhXH4wxbI94ybAofmUaYKyqwFsbA0DuX630XtdiQeLxyHONMx7_TJOa9UjYGFj8N-b7ImvhZP7LzZ5SbWMNvWXfKlZ1PFA2qEkDMqj5nY9TPN771hHyB04J_2nT_Dhw2/الاصناف الراكدة.ashx?show=1 urls 9
+saved stagnant-items.pdf 150753
+SUMMARY [
+  {
+    "key": "inventory-summary",
+    "pdf": true,
+    "prep": {
+      "okFrom": false,
+      "okTo": true,
+      "to": "3/1/2022",
+      "hasBtn": true,
+      "btnId": "cph_btnShow",
+      "hasViewer": true,
+      "dateIds": [
+        "cph_txtDate",
+        "cph_txtProductionDateFrom",
+        "cph_txtProductionDateTo",
+        "cph_txtExpirationDateFrom",
+        "cph_txtExpirationDateTo"
+      ]
+    }
+  },
+  {
+    "key": "items-transfer-details",
+    "pdf": true,
+    "prep": {
+      "okFrom": true,
+      "okTo": true,
+      "from": "1/1/2022",
+      "to": "3/1/2022",
+      "hasBtn": true,
+      "btnId": "cph_btnShow",
+      "hasViewer": true,
+      "dateIds": [
+        "cph_txtFromDateSrch",
+        "cph_txtToDateSrch"
+      ]
+    }
+  },
+  {
+    "key": "warehouse-export-import",
+    "pdf": true,
+    "prep": {
+      "okFrom": true,
+      "okTo": true,
+      "from": "1/1/2022",
+      "to": "3/1/2022",
+      "hasBtn": true,
+      "btnId": "cph_btnShow",
+      "hasViewer": true,
+      "dateIds": [
+        "cph_txtFromDateSrch",
+        "cph_txtToDateSrch"
+      ]
+    }
+  },
+  {
+    "key": "inventory-transfer-details",
+    "pdf": true,
+    "prep": {
+      "okFrom": true,
+      "okTo": true,
+      "from": "1/1/2022",
+      "to": "3/1/2022",
+      "hasBtn": true,
+      "btnId": "cph_btnShow",
+      "hasViewer": true,
+      "dateIds": [
+        "cph_txtFromDateSrch",
+        "cph_txtToDateSrch"
+      ]
+    }
+  },
+  {
+    "key": "items-costs",
+    "pdf": true,
+    "prep": {
+      "okFrom": false,
+      "okTo": true,
+      "to": "3/1/2022",
+      "hasBtn": true,
+      "btnId": "cph_btnShow",
+      "hasViewer": true,
+      "dateIds": [
+        "cph_txtDate"
+      ]
+    }
+  },
+  {
+    "key": "items-list",
+    "pdf": true,
+    "prep": {
+      "okFrom": false,
+      "okTo": true,
+      "to": "3/1/2022",
+      "hasBtn": true,
+      "btnId": "cph_btnShow",
+      "hasViewer": true,
+      "dateIds": [
+        "cph_txtDate"
+      ]
+    }
+  },
+  {
+    "key": "items-summary",
+    "pdf": true,
+    "prep": {
+      "okFrom": true,
+      "okTo": true,
+      "from": "1/1/2022",
+      "to": "3/1/2022",
+      "hasBtn": true,
+      "btnId": "cph_btnShow",
+      "hasViewer": true,
+      "dateIds": [
+        "cph_txtFromDateSrch",
+        "cph_txtToDateSrch"
+      ]
+    }
+  },
+  {
+    "key": "income-outcome-item",
+    "pdf": true,
+    "prep": {
+      "okFrom": true,
+      "okTo": true,
+      "from": "1/1/2022",
+      "to": "3/1/2022",
+      "hasBtn": true,
+      "btnId": "cph_btnShow",
+      "hasViewer": true,
+      "dateIds": [
+        "cph_txtFromDateSrch",
+        "cph_txtToDateSrch"
+      ]
+    }
+  },
+  {
+    "key": "stagnant-items",
+    "pdf": true,
+    "prep": {
+      "okFrom": true,
+      "okTo": true,
+      "from": "1/1/2022",
+      "to": "3/1/2022",
+      "hasBtn": true,
+      "btnId": "cph_btnShow",
+      "hasViewer": true,
+      "dateIds": [
+        "cph_txtFromDateSrch",
+        "cph_txtToDateSrch"
+      ]
+    }
+  }
+]

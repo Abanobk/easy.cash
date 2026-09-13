@@ -92,6 +92,7 @@ import {
   stagnantItemsReport,
   itemAgingReport,
   warehouseInOutReport,
+  toMegaWarehouseMovementRows,
   itemMovementSummaryReport,
   itemInOutReport,
   itemCostsReport,
@@ -4166,8 +4167,12 @@ const reportsRouter = router({
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     const scope = await loadUserScopeFromCtx(db, ctx.saasUser);
     const filters = applyScopeToReportFilters({ tenantId: ctx.tenantId, ...input }, scope);
+    // ميجا: صادر/وارد مخزن = صفوف حركة تفصيلية (PDF evidence wave-3)
+    const openings = await computeItemMovementOpenings(db, filters);
     const movements = await collectInventoryMovements(db, filters);
-    return warehouseInOutReport(movements);
+    const openByWhItem = new Map<string, number>();
+    for (const [itemId, o] of openings) openByWhItem.set(`0:${itemId}`, o.qty);
+    return warehouseInOutReport(movements, openByWhItem);
   }),
 
   inventoryWarehouseMovements: protectedProcedure.input(z.object({
@@ -4184,12 +4189,13 @@ const reportsRouter = router({
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     const scope = await loadUserScopeFromCtx(db, ctx.saasUser);
     const filters = applyScopeToReportFilters({ tenantId: ctx.tenantId, ...input }, scope);
-    const movements = await collectInventoryMovements(db, filters);
-    if (filters.warehouseId) return movements.filter((m) => m.warehouseId === filters.warehouseId);
-    if (filters.warehouseIds?.length) {
-      return movements.filter((m) => m.warehouseId != null && filters.warehouseIds!.includes(m.warehouseId));
+    let movements = await collectInventoryMovements(db, filters);
+    if (filters.warehouseId) movements = movements.filter((m) => m.warehouseId === filters.warehouseId);
+    else if (filters.warehouseIds?.length) {
+      movements = movements.filter((m) => m.warehouseId != null && filters.warehouseIds!.includes(m.warehouseId));
     }
-    return movements;
+    // ميجا: حركة تفصيلية للمخازن — رصيد + قيم وارد/صادر (PDF wave-3)
+    return toMegaWarehouseMovementRows(movements);
   }),
 
   inventoryItemCosts: protectedProcedure.input(z.object({
@@ -4233,8 +4239,10 @@ const reportsRouter = router({
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     const scope = await loadUserScopeFromCtx(db, ctx.saasUser);
     const filters = applyScopeToReportFilters({ tenantId: ctx.tenantId, ...input }, scope);
+    const openings = await computeItemMovementOpenings(db, filters);
     const movements = await collectInventoryMovements(db, filters);
-    return itemMovementSummaryReport(movements);
+    // ميجا: ملخص حركة الاصناف — رصيد سابق + وارد/صادر + رصيد (PDF wave-3)
+    return itemMovementSummaryReport(movements, openings);
   }),
 
   inventoryItemInOut: protectedProcedure.input(z.object({
@@ -4252,7 +4260,11 @@ const reportsRouter = router({
     const scope = await loadUserScopeFromCtx(db, ctx.saasUser);
     const filters = applyScopeToReportFilters({ tenantId: ctx.tenantId, ...input }, scope);
     const movements = await collectInventoryMovements(db, filters);
-    return itemInOutReport(movements);
+    const stock = await inventoryStocktakeReport(db, filters);
+    const available = new Map<number, number>();
+    for (const r of stock) available.set(r.itemId, (available.get(r.itemId) || 0) + Number(r.quantity || 0));
+    // ميجا: صادر/وارد صنف — مشتريات/مبيعات/مردود/انتاج (PDF wave-3)
+    return itemInOutReport(movements, available);
   }),
 
   inventoryStagnantItems: protectedProcedure.input(z.object({

@@ -13,27 +13,47 @@ Goal: Easy Cash reports match Mega Cash (filters + columns + behavior) with **no
 Full map: `artifacts/mega-report-menu/MENU-MAP.md`  
 Live filters: `artifacts/mega-report-menu/mega-report-filters-scan.json`
 
-Nav fix: التحصيل والسداد → **الاستحقاقات** (`accountingreports-dues`); أعمار الموردين تحت المشتريات.
-
 ## P0 — accounting core
 | Easy slug | Filters | Columns |
 |-----------|---------|---------|
-| `finalreports-trialbalance` | filters_done (customerGrouping) | columns_done + PDF |
+| `finalreports-trialbalance` | filters_done | columns_done + PDF |
 | `finalreports-generalledger` | filters_done | columns_done + PDF |
-| `accountingreports-accountstatment` | filters_done + 3 checkboxes | columns_done + PDF |
+| `accountingreports-accountstatment` | filters_done | columns_done + PDF |
 | `accountingreports-customeraccountstatementbyitems` | filters_partial | columns_done from PDF |
 
-## Wave 1 — sales / purchases (in progress)
+## Wave 1 — sales / purchases core (6)
+| Easy slug | Status |
+|-----------|--------|
+| `accountingreports-sales` | columns_done (PDF) |
+| `accountingreports-customerssales` | columns_done |
+| `accountingreports-grosscustomersalesbyitems` | columns_done |
+| `accountingreports-purchases` | columns_done |
+| `accountingreports-vendorspurchases` | columns_done |
+| `accountingreports-grossvendorpurchasesbyitems` | columns_done |
+
+Evidence: `artifacts/mega-wave1-sales/`
+
+## Wave 2 — sales/purchases remainder
+Customer/vendor statement, lists, summaries, areas, last prices, mature, monthly, orders, aging — PDF + reshape.  
+Evidence: `artifacts/mega-wave2-sales/`
+
+## Wave 3 — inventory (2026-09-13)
 | Easy slug | Filters | Columns |
 |-----------|---------|---------|
-| `accountingreports-sales` | filters_partial (+ item/category 2026-09-13) | columns_unknown — **need Mega PDF** |
-| `accountingreports-customerssales` | filters_partial (from live scan) | columns_unknown |
-| `accountingreports-grosscustomersalesbyitems` | filters_partial | columns_unknown |
-| `accountingreports-purchases` | filters_partial (+ item/category) | columns_unknown |
-| `accountingreports-vendorspurchases` | filters_partial | columns_unknown |
-| `accountingreports-grossvendorpurchasesbyitems` | filters_partial | columns_unknown |
+| `invreports-inventorysummary` | filters_partial | columns_done (PDF) |
+| `invreports-itemstransferdetails` | filters_partial | columns_done |
+| `invreports-totalinventoryexportimportreport` | filters_partial | columns_done (line-level) |
+| `invreports-inventorytransferdetailsreport` | filters_partial | columns_done |
+| `invreports-itemscosts` | filters_partial | columns_done |
+| `invreports-itemslist` | filters_partial | columns_done |
+| `invreports-itemssummary` | filters_partial | columns_done |
+| `invreports-incomeoutcomeitem` | filters_partial | columns_done |
+| `invreports-stagnantitems` | filters_partial | columns_done |
+| `invreports-itemaging` | filters_partial | columns_unknown (Mega StartScreen) |
 
-Details + upload ask (PDF only, no Excel): `artifacts/mega-wave1-sales/WAVE1.md`
+Evidence: `artifacts/mega-wave3-inventory/`
 
-## Blocker
-Mega `ifViewer` blank in automation (same as P0). **PDF after عرض** is enough for column labels — Excel not required for this wave.
+## Remaining waves
+4. Collection/checks/dues + accounting leftovers  
+5. Final statements beyond TB/GL  
+6. Profits / reps / production / HR / assets

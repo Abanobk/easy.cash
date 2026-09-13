@@ -549,42 +549,36 @@ function getTableConfig(slug: ReportSlug): {
 } {
   switch (slug) {
     case "stocktake":
+      // ميجا جرد المخازن (PDF): الفئة | الصنف | الباركود | الوحدة / التشغيلة | الكمية | حجز / طلب | صافى الكمية
       return {
         columns: [
-          { key: "code", label: "الكود", render: (r) => r.code || "—" },
-          { key: "name", label: "الصنف", render: (r) => r.name },
-          { key: "warehouse", label: "المخزن", render: (r) => r.warehouseName },
           { key: "category", label: "الفئة", render: (r) => r.categoryName || "—" },
+          { key: "name", label: "الصنف", render: (r) => r.name },
+          { key: "barcode", label: "الباركود", render: (r) => r.barcode || r.code || "—" },
+          { key: "unit", label: "الوحدة / التشغيلة", render: (r) => r.batchNumber ? `${r.unit || ""} / ${r.batchNumber}` : (r.unit || "—") },
           { key: "qty", label: "الكمية", render: (r) => fmt(r.quantity, 3) },
-          { key: "unit", label: "الوحدة", render: (r) => r.unit },
-          { key: "cost", label: "سعر التكلفة", render: (r) => fmt(r.purchasePrice) },
-          { key: "value", label: "قيمة المخزون", render: (r) => fmt(r.stockValue) },
-          {
-            key: "status", label: "الحالة", render: (r) => (
-              <Badge className={r.status === "low" ? "bg-red-100 text-red-700" : r.status === "zero" ? "bg-gray-100 text-gray-600" : "bg-green-100 text-green-700"}>
-                {r.status === "low" ? "منخفض" : r.status === "zero" ? "نفد" : "طبيعي"}
-              </Badge>
-            ),
-          },
+          { key: "reserved", label: "حجز / طلب", render: (r) => fmt(r.reservedQty ?? 0, 3) },
+          { key: "net", label: "صافى الكمية", render: (r) => fmt(r.netQty ?? (Number(r.quantity || 0) - Number(r.reservedQty || 0)), 3) },
+          { key: "warehouse", label: "المخزن", render: (r) => r.warehouseName },
         ],
         exportRows: (rows) => rows.map((r) => ({
-          الكود: r.code, الصنف: r.name, المخزن: r.warehouseName, الفئة: r.categoryName,
-          الكمية: r.quantity, الوحدة: r.unit, "سعر التكلفة": r.purchasePrice, "قيمة المخزون": r.stockValue,
+          الفئة: r.categoryName, الصنف: r.name, الباركود: r.barcode || r.code,
+          "الوحدة / التشغيلة": r.batchNumber ? `${r.unit || ""} / ${r.batchNumber}` : r.unit,
+          الكمية: r.quantity, "حجز / طلب": r.reservedQty ?? 0,
+          "صافى الكمية": r.netQty ?? (Number(r.quantity || 0) - Number(r.reservedQty || 0)),
+          المخزن: r.warehouseName,
         })),
-        footer: (rows) => [
-          <td key="t" colSpan={7} className="px-3 py-2 text-right">الإجمالي</td>,
-          <td key="v" className="px-3 py-2">{fmt(rows.reduce((s, r) => s + Number(r.stockValue || 0), 0))}</td>,
-          <td key="s" />,
-        ],
       };
 
     case "item-movements":
-      // أعمدة ميجا من ملف «حركة تفصيلية للاصناف.xlsx» (صف عناوين الجدول)
+      // ميجا حركة تفصيلية للاصناف (PDF)
       return {
         columns: [
           { key: "date", label: "التاريخ", render: (r) => r.date },
           { key: "doc", label: "رقم المستند", render: (r) => r.documentNumber || "—" },
           { key: "batch", label: "رقم التشغيلة", render: (r) => r.batchNumber || "—" },
+          { key: "from", label: "من", render: (r) => r.fromLocation || "—" },
+          { key: "to", label: "إلي", render: (r) => r.toLocation || "—" },
           { key: "in", label: "كمية واردة", render: (r) => r.quantityIn > 0 ? fmt(r.quantityIn, 3) : "—" },
           { key: "out", label: "كمية صادرة", render: (r) => r.quantityOut > 0 ? fmt(r.quantityOut, 3) : "—" },
           { key: "balQty", label: "الرصيد", render: (r) => fmt(r.balanceQty, 3) },
@@ -592,156 +586,190 @@ function getTableConfig(slug: ReportSlug): {
           { key: "balVal", label: "رصيد قيمة", render: (r) => fmt(r.balanceValue) },
           { key: "costIn", label: "تكلفة الوحدة الواردة", render: (r) => r.unitCostIn > 0 ? fmt(r.unitCostIn) : "—" },
           { key: "costOut", label: "تكلفة الوحدة الصادرة", render: (r) => r.unitCostOut > 0 ? fmt(r.unitCostOut) : "—" },
-          { key: "from", label: "من", render: (r) => r.fromLocation || "—" },
-          { key: "to", label: "إلي", render: (r) => r.toLocation || "—" },
         ],
         exportRows: (rows) => rows.map((r) => ({
-          التاريخ: r.date,
-          "رقم المستند": r.documentNumber,
-          "رقم التشغيلة": r.batchNumber,
-          "كمية واردة": r.quantityIn,
-          "كمية صادرة": r.quantityOut,
-          الرصيد: r.balanceQty,
-          القيمة: r.lineValue,
-          "رصيد قيمة": r.balanceValue,
-          "تكلفة الوحدة الواردة": r.unitCostIn,
-          "تكلفة الوحدة الصادرة": r.unitCostOut,
-          من: r.fromLocation,
-          إلي: r.toLocation,
-          "كود الصنف": r.itemCode,
-          الصنف: r.itemName,
-        })),
-      };
-
-    case "warehouse-movements":
-      return {
-        columns: [
-          { key: "date", label: "التاريخ", render: (r) => r.date },
-          { key: "type", label: "نوع الحركة", render: (r) => r.documentTypeLabel },
-          { key: "doc", label: "رقم المستند", render: (r) => r.documentNumber },
-          { key: "warehouse", label: "المخزن", render: (r) => r.warehouseName },
-          { key: "item", label: "الصنف", render: (r) => r.itemName },
-          { key: "party", label: "العميل / المورد", render: (r) => r.partyName },
-          { key: "in", label: "وارد", render: (r) => r.quantityIn > 0 ? fmt(r.quantityIn, 3) : "—" },
-          { key: "out", label: "صادر", render: (r) => r.quantityOut > 0 ? fmt(r.quantityOut, 3) : "—" },
-          { key: "cost", label: "التكلفة", render: (r) => fmt(r.unitCost) },
-          { key: "total", label: "القيمة", render: (r) => fmt(r.totalValue) },
-        ],
-        exportRows: (rows) => rows.map((r) => ({
-          التاريخ: r.date, "نوع الحركة": r.documentTypeLabel, "رقم المستند": r.documentNumber,
-          المخزن: r.warehouseName, الصنف: r.itemName, "العميل/المورد": r.partyName,
-          وارد: r.quantityIn, صادر: r.quantityOut, التكلفة: r.unitCost, القيمة: r.totalValue,
+          التاريخ: r.date, "رقم المستند": r.documentNumber, "رقم التشغيلة": r.batchNumber,
+          من: r.fromLocation, إلي: r.toLocation,
+          "كمية واردة": r.quantityIn, "كمية صادرة": r.quantityOut, الرصيد: r.balanceQty,
+          القيمة: r.lineValue, "رصيد قيمة": r.balanceValue,
+          "تكلفة الوحدة الواردة": r.unitCostIn, "تكلفة الوحدة الصادرة": r.unitCostOut,
+          الصنف: r.itemName, "كود الصنف": r.itemCode,
         })),
       };
 
     case "warehouse-in-out":
+      // ميجا صادر/وارد مخزن — صفوف تفصيلية (PDF)
       return {
         columns: [
-          { key: "wh", label: "المخزن", render: (r) => r.warehouseName },
-          { key: "in", label: "إجمالي وارد", render: (r) => fmt(r.totalIn, 3) },
-          { key: "out", label: "إجمالي صادر", render: (r) => fmt(r.totalOut, 3) },
-          { key: "net", label: "صافي الكمية", render: (r) => fmt(r.netQty, 3) },
-          { key: "inVal", label: "قيمة الوارد", render: (r) => fmt(r.inValue) },
-          { key: "outVal", label: "قيمة الصادر", render: (r) => fmt(r.outValue) },
-          { key: "netVal", label: "صافي القيمة", render: (r) => fmt(r.netValue) },
+          { key: "date", label: "التاريخ", render: (r) => r.date },
+          { key: "doc", label: "رقم المستند", render: (r) => r.documentNumber || "—" },
+          { key: "item", label: "اسم الصنف", render: (r) => r.itemName },
+          { key: "barcode", label: "الباركود", render: (r) => r.barcode || "—" },
+          { key: "unit", label: "وحدة القياس", render: (r) => r.unit || "—" },
+          { key: "batch", label: "رقم التشغيلة", render: (r) => r.batchNumber || "—" },
+          { key: "in", label: "وارد", render: (r) => r.quantityIn > 0 ? fmt(r.quantityIn, 3) : "—" },
+          { key: "out", label: "صادر", render: (r) => r.quantityOut > 0 ? fmt(r.quantityOut, 3) : "—" },
+          { key: "bal", label: "رصيد", render: (r) => fmt(r.balanceQty, 3) },
+          { key: "from", label: "من", render: (r) => r.fromLocation || "—" },
+          { key: "to", label: "الى", render: (r) => r.toLocation || "—" },
         ],
         exportRows: (rows) => rows.map((r) => ({
-          المخزن: r.warehouseName, "إجمالي وارد": r.totalIn, "إجمالي صادر": r.totalOut,
-          "صافي الكمية": r.netQty, "قيمة الوارد": r.inValue, "قيمة الصادر": r.outValue, "صافي القيمة": r.netValue,
+          التاريخ: r.date, "رقم المستند": r.documentNumber, "اسم الصنف": r.itemName,
+          الباركود: r.barcode, "وحدة القياس": r.unit, "رقم التشغيلة": r.batchNumber,
+          وارد: r.quantityIn, صادر: r.quantityOut, رصيد: r.balanceQty,
+          من: r.fromLocation, الى: r.toLocation, المخزن: r.warehouseName,
+        })),
+      };
+
+    case "warehouse-movements":
+      // ميجا حركة تفصيلية للمخازن (PDF)
+      return {
+        columns: [
+          { key: "date", label: "التاريخ", render: (r) => r.date },
+          { key: "type", label: "نوع العملية", render: (r) => r.operationType || r.documentTypeLabel || "—" },
+          { key: "warehouse", label: "المخزن", render: (r) => r.warehouseName },
+          { key: "item", label: "الصنف", render: (r) => r.itemName },
+          { key: "unit", label: "وحدة القياس", render: (r) => r.unit || "—" },
+          { key: "in", label: "الكمية الواردة", render: (r) => r.quantityIn > 0 ? fmt(r.quantityIn, 3) : "—" },
+          { key: "out", label: "الكمية الصادرة", render: (r) => r.quantityOut > 0 ? fmt(r.quantityOut, 3) : "—" },
+          { key: "balQty", label: "الرصيد", render: (r) => fmt(r.balanceQty, 3) },
+          { key: "inVal", label: "القيمة الواردة", render: (r) => fmt(r.inValue ?? 0) },
+          { key: "outVal", label: "القيمة الصادرة", render: (r) => fmt(r.outValue ?? 0) },
+          { key: "balVal", label: "رصيد قيمة", render: (r) => fmt(r.balanceValue ?? 0) },
+        ],
+        exportRows: (rows) => rows.map((r) => ({
+          التاريخ: r.date, "نوع العملية": r.operationType || r.documentTypeLabel,
+          المخزن: r.warehouseName, الصنف: r.itemName, "وحدة القياس": r.unit,
+          "الكمية الواردة": r.quantityIn, "الكمية الصادرة": r.quantityOut, الرصيد: r.balanceQty,
+          "القيمة الواردة": r.inValue, "القيمة الصادرة": r.outValue, "رصيد قيمة": r.balanceValue,
         })),
       };
 
     case "item-costs":
+      // ميجا تكاليف الاصناف (PDF)
       return {
         columns: [
-          { key: "asOf", label: "التاريخ", render: (r) => r.asOfDate || "—" },
-          { key: "code", label: "الكود", render: (r) => r.code || "—" },
+          { key: "barcode", label: "الباركود", render: (r) => r.barcode || r.code || "—" },
           { key: "name", label: "الصنف", render: (r) => r.name },
           { key: "cat", label: "الفئة", render: (r) => r.categoryName || "—" },
           { key: "unit", label: "الوحدة", render: (r) => r.unit || "—" },
-          {
-            key: "wh",
-            label: "المخزن",
-            render: (r) => (r.warehouseCount > 1 ? `عدة مخازن (${r.warehouseCount})` : (r.warehouseName || "—")),
-          },
-          { key: "qty", label: "إجمالي الكمية", render: (r) => fmt(r.quantity, 3) },
+          { key: "wh", label: "المخزن", render: (r) => (r.warehouseCount > 1 ? `عدة مخازن (${r.warehouseCount})` : (r.warehouseName || "—")) },
+          { key: "qty", label: "الكمية", render: (r) => fmt(r.quantity, 3) },
           { key: "avg", label: "متوسط التكلفة", render: (r) => fmt(r.averageCost ?? r.purchasePrice) },
-          { key: "totalCost", label: "قيمة المخزون", render: (r) => fmt(r.totalCostValue) },
-          { key: "sale", label: "سعر البيع", render: (r) => fmt(r.salePrice) },
+          { key: "totalCost", label: "اجمالي التكلفة", render: (r) => fmt(r.totalCostValue) },
+          { key: "sale", label: "السعر", render: (r) => fmt(r.salePrice) },
+          { key: "totalPrice", label: "اجمالى بالسعر", render: (r) => fmt(Number(r.quantity || 0) * Number(r.salePrice || 0)) },
         ],
         exportRows: (rows) => rows.map((r) => ({
-          التاريخ: r.asOfDate,
-          الكود: r.code,
-          الصنف: r.name,
-          الفئة: r.categoryName,
-          الوحدة: r.unit,
+          الباركود: r.barcode || r.code, الصنف: r.name, الفئة: r.categoryName, الوحدة: r.unit,
           المخزن: r.warehouseCount > 1 ? `عدة مخازن (${r.warehouseCount})` : r.warehouseName,
-          "عدد المخازن": r.warehouseCount || 1,
-          "إجمالي الكمية": r.quantity,
-          "متوسط التكلفة": r.averageCost ?? r.purchasePrice,
-          "قيمة المخزون": r.totalCostValue,
-          "سعر البيع": r.salePrice,
+          الكمية: r.quantity, "متوسط التكلفة": r.averageCost ?? r.purchasePrice,
+          "اجمالي التكلفة": r.totalCostValue, السعر: r.salePrice,
+          "اجمالى بالسعر": Number(r.quantity || 0) * Number(r.salePrice || 0),
         })),
       };
 
     case "items-list":
+      // ميجا قائمة الاصناف (PDF)
       return {
         columns: [
-          { key: "code", label: "الكود", render: (r) => r.code || "—" },
-          { key: "barcode", label: "السيريل نمبر", render: (r) => r.barcode || "—" },
+          { key: "serial", label: "مسلسل", render: (r) => r.serial ?? r.id ?? "—" },
+          { key: "barcode", label: "الباركود", render: (r) => r.barcode || "—" },
           { key: "name", label: "الصنف", render: (r) => r.name },
           { key: "cat", label: "الفئة", render: (r) => r.categoryName || "—" },
-          { key: "unit", label: "الوحدة", render: (r) => r.unit },
-          { key: "purchase", label: "سعر الشراء", render: (r) => fmt(r.purchasePrice) },
-          { key: "sale", label: "سعر البيع", render: (r) => fmt(r.salePrice) },
-          { key: "stock", label: "المخزون", render: (r) => fmt(r.currentStock, 3) },
-          { key: "min", label: "الحد الأدنى", render: (r) => fmt(r.minStock, 3) },
+          { key: "altCat", label: "الفئة البديلة", render: (r) => r.altCategoryName || "—" },
+          { key: "unit", label: "وحدة القياس", render: (r) => r.unit || "—" },
+          { key: "price", label: "السعر", render: (r) => fmt(r.salePrice) },
+          { key: "cost", label: "التكلفة الافتراضية", render: (r) => fmt(r.purchasePrice) },
+          { key: "discPct", label: "خصم نسبة", render: (r) => fmt(r.discountPercent ?? 0) },
+          { key: "discCash", label: "خصم نقدي", render: (r) => fmt(r.discountCash ?? 0) },
         ],
         exportRows: (rows) => rows.map((r) => ({
-          الكود: r.code, "سيريل نمبر": r.barcode, الصنف: r.name, الفئة: r.categoryName,
-          الوحدة: r.unit, "سعر الشراء": r.purchasePrice, "سعر البيع": r.salePrice, المخزون: r.currentStock,
+          مسلسل: r.serial ?? r.id, الباركود: r.barcode, الصنف: r.name, الفئة: r.categoryName,
+          "الفئة البديلة": r.altCategoryName, "وحدة القياس": r.unit,
+          السعر: r.salePrice, "التكلفة الافتراضية": r.purchasePrice,
+          "خصم نسبة": r.discountPercent ?? 0, "خصم نقدي": r.discountCash ?? 0,
         })),
       };
 
     case "item-summary":
-    case "item-in-out":
+      // ميجا ملخص حركة الاصناف (PDF)
       return {
         columns: [
-          { key: "code", label: "الكود", render: (r) => r.itemCode || "—" },
+          { key: "barcode", label: "الباركود", render: (r) => r.barcode || r.itemCode || "—" },
           { key: "name", label: "الصنف", render: (r) => r.itemName },
-          { key: "cat", label: "الفئة", render: (r) => r.categoryName || "—" },
-          { key: "in", label: "وارد", render: (r) => fmt(r.totalIn, 3) },
-          { key: "out", label: "صادر", render: (r) => fmt(r.totalOut, 3) },
-          { key: "net", label: "صافي الكمية", render: (r) => fmt(r.netQty, 3) },
-          { key: "inVal", label: "قيمة الوارد", render: (r) => fmt(r.inValue) },
-          { key: "outVal", label: "قيمة الصادر", render: (r) => fmt(r.outValue) },
-          { key: "netVal", label: "صافي القيمة", render: (r) => fmt(r.netValue) },
+          { key: "unit", label: "الوحدة", render: (r) => r.unit || "—" },
+          { key: "openQty", label: "رصيد كمية سابق", render: (r) => fmt(r.openingQty ?? 0, 3) },
+          { key: "openVal", label: "رصيد قيمة سابق", render: (r) => fmt(r.openingValue ?? 0) },
+          { key: "in", label: "كمية واردة", render: (r) => fmt(r.totalIn, 3) },
+          { key: "out", label: "كمية صادرة", render: (r) => fmt(r.totalOut, 3) },
+          { key: "inVal", label: "قيمة واردة", render: (r) => fmt(r.inValue) },
+          { key: "outVal", label: "قيمة صادرة", render: (r) => fmt(r.outValue) },
+          { key: "balQty", label: "رصيد كمية", render: (r) => fmt(r.balanceQty ?? r.netQty, 3) },
+          { key: "balVal", label: "رصيد قيمة", render: (r) => fmt(r.balanceValue ?? r.netValue) },
         ],
         exportRows: (rows) => rows.map((r) => ({
-          الكود: r.itemCode, الصنف: r.itemName, الفئة: r.categoryName,
-          وارد: r.totalIn, صادر: r.totalOut, "صافي الكمية": r.netQty,
-          "قيمة الوارد": r.inValue, "قيمة الصادر": r.outValue, "صافي القيمة": r.netValue,
+          الباركود: r.barcode || r.itemCode, الصنف: r.itemName, الوحدة: r.unit,
+          "رصيد كمية سابق": r.openingQty, "رصيد قيمة سابق": r.openingValue,
+          "كمية واردة": r.totalIn, "كمية صادرة": r.totalOut,
+          "قيمة واردة": r.inValue, "قيمة صادرة": r.outValue,
+          "رصيد كمية": r.balanceQty, "رصيد قيمة": r.balanceValue,
+        })),
+      };
+
+    case "item-in-out":
+      // ميجا صادر/وارد صنف (PDF)
+      return {
+        columns: [
+          { key: "barcode", label: "الباركود", render: (r) => r.barcode || "—" },
+          { key: "name", label: "الصنف", render: (r) => r.itemName },
+          { key: "unit", label: "الوحدة", render: (r) => r.unit || "—" },
+          { key: "purchases", label: "مشتريات", render: (r) => fmt(r.purchases ?? 0, 3) },
+          { key: "purchaseReturns", label: "مردود مشتريات", render: (r) => fmt(r.purchaseReturns ?? 0, 3) },
+          { key: "sales", label: "مبيعات", render: (r) => fmt(r.sales ?? 0, 3) },
+          { key: "salesReturns", label: "مردود مبيعات", render: (r) => fmt(r.salesReturns ?? 0, 3) },
+          { key: "production", label: "انتاج", render: (r) => fmt(r.production ?? 0, 3) },
+          { key: "netPurchases", label: "صافي مشتريات", render: (r) => fmt(r.netPurchases ?? 0, 3) },
+          { key: "netSales", label: "صافي مبيعات", render: (r) => fmt(r.netSales ?? 0, 3) },
+          { key: "available", label: "الكمية المتاحة", render: (r) => fmt(r.availableQty ?? 0, 3) },
+        ],
+        exportRows: (rows) => rows.map((r) => ({
+          الباركود: r.barcode, الصنف: r.itemName, الوحدة: r.unit,
+          مشتريات: r.purchases, "مردود مشتريات": r.purchaseReturns,
+          مبيعات: r.sales, "مردود مبيعات": r.salesReturns, انتاج: r.production,
+          "صافي مشتريات": r.netPurchases, "صافي مبيعات": r.netSales,
+          "الكمية المتاحة": r.availableQty,
         })),
       };
 
     case "stagnant-items":
+      // ميجا الاصناف الراكدة (PDF) — أعمدة الحركات عند توفرها
       return {
         columns: [
-          { key: "code", label: "الكود", render: (r) => r.code || "—" },
+          { key: "serial", label: "مسلسل", render: (r) => r.serial ?? r.itemId ?? "—" },
           { key: "name", label: "الصنف", render: (r) => r.name },
-          { key: "warehouse", label: "المخزن", render: (r) => r.warehouseName },
-          { key: "qty", label: "الكمية", render: (r) => fmt(r.quantity, 3) },
-          { key: "value", label: "قيمة المخزون", render: (r) => fmt(r.stockValue) },
-          { key: "last", label: "آخر حركة", render: (r) => r.lastMovementDate || "—" },
-          { key: "days", label: "أيام الركود", render: (r) => String(r.daysStagnant) },
+          { key: "cat", label: "الفئة", render: (r) => r.categoryName || "—" },
+          { key: "unit", label: "وحدة القياس", render: (r) => r.unit || "—" },
+          { key: "qty", label: "الكمية بالمخازن", render: (r) => fmt(r.quantity, 3) },
+          { key: "cost", label: "التكلفة بالمخازن", render: (r) => fmt(r.stockValue) },
+          { key: "purchaseMoves", label: "حركات شراء", render: (r) => String(r.purchaseMoves ?? 0) },
+          { key: "purchaseReturnMoves", label: "مردود شراء", render: (r) => String(r.purchaseReturnMoves ?? 0) },
+          { key: "saleMoves", label: "حركات بيع", render: (r) => String(r.saleMoves ?? 0) },
+          { key: "saleReturnMoves", label: "مردود بيع", render: (r) => String(r.saleReturnMoves ?? 0) },
+          { key: "productionMoves", label: "حركات انتاج", render: (r) => String(r.productionMoves ?? 0) },
+          { key: "totalMoves", label: "اجمالي الحركات", render: (r) => String(r.totalMoves ?? 0) },
         ],
         exportRows: (rows) => rows.map((r) => ({
-          الكود: r.code, الصنف: r.name, المخزن: r.warehouseName, الكمية: r.quantity,
-          القيمة: r.stockValue, "آخر حركة": r.lastMovementDate, "أيام الركود": r.daysStagnant,
+          مسلسل: r.serial ?? r.itemId, الصنف: r.name, الفئة: r.categoryName,
+          "وحدة القياس": r.unit, "الكمية بالمخازن": r.quantity, "التكلفة بالمخازن": r.stockValue,
+          "حركات شراء": r.purchaseMoves ?? 0, "مردود شراء": r.purchaseReturnMoves ?? 0,
+          "حركات بيع": r.saleMoves ?? 0, "مردود بيع": r.saleReturnMoves ?? 0,
+          "حركات انتاج": r.productionMoves ?? 0, "اجمالي الحركات": r.totalMoves ?? 0,
         })),
       };
 
     case "item-aging":
+      // لا يوجد PDF على حساب الاختبار — الإبقاء على أعمدة العمر الحالية
       return {
         columns: [
           { key: "code", label: "الكود", render: (r) => r.code || "—" },

@@ -1,0 +1,325 @@
+{
+  "at": "2026-09-13T17:40:20.577Z",
+  "results": [
+    {
+      "key": "inventory-summary",
+      "featureKey": "invreports-inventorysummary",
+      "path": "/InvReports/InventorySummary.aspx",
+      "prep": {
+        "okFrom": false,
+        "okTo": true,
+        "to": "3/1/2022",
+        "hasBtn": true,
+        "btnId": "cph_btnShow",
+        "hasViewer": true,
+        "dateIds": [
+          "cph_txtDate",
+          "cph_txtProductionDateFrom",
+          "cph_txtProductionDateTo",
+          "cph_txtExpirationDateFrom",
+          "cph_txtExpirationDateTo"
+        ]
+      },
+      "foundUrls": [
+        "/showreport/5N29toS7k9y4j70NPipx2SDceJf7EaCu0QVfzVQ9JD03ENhZjBbOmMQHEByE8rY_V1TZmcNzriwDf5A19Fe4muelZ-mycLdPM1cgHXIpM5pEO-z7Bn4rXJyyP7M9ZyIv_BYE1w2/جرد",
+        "https://km.mega-cash.net/showreport/5N29toS7k9y4j70NPipx2SDceJf7EaCu0QVfzVQ9JD03ENhZjBbOmMQHEByE8rY_V1TZmcNzriwDf5A19Fe4muelZ-mycLdPM1cgHXIpM5pEO-z7Bn4rXJyyP7M9ZyIv_BYE1w2/%D8%AC%D8%B1%D8%AF%20%D8%A7%D9%84%D9%85%D8%AE%D8%A7%D8%B2%D9%86.ashx?show=1",
+        "/showreport/5N29toS7k9y4j70NPipx2SDceJf7EaCu0QVfzVQ9JD03ENhZjBbOmMQHEByE8rY_V1TZmcNzriwDf5A19Fe4muelZ-mycLdPM1cgHXIpM5pEO-z7Bn4rXJyyP7M9ZyIv_BYE1w2/%D8%AC%D8%B1%D8%AF%20%D8%A7%D9%84%D9%85%D8%AE%D8%A7%D8%B2%D9%86.ashx?show=1",
+        "https://km.mega-cash.net/downloadreport/5N29toS7k9y4j70NPipx2SDceJf7EaCu0QVfzVQ9JD03ENhZjBbOmMQHEByE8rY_V1TZmcNzriwDf5A19Fe4muelZ-mycLdPM1cgHXIpM5pEO-z7Bn4rXJyyP7M9ZyIv_BYE1w2/%D8%AC%D8%B1%D8%AF%20%D8%A7%D9%84%D9%85%D8%AE%D8%A7%D8%B2%D9%86.ashx?show=1",
+        "/showreport/5N29toS7k9y4j70NPipx2SDceJf7EaCu0QVfzVQ9JD03ENhZjBbOmMQHEByE8rY_V1TZmcNzriwDf5A19Fe4muelZ-mycLdPM1cgHXIpM5pEO-z7Bn4rXJyyP7M9ZyIv_BYE1w2/جرد المخازن.ashx?show=1"
+      ],
+      "finalSrc": "/showreport/5N29toS7k9y4j70NPipx2SDceJf7EaCu0QVfzVQ9JD03ENhZjBbOmMQHEByE8rY_V1TZmcNzriwDf5A19Fe4muelZ-mycLdPM1cgHXIpM5pEO-z7Bn4rXJyyP7M9ZyIv_BYE1w2/جرد المخازن.ashx?show=1",
+      "pdfPath": "artifacts/mega-wave3-inventory/pdf/inventory-summary.pdf",
+      "saved": [
+        {
+          "vu": "https://km.mega-cash.net/showreport/5N29toS7k9y4j70NPipx2SDceJf7EaCu0QVfzVQ9JD03ENhZjBbOmMQHEByE8rY_V1TZmcNzriwDf5A19Fe4muelZ-mycLdPM1cgHXIpM5pEO-z7Bn4rXJyyP7M9ZyIv_BYE1w2/جرد",
+          "status": 200,
+          "size": 104206,
+          "name": "inventory-summary.pdf"
+        }
+      ],
+      "netHits": 3
+    },
+    {
+      "key": "items-transfer-details",
+      "featureKey": "invreports-itemstransferdetails",
+      "path": "/InvReports/ItemsTransferDetails.aspx",
+      "prep": {
+        "okFrom": true,
+        "okTo": true,
+        "from": "1/1/2022",
+        "to": "3/1/2022",
+        "hasBtn": true,
+        "btnId": "cph_btnShow",
+        "hasViewer": true,
+        "dateIds": [
+          "cph_txtFromDateSrch",
+          "cph_txtToDateSrch"
+        ]
+      },
+      "foundUrls": [
+        "/showreport/19VqfrEkmyV1NQDUbRREiY2CM3iVp0BFuJffjAd1rFTO2P-CBWiMT3mf3C8iAcmLGPXSy3k6n1Lg_f3DAByoNHg487X_6Z3JzNDGNClwsjG5ut4vtlIbiY5dijdLXKoX6Z6QOA2/حركة",
+        "https://km.mega-cash.net/showreport/19VqfrEkmyV1NQDUbRREiY2CM3iVp0BFuJffjAd1rFTO2P-CBWiMT3mf3C8iAcmLGPXSy3k6n1Lg_f3DAByoNHg487X_6Z3JzNDGNClwsjG5ut4vtlIbiY5dijdLXKoX6Z6QOA2/%D8%AD%D8%B1%D9%83%D8%A9%20%D8%AA%D9%81%D8%B5%D9%8A%D9%84%D9%8A%D8%A9%20%D9%84%D9%84%D8%A7%D8%B5%D9%86%D8%A7%D9%81.ashx?show=1",
+        "https://km.mega-cash.net/downloadreport/19VqfrEkmyV1NQDUbRREiY2CM3iVp0BFuJffjAd1rFTO2P-CBWiMT3mf3C8iAcmLGPXSy3k6n1Lg_f3DAByoNHg487X_6Z3JzNDGNClwsjG5ut4vtlIbiY5dijdLXKoX6Z6QOA2/%D8%AD%D8%B1%D9%83%D8%A9%20%D8%AA%D9%81%D8%B5%D9%8A%D9%84%D9%8A%D8%A9%20%D9%84%D9%84%D8%A7%D8%B5%D9%86%D8%A7%D9%81.ashx?show=1",
+        "/showreport/19VqfrEkmyV1NQDUbRREiY2CM3iVp0BFuJffjAd1rFTO2P-CBWiMT3mf3C8iAcmLGPXSy3k6n1Lg_f3DAByoNHg487X_6Z3JzNDGNClwsjG5ut4vtlIbiY5dijdLXKoX6Z6QOA2/حركة تفصيلية للاصناف.ashx?show=1"
+      ],
+      "finalSrc": "/showreport/19VqfrEkmyV1NQDUbRREiY2CM3iVp0BFuJffjAd1rFTO2P-CBWiMT3mf3C8iAcmLGPXSy3k6n1Lg_f3DAByoNHg487X_6Z3JzNDGNClwsjG5ut4vtlIbiY5dijdLXKoX6Z6QOA2/حركة تفصيلية للاصناف.ashx?show=1",
+      "pdfPath": "artifacts/mega-wave3-inventory/pdf/items-transfer-details.pdf",
+      "saved": [
+        {
+          "vu": "https://km.mega-cash.net/showreport/19VqfrEkmyV1NQDUbRREiY2CM3iVp0BFuJffjAd1rFTO2P-CBWiMT3mf3C8iAcmLGPXSy3k6n1Lg_f3DAByoNHg487X_6Z3JzNDGNClwsjG5ut4vtlIbiY5dijdLXKoX6Z6QOA2/حركة",
+          "status": 200,
+          "size": 317940,
+          "name": "items-transfer-details.pdf"
+        }
+      ],
+      "netHits": 3
+    },
+    {
+      "key": "warehouse-export-import",
+      "featureKey": "invreports-totalinventoryexportimportreport",
+      "path": "/InvReports/TotalInventoryExportImportReport.aspx",
+      "prep": {
+        "okFrom": true,
+        "okTo": true,
+        "from": "1/1/2022",
+        "to": "3/1/2022",
+        "hasBtn": true,
+        "btnId": "cph_btnShow",
+        "hasViewer": true,
+        "dateIds": [
+          "cph_txtFromDateSrch",
+          "cph_txtToDateSrch"
+        ]
+      },
+      "foundUrls": [
+        "/showreport/kpG454mz40YeL-J0UQSRKxAu7DZcWzBpzl7mKtuyVT58R99zqd2C_hrlxh7A0vWgVX52jax7CqwQe_JUiEkgXOFzvbLzF_AU9ALBPbxS5U3s1uF7KVdNILUtND_xYN-8svrRhYX0NDlIQGcXjsVrQvmf14s1/صادر",
+        "https://km.mega-cash.net/showreport/kpG454mz40YeL-J0UQSRKxAu7DZcWzBpzl7mKtuyVT58R99zqd2C_hrlxh7A0vWgVX52jax7CqwQe_JUiEkgXOFzvbLzF_AU9ALBPbxS5U3s1uF7KVdNILUtND_xYN-8svrRhYX0NDlIQGcXjsVrQvmf14s1/%D8%B5%D8%A7%D8%AF%D8%B1%20-%20%D9%88%D8%A7%D8%B1%D8%AF%20%D9%85%D8%AE%D8%B2%D9%86.ashx?show=1",
+        "/showreport/kpG454mz40YeL-J0UQSRKxAu7DZcWzBpzl7mKtuyVT58R99zqd2C_hrlxh7A0vWgVX52jax7CqwQe_JUiEkgXOFzvbLzF_AU9ALBPbxS5U3s1uF7KVdNILUtND_xYN-8svrRhYX0NDlIQGcXjsVrQvmf14s1/%D8%B5%D8%A7%D8%AF%D8%B1%20-%20%D9%88%D8%A7%D8%B1%D8%AF%20%D9%85%D8%AE%D8%B2%D9%86.ashx?show=1",
+        "https://km.mega-cash.net/downloadreport/kpG454mz40YeL-J0UQSRKxAu7DZcWzBpzl7mKtuyVT58R99zqd2C_hrlxh7A0vWgVX52jax7CqwQe_JUiEkgXOFzvbLzF_AU9ALBPbxS5U3s1uF7KVdNILUtND_xYN-8svrRhYX0NDlIQGcXjsVrQvmf14s1/%D8%B5%D8%A7%D8%AF%D8%B1%20-%20%D9%88%D8%A7%D8%B1%D8%AF%20%D9%85%D8%AE%D8%B2%D9%86.ashx?show=1",
+        "/showreport/kpG454mz40YeL-J0UQSRKxAu7DZcWzBpzl7mKtuyVT58R99zqd2C_hrlxh7A0vWgVX52jax7CqwQe_JUiEkgXOFzvbLzF_AU9ALBPbxS5U3s1uF7KVdNILUtND_xYN-8svrRhYX0NDlIQGcXjsVrQvmf14s1/صادر - وارد مخزن.ashx?show=1"
+      ],
+      "finalSrc": "/showreport/kpG454mz40YeL-J0UQSRKxAu7DZcWzBpzl7mKtuyVT58R99zqd2C_hrlxh7A0vWgVX52jax7CqwQe_JUiEkgXOFzvbLzF_AU9ALBPbxS5U3s1uF7KVdNILUtND_xYN-8svrRhYX0NDlIQGcXjsVrQvmf14s1/صادر - وارد مخزن.ashx?show=1",
+      "pdfPath": "artifacts/mega-wave3-inventory/pdf/warehouse-export-import.pdf",
+      "saved": [
+        {
+          "vu": "https://km.mega-cash.net/showreport/kpG454mz40YeL-J0UQSRKxAu7DZcWzBpzl7mKtuyVT58R99zqd2C_hrlxh7A0vWgVX52jax7CqwQe_JUiEkgXOFzvbLzF_AU9ALBPbxS5U3s1uF7KVdNILUtND_xYN-8svrRhYX0NDlIQGcXjsVrQvmf14s1/صادر",
+          "status": 200,
+          "size": 239172,
+          "name": "warehouse-export-import.pdf"
+        }
+      ],
+      "netHits": 3
+    },
+    {
+      "key": "inventory-transfer-details",
+      "featureKey": "invreports-inventorytransferdetailsreport",
+      "path": "/InvReports/InventoryTransferDetailsReport.aspx",
+      "prep": {
+        "okFrom": true,
+        "okTo": true,
+        "from": "1/1/2022",
+        "to": "3/1/2022",
+        "hasBtn": true,
+        "btnId": "cph_btnShow",
+        "hasViewer": true,
+        "dateIds": [
+          "cph_txtFromDateSrch",
+          "cph_txtToDateSrch"
+        ]
+      },
+      "foundUrls": [
+        "/showreport/NoXZw8pQK2sCwSJ2Z-P_HRMWqbdpopb6IofgrGySoQxtoO2lkSNZl5l7LKcc45ZiZbGkHyh7aS90k-tZSpLq6EGLxfpd0IRbf2vmjvlzGC2nr0ZfUl-TYPV4Zqb6LGoqew5YiF7UrkDhu6HONFTzBw7-hTg1/حركة",
+        "https://km.mega-cash.net/showreport/NoXZw8pQK2sCwSJ2Z-P_HRMWqbdpopb6IofgrGySoQxtoO2lkSNZl5l7LKcc45ZiZbGkHyh7aS90k-tZSpLq6EGLxfpd0IRbf2vmjvlzGC2nr0ZfUl-TYPV4Zqb6LGoqew5YiF7UrkDhu6HONFTzBw7-hTg1/%D8%AD%D8%B1%D9%83%D8%A9%20%D8%AA%D9%81%D8%B5%D9%8A%D9%84%D9%8A%D8%A9%20%D9%84%D9%84%D9%85%D8%AE%D8%A7%D8%B2%D9%86.ashx?show=1",
+        "/showreport/NoXZw8pQK2sCwSJ2Z-P_HRMWqbdpopb6IofgrGySoQxtoO2lkSNZl5l7LKcc45ZiZbGkHyh7aS90k-tZSpLq6EGLxfpd0IRbf2vmjvlzGC2nr0ZfUl-TYPV4Zqb6LGoqew5YiF7UrkDhu6HONFTzBw7-hTg1/%D8%AD%D8%B1%D9%83%D8%A9%20%D8%AA%D9%81%D8%B5%D9%8A%D9%84%D9%8A%D8%A9%20%D9%84%D9%84%D9%85%D8%AE%D8%A7%D8%B2%D9%86.ashx?show=1",
+        "https://km.mega-cash.net/downloadreport/NoXZw8pQK2sCwSJ2Z-P_HRMWqbdpopb6IofgrGySoQxtoO2lkSNZl5l7LKcc45ZiZbGkHyh7aS90k-tZSpLq6EGLxfpd0IRbf2vmjvlzGC2nr0ZfUl-TYPV4Zqb6LGoqew5YiF7UrkDhu6HONFTzBw7-hTg1/%D8%AD%D8%B1%D9%83%D8%A9%20%D8%AA%D9%81%D8%B5%D9%8A%D9%84%D9%8A%D8%A9%20%D9%84%D9%84%D9%85%D8%AE%D8%A7%D8%B2%D9%86.ashx?show=1",
+        "/showreport/NoXZw8pQK2sCwSJ2Z-P_HRMWqbdpopb6IofgrGySoQxtoO2lkSNZl5l7LKcc45ZiZbGkHyh7aS90k-tZSpLq6EGLxfpd0IRbf2vmjvlzGC2nr0ZfUl-TYPV4Zqb6LGoqew5YiF7UrkDhu6HONFTzBw7-hTg1/حركة تفصيلية للمخازن.ashx?show=1"
+      ],
+      "finalSrc": "/showreport/NoXZw8pQK2sCwSJ2Z-P_HRMWqbdpopb6IofgrGySoQxtoO2lkSNZl5l7LKcc45ZiZbGkHyh7aS90k-tZSpLq6EGLxfpd0IRbf2vmjvlzGC2nr0ZfUl-TYPV4Zqb6LGoqew5YiF7UrkDhu6HONFTzBw7-hTg1/حركة تفصيلية للمخازن.ashx?show=1",
+      "pdfPath": "artifacts/mega-wave3-inventory/pdf/inventory-transfer-details.pdf",
+      "saved": [
+        {
+          "vu": "https://km.mega-cash.net/showreport/NoXZw8pQK2sCwSJ2Z-P_HRMWqbdpopb6IofgrGySoQxtoO2lkSNZl5l7LKcc45ZiZbGkHyh7aS90k-tZSpLq6EGLxfpd0IRbf2vmjvlzGC2nr0ZfUl-TYPV4Zqb6LGoqew5YiF7UrkDhu6HONFTzBw7-hTg1/حركة",
+          "status": 200,
+          "size": 235685,
+          "name": "inventory-transfer-details.pdf"
+        }
+      ],
+      "netHits": 3
+    },
+    {
+      "key": "items-costs",
+      "featureKey": "invreports-itemscosts",
+      "path": "/InvReports/ItemsCosts.aspx",
+      "prep": {
+        "okFrom": false,
+        "okTo": true,
+        "to": "3/1/2022",
+        "hasBtn": true,
+        "btnId": "cph_btnShow",
+        "hasViewer": true,
+        "dateIds": [
+          "cph_txtDate"
+        ]
+      },
+      "foundUrls": [
+        "/showreport/2DLtsGCA0I7Mq2mFukZeqwU9_4KKW9XyptubQ-P7Iexfr_XwHLg9W71aFZ1TcewfzlaR2xC9JXY7Kj5hyUL6hlDH71F4d2nsC0BEl_ADzmdDimxloXoQvEZYsO9DWsGxe9Vs0w2/تكاليف",
+        "https://km.mega-cash.net/showreport/2DLtsGCA0I7Mq2mFukZeqwU9_4KKW9XyptubQ-P7Iexfr_XwHLg9W71aFZ1TcewfzlaR2xC9JXY7Kj5hyUL6hlDH71F4d2nsC0BEl_ADzmdDimxloXoQvEZYsO9DWsGxe9Vs0w2/%D8%AA%D9%83%D8%A7%D9%84%D9%8A%D9%81%20%D8%A7%D9%84%D8%A7%D8%B5%D9%86%D8%A7%D9%81.ashx?show=1",
+        "https://km.mega-cash.net/downloadreport/2DLtsGCA0I7Mq2mFukZeqwU9_4KKW9XyptubQ-P7Iexfr_XwHLg9W71aFZ1TcewfzlaR2xC9JXY7Kj5hyUL6hlDH71F4d2nsC0BEl_ADzmdDimxloXoQvEZYsO9DWsGxe9Vs0w2/%D8%AA%D9%83%D8%A7%D9%84%D9%8A%D9%81%20%D8%A7%D9%84%D8%A7%D8%B5%D9%86%D8%A7%D9%81.ashx?show=1",
+        "/showreport/2DLtsGCA0I7Mq2mFukZeqwU9_4KKW9XyptubQ-P7Iexfr_XwHLg9W71aFZ1TcewfzlaR2xC9JXY7Kj5hyUL6hlDH71F4d2nsC0BEl_ADzmdDimxloXoQvEZYsO9DWsGxe9Vs0w2/تكاليف الاصناف.ashx?show=1"
+      ],
+      "finalSrc": "/showreport/2DLtsGCA0I7Mq2mFukZeqwU9_4KKW9XyptubQ-P7Iexfr_XwHLg9W71aFZ1TcewfzlaR2xC9JXY7Kj5hyUL6hlDH71F4d2nsC0BEl_ADzmdDimxloXoQvEZYsO9DWsGxe9Vs0w2/تكاليف الاصناف.ashx?show=1",
+      "pdfPath": "artifacts/mega-wave3-inventory/pdf/items-costs.pdf",
+      "saved": [
+        {
+          "vu": "https://km.mega-cash.net/showreport/2DLtsGCA0I7Mq2mFukZeqwU9_4KKW9XyptubQ-P7Iexfr_XwHLg9W71aFZ1TcewfzlaR2xC9JXY7Kj5hyUL6hlDH71F4d2nsC0BEl_ADzmdDimxloXoQvEZYsO9DWsGxe9Vs0w2/تكاليف",
+          "status": 200,
+          "size": 109973,
+          "name": "items-costs.pdf"
+        }
+      ],
+      "netHits": 3
+    },
+    {
+      "key": "items-list",
+      "featureKey": "invreports-itemslist",
+      "path": "/InvReports/ItemsList.aspx",
+      "prep": {
+        "okFrom": false,
+        "okTo": true,
+        "to": "3/1/2022",
+        "hasBtn": true,
+        "btnId": "cph_btnShow",
+        "hasViewer": true,
+        "dateIds": [
+          "cph_txtDate"
+        ]
+      },
+      "foundUrls": [
+        "/showreport/Jh7llxbcVvx9UJ9NriSVWbusbbqXeBSPBQCyZSKqvIV_98VITKti-r-hcy-EyjR9RipaKIbpYw-Rcz_tadXmQC--AmSC-dpItfWQf4rNsCmUibzBM1_tOAi4VwxdPu1mN9uofA2/قائمة",
+        "https://km.mega-cash.net/showreport/Jh7llxbcVvx9UJ9NriSVWbusbbqXeBSPBQCyZSKqvIV_98VITKti-r-hcy-EyjR9RipaKIbpYw-Rcz_tadXmQC--AmSC-dpItfWQf4rNsCmUibzBM1_tOAi4VwxdPu1mN9uofA2/%D9%82%D8%A7%D8%A6%D9%85%D8%A9%20%D8%A7%D9%84%D8%A7%D8%B5%D9%86%D8%A7%D9%81.ashx?show=1",
+        "/showreport/Jh7llxbcVvx9UJ9NriSVWbusbbqXeBSPBQCyZSKqvIV_98VITKti-r-hcy-EyjR9RipaKIbpYw-Rcz_tadXmQC--AmSC-dpItfWQf4rNsCmUibzBM1_tOAi4VwxdPu1mN9uofA2/%D9%82%D8%A7%D8%A6%D9%85%D8%A9%20%D8%A7%D9%84%D8%A7%D8%B5%D9%86%D8%A7%D9%81.ashx?show=1",
+        "https://km.mega-cash.net/downloadreport/Jh7llxbcVvx9UJ9NriSVWbusbbqXeBSPBQCyZSKqvIV_98VITKti-r-hcy-EyjR9RipaKIbpYw-Rcz_tadXmQC--AmSC-dpItfWQf4rNsCmUibzBM1_tOAi4VwxdPu1mN9uofA2/%D9%82%D8%A7%D8%A6%D9%85%D8%A9%20%D8%A7%D9%84%D8%A7%D8%B5%D9%86%D8%A7%D9%81.ashx?show=1",
+        "/showreport/Jh7llxbcVvx9UJ9NriSVWbusbbqXeBSPBQCyZSKqvIV_98VITKti-r-hcy-EyjR9RipaKIbpYw-Rcz_tadXmQC--AmSC-dpItfWQf4rNsCmUibzBM1_tOAi4VwxdPu1mN9uofA2/قائمة الاصناف.ashx?show=1"
+      ],
+      "finalSrc": "/showreport/Jh7llxbcVvx9UJ9NriSVWbusbbqXeBSPBQCyZSKqvIV_98VITKti-r-hcy-EyjR9RipaKIbpYw-Rcz_tadXmQC--AmSC-dpItfWQf4rNsCmUibzBM1_tOAi4VwxdPu1mN9uofA2/قائمة الاصناف.ashx?show=1",
+      "pdfPath": "artifacts/mega-wave3-inventory/pdf/items-list.pdf",
+      "saved": [
+        {
+          "vu": "https://km.mega-cash.net/showreport/Jh7llxbcVvx9UJ9NriSVWbusbbqXeBSPBQCyZSKqvIV_98VITKti-r-hcy-EyjR9RipaKIbpYw-Rcz_tadXmQC--AmSC-dpItfWQf4rNsCmUibzBM1_tOAi4VwxdPu1mN9uofA2/قائمة",
+          "status": 200,
+          "size": 131107,
+          "name": "items-list.pdf"
+        }
+      ],
+      "netHits": 3
+    },
+    {
+      "key": "items-summary",
+      "featureKey": "invreports-itemssummary",
+      "path": "/InvReports/ItemsSummary.aspx",
+      "prep": {
+        "okFrom": true,
+        "okTo": true,
+        "from": "1/1/2022",
+        "to": "3/1/2022",
+        "hasBtn": true,
+        "btnId": "cph_btnShow",
+        "hasViewer": true,
+        "dateIds": [
+          "cph_txtFromDateSrch",
+          "cph_txtToDateSrch"
+        ]
+      },
+      "foundUrls": [
+        "/showreport/_WhvOfMh3ACc4wevfLJo75oWHK7r2WDWFDO6Hq73588oxHh6hYlHxRtaRPN_qmgqjoOfl0WXPbdLbbTacljXbZl9DUy8jbcqtB3mIYPTDXrXGGGvWO86XM8z2B7ye6vyylgkjA2/ملخص",
+        "https://km.mega-cash.net/showreport/_WhvOfMh3ACc4wevfLJo75oWHK7r2WDWFDO6Hq73588oxHh6hYlHxRtaRPN_qmgqjoOfl0WXPbdLbbTacljXbZl9DUy8jbcqtB3mIYPTDXrXGGGvWO86XM8z2B7ye6vyylgkjA2/%D9%85%D9%84%D8%AE%D8%B5%20%D8%AD%D8%B1%D9%83%D8%A9%20%D8%A7%D9%84%D8%A7%D8%B5%D9%86%D8%A7%D9%81.ashx?show=1",
+        "/showreport/_WhvOfMh3ACc4wevfLJo75oWHK7r2WDWFDO6Hq73588oxHh6hYlHxRtaRPN_qmgqjoOfl0WXPbdLbbTacljXbZl9DUy8jbcqtB3mIYPTDXrXGGGvWO86XM8z2B7ye6vyylgkjA2/%D9%85%D9%84%D8%AE%D8%B5%20%D8%AD%D8%B1%D9%83%D8%A9%20%D8%A7%D9%84%D8%A7%D8%B5%D9%86%D8%A7%D9%81.ashx?show=1",
+        "https://km.mega-cash.net/downloadreport/_WhvOfMh3ACc4wevfLJo75oWHK7r2WDWFDO6Hq73588oxHh6hYlHxRtaRPN_qmgqjoOfl0WXPbdLbbTacljXbZl9DUy8jbcqtB3mIYPTDXrXGGGvWO86XM8z2B7ye6vyylgkjA2/%D9%85%D9%84%D8%AE%D8%B5%20%D8%AD%D8%B1%D9%83%D8%A9%20%D8%A7%D9%84%D8%A7%D8%B5%D9%86%D8%A7%D9%81.ashx?show=1",
+        "/showreport/_WhvOfMh3ACc4wevfLJo75oWHK7r2WDWFDO6Hq73588oxHh6hYlHxRtaRPN_qmgqjoOfl0WXPbdLbbTacljXbZl9DUy8jbcqtB3mIYPTDXrXGGGvWO86XM8z2B7ye6vyylgkjA2/ملخص حركة الاصناف.ashx?show=1"
+      ],
+      "finalSrc": "/showreport/_WhvOfMh3ACc4wevfLJo75oWHK7r2WDWFDO6Hq73588oxHh6hYlHxRtaRPN_qmgqjoOfl0WXPbdLbbTacljXbZl9DUy8jbcqtB3mIYPTDXrXGGGvWO86XM8z2B7ye6vyylgkjA2/ملخص حركة الاصناف.ashx?show=1",
+      "pdfPath": "artifacts/mega-wave3-inventory/pdf/items-summary.pdf",
+      "saved": [
+        {
+          "vu": "https://km.mega-cash.net/showreport/_WhvOfMh3ACc4wevfLJo75oWHK7r2WDWFDO6Hq73588oxHh6hYlHxRtaRPN_qmgqjoOfl0WXPbdLbbTacljXbZl9DUy8jbcqtB3mIYPTDXrXGGGvWO86XM8z2B7ye6vyylgkjA2/ملخص",
+          "status": 200,
+          "size": 111598,
+          "name": "items-summary.pdf"
+        }
+      ],
+      "netHits": 3
+    },
+    {
+      "key": "income-outcome-item",
+      "featureKey": "invreports-incomeoutcomeitem",
+      "path": "/InvReports/IncomeOutcomeItem.aspx",
+      "prep": {
+        "okFrom": true,
+        "okTo": true,
+        "from": "1/1/2022",
+        "to": "3/1/2022",
+        "hasBtn": true,
+        "btnId": "cph_btnShow",
+        "hasViewer": true,
+        "dateIds": [
+          "cph_txtFromDateSrch",
+          "cph_txtToDateSrch"
+        ]
+      },
+      "foundUrls": [
+        "/showreport/HAFg6W6M5fPqyJMfZGKnil2CV4mxglSozpPKYtxsNwOBpJMwO-VXrRDTyDpvcj3OuGNapMIo3SxVOyrURm53YhRok1n6hH63Tg76ZZj3fIFvTYgysNZBn8lJdeb0JMCDw3XLbw2/صادر",
+        "https://km.mega-cash.net/showreport/HAFg6W6M5fPqyJMfZGKnil2CV4mxglSozpPKYtxsNwOBpJMwO-VXrRDTyDpvcj3OuGNapMIo3SxVOyrURm53YhRok1n6hH63Tg76ZZj3fIFvTYgysNZBn8lJdeb0JMCDw3XLbw2/%D8%B5%D8%A7%D8%AF%D8%B1%20-%20%D9%88%D8%A7%D8%B1%D8%AF%20%D8%B5%D9%86%D9%81.ashx?show=1",
+        "/showreport/HAFg6W6M5fPqyJMfZGKnil2CV4mxglSozpPKYtxsNwOBpJMwO-VXrRDTyDpvcj3OuGNapMIo3SxVOyrURm53YhRok1n6hH63Tg76ZZj3fIFvTYgysNZBn8lJdeb0JMCDw3XLbw2/%D8%B5%D8%A7%D8%AF%D8%B1%20-%20%D9%88%D8%A7%D8%B1%D8%AF%20%D8%B5%D9%86%D9%81.ashx?show=1",
+        "https://km.mega-cash.net/downloadreport/HAFg6W6M5fPqyJMfZGKnil2CV4mxglSozpPKYtxsNwOBpJMwO-VXrRDTyDpvcj3OuGNapMIo3SxVOyrURm53YhRok1n6hH63Tg76ZZj3fIFvTYgysNZBn8lJdeb0JMCDw3XLbw2/%D8%B5%D8%A7%D8%AF%D8%B1%20-%20%D9%88%D8%A7%D8%B1%D8%AF%20%D8%B5%D9%86%D9%81.ashx?show=1",
+        "/showreport/HAFg6W6M5fPqyJMfZGKnil2CV4mxglSozpPKYtxsNwOBpJMwO-VXrRDTyDpvcj3OuGNapMIo3SxVOyrURm53YhRok1n6hH63Tg76ZZj3fIFvTYgysNZBn8lJdeb0JMCDw3XLbw2/صادر - وارد صنف.ashx?show=1"
+      ],
+      "finalSrc": "/showreport/HAFg6W6M5fPqyJMfZGKnil2CV4mxglSozpPKYtxsNwOBpJMwO-VXrRDTyDpvcj3OuGNapMIo3SxVOyrURm53YhRok1n6hH63Tg76ZZj3fIFvTYgysNZBn8lJdeb0JMCDw3XLbw2/صادر - وارد صنف.ashx?show=1",
+      "pdfPath": "artifacts/mega-wave3-inventory/pdf/income-outcome-item.pdf",
+      "saved": [
+        {
+          "vu": "https://km.mega-cash.net/showreport/HAFg6W6M5fPqyJMfZGKnil2CV4mxglSozpPKYtxsNwOBpJMwO-VXrRDTyDpvcj3OuGNapMIo3SxVOyrURm53YhRok1n6hH63Tg76ZZj3fIFvTYgysNZBn8lJdeb0JMCDw3XLbw2/صادر",
+          "status": 200,
+          "size": 106016,
+          "name": "income-outcome-item.pdf"
+        }
+      ],
+      "netHits": 3
+    },
+    {
+      "key": "stagnant-items",
+      "featureKey": "invreports-stagnantitems",
+      "path": "/InvReports/StagnantItems.aspx",
+      "prep": {
+        "okFrom": true,
+        "okTo": true,
+        "from": "1/1/2022",
+        "to": "3/1/2022",
+        "hasBtn": true,
+        "btnId": "cph_btnShow",
+        "hasViewer": true,
+        "dateIds": [
+          "cph_txtFromDateSrch",
+          "cph_txtToDateSrch"
+        ]
+      },
+      "foundUrls": [
+        "/showreport/IqPp90CmhXH4wxbI94ybAofmUaYKyqwFsbA0DuX630XtdiQeLxyHONMx7_TJOa9UjYGFj8N-b7ImvhZP7LzZ5SbWMNvWXfKlZ1PFA2qEkDMqj5nY9TPN771hHyB04J_2nT_Dhw2/الاصناف",
+        "https://km.mega-cash.net/showreport/IqPp90CmhXH4wxbI94ybAofmUaYKyqwFsbA0DuX630XtdiQeLxyHONMx7_TJOa9UjYGFj8N-b7ImvhZP7LzZ5SbWMNvWXfKlZ1PFA2qEkDMqj5nY9TPN771hHyB04J_2nT_Dhw2/%D8%A7%D9%84%D8%A7%D8%B5%D9%86%D8%A7%D9%81%20%D8%A7%D9%84%D8%B1%D8%A7%D9%83%D8%AF%D8%A9.ashx?show=1",
+        "/showreport/IqPp90CmhXH4wxbI94ybAofmUaYKyqwFsbA0DuX630XtdiQeLxyHONMx7_TJOa9UjYGFj8N-b7ImvhZP7LzZ5SbWMNvWXfKlZ1PFA2qEkDMqj5nY9TPN771hHyB04J_2nT_Dhw2/%D8%A7%D9%84%D8%A7%D8%B5%D9%86%D8%A7%D9%81%20%D8%A7%D9%84%D8%B1%D8%A7%D9%83%D8%AF%D8%A9.ashx?show=1",
+        "https://km.mega-cash.net/downloadreport/IqPp90CmhXH4wxbI94ybAofmUaYKyqwFsbA0DuX630XtdiQeLxyHONMx7_TJOa9UjYGFj8N-b7ImvhZP7LzZ5SbWMNvWXfKlZ1PFA2qEkDMqj5nY9TPN771hHyB04J_2nT_Dhw2/%D8%A7%D9%84%D8%A7%D8%B5%D9%86%D8%A7%D9%81%20%D8%A7%D9%84%D8%B1%D8%A7%D9%83%D8%AF%D8%A9.ashx?show=1",
+        "/showreport/IqPp90CmhXH4wxbI94ybAofmUaYKyqwFsbA0DuX630XtdiQeLxyHONMx7_TJOa9UjYGFj8N-b7ImvhZP7LzZ5SbWMNvWXfKlZ1PFA2qEkDMqj5nY9TPN771hHyB04J_2nT_Dhw2/الاصناف الراكدة.ashx?show=1"
+      ],
+      "finalSrc": "/showreport/IqPp90CmhXH4wxbI94ybAofmUaYKyqwFsbA0DuX630XtdiQeLxyHONMx7_TJOa9UjYGFj8N-b7ImvhZP7LzZ5SbWMNvWXfKlZ1PFA2qEkDMqj5nY9TPN771hHyB04J_2nT_Dhw2/الاصناف الراكدة.ashx?show=1",
+      "pdfPath": "artifacts/mega-wave3-inventory/pdf/stagnant-items.pdf",
+      "saved": [
+        {
+          "vu": "https://km.mega-cash.net/showreport/IqPp90CmhXH4wxbI94ybAofmUaYKyqwFsbA0DuX630XtdiQeLxyHONMx7_TJOa9UjYGFj8N-b7ImvhZP7LzZ5SbWMNvWXfKlZ1PFA2qEkDMqj5nY9TPN771hHyB04J_2nT_Dhw2/الاصناف",
+          "status": 200,
+          "size": 150753,
+          "name": "stagnant-items.pdf"
+        }
+      ],
+      "netHits": 3
+    }
+  ]
+}
