@@ -13,9 +13,13 @@ import {
   items,
   journalEntries,
   journalEntryLines,
+  purchaseInvoiceExpenses,
   purchaseInvoiceItems,
   purchaseInvoices,
+  purchaseReturnItems,
+  purchaseReturns,
   salesAreas,
+  salesInvoiceExpenses,
   salesInvoiceItems,
   salesInvoices,
   salesReps,
@@ -1124,13 +1128,36 @@ export async function generalJournalReport(db: Db, filters: ReportFilters) {
   return result;
 }
 
+/** مجموع مصروفات الفاتورة (ميجا: المصروفات) بالعملة المحلية */
+async function sumExpensesByInvoice(
+  db: Db,
+  tenantId: number,
+  table: typeof salesInvoiceExpenses | typeof purchaseInvoiceExpenses,
+  invoiceIds: number[],
+) {
+  const map = new Map<number, number>();
+  if (!invoiceIds.length) return map;
+  const rows = await db
+    .select({
+      invoiceId: table.invoiceId,
+      total: sql<string>`coalesce(sum(${table.amount} * coalesce(${table.exchangeRate}, 1)), 0)`,
+    })
+    .from(table)
+    .where(and(eq(table.tenantId, tenantId), inArray(table.invoiceId, invoiceIds)))
+    .groupBy(table.invoiceId);
+  for (const r of rows) map.set(r.invoiceId, num(r.total));
+  return map;
+}
+
 export async function salesInvoicesReport(db: Db, filters: ReportFilters) {
   const dateParts = dateConds(salesInvoices, filters.dateFrom, filters.dateTo);
   const dueDateParts = dueDateConds(salesInvoices, filters.dueDateFrom, filters.dueDateTo);
   const rows = await db.select({
+    id: salesInvoices.id,
     number: salesInvoices.number,
     date: salesInvoices.date,
     dueDate: salesInvoices.dueDate,
+    customerId: salesInvoices.customerId,
     customerCode: customers.code,
     customerName: customers.name,
     branchName: branches.name,
@@ -1140,6 +1167,7 @@ export async function salesInvoicesReport(db: Db, filters: ReportFilters) {
     subtotal: salesInvoices.subtotal,
     discount: salesInvoices.discount,
     tax: salesInvoices.tax,
+    additions: salesInvoices.additions,
     total: salesInvoices.total,
     foreignTotal: salesInvoices.foreignTotal,
     currencyCode: salesInvoices.currencyCode,
@@ -1181,6 +1209,13 @@ export async function salesInvoicesReport(db: Db, filters: ReportFilters) {
           : undefined)))
     .orderBy(desc(salesInvoices.date));
 
+  const expenseByInvoice = await sumExpensesByInvoice(
+    db,
+    filters.tenantId,
+    salesInvoiceExpenses,
+    rows.map((r) => r.id),
+  );
+
   return rows.map((r) => ({
     documentNumber: r.number,
     date: dateOnly(r.date),
@@ -1197,11 +1232,16 @@ export async function salesInvoicesReport(db: Db, filters: ReportFilters) {
     subtotal: num(r.subtotal),
     discount: num(r.discount),
     tax: num(r.tax),
+    /** ميجا: اضافات */
+    additions: num(r.additions),
     total: num(r.total),
+    /** ميجا: المصروفات — مجموع sales_invoice_expenses */
+    expenses: expenseByInvoice.get(r.id) || 0,
     paid: num(r.paid),
     remaining: num(r.remaining),
     status: r.status,
     paymentType: r.paymentType === "cash" ? "نقدي" : r.paymentType === "credit" ? "آجل" : r.paymentType,
+    _customerId: r.customerId,
   }));
 }
 
@@ -1209,9 +1249,12 @@ export async function purchasesInvoicesReport(db: Db, filters: ReportFilters) {
   const dateParts = dateConds(purchaseInvoices, filters.dateFrom, filters.dateTo);
   const dueDateParts = dueDateConds(purchaseInvoices, filters.dueDateFrom, filters.dueDateTo);
   const rows = await db.select({
+    id: purchaseInvoices.id,
     number: purchaseInvoices.number,
+    referenceNumber: purchaseInvoices.referenceNumber,
     date: purchaseInvoices.date,
     dueDate: purchaseInvoices.dueDate,
+    supplierId: purchaseInvoices.supplierId,
     supplierCode: suppliers.code,
     supplierName: suppliers.name,
     branchName: branches.name,
@@ -1250,12 +1293,14 @@ export async function purchasesInvoicesReport(db: Db, filters: ReportFilters) {
           ? sql`exists (select 1 from purchase_invoice_items pii inner join items it on it.id = pii.itemId where pii.invoiceId = ${purchaseInvoices.id} and it.categoryId = ${filters.categoryId} and pii.tenantId = ${filters.tenantId})`
           : undefined,
         filters.search
-          ? sql`(${purchaseInvoices.number} LIKE ${`%${filters.search}%`} OR ${suppliers.name} LIKE ${`%${filters.search}%`})`
+          ? sql`(${purchaseInvoices.number} LIKE ${`%${filters.search}%`} OR ${suppliers.name} LIKE ${`%${filters.search}%`} OR ${purchaseInvoices.referenceNumber} LIKE ${`%${filters.search}%`})`
           : undefined)))
     .orderBy(desc(purchaseInvoices.date));
 
   return rows.map((r) => ({
     documentNumber: r.number,
+    /** ميجا: رقم المرجع */
+    referenceNumber: r.referenceNumber || "",
     date: dateOnly(r.date),
     dueDate: dateOnly(r.dueDate),
     partyCode: r.supplierCode || "",
@@ -1273,6 +1318,7 @@ export async function purchasesInvoicesReport(db: Db, filters: ReportFilters) {
     remaining: num(r.remaining),
     status: r.status,
     paymentType: r.paymentType === "cash" ? "نقدي" : r.paymentType === "credit" ? "آجل" : r.paymentType,
+    _supplierId: r.supplierId,
   }));
 }
 
@@ -1745,10 +1791,14 @@ export async function creditsAgingReport(db: Db, filters: ReportFilters, bucket:
 export async function salesByItemsReport(db: Db, filters: ReportFilters, monthly = false) {
   const dateParts = dateConds(salesInvoices, filters.dateFrom, filters.dateTo);
   const rows = await db.select({
+    itemId: salesInvoiceItems.itemId,
     itemCode: items.code,
     itemName: items.name,
-    purchasePrice: items.purchasePrice,
+    unitName: items.unit,
     quantity: salesInvoiceItems.quantity,
+    price: salesInvoiceItems.price,
+    purchasePrice: items.purchasePrice,
+    discountPct: salesInvoiceItems.discount,
     total: salesInvoiceItems.total,
     date: salesInvoices.date,
   }).from(salesInvoiceItems)
@@ -1766,29 +1816,128 @@ export async function salesByItemsReport(db: Db, filters: ReportFilters, monthly
           ? sql`(${salesInvoices.salesRepId} = ${filters.repId} OR ${customers.salesRepId} = ${filters.repId})`
           : undefined)));
 
-  const map = new Map<string, { itemCode: string; itemName: string; quantity: number; total: number; profit: number; month?: string }>();
+  type Acc = {
+    itemCode: string;
+    itemName: string;
+    unitName: string;
+    salesQty: number;
+    returnQty: number;
+    quantity: number;
+    discount: number;
+    total: number;
+    gross: number;
+    profit: number;
+    month?: string;
+  };
+  const map = new Map<string, Acc>();
   for (const r of rows) {
     const d = new Date(dateOnly(r.date));
     const monthKey = monthly ? `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}` : "";
-    const key = monthly ? `${r.itemCode}-${monthKey}` : String(r.itemCode || r.itemName);
-    const cur = map.get(key) || { itemCode: r.itemCode || "", itemName: r.itemName || "", quantity: 0, total: 0, profit: 0, month: monthKey };
-    cur.quantity += num(r.quantity);
-    cur.total += num(r.total);
-    cur.profit += num(r.total) - num(r.purchasePrice) * num(r.quantity);
+    const key = monthly ? `${r.itemId ?? r.itemCode}-${monthKey}` : String(r.itemId ?? r.itemCode ?? r.itemName ?? "");
+    const qty = num(r.quantity);
+    const price = num(r.price);
+    const discountAmt = qty * price * (num(r.discountPct) / 100);
+    const lineTotal = num(r.total);
+    const lineProfit = lineTotal - num(r.purchasePrice) * qty;
+    const cur = map.get(key) || {
+      itemCode: r.itemCode || "",
+      itemName: r.itemName || "",
+      unitName: r.unitName || "",
+      salesQty: 0,
+      returnQty: 0,
+      quantity: 0,
+      discount: 0,
+      total: 0,
+      gross: 0,
+      profit: 0,
+      month: monthKey,
+    };
+    cur.salesQty += qty;
+    cur.quantity += qty;
+    cur.discount += discountAmt;
+    cur.total += lineTotal;
+    cur.gross += qty * price;
+    cur.profit += lineProfit;
     map.set(key, cur);
   }
-  return Array.from(map.values());
+
+  // مردود المبيعات — عمود ميجا «مردود»
+  const returnDateParts = dateConds(salesReturns, filters.dateFrom, filters.dateTo);
+  const returnRows = await db.select({
+    itemId: salesReturnItems.itemId,
+    itemCode: items.code,
+    itemName: items.name,
+    unitName: items.unit,
+    quantity: salesReturnItems.quantity,
+    date: salesReturns.date,
+  }).from(salesReturnItems)
+    .innerJoin(salesReturns, eq(salesReturnItems.returnId, salesReturns.id))
+    .leftJoin(items, eq(salesReturnItems.itemId, items.id))
+    .where(tenantWhere(salesReturnItems, filters.tenantId,
+      and(
+        eq(salesReturns.status, "confirmed"),
+        ...(returnDateParts.length ? [and(...returnDateParts)] : []),
+        filters.itemId ? eq(salesReturnItems.itemId, filters.itemId) : undefined,
+        filters.categoryId ? eq(items.categoryId, filters.categoryId) : undefined,
+        filters.customerId ? eq(salesReturns.customerId, filters.customerId) : undefined,
+      )));
+
+  for (const r of returnRows) {
+    const d = new Date(dateOnly(r.date));
+    const monthKey = monthly ? `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}` : "";
+    const key = monthly ? `${r.itemId ?? r.itemCode}-${monthKey}` : String(r.itemId ?? r.itemCode ?? r.itemName ?? "");
+    const qty = num(r.quantity);
+    const cur = map.get(key) || {
+      itemCode: r.itemCode || "",
+      itemName: r.itemName || "",
+      unitName: r.unitName || "",
+      salesQty: 0,
+      returnQty: 0,
+      quantity: 0,
+      discount: 0,
+      total: 0,
+      gross: 0,
+      profit: 0,
+      month: monthKey,
+    };
+    cur.returnQty += qty;
+    cur.quantity -= qty;
+    map.set(key, cur);
+  }
+
+  return Array.from(map.values()).map((r) => ({
+    itemCode: r.itemCode,
+    itemName: r.itemName,
+    /** ميجا: مبيعات */
+    salesQty: r.salesQty,
+    /** ميجا: مردود */
+    returnQty: r.returnQty,
+    /** ميجا: الكمية (= مبيعات − مردود) */
+    quantity: r.quantity,
+    /** ميجا: وحدة القياس */
+    unitName: r.unitName,
+    /** ميجا: سعر الوحدة (متوسط مرجّح على إجمالي قبل الخصم) */
+    unitPrice: r.salesQty > 0 ? r.gross / r.salesQty : 0,
+    /** ميجا: الخصم (مبلغ) */
+    discount: r.discount,
+    /** ميجا: القيمة */
+    total: r.total,
+    /** لـ تقرير أرباح الأصناف (ليس عمود ميجا في المبيعات بالأصناف) */
+    profit: r.profit,
+    ...(monthly ? { month: r.month } : {}),
+  }));
 }
 
 export async function monthlySalesTotalsReport(db: Db, filters: ReportFilters) {
   const rows = await salesByItemsReport(db, filters, true);
-  const map = new Map<string, { month: string; quantity: number; total: number; profit: number }>();
+  const map = new Map<string, { month: string; quantity: number; total: number; salesQty: number; returnQty: number }>();
   for (const r of rows) {
-    const key = r.month || "";
-    const cur = map.get(key) || { month: key, quantity: 0, total: 0, profit: 0 };
+    const key = (r as { month?: string }).month || "";
+    const cur = map.get(key) || { month: key, quantity: 0, total: 0, salesQty: 0, returnQty: 0 };
     cur.quantity += r.quantity;
     cur.total += r.total;
-    cur.profit += r.profit;
+    cur.salesQty += r.salesQty;
+    cur.returnQty += r.returnQty;
     map.set(key, cur);
   }
   return Array.from(map.values()).sort((a, b) => a.month.localeCompare(b.month));
@@ -1797,16 +1946,17 @@ export async function monthlySalesTotalsReport(db: Db, filters: ReportFilters) {
 export async function purchasesByItemsReport(db: Db, filters: ReportFilters) {
   const dateParts = dateConds(purchaseInvoices, filters.dateFrom, filters.dateTo);
   const rows = await db.select({
+    itemId: purchaseInvoiceItems.itemId,
     itemCode: items.code,
     itemName: items.name,
+    unitName: items.unit,
     quantity: purchaseInvoiceItems.quantity,
+    price: purchaseInvoiceItems.price,
+    discountPct: purchaseInvoiceItems.discount,
     total: purchaseInvoiceItems.total,
-    date: purchaseInvoices.date,
-    supplierName: suppliers.name,
   }).from(purchaseInvoiceItems)
     .innerJoin(purchaseInvoices, eq(purchaseInvoiceItems.invoiceId, purchaseInvoices.id))
     .leftJoin(items, eq(purchaseInvoiceItems.itemId, items.id))
-    .leftJoin(suppliers, eq(purchaseInvoices.supplierId, suppliers.id))
     .where(tenantWhere(purchaseInvoiceItems, filters.tenantId,
       and(purchasePostedFilter(), ...(dateParts.length ? [and(...dateParts)] : []),
         filters.supplierId ? eq(purchaseInvoices.supplierId, filters.supplierId) : undefined,
@@ -1815,15 +1965,96 @@ export async function purchasesByItemsReport(db: Db, filters: ReportFilters) {
         filters.itemId ? eq(purchaseInvoiceItems.itemId, filters.itemId) : undefined,
         reportBranchCond(purchaseInvoices.branchId, filters))));
 
-  const map = new Map<string, { itemCode: string; itemName: string; quantity: number; total: number; supplierName: string }>();
+  type Acc = {
+    itemCode: string;
+    itemName: string;
+    unitName: string;
+    purchaseQty: number;
+    returnQty: number;
+    quantity: number;
+    discount: number;
+    total: number;
+    gross: number;
+  };
+  const map = new Map<string, Acc>();
   for (const r of rows) {
-    const key = String(r.itemCode || r.itemName);
-    const cur = map.get(key) || { itemCode: r.itemCode || "", itemName: r.itemName || "", quantity: 0, total: 0, supplierName: r.supplierName || "" };
-    cur.quantity += num(r.quantity);
+    const key = String(r.itemId ?? r.itemCode ?? r.itemName ?? "");
+    const qty = num(r.quantity);
+    const price = num(r.price);
+    const discountAmt = qty * price * (num(r.discountPct) / 100);
+    const cur = map.get(key) || {
+      itemCode: r.itemCode || "",
+      itemName: r.itemName || "",
+      unitName: r.unitName || "",
+      purchaseQty: 0,
+      returnQty: 0,
+      quantity: 0,
+      discount: 0,
+      total: 0,
+      gross: 0,
+    };
+    cur.purchaseQty += qty;
+    cur.quantity += qty;
+    cur.discount += discountAmt;
     cur.total += num(r.total);
+    cur.gross += qty * price;
     map.set(key, cur);
   }
-  return Array.from(map.values());
+
+  const returnDateParts = dateConds(purchaseReturns, filters.dateFrom, filters.dateTo);
+  const returnRows = await db.select({
+    itemId: purchaseReturnItems.itemId,
+    itemCode: items.code,
+    itemName: items.name,
+    unitName: items.unit,
+    quantity: purchaseReturnItems.quantity,
+  }).from(purchaseReturnItems)
+    .innerJoin(purchaseReturns, eq(purchaseReturnItems.returnId, purchaseReturns.id))
+    .leftJoin(items, eq(purchaseReturnItems.itemId, items.id))
+    .where(tenantWhere(purchaseReturnItems, filters.tenantId,
+      and(
+        eq(purchaseReturns.status, "confirmed"),
+        ...(returnDateParts.length ? [and(...returnDateParts)] : []),
+        filters.itemId ? eq(purchaseReturnItems.itemId, filters.itemId) : undefined,
+        filters.categoryId ? eq(items.categoryId, filters.categoryId) : undefined,
+        filters.supplierId ? eq(purchaseReturns.supplierId, filters.supplierId) : undefined,
+      )));
+
+  for (const r of returnRows) {
+    const key = String(r.itemId ?? r.itemCode ?? r.itemName ?? "");
+    const qty = num(r.quantity);
+    const cur = map.get(key) || {
+      itemCode: r.itemCode || "",
+      itemName: r.itemName || "",
+      unitName: r.unitName || "",
+      purchaseQty: 0,
+      returnQty: 0,
+      quantity: 0,
+      discount: 0,
+      total: 0,
+      gross: 0,
+    };
+    cur.returnQty += qty;
+    cur.quantity -= qty;
+    map.set(key, cur);
+  }
+
+  return Array.from(map.values()).map((r) => ({
+    itemCode: r.itemCode,
+    itemName: r.itemName,
+    /** ميجا: مشتريات */
+    purchaseQty: r.purchaseQty,
+    /** ميجا: مردود */
+    returnQty: r.returnQty,
+    /** ميجا: الكمية */
+    quantity: r.quantity,
+    /** ميجا: وحدة القياس */
+    unitName: r.unitName,
+    /** ميجا: سعر الوحدة */
+    unitPrice: r.purchaseQty > 0 ? r.gross / r.purchaseQty : 0,
+    discount: r.discount,
+    total: r.total,
+  }));
 }
 
 export async function customerStatementReport(db: Db, filters: ReportFilters) {

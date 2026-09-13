@@ -294,6 +294,8 @@ export const purchaseInvoices = mysqlTable("purchase_invoices", {
   currencyCode: varchar("currencyCode", { length: 10 }).default("EGP"),
   exchangeRate: decimal("exchangeRate", { precision: 15, scale: 6 }).default("1"),
   foreignTotal: decimal("foreignTotal", { precision: 15, scale: 2 }),
+  /** رقم المرجع — زي ميجا في تقرير الشراء (رقم فاتورة المورد) */
+  referenceNumber: varchar("referenceNumber", { length: 100 }),
   notes: text("notes"),
   createdBy: int("createdBy"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
@@ -445,6 +447,8 @@ export const salesInvoices = mysqlTable("sales_invoices", {
   currencyCode: varchar("currencyCode", { length: 10 }).default("EGP"),
   exchangeRate: decimal("exchangeRate", { precision: 15, scale: 6 }).default("1"),
   foreignTotal: decimal("foreignTotal", { precision: 15, scale: 2 }),
+  /** اضافات — زي عمود ميجا في تقرير البيع */
+  additions: decimal("additions", { precision: 15, scale: 2 }).default("0"),
   etaUuid: varchar("etaUuid", { length: 64 }),
   etaStatus: varchar("etaStatus", { length: 32 }),
   etaSubmittedAt: timestamp("etaSubmittedAt"),

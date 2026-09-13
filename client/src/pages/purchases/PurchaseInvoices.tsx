@@ -61,6 +61,7 @@ const emptyForm = {
   receiptType: "full" as "full" | "partial",
   currencyCode: "EGP",
   exchangeRate: "1",
+  referenceNumber: "",
   notes: "",
 };
 
@@ -167,6 +168,7 @@ export default function PurchaseInvoices() {
         receiptType: (inv.receiptType as "full" | "partial") || "full",
         currencyCode: inv.currencyCode || "EGP",
         exchangeRate: inv.exchangeRate?.toString() || "1",
+        referenceNumber: inv.referenceNumber || "",
         notes: inv.notes || "",
       });
       setSettlement({
@@ -236,6 +238,7 @@ export default function PurchaseInvoices() {
         receiptType: "full",
         currencyCode: inv.currencyCode || "EGP",
         exchangeRate: inv.exchangeRate?.toString() || "1",
+        referenceNumber: inv.referenceNumber || "",
         notes: `نسخة من الفاتورة ${inv.number}`,
       });
       setInvoiceItems(inv.items.map((i) => ({
@@ -342,6 +345,7 @@ export default function PurchaseInvoices() {
       discount: "0",
       tax: toBaseAmount(taxTotal, form.currencyCode, rate).toFixed(2),
       total: totalBase.toFixed(2),
+      referenceNumber: form.referenceNumber || undefined,
       notes: form.notes,
       taxes: invoiceTaxes.filter((t) => Number(t.amount) > 0).map((t) => ({ ...t, amount: t.amount })),
       expenses: invoiceExpenses
@@ -453,6 +457,7 @@ export default function PurchaseInvoices() {
                     <SelectContent><SelectItem value="full">استلام كلي</SelectItem><SelectItem value="partial">استلام جزئي</SelectItem></SelectContent>
                   </Select>
                 </div>
+                <div><Label className="text-xs font-medium text-slate-700 mb-1.5 block">رقم المرجع</Label><Input value={form.referenceNumber} onChange={(e) => setForm((p) => ({ ...p, referenceNumber: e.target.value }))} placeholder="رقم فاتورة المورد" className="h-9 text-sm" /></div>
                 <div className="col-span-2"><Label className="text-xs font-medium text-slate-700 mb-1.5 block">ملاحظات</Label><Input value={form.notes} onChange={(e) => setForm((p) => ({ ...p, notes: e.target.value }))} placeholder="ملاحظات" className="h-9 text-sm" /></div>
               </div>
             </CardContent>

@@ -353,7 +353,7 @@ export default function ReportHub({ title, section, icon, reports, procedure }: 
   /**
    * ترتيب أعمدة فواتير البيع — من PDF ميجا (صف الفاتورة):
    * مسلسل | التاريخ | العميل | الاجمالي | الخصم | الضريبة | اضافات | الصافي | المصروفات | المستحق تحصيله
-   * (اضافات/المصروفات غير موجودة في Easy بعد — باقي الحقول الإضافية بعد أعمدة ميجا)
+   * اضافات من sales_invoices.additions — المصروفات من sales_invoice_expenses
    */
   const SALES_COLUMN_ORDER = [
     "documentNumber",
@@ -362,7 +362,9 @@ export default function ReportHub({ title, section, icon, reports, procedure }: 
     "subtotal",
     "discount",
     "tax",
+    "additions",
     "total",
+    "expenses",
     "remaining",
   ] as const;
 
@@ -372,6 +374,7 @@ export default function ReportHub({ title, section, icon, reports, procedure }: 
    */
   const PURCHASES_COLUMN_ORDER = [
     "documentNumber",
+    "referenceNumber",
     "date",
     "partyName",
     "subtotal",
@@ -381,15 +384,69 @@ export default function ReportHub({ title, section, icon, reports, procedure }: 
     "remaining",
   ] as const;
 
+  const CUSTOMERS_SALES_COLUMN_ORDER = [
+    "documentNumber",
+    "areaName",
+    "customerName",
+    "total",
+    "discount",
+    "tax",
+    "additions",
+    "net",
+    "remaining",
+    "lastSaleDate",
+    "lastCollectionDate",
+  ] as const;
+
+  const VENDORS_PURCHASES_COLUMN_ORDER = [
+    "documentNumber",
+    "vendorName",
+    "total",
+    "discount",
+    "tax",
+    "net",
+    "remaining",
+    "lastPurchaseDate",
+    "lastPaymentDate",
+  ] as const;
+
+  const GROSS_SALES_BY_ITEMS_COLUMN_ORDER = [
+    "itemName",
+    "salesQty",
+    "returnQty",
+    "quantity",
+    "unitName",
+    "unitPrice",
+    "discount",
+    "total",
+  ] as const;
+
+  const GROSS_PURCHASES_BY_ITEMS_COLUMN_ORDER = [
+    "itemName",
+    "purchaseQty",
+    "returnQty",
+    "quantity",
+    "unitName",
+    "unitPrice",
+    "discount",
+    "total",
+  ] as const;
+
   const isSales = slug === "accountingreports-sales";
   const isPurchases = slug === "accountingreports-purchases";
+  const isCustomersSales = slug === "accountingreports-customerssales";
+  const isVendorsPurchases = slug === "accountingreports-vendorspurchases";
+  const isGrossSalesByItems = slug === "accountingreports-grosscustomersalesbyitems";
+  const isGrossPurchasesByItems = slug === "accountingreports-grossvendorpurchasesbyitems";
   const isSalesOrPurchases = isSales || isPurchases;
 
   const columnLabel = (key: string) => reportColumnLabelForSlug(slug, key);
 
   const columns = useMemo(() => {
     if (!rows.length) return [];
-    const keys = Object.keys(rows[0] as object).filter((k) => !["drillSlug", "section"].includes(k));
+    const keys = Object.keys(rows[0] as object).filter(
+      (k) => !["drillSlug", "section"].includes(k) && !k.startsWith("_"),
+    );
     const order = isAccountStatement
       ? ACCOUNT_STATEMENT_COLUMN_ORDER
       : isCustomerItemStatement
@@ -398,12 +455,23 @@ export default function ReportHub({ title, section, icon, reports, procedure }: 
           ? SALES_COLUMN_ORDER
           : isPurchases
             ? PURCHASES_COLUMN_ORDER
-            : null;
+            : isCustomersSales
+              ? CUSTOMERS_SALES_COLUMN_ORDER
+              : isVendorsPurchases
+                ? VENDORS_PURCHASES_COLUMN_ORDER
+                : isGrossSalesByItems
+                  ? GROSS_SALES_BY_ITEMS_COLUMN_ORDER
+                  : isGrossPurchasesByItems
+                    ? GROSS_PURCHASES_BY_ITEMS_COLUMN_ORDER
+                    : null;
     if (!order) return keys;
     const preferred = order.filter((k) => keys.includes(k));
+    // لتقارير ميجا ذات ترتيب ثابت: لا نعرض أعمدة إضافية (مثل profit/itemCode) خارج ترتيب ميجا
+    const megaStrict = isCustomersSales || isVendorsPurchases || isGrossSalesByItems || isGrossPurchasesByItems || isSales || isPurchases;
+    if (megaStrict) return preferred.length ? preferred : keys;
     const rest = keys.filter((k) => !(order as readonly string[]).includes(k));
     return [...preferred, ...rest];
-  }, [rows, isAccountStatement, isCustomerItemStatement, isSales, isPurchases]);
+  }, [rows, isAccountStatement, isCustomerItemStatement, isSales, isPurchases, isCustomersSales, isVendorsPurchases, isGrossSalesByItems, isGrossPurchasesByItems]);
 
   const totals = useMemo(() => {
     // ميجا: الإجمالي صف داخل البيانات («اجمالي حركات الفترة») — لا نضاعفه في تذييل الجدول

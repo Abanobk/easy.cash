@@ -41,8 +41,10 @@ import {
   vendorsListReport,
   vendorsSummaryReport,
 } from "./accounting-data";
-import { and, desc, eq, gte, lte, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, lte, sql } from "drizzle-orm";
 import {
+  bankTransactions,
+  cashTransactions,
   customers,
   fixedAssets,
   installments,
@@ -204,48 +206,196 @@ const HANDLERS: Record<string, (db: Db, f: ReportFilters) => Promise<ReportRow[]
       { metric: "مدفوعات نقدية/بنكية", value: totalPaid, drillSlug: "accountingreports-payments", section: "accounting" },
     ];
   },
+  /**
+   * ميجا PDF: مسلسل | المنطقة | العميل | الاجمالي | الخصومات | الضرائب | اضافات | الصافي | المديونية | اخر بيع | اخر تحصيل
+   */
   "accountingreports-customerssales": async (db, f) => {
     const sales = await salesInvoicesReport(db, f);
-    const map = new Map<string, { customerName: string; branchName: string; areaName: string; total: number; paid: number; remaining: number; count: number }>();
+    type Row = {
+      customerId: number | null;
+      areaName: string;
+      customerName: string;
+      total: number;
+      discount: number;
+      tax: number;
+      additions: number;
+      net: number;
+      remaining: number;
+      lastSaleDate: string;
+    };
+    const map = new Map<string, Row>();
     for (const s of sales) {
+      const customerId = (s as { _customerId?: number | null })._customerId ?? null;
       const name = String(s.partyName || "غير محدد");
-      const cur = map.get(name) || {
-        customerName: name,
-        branchName: String(s.branchName || ""),
+      const key = customerId != null ? `id:${customerId}` : `name:${name}`;
+      const cur = map.get(key) || {
+        customerId,
         areaName: String(s.areaName || ""),
+        customerName: name,
         total: 0,
-        paid: 0,
+        discount: 0,
+        tax: 0,
+        additions: 0,
+        net: 0,
         remaining: 0,
-        count: 0,
+        lastSaleDate: "",
       };
-      cur.total += Number(s.total);
-      cur.paid += Number(s.paid);
-      cur.remaining += Number(s.remaining);
-      cur.count++;
-      map.set(name, cur);
+      cur.total += Number(s.subtotal) || 0;
+      cur.discount += Number(s.discount) || 0;
+      cur.tax += Number(s.tax) || 0;
+      cur.additions += Number(s.additions) || 0;
+      cur.net += Number(s.total) || 0;
+      cur.remaining += Number(s.remaining) || 0;
+      const d = String(s.date || "");
+      if (d && (!cur.lastSaleDate || d > cur.lastSaleDate)) cur.lastSaleDate = d;
+      if (!cur.areaName && s.areaName) cur.areaName = String(s.areaName);
+      map.set(key, cur);
     }
-    return Array.from(map.values());
+
+    const customerIds = Array.from(map.values())
+      .map((r) => r.customerId)
+      .filter((id): id is number => id != null);
+    const lastCollectionByCustomer = new Map<number, string>();
+    if (customerIds.length) {
+      const cashRows = await db
+        .select({
+          customerId: cashTransactions.customerId,
+          date: cashTransactions.date,
+          type: cashTransactions.type,
+        })
+        .from(cashTransactions)
+        .where(and(eq(cashTransactions.tenantId, f.tenantId), inArray(cashTransactions.customerId, customerIds)));
+      for (const r of cashRows) {
+        if (!r.customerId) continue;
+        if (!String(r.type || "").includes("receive")) continue;
+        const d = String(r.date || "").slice(0, 10);
+        const prev = lastCollectionByCustomer.get(r.customerId) || "";
+        if (d && (!prev || d > prev)) lastCollectionByCustomer.set(r.customerId, d);
+      }
+      const bankRows = await db
+        .select({
+          customerId: bankTransactions.customerId,
+          date: bankTransactions.date,
+          type: bankTransactions.type,
+        })
+        .from(bankTransactions)
+        .where(and(eq(bankTransactions.tenantId, f.tenantId), inArray(bankTransactions.customerId, customerIds)));
+      for (const r of bankRows) {
+        if (!r.customerId) continue;
+        if (!String(r.type || "").includes("deposit")) continue;
+        const d = String(r.date || "").slice(0, 10);
+        const prev = lastCollectionByCustomer.get(r.customerId) || "";
+        if (d && (!prev || d > prev)) lastCollectionByCustomer.set(r.customerId, d);
+      }
+    }
+
+    return Array.from(map.values())
+      .sort((a, b) => a.customerName.localeCompare(b.customerName, "ar"))
+      .map((r, idx) => ({
+        documentNumber: idx + 1,
+        areaName: r.areaName,
+        customerName: r.customerName,
+        total: r.total,
+        discount: r.discount,
+        tax: r.tax,
+        additions: r.additions,
+        net: r.net,
+        remaining: r.remaining,
+        lastSaleDate: r.lastSaleDate,
+        lastCollectionDate: r.customerId != null ? (lastCollectionByCustomer.get(r.customerId) || "") : "",
+      }));
   },
+  /**
+   * ميجا PDF: مسلسل | المورد | الاجمالي | الخصومات | الضرائب | الصافي | المديونية | اخر شراء | اخر سداد
+   */
   "accountingreports-vendorspurchases": async (db, f) => {
     const rows = await purchasesInvoicesReport(db, f);
-    const map = new Map<string, { vendorName: string; branchName: string; total: number; paid: number; remaining: number; count: number }>();
+    type Row = {
+      supplierId: number | null;
+      vendorName: string;
+      total: number;
+      discount: number;
+      tax: number;
+      net: number;
+      remaining: number;
+      lastPurchaseDate: string;
+    };
+    const map = new Map<string, Row>();
     for (const r of rows) {
+      const supplierId = (r as { _supplierId?: number | null })._supplierId ?? null;
       const name = String(r.partyName || "غير محدد");
-      const cur = map.get(name) || {
+      const key = supplierId != null ? `id:${supplierId}` : `name:${name}`;
+      const cur = map.get(key) || {
+        supplierId,
         vendorName: name,
-        branchName: String(r.branchName || ""),
         total: 0,
-        paid: 0,
+        discount: 0,
+        tax: 0,
+        net: 0,
         remaining: 0,
-        count: 0,
+        lastPurchaseDate: "",
       };
-      cur.total += Number(r.total);
-      cur.paid += Number(r.paid);
-      cur.remaining += Number(r.remaining);
-      cur.count++;
-      map.set(name, cur);
+      cur.total += Number(r.subtotal) || 0;
+      cur.discount += Number(r.discount) || 0;
+      cur.tax += Number(r.tax) || 0;
+      cur.net += Number(r.total) || 0;
+      cur.remaining += Number(r.remaining) || 0;
+      const d = String(r.date || "");
+      if (d && (!cur.lastPurchaseDate || d > cur.lastPurchaseDate)) cur.lastPurchaseDate = d;
+      map.set(key, cur);
     }
-    return Array.from(map.values());
+
+    const supplierIds = Array.from(map.values())
+      .map((r) => r.supplierId)
+      .filter((id): id is number => id != null);
+    const lastPaymentBySupplier = new Map<number, string>();
+    if (supplierIds.length) {
+      const cashRows = await db
+        .select({
+          supplierId: cashTransactions.supplierId,
+          date: cashTransactions.date,
+          type: cashTransactions.type,
+        })
+        .from(cashTransactions)
+        .where(and(eq(cashTransactions.tenantId, f.tenantId), inArray(cashTransactions.supplierId, supplierIds)));
+      for (const r of cashRows) {
+        if (!r.supplierId) continue;
+        const t = String(r.type || "");
+        if (!(t.includes("pay"))) continue;
+        const d = String(r.date || "").slice(0, 10);
+        const prev = lastPaymentBySupplier.get(r.supplierId) || "";
+        if (d && (!prev || d > prev)) lastPaymentBySupplier.set(r.supplierId, d);
+      }
+      const bankRows = await db
+        .select({
+          supplierId: bankTransactions.supplierId,
+          date: bankTransactions.date,
+          type: bankTransactions.type,
+        })
+        .from(bankTransactions)
+        .where(and(eq(bankTransactions.tenantId, f.tenantId), inArray(bankTransactions.supplierId, supplierIds)));
+      for (const r of bankRows) {
+        if (!r.supplierId) continue;
+        if (!String(r.type || "").includes("withdraw")) continue;
+        const d = String(r.date || "").slice(0, 10);
+        const prev = lastPaymentBySupplier.get(r.supplierId) || "";
+        if (d && (!prev || d > prev)) lastPaymentBySupplier.set(r.supplierId, d);
+      }
+    }
+
+    return Array.from(map.values())
+      .sort((a, b) => a.vendorName.localeCompare(b.vendorName, "ar"))
+      .map((r, idx) => ({
+        documentNumber: idx + 1,
+        vendorName: r.vendorName,
+        total: r.total,
+        discount: r.discount,
+        tax: r.tax,
+        net: r.net,
+        remaining: r.remaining,
+        lastPurchaseDate: r.lastPurchaseDate,
+        lastPaymentDate: r.supplierId != null ? (lastPaymentBySupplier.get(r.supplierId) || "") : "",
+      }));
   },
   "accountingreports-matureinvoices": matureInvoicesReport,
   "accountingreports-maturereceipts": matureReceiptsReport,

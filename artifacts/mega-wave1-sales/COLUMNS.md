@@ -77,3 +77,14 @@ Easy (قائمة فواتير مسطحة) — مطابقة صف الفاتورة
 
 - حقول ميجا الناقصة: اضافات، مصروفات، رقم المرجع.
 - تقارير التجميع (بالعملاء/بالأصناف): تسميات ميجا جاهزة في الخريطة؛ شكل الصفوف ما زال تجميع Easy وليس تخطيط PDF الهرمي.
+
+## Easy Cash mapping (wave-1 complete)
+
+| Mega report | Easy slug | Status |
+|---|---|---|
+| فواتير البيع | `accountingreports-sales` | columns + additions/expenses |
+| فواتير الشراء | `accountingreports-purchases` | columns + referenceNumber |
+| المبيعات بالعملاء | `accountingreports-customerssales` | Mega aggregate columns |
+| المشتريات بالموردين | `accountingreports-vendorspurchases` | Mega aggregate columns |
+| المبيعات بالأصناف | `accountingreports-grosscustomersalesbyitems` | salesQty/returnQty/unit… |
+| المشتريات بالأصناف | `accountingreports-grossvendorpurchasesbyitems` | purchaseQty/returnQty/unit… |

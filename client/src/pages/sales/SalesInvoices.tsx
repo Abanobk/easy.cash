@@ -57,6 +57,7 @@ const emptyForm = {
   paymentType: "cash" as "cash" | "credit",
   currencyCode: "EGP",
   exchangeRate: "1",
+  additions: "0",
   notes: "",
 };
 
@@ -232,6 +233,7 @@ export default function SalesInvoices() {
         paymentType: (inv.paymentType as "cash" | "credit") || "cash",
         currencyCode: inv.currencyCode || "EGP",
         exchangeRate: inv.exchangeRate?.toString() || "1",
+        additions: inv.additions != null ? String(inv.additions) : "0",
         notes: inv.notes || "",
       });
       setSettlement({
@@ -302,6 +304,7 @@ export default function SalesInvoices() {
         paymentType: isCashMode ? "cash" : ((inv.paymentType as "cash" | "credit") || "cash"),
         currencyCode: inv.currencyCode || "EGP",
         exchangeRate: inv.exchangeRate?.toString() || "1",
+        additions: inv.additions != null ? String(inv.additions) : "0",
         notes: `نسخة من الفاتورة ${inv.number}`,
       });
       setInvoiceItems(inv.items.map((i) => ({
@@ -397,7 +400,8 @@ export default function SalesInvoices() {
   const subtotal = invoiceItems.reduce((s, i) => s + Number(i.quantity) * Number(i.price) * (1 - Number(i.discount) / 100), 0);
   const taxTotal = invoiceItems.reduce((s, i) => s + Number(i.total) - Number(i.quantity) * Number(i.price) * (1 - Number(i.discount) / 100), 0)
     + invoiceTaxes.reduce((s, t) => s + Number(t.amount), 0);
-  const total = invoiceItems.reduce((s, i) => s + Number(i.total), 0) + invoiceTaxes.reduce((s, t) => s + Number(t.amount), 0);
+  const additionsAmt = Number(form.additions) || 0;
+  const total = (invoiceItems.reduce((s, i) => s + Number(i.total), 0) + invoiceTaxes.reduce((s, t) => s + Number(t.amount), 0)) + additionsAmt;
   const foreign = isForeignCurrency(form.currencyCode);
   const amountLabel = foreign ? form.currencyCode : "ج.م";
   const baseTotal = toBaseAmount(total, form.currencyCode, form.exchangeRate);
@@ -450,6 +454,7 @@ export default function SalesInvoices() {
       discount: "0",
       tax: toBaseAmount(taxTotal, form.currencyCode, rate).toFixed(2),
       total: toBaseAmount(total, form.currencyCode, rate).toFixed(2),
+      additions: form.additions || "0",
       notes: form.notes,
       taxes: invoiceTaxes.filter((t) => Number(t.amount) > 0),
       expenses: invoiceExpenses
@@ -597,6 +602,8 @@ export default function SalesInvoices() {
                   )}
                 </div>
                 <div className="col-span-2">
+                  <Label className="text-xs font-medium text-slate-700 mb-1.5 block">اضافات</Label>
+                  <Input type="number" value={form.additions} onChange={(e) => setForm((p) => ({ ...p, additions: e.target.value }))} className="h-9 text-sm" />
                   <Label className="text-xs font-medium text-slate-700 mb-1.5 block">ملاحظات</Label>
                   <Input value={form.notes} onChange={(e) => setForm((p) => ({ ...p, notes: e.target.value }))} placeholder="ملاحظات" className="h-9 text-sm" />
                 </div>
@@ -750,6 +757,10 @@ export default function SalesInvoices() {
                   <div className="flex justify-between text-sm text-slate-600">
                     <span>الضريبة:</span>
                     <span className="font-medium">{taxTotal.toLocaleString("en-US", { minimumFractionDigits: 2 })} {amountLabel}</span>
+                  </div>
+                  <div className="flex justify-between text-sm text-slate-600">
+                    <span>اضافات:</span>
+                    <span className="font-medium">{additionsAmt.toLocaleString("en-US", { minimumFractionDigits: 2 })} {amountLabel}</span>
                   </div>
                   <div className="flex justify-between text-base font-bold text-slate-800 border-t border-slate-200 pt-2">
                     <span>الإجمالي:</span>
