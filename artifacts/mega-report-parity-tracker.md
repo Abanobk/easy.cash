@@ -26,14 +26,14 @@ Nav fix: التحصيل والسداد → **الاستحقاقات** (`accounti
 ## Wave 1 — sales / purchases (in progress)
 | Easy slug | Filters | Columns |
 |-----------|---------|---------|
-| `accountingreports-sales` | filters_partial (+ item/category 2026-09-13) | columns_unknown — **need Mega Excel** |
+| `accountingreports-sales` | filters_partial (+ item/category 2026-09-13) | columns_unknown — **need Mega PDF** |
 | `accountingreports-customerssales` | filters_partial (from live scan) | columns_unknown |
 | `accountingreports-grosscustomersalesbyitems` | filters_partial | columns_unknown |
 | `accountingreports-purchases` | filters_partial (+ item/category) | columns_unknown |
 | `accountingreports-vendorspurchases` | filters_partial | columns_unknown |
 | `accountingreports-grossvendorpurchasesbyitems` | filters_partial | columns_unknown |
 
-Details + upload ask: `artifacts/mega-wave1-sales/WAVE1.md`
+Details + upload ask (PDF only, no Excel): `artifacts/mega-wave1-sales/WAVE1.md`
 
 ## Blocker
-Mega `ifViewer` blank + Excel download blocked in automation (same as P0). Need user Excel after عرض for wave-1 column labels.
+Mega `ifViewer` blank in automation (same as P0). **PDF after عرض** is enough for column labels — Excel not required for this wave.
