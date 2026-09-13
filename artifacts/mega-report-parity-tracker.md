@@ -53,7 +53,23 @@ Evidence: `artifacts/mega-wave2-sales/`
 
 Evidence: `artifacts/mega-wave3-inventory/`
 
+## Wave 4 — collection / checks / dues / accounting leftovers (2026-09-13)
+| Easy slug | Filters | Columns |
+|-----------|---------|---------|
+| `accountingreports-checks-checkout` | filters_partial | columns_done (PDF) |
+| `accountingreports-checks-checkin` | filters_partial | columns_done (PDF) |
+| `accountingreports-customersinstallments` | filters_partial | columns_done (PDF) |
+| `accountingreports-payments` | filters_partial | columns_done (PDF) |
+| `accountingreports-dues` | filters_partial | columns_done (PDF; data ≈ open sales invoices) |
+| `accountingreports-accountstatment-cash` | filters_partial | columns_done (PDF) |
+| `accountingreports-costcenterstatment` | filters_partial | columns_done (PDF) |
+| `accountingreports-dashboard` | filters_partial | columns_done (PDF cash balances) |
+| `accountingreports-branchessummary` | filters_partial | columns_done (PDF) |
+| `accountingreports-monthlyexpenses` | filters_partial | columns_done (PDF month pivot) |
+
+Evidence: `artifacts/mega-wave4-collection/`  
+Honesty: dues approximated from open sales invoices; dashboard Mega-shaped cash balances; check bank/deposit/branch enriched when linked.
+
 ## Remaining waves
-4. Collection/checks/dues + accounting leftovers  
 5. Final statements beyond TB/GL  
 6. Profits / reps / production / HR / assets
