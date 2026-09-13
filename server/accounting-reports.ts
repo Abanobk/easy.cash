@@ -178,6 +178,8 @@ const HANDLERS: Record<string, (db: Db, f: ReportFilters) => Promise<ReportRow[]
   "accountingreports-monthlysalesbyitems": (db, f) => salesByItemsReport(db, f, true),
   "accountingreports-monthlysalesbyitemstotals": monthlySalesTotalsReport,
   "accountingreports-payments": paymentsReport,
+  /** ميجا `/AccountingReports/Dues.aspx` — فلاتر مؤكدة؛ لا جدول استحقاقات في Easy بعد — رجّع فاضي لحد ما يتبني الكيان */
+  "accountingreports-dues": async () => [],
   "accountingreports-dashboard": async (db, f) => {
     const sales = await salesInvoicesReport(db, f);
     const purchases = await purchasesInvoicesReport(db, f);

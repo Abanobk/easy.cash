@@ -1,5 +1,5 @@
 {
-  "count": 76,
+  "count": 77,
   "items": [
     {
       "featureKey": "inv-mega-report-import",
@@ -304,6 +304,10 @@
     {
       "featureKey": "finalreports-cashflow",
       "megaUrl": "/FinalReports/CashFlow.aspx"
+    },
+    {
+      "featureKey": "accountingreports-dues",
+      "megaUrl": "/AccountingReports/Dues.aspx"
     }
   ]
 }

@@ -31,6 +31,8 @@ const ACCOUNTING_FILTERS: Record<string, ReportEntityFilter[]> = {
   "accountingreports-customerssales": ["customer", "branch", "area", "rep", "paymentType"],
   "accountingreports-vendorspurchases": ["supplier", "branch", "paymentType"],
   "accountingreports-payments": ["customer", "supplier", "branch"],
+  // ميجا Dues.aspx: الفرع، العملة، من/الى، اسم الحساب، رقم المرجع، حالة السداد
+  "accountingreports-dues": ["branch", "currency", "account", "paymentStatus"],
   "accountingreports-checks-checkin": ["customer"],
   "accountingreports-checks-checkout": ["supplier"],
   "accountingreports-matureinvoices": ["customer", "branch"],

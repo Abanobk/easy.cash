@@ -436,8 +436,9 @@ export const PERMISSION_TREE: PermModule[] = [
       { key: "accountingreports-vendorspurchases", label: "تقارير المشتريات ← المشتريات بالموردين", bundle: "REPORT_COST_WAREHOUSE" },
       { key: "accountingreports-vendorssummary", label: "تقارير المشتريات ← ملخص حركة الموردين", bundle: "REPORT_SECRET" },
       { key: "accountingreports-maturereceipts", label: "تقارير المشتريات ← فواتير شراء مستحقة", bundle: "REPORT" },
-      // تقارير التحصيل والسداد
+      // تقارير التحصيل والسداد (ميجا: شيكات / أقساط / معاملات / استحقاقات)
       { key: "accountingreports-customersinstallments", label: "تقارير التحصيل والسداد ← أقساط العملاء", bundle: "REPORT" },
+      { key: "accountingreports-dues", label: "تقارير التحصيل والسداد ← الاستحقاقات", bundle: "REPORT" },
       // تقارير الإنتاج
       { key: "accountingreports-productionorders", label: "تقارير الإنتاج ← أوامر الإنتاج", bundle: "REPORT_WAREHOUSE" },
       { key: "accountingreports-productionmaterials", label: "تقارير الإنتاج ← خامات وتوالف الإنتاج", bundle: "REPORT_WAREHOUSE" },
