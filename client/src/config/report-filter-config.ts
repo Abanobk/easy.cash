@@ -26,8 +26,10 @@ const ACCOUNTING_FILTERS: Record<string, ReportEntityFilter[]> = {
   "accountingreports-costcenterstatment": ["costCenter"],
   "accountingreports-customeraccountstatementbyitems": ["branch", "customer", "currency", "item"],
   "accountingreports-vendoraccountstatementbyitems": ["supplier", "item"],
-  "accountingreports-sales": ["customer", "branch", "warehouse", "rep", "area", "paymentType", "currency", "dueDate", "paymentStatus", "taxFilter", "discountFilter"],
-  "accountingreports-purchases": ["supplier", "branch", "warehouse", "paymentType", "currency", "dueDate", "paymentStatus", "taxFilter", "discountFilter"],
+  // ميجا Sales.aspx: فرع، عملة، تواريخ، استحقاق، مخزن، فئة، صنف، مندوب، منطقة، عميل، ضريبة، خصم، دفع، تحصيل…
+  "accountingreports-sales": ["customer", "branch", "warehouse", "rep", "area", "item", "category", "paymentType", "currency", "dueDate", "paymentStatus", "taxFilter", "discountFilter"],
+  // ميجا Purchases.aspx: نفس روح فلاتر البيع للمشتريات (+ مورد بدل عميل)
+  "accountingreports-purchases": ["supplier", "branch", "warehouse", "item", "category", "paymentType", "currency", "dueDate", "paymentStatus", "taxFilter", "discountFilter"],
   "accountingreports-customerssales": ["customer", "branch", "area", "rep", "paymentType"],
   "accountingreports-vendorspurchases": ["supplier", "branch", "paymentType"],
   "accountingreports-payments": ["customer", "supplier", "branch"],

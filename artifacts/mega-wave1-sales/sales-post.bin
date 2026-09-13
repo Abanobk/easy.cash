@@ -1,0 +1,520 @@
+
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" translate="no">
+<head><meta name="viewport" content="width=device-width, initial-scale=1.0" /><title>
+
+</title><meta name="format-detection" content="telephone=no" />
+    <link type="text/css" rel="stylesheet" href="/Styles/MasterPage-ar.css?cache=639248415580000000"></link><script type="text/javascript" src="/Scripts/jquery-3.7.1.min.js?cache=639248415580000000"></script><script type="text/javascript" src="/Scripts/jquery-impromptu.2.8.min.js?cache=639248415580000000"></script><script type="text/javascript" src="/Scripts/Autocomplete.js?cache=639248415580000000"></script><script type="text/javascript" src="/Scripts/Shortcut.js?cache=639248415580000000"></script><script type="text/javascript" src="/Scripts/MasterPage.js?cache=639248415580000000"></script><script type="text/javascript" src="/Scripts/BrowserFP.js?cache=639248415580000000"></script><script type="text/javascript" src="/Scripts/quagga.min.js?cache=639248415580000000"></script><script type="text/javascript" src="/Scripts/Barcode.js?cache=639248415580000000"></script><link href="/WebResource.axd?d=-H-7euyzCq22q5_s0z2InFUm0zpRE4OK4xFJtx0xgFB697D1GdvCCNipqzuYEY1PuDyd6YItAgIshFzEJrwMV5MqUealuCl2WXXKUd1WylfJ_CT4_ayjD4bpfUxLtLPeyGyKxg2&amp;t=638994950560000000" type="text/css" rel="stylesheet" /><link href="/WebResource.axd?d=hcXDZhXiidgsQUtEo5iT3_sMFexiM4ej7Na-ySQMbp6c40MQ1k3CQ0wTerArglnlIrnWFtKFJ8-BegKmh8BY1lcQrlTtd5q_nfT4szQA034XcXl2sGT3W-nT000GdxM28OQg8uuBTo7M5gsqU_ipbGHYjS41&amp;t=638994950560000000" type="text/css" rel="stylesheet" /></head>
+<body>
+    <script type="text/javascript">
+        let PopUpPages = ["Main/Attachments.aspx", "Main/Authorization.aspx"];
+        let IsPopUpPages = false;
+        if (window == window.top) {
+
+            PopUpPages.forEach(function (value) {
+                if (window.location.pathname.toLowerCase().indexOf(value.toLowerCase()) != -1) IsPopUpPages = true;
+            });
+
+            if (!IsPopUpPages) {
+                document.body.style.display = "none";
+                window.location = '../' + "?ReturnUrl=" + encodeURIComponent(window.top.location) + "&RemoveWinID=" +'622a5182-24e1-4373-bc7c-1ccc1f7fc601';
+            }
+        }
+    </script>
+    <form method="post" action="./Sales.aspx" id="form1">
+<input type="hidden" name="__VIEWSTATE" id="__VIEWSTATE" value="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" />
+
+
+<script type="text/javascript">
+//<![CDATA[
+var __cultureInfo = {"name":"ar-EG","numberFormat":{"CurrencyDecimalDigits":2,"CurrencyDecimalSeparator":".","IsReadOnly":false,"CurrencyGroupSizes":[3],"NumberGroupSizes":[3],"PercentGroupSizes":[3],"CurrencyGroupSeparator":",","CurrencySymbol":"ج.م.‏","NaNSymbol":"ليس رقمًا","CurrencyNegativePattern":8,"NumberNegativePattern":1,"PercentPositivePattern":1,"PercentNegativePattern":1,"NegativeInfinitySymbol":"-∞","NegativeSign":"-","NumberDecimalDigits":2,"NumberDecimalSeparator":".","NumberGroupSeparator":",","CurrencyPositivePattern":3,"PositiveInfinitySymbol":"∞","PositiveSign":"+","PercentDecimalDigits":2,"PercentDecimalSeparator":".","PercentGroupSeparator":",","PercentSymbol":"%","PerMilleSymbol":"‰","NativeDigits":["٠","١","٢","٣","٤","٥","٦","٧","٨","٩"],"DigitSubstitution":0},"dateTimeFormat":{"AMDesignator":"ص","Calendar":{"MinSupportedDateTime":"\/Date(-62135596800000)\/","MaxSupportedDateTime":"\/Date(253402293599999)\/","AlgorithmType":1,"CalendarType":1,"Eras":[1],"TwoDigitYearMax":2049,"IsReadOnly":false},"DateSeparator":"/","FirstDayOfWeek":6,"CalendarWeekRule":0,"FullDateTimePattern":"dd MMMM, yyyy hh:mm:ss tt","LongDatePattern":"dd MMMM, yyyy","LongTimePattern":"hh:mm:ss tt","MonthDayPattern":"dd MMMM","PMDesignator":"م","RFC1123Pattern":"ddd, dd MMM yyyy HH\u0027:\u0027mm\u0027:\u0027ss \u0027GMT\u0027","ShortDatePattern":"d/M/yyyy","ShortTimePattern":"hh:mm tt","SortableDateTimePattern":"yyyy\u0027-\u0027MM\u0027-\u0027dd\u0027T\u0027HH\u0027:\u0027mm\u0027:\u0027ss","TimeSeparator":":","UniversalSortableDateTimePattern":"yyyy\u0027-\u0027MM\u0027-\u0027dd HH\u0027:\u0027mm\u0027:\u0027ss\u0027Z\u0027","YearMonthPattern":"MMMM, yyyy","AbbreviatedDayNames":["الأحد","الإثنين","الثلاثاء","الأربعاء","الخميس","الجمعة","السبت"],"ShortestDayNames":["ح","ن","ث","ر","خ","ج","س"],"DayNames":["الأحد","الإثنين","الثلاثاء","الأربعاء","الخميس","الجمعة","السبت"],"AbbreviatedMonthNames":["يناير","فبراير","مارس","أبريل","مايو","يونيو","يوليو","أغسطس","سبتمبر","أكتوبر","نوفمبر","ديسمبر",""],"MonthNames":["يناير","فبراير","مارس","أبريل","مايو","يونيو","يوليو","أغسطس","سبتمبر","أكتوبر","نوفمبر","ديسمبر",""],"IsReadOnly":false,"NativeCalendarName":"التقويم الميلادي (تسمية إنجليزية)‏","AbbreviatedMonthGenitiveNames":["يناير","فبراير","مارس","أبريل","مايو","يونيو","يوليو","أغسطس","سبتمبر","أكتوبر","نوفمبر","ديسمبر",""],"MonthGenitiveNames":["يناير","فبراير","مارس","أبريل","مايو","يونيو","يوليو","أغسطس","سبتمبر","أكتوبر","نوفمبر","ديسمبر",""]},"eras":[1,"A.D.",null,0]};//]]>
+</script>
+
+<script src="/ScriptResource.axd?d=NJmAwtEo3Ipnlaxl6CMhvugyO-bP8rfouzzh0LZobz6VC-zi2RXHGFdbGWyDhcLNrEL29ZOaDEupGIOs2L9UEUVhIAOEEhP1-IqKDVQXdRFzLvxAO8f27B85uJ06-DhsMhBMUF4IwOZOwpDnZIusbq2oOTY1&amp;t=ffffffffa1bf0f7b" type="text/javascript"></script>
+<script src="../Main/StaticResource.ashx?Type=-1" type="text/javascript"></script>
+<script src="/ScriptResource.axd?d=eE6V8nDbUVn0gtG6hKNX_K2wNy00KPj-sS7rtKojMWEhd90jnSlzEU-52uHHTYj3jIk7uUHehDDqzHUfY3ujQiDLakluxRWEBrvVVfEEVNyZmeFm0&amp;t=7d5986a" type="text/javascript"></script>
+<script src="/ScriptResource.axd?d=piyPbtjygYPOgqKIxrUW5d3oTeeVF2-SKKqehHeJA80GqhIESZqTmcUpc1vAvdJmvwaNUlvw-7SmCORwnrylC5VN2WV8zYIeFs0cK-lzS1MjHMe2lVECg7FpXUtFsgPxSTzlhQ2&amp;t=7d5986a" type="text/javascript"></script>
+<script src="/ScriptResource.axd?d=mcAASOSteirJeuV-3by3UYegPa4FVMdH7WC8Dt9Wuo9k06FKJwG5phPLg8IKvU8eLYRYAjZO-cDjEfwL8eh7jJFjJhE1&amp;t=7d5986a" type="text/javascript"></script>
+<script src="/ScriptResource.axd?d=jwf4VSQi7LeShc44FJ-gAWlmjiGc-TqFRm7aldjJWQj9rYKGRzzeQu53jyO9Sog__ShsIcPOzSzae_avfaF619zDq7E76J3zK6arb5hh6caXH9rY0&amp;t=7d5986a" type="text/javascript"></script>
+<script src="/ScriptResource.axd?d=uiErWUqGhD5_ddnGX4Xq_v8N-viEw8MoMSWGiVrglUF14ORw3f9CgVnmbA2iH80s3EgiPoj8Q9M3AluM0_nhxkA2-2tyxjb6VmNLLbDxmvczBqzl0&amp;t=7d5986a" type="text/javascript"></script>
+<script src="/ScriptResource.axd?d=nai7mGcYyE2dix_TwveLDf2rMoSSjZDE0YBkBwIFgmAXarGN9KjdFxkQxlS8iFJld7X5EyTyLnFye-DwhxGEPu97slliS2vLdg5UY-CbSSyuoWNE0&amp;t=7d5986a" type="text/javascript"></script>
+<script src="/ScriptResource.axd?d=LQ1q2RBSthBAZhliMjtG_8CSP8lCFKIrnSqhmC3eMXXFkUwiyfQBzpyWQm8GunObaYQfQdKNl7fUe5Aw1ikE1J8ejTkLEBdGEHpIyrsXo3quGqkH0&amp;t=7d5986a" type="text/javascript"></script>
+<script src="/ScriptResource.axd?d=HEFpVKbnoeQjkjHkFKu3MEnE2wgY9e7BqYNNPsCkI5AARi7dM6yaBNTHDmpqYc3S9jsv5j1vO_CWWyPRamYzN2Ah9zRCahl_vAPzQF0inw0313yd0&amp;t=7d5986a" type="text/javascript"></script>
+<script src="/ScriptResource.axd?d=VOYD8Xe7kQA0lniBYXVpAuFI7EZ3xErvLu0nYp3IRZJTzywXp6CZrtmT4kyDWx4BRcM41Trtlgc8nGmdLPn6GHs_pnXZlPUgBofyvHpSk0FOw1ci0&amp;t=7d5986a" type="text/javascript"></script>
+<script src="/ScriptResource.axd?d=24039AtbfhsNBYQDFUMYHHgEgY-ZdZ_0oWeEO0bIZurtbBF6zCixGmu90WWJutccymTjBZdvgLBVbPjd-iXIDlYRZrU1&amp;t=7d5986a" type="text/javascript"></script>
+<script src="/ScriptResource.axd?d=myBlz7mQmGQE80F8-WeLsYWhZU4SM4bGnv6DyINH6FYpCIvw1TYZ80ZAFMmTj0tui_0zL7iTLbp0qxtxLPus04tt7Tc84stJDNx0Bh4Xns4qEovo0&amp;t=7d5986a" type="text/javascript"></script>
+<script src="/ScriptResource.axd?d=NISXSzp87hD3qcCkP6NEPvdHqY2pjZ1T2MaW67E16c3MeyqKIC34wKZp0TEp2JOYwXZ_wV1tIrqV9cFr1BrDM3TeY4-GxLOwQYj46qepkrr7Wlfi0&amp;t=7d5986a" type="text/javascript"></script>
+<script type="text/javascript">
+//<![CDATA[
+$(document).ready( function(){InitializeAutoComplete([{"HF":"cph_acBranch_hfAutocomplete","SM":"GetBranchs","CK":"","UK":"1e139bec-cc58-4c09-a3b0-27ed777581f1","UID":"ctl00$cph$acBranch$txtAutoCompleteText"},{"HF":"cph_acStore_hfAutocomplete","SM":"GetStores","CK":"VWUAbLeHLe0XDq_v5NWW-1GIuU_4AbqOLnHCINzQajOifr3FGgTBx30lsz6p0NmaZfZ1ZANydyXrfSvrq2cVcl6tOy-MzGnhklheK41Q8uTIJM860","APB":false,"UK":"ed40e1cf-1f6f-4019-afb3-ea11f4a7db6b","UID":"ctl00$cph$acStore$txtAutoCompleteText"},{"HF":"cph_acCategory_hfAutocomplete","SM":"GetItemsCategories","CK":"","UK":"e1598da3-4705-43a2-9692-872e81bcde52","UID":"ctl00$cph$acCategory$txtAutoCompleteText"},{"HF":"cph_acAltCategory_hfAutocomplete","SM":"GetItemsCategories","CK":"","UK":"029df27b-c26f-4aa3-b80d-5f4e410350dc","UID":"ctl00$cph$acAltCategory$txtAutoCompleteText"},{"HF":"cph_acItemName_hfAutocomplete","SM":"GetItems","CK":"9RyKQRtO9J66bDOT_7dndJ4qeTuh9we-J3t_L00tkyCKo5wIRYx5AQO28ZwMpT6-y81AXnwhOoGf_ibsp0S7J5rSTgE1","APB":false,"UK":"40b5708b-c272-4504-8aac-c4cc359f6e44","UID":"ctl00$cph$acItemName$txtAutoCompleteText"},{"HF":"cph_acSalesManager_hfAutocomplete","SM":"GetContactNames","CK":"IPRTB6nijGOt1CN11RKNewZzzaP97MgHd2QdH1YKml8UJ8qp6WY1D_lzqUGEEGt_5kWGMhISNrleQbsEdmexL04UN3c1","APB":false,"UK":"b7ec119b-a14a-4647-89c0-7b70d850803d","UID":"ctl00$cph$acSalesManager$txtAutoCompleteText"},{"HF":"cph_acSalesRep_hfAutocomplete","SM":"GetContactNames","CK":"bzL1xf0ErzfZrbIWFEFGqlF8Vw3n8KCFdVmyjxWC7snEmZzhiXngwARkZADNcoLQbv6mWBhRFsEeArcdgM5iBsw54py9e1sY9TcCNfNVi9VdiPgk0","APB":false,"UK":"e24152ac-90b7-4da3-be90-c1e2b328cad3","UID":"ctl00$cph$acSalesRep$txtAutoCompleteText"},{"HF":"cph_acCashAccount_hfAutocomplete","SM":"GetChartOfAccounts","CK":"u91u4kkGKJss9KbTamT9sFHtfODcDtwb7eyLaGYNby7Xxy0JwOcwuHQ3JM3-bn658aKW9js5RbVH62QKg6-Rz0gellfmeV90UV7HYkd9nPibmR5eScYyFCkMbzOplEVnWn2h-AOC9Y7-HKuizKMdYPcr50A1","APB":false,"IC":true,"UK":"22a8f08c-c93a-441f-9c10-11874a044da2","UID":"ctl00$cph$acCashAccount$txtAutoCompleteText"},{"HF":"cph_acVisaAccount_hfAutocomplete","SM":"GetChartOfAccounts","CK":"bThYT1h-4W-aQjMJ4gXTE07V_8LhNUb6N9BL5JQiZVuDh_405p54dYog4iRkifHq7xMC2ANipHhXpLQgldM0WIFo1zkK4zibZ1vpopaeh243GIwzVzeyL527C2dMJGNt5cOCaTt7cl6CpNqpIX8jkv9nrC01","APB":false,"IC":true,"UK":"5c3e1fa6-01b1-47e7-b9bb-e7d669ca26fd","UID":"ctl00$cph$acVisaAccount$txtAutoCompleteText"},{"HF":"cph_acShppingCompAccount_hfAutocomplete","SM":"GetChartOfAccounts","CK":"q-hW5JD2bcqgNEq0ndn7KjOJI1kYymx7p1E8HtSoRIvTXXzU10OkwXcRm5lHyjP8ezhNlEPQc2m1Vk768ZroLb-wzehiogGqkDqboilpwWJxRvvAN06o3WxFflPzF79E4A96xh6zrj48j3nLrbZjUcJ8uSw1","APB":false,"IC":true,"UK":"07d98152-efbf-4c36-bf9f-3bbbbc4cca8b","UID":"ctl00$cph$acShppingCompAccount$txtAutoCompleteText"},{"HF":"cph_acContactCategory_hfAutocomplete","SM":"GetContactsCategories","CK":"","APB":false,"UK":"c5ba0a30-3037-49ee-b4dd-84f1e44b637c","UID":"ctl00$cph$acContactCategory$txtAutoCompleteText"},{"HF":"cph_acPriceName_hfAutocomplete","SM":"GetGeneralAtt","CK":"24tjE5aDKBSfeHgV29Cm2vIuJeyki4HO8VlGpO7Ht5K_AGhq0kurNVmWpbOUNJF5RYFdeluSo-vj0IT_MG8qfz8UoTw1","APB":false,"UK":"8706cadb-e1d5-409c-be7e-19e344a76bb2","UID":"ctl00$cph$acPriceName$txtAutoCompleteText"},{"HF":"cph_acArea_hfAutocomplete","SM":"GetAreas","CK":"rSrIPI3DczGBtgMPrKK32g0Ve7t3W4tql28dWYoUzmF7k0wyBnFK1LgnPLdI-SLwewvxs8gFG09LHk1LNA3RaLeut3ozAR-VHBR5U9PVM-hAj8N60","APB":false,"UK":"61a8883a-6b4e-432b-b9da-ddcee8652601","UID":"ctl00$cph$acArea$txtAutoCompleteText"},{"HF":"cph_acCustomer_hfAutocomplete","SM":"GetContactNames","CK":"XV108DVGtc8T0y8_ph6httHs0iccTOiCKGkBu56uE2QvN6jQo_rrl0d6caxXiyTI2DbEzWg0pt6gj0BaUeGZGEjiByoQwQeoadWKmE5k0JcDJxOJyPfkdo-DCzpbA2ANDn-2TlDf9DQA4u9LVWFX2hcd7KuyK3yaE6Q_BpXTngb9eGWc0","IC":true,"UK":"d04d77fb-0ea9-4027-bcc9-45084109803f","UID":"ctl00$cph$acCustomer$txtAutoCompleteText"},{"HF":"cph_acCreatedBy_hfAutocomplete","SM":"GetContactNames","CK":"Ni8sYRk_JvHgYn_1IMUdB1ZFaJq889fESguK567G7y0IT7iFoo4rlx-b7VVi3SaWaEgXEh0UymMpD32X_tbPciZSCLE1","APB":false,"UK":"cc3a9e1c-39d7-4fae-97b5-93bf10ec1ef8","UID":"ctl00$cph$acCreatedBy$txtAutoCompleteText"},{"HF":"cph_acApprovedBy_hfAutocomplete","SM":"GetContactNames","CK":"hYzGyDH4oPnlSWO1bZt79Mg3sPXbp0a-3qL_mnVHwyH3WTTtxFJ_V1R_B8JWrTetlGgojtFKw-Kpr9JQq7rRdqVr3qg1","APB":false,"UK":"f1dc58c0-f73c-43f6-b187-b9d9ec2865e2","UID":"ctl00$cph$acApprovedBy$txtAutoCompleteText"}]);});//]]>
+</script>
+
+<input type="hidden" name="__VIEWSTATEGENERATOR" id="__VIEWSTATEGENERATOR" value="791B9A1A" />
+<input type="hidden" name="__VIEWSTATEENCRYPTED" id="__VIEWSTATEENCRYPTED" value="" />
+<input type="hidden" name="__EVENTVALIDATION" id="__EVENTVALIDATION" value="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" />
+        <input type="hidden" name="ctl00$hfViewStateKey" id="hfViewStateKey" />
+        <input type="hidden" name="ctl00$hfParentScrollY" id="hfParentScrollY" value="1433" />
+        <input type="submit" name="ctl00$btnHidden" value="" onclick="return false;" id="btnHidden" style="display: none" />
+        <div class="field"><input name="ctl00$txtHidden" type="text" id="txtHidden" class=" TextBox" OriginalValue="" int="true" inputmode="numeric" style="display: none" /></div>
+        
+
+        <div class="inProgressDiv" style="display: none;">
+            <span class="WaitWord">
+                <img src="../Images/Loading.png" alt="wait" />
+                <br />
+                برجاء الانتظار<br />
+                <img src="../Images/Loading.png" alt="wait" />
+            </span>
+        </div>
+
+        <div class="MainDiv">
+            <div id="MainTitle">
+                <div class="PageTitle">
+                    <img width="32" height="32" src="" alt="" id="pageImg" />
+
+                    <span id="lblPageTitle"></span>
+                    <div id="dvForPrints" class="dvForPrints">
+                        <div class="field"><select name="ctl00$ddlNumDecimals" id="ddlNumDecimals">
+	<option value="-4">تلقائي (4)</option>
+	<option value="-3">تلقائي (3)</option>
+	<option selected="selected" value="-2">تلقائي (2)</option>
+	<option value="-1">تلقائي (1)</option>
+	<option value="0">0</option>
+	<option value="1">1</option>
+	<option value="2">2</option>
+	<option value="3">3</option>
+	<option value="4">4</option>
+
+</select></div>
+                        <div class="field"><select name="ctl00$ddlNumAlign" id="ddlNumAlign">
+	<option value="0">يسار</option>
+	<option value="1">وسط</option>
+	<option selected="selected" value="2">يمين</option>
+
+</select></div>
+                        <div class="field"><select name="ctl00$ddlExcelFormat" id="ddlExcelFormat" class="excel">
+	<option value="0">اكسل بالتنسيق</option>
+	<option selected="selected" value="1">اكسل بدون تنسيق</option>
+
+</select></div>
+                        <div class="field"><select name="ctl00$ddlDisableLinks" id="ddlDisableLinks">
+	<option selected="selected" value="False">تفعيل الروابط</option>
+	<option value="True">تعطيل الروابط</option>
+
+</select></div>
+                        <div class="field"><select name="ctl00$ddlOverrideDatabases" id="ddlOverrideDatabases" current-value="KM-01_01_2022" onchange="PreventFalseChange(this,event);">
+	<option selected="selected" value="KM-01_01_2022">KM-01_01_2022</option>
+
+</select></div>
+                    </div>
+                </div>
+
+                <div class="NoMobile sidelogo">
+                    <img src="../Uploads/logos/company.jpg?cache=639249096418160741" id="imgSideLogo" height="75" alt="Mega Cash" />
+                </div>
+                <hr style="clear: both;" />
+                
+            </div>
+            <div id="upnHeader">
+	
+                    <div class="divNav">
+                        <div class="NavBtnWrapper">
+                            <a id="lnkGoBack" tabindex="-1" title="الى الخلف" class="Navbtn" onclick="OpenPage(&#39;/GoBack&#39;)" href="javascript:void(0)"><img src="/Images/Backbtn.png"/></a>
+                            <a id="lnkGoForward" tabindex="-1" title="الى الامام" class="Navbtn" onclick="OpenPage(&#39;/GoForward&#39;)" href="javascript:void(0)"><img src="/Images/Forebtn.png"  /></a>
+                            <a id="lnkRefresh" tabindex="-1" title="اعادة تحميل الصفحة" class="Refresh" onclick="OpenPage(window.location)" href="javascript:void(0)"><img src="/Images/Refresh-button.png"  /></a>
+                            
+                            <input type="image" name="ctl00$btnAddFav" id="btnAddFav" tabindex="-1" title="اضافة الى المفضلة" class="AddFav" src="../Images/AddToFav.png" />
+                            <input type="image" name="ctl00$btnLayoutMode" id="btnLayoutMode" tabindex="-1" title="نظام العرض" class="LayoutMode" src="../Images/NormalView.png" onclick="return CheckIsAllChangesSaved();" />
+                            
+                            
+                            
+                            
+                        </div>
+                    </div>
+                    <input type="hidden" id="pnlComment_IsCollapsed" name="ctl00$pnlComment_IsCollapsed" value="true" /><div id="pnlComment" class="pnlComment pnl_collapsable" style="display:none;">
+		
+                        <div class="content">
+                            <div class="commentsContainer">
+                                
+
+                                <div class="field"><textarea name="ctl00$txtComment" rows="2" cols="20" id="txtComment" class="commentInput TextBox" OriginalValue="">
+</textarea></div>
+                                <div class="btnDiv">
+                                    <input type="submit" name="ctl00$btnAddComment" value="اضافة تعليق" onclick="javascript:WebForm_DoPostBackWithOptions(new WebForm_PostBackOptions(&quot;ctl00$btnAddComment&quot;, &quot;&quot;, true, &quot;AddComment&quot;, &quot;&quot;, false, false))" id="btnAddComment" class="button" />
+                                </div>
+                            </div>
+                        </div>
+                    
+	</div>
+                    <div id="BracodeCamContainer">
+                        <div id="BarcodeCounter">العدد: <span class="counter">0</span></div>
+                        <button id="BracodeCamClose" class="closebtn" title="اغلاق"></button>
+                        <video id="BarcodeVideo" autoplay="autoplay" playsinline="true" muted="muted"></video>
+                        <div id="BarcodeScanArea"></div>
+                    </div>
+                
+</div>
+            <div style="clear: both;"></div>
+            
+            <div id="upnMainUpdatePanel">
+	
+                    <input type="hidden" name="ctl00$hfReqUUID" id="hfReqUUID" value="94c1536f-5d5e-4d6b-a8ea-c1c1e07c5ee4" />
+                    
+    <a id="cph_lnkSearch" class="collapse_search_link" href="javascript:__doPostBack(&#39;ctl00$cph$lnkSearch&#39;,&#39;&#39;)">بحث</a>
+
+    <input type="hidden" id="cph_pnlSearch_IsCollapsed" name="ctl00$cph$pnlSearch_IsCollapsed" value="false" /><div id="cph_pnlSearch" class="pnlSearch pnl_collapsable">
+		
+        <div class="tcat">
+            <span>بحث</span>
+        </div>
+        <div class="content">
+            <div class="form">
+                <div class="right_col">
+                    <div id="cph_acBranch_dvMain" class="field">
+    <label id="cph_acBranch_label">
+        الفرع</label>
+    <input name="ctl00$cph$acBranch$txtAutoCompleteText" type="text" id="cph_acBranch_txtAutoCompleteText" class="AutoCompleteText TextBox" />
+    <input name="ctl00$cph$acBranch$hfAutocomplete" type="text" id="cph_acBranch_hfAutocomplete" class="hf_Autocomplete" />
+    
+</div>
+
+                    <div class="field"><label id="cph_ddlCurrency_label">العملة</label><select name="ctl00$cph$ddlCurrency" id="cph_ddlCurrency" current-value="-1" onchange="PreventFalseChange(this,event);">
+			<option selected="selected" value="-1">اختر</option>
+			<option value="3">جنيه مصري</option>
+			<option value="7">جنيه استرليني</option>
+			<option value="19">جنيه سوداني</option>
+			<option value="16">درهم اماراتي</option>
+			<option value="20">درهم مغربي</option>
+			<option value="2">دولار امريكي</option>
+			<option value="9">دينار اردني</option>
+			<option value="6">دينار عراقي</option>
+			<option value="10">دينار كويتي</option>
+			<option value="11">دينار ليبي</option>
+			<option value="14">روبل روسي</option>
+			<option value="4">روبية هندي</option>
+			<option value="5">ريال ايراني</option>
+			<option value="15">ريال سعودي</option>
+			<option value="12">ريال عماني</option>
+			<option value="13">ريال قطري</option>
+			<option value="18">ريال يمني</option>
+			<option value="8">ين ياباني</option>
+			<option value="17">يوان صيني</option>
+			<option value="1">يورو</option>
+
+		</select></div>
+                    <div class="field"><label id="cph_txtDateFrom_label">من تاريخ</label><input name="ctl00$cph$txtDateFrom" type="text" id="cph_txtDateFrom" class=" TextBox" OriginalValue="" autocomplete="off" date="true" inputmode="numeric" /></div>
+                    <div class="field"><label id="cph_txtDateTo_label">الى تاريخ</label><input name="ctl00$cph$txtDateTo" type="text" id="cph_txtDateTo" class=" TextBox" OriginalValue="" autocomplete="off" date="true" inputmode="numeric" /></div>
+                    <div class="field"><label id="cph_txtMatDateFrom_label">تاريخ استحقاق من</label><input name="ctl00$cph$txtMatDateFrom" type="text" id="cph_txtMatDateFrom" class=" TextBox" OriginalValue="" autocomplete="off" date="true" inputmode="numeric" /></div>
+                    <div class="field"><label id="cph_txtMatDateTo_label">تاريخ استحقاق الى</label><input name="ctl00$cph$txtMatDateTo" type="text" id="cph_txtMatDateTo" class=" TextBox" OriginalValue="" autocomplete="off" date="true" inputmode="numeric" /></div>
+                    <div id="cph_acStore_dvMain" class="field">
+    <label id="cph_acStore_label">
+        المخزن</label>
+    <input name="ctl00$cph$acStore$txtAutoCompleteText" type="text" id="cph_acStore_txtAutoCompleteText" class="AutoCompleteText TextBox" />
+    <input name="ctl00$cph$acStore$hfAutocomplete" type="text" id="cph_acStore_hfAutocomplete" class="hf_Autocomplete" />
+    
+</div>
+
+                    <div class="field"><label id="cph_txtBarcode_label">الباركود</label><input name="ctl00$cph$txtBarcode" type="text" id="cph_txtBarcode" class=" TextBox barcode" OriginalValue="" inputmode="numeric" /></div>
+                    <div id="cph_acCategory_dvMain" class="field">
+    <label id="cph_acCategory_label">
+        الفئة</label>
+    <input name="ctl00$cph$acCategory$txtAutoCompleteText" type="text" id="cph_acCategory_txtAutoCompleteText" class="AutoCompleteText TextBox" />
+    <input name="ctl00$cph$acCategory$hfAutocomplete" type="text" id="cph_acCategory_hfAutocomplete" class="hf_Autocomplete" />
+    
+</div>
+
+                    <div id="cph_acAltCategory_dvMain" class="field">
+    <label id="cph_acAltCategory_label">
+        فئة بديلة</label>
+    <input name="ctl00$cph$acAltCategory$txtAutoCompleteText" type="text" id="cph_acAltCategory_txtAutoCompleteText" class="AutoCompleteText TextBox" />
+    <input name="ctl00$cph$acAltCategory$hfAutocomplete" type="text" id="cph_acAltCategory_hfAutocomplete" class="hf_Autocomplete" />
+    
+</div>
+
+                    <div id="cph_acItemName_dvMain" class="field">
+    <label id="cph_acItemName_label">
+        الصنف</label>
+    <input name="ctl00$cph$acItemName$txtAutoCompleteText" type="text" id="cph_acItemName_txtAutoCompleteText" class="AutoCompleteText TextBox" />
+    <input name="ctl00$cph$acItemName$hfAutocomplete" type="text" id="cph_acItemName_hfAutocomplete" class="hf_Autocomplete" />
+    
+</div>
+
+                    <div id="cph_acSalesManager_dvMain" class="field">
+    <label id="cph_acSalesManager_label">
+        مدير المبيعات</label>
+    <input name="ctl00$cph$acSalesManager$txtAutoCompleteText" type="text" id="cph_acSalesManager_txtAutoCompleteText" class="AutoCompleteText TextBox" />
+    <input name="ctl00$cph$acSalesManager$hfAutocomplete" type="text" id="cph_acSalesManager_hfAutocomplete" class="hf_Autocomplete" />
+    
+</div>
+
+                    <div id="cph_acSalesRep_dvMain" class="field">
+    <label id="cph_acSalesRep_label">
+        مندوب المبيعات</label>
+    <input name="ctl00$cph$acSalesRep$txtAutoCompleteText" type="text" id="cph_acSalesRep_txtAutoCompleteText" class="AutoCompleteText TextBox" />
+    <input name="ctl00$cph$acSalesRep$hfAutocomplete" type="text" id="cph_acSalesRep_hfAutocomplete" class="hf_Autocomplete" />
+    
+</div>
+
+                    <div id="cph_acCashAccount_dvMain" class="field">
+    <label id="cph_acCashAccount_label">
+        حساب الخزينة</label>
+    <input name="ctl00$cph$acCashAccount$txtAutoCompleteText" type="text" id="cph_acCashAccount_txtAutoCompleteText" class="AutoCompleteText TextBox" />
+    <input name="ctl00$cph$acCashAccount$hfAutocomplete" type="text" id="cph_acCashAccount_hfAutocomplete" class="hf_Autocomplete" />
+    
+</div>
+
+                    <div id="cph_acVisaAccount_dvMain" class="field">
+    <label id="cph_acVisaAccount_label">
+        حساب البنك</label>
+    <input name="ctl00$cph$acVisaAccount$txtAutoCompleteText" type="text" id="cph_acVisaAccount_txtAutoCompleteText" class="AutoCompleteText TextBox" />
+    <input name="ctl00$cph$acVisaAccount$hfAutocomplete" type="text" id="cph_acVisaAccount_hfAutocomplete" class="hf_Autocomplete" />
+    
+</div>
+
+                    <div id="cph_acShppingCompAccount_dvMain" class="field">
+    <label id="cph_acShppingCompAccount_label">
+        حساب شركة الشحن</label>
+    <input name="ctl00$cph$acShppingCompAccount$txtAutoCompleteText" type="text" id="cph_acShppingCompAccount_txtAutoCompleteText" class="AutoCompleteText TextBox" />
+    <input name="ctl00$cph$acShppingCompAccount$hfAutocomplete" type="text" id="cph_acShppingCompAccount_hfAutocomplete" class="hf_Autocomplete" />
+    
+</div>
+
+                    <div id="cph_acContactCategory_dvMain" class="field">
+    <label id="cph_acContactCategory_label">
+        فئة العميل / المورد</label>
+    <input name="ctl00$cph$acContactCategory$txtAutoCompleteText" type="text" id="cph_acContactCategory_txtAutoCompleteText" class="AutoCompleteText TextBox" />
+    <input name="ctl00$cph$acContactCategory$hfAutocomplete" type="text" id="cph_acContactCategory_hfAutocomplete" class="hf_Autocomplete" />
+    
+</div>
+
+                    <div id="cph_acPriceName_dvMain" class="field">
+    <label id="cph_acPriceName_label">
+        نوع سعر العميل</label>
+    <input name="ctl00$cph$acPriceName$txtAutoCompleteText" type="text" id="cph_acPriceName_txtAutoCompleteText" class="AutoCompleteText TextBox" />
+    <input name="ctl00$cph$acPriceName$hfAutocomplete" type="text" id="cph_acPriceName_hfAutocomplete" class="hf_Autocomplete" />
+    
+</div>
+
+                </div>
+                <div class="left_col">
+                    <div id="cph_acArea_dvMain" class="field">
+    <label id="cph_acArea_label">
+        المنطقة</label>
+    <input name="ctl00$cph$acArea$txtAutoCompleteText" type="text" id="cph_acArea_txtAutoCompleteText" class="AutoCompleteText TextBox" />
+    <input name="ctl00$cph$acArea$hfAutocomplete" type="text" id="cph_acArea_hfAutocomplete" class="hf_Autocomplete" />
+    
+</div>
+
+                    <div id="cph_acCustomer_dvMain" class="field">
+    <label id="cph_acCustomer_label">
+        العميل</label>
+    <input name="ctl00$cph$acCustomer$txtAutoCompleteText" type="text" id="cph_acCustomer_txtAutoCompleteText" class="AutoCompleteText TextBox" />
+    <input name="ctl00$cph$acCustomer$hfAutocomplete" type="text" id="cph_acCustomer_hfAutocomplete" class="hf_Autocomplete" />
+    
+</div>
+
+                    <div id="cph_acContactBranch_dvMain" class="field">
+    <label id="cph_acContactBranch_label">
+        فرع العميل</label>
+    <input name="ctl00$cph$acContactBranch$txtAutoCompleteText" type="text" id="cph_acContactBranch_txtAutoCompleteText" class="AutoCompleteText TextBox" />
+    <input name="ctl00$cph$acContactBranch$hfAutocomplete" type="text" id="cph_acContactBranch_hfAutocomplete" class="hf_Autocomplete" />
+    
+</div>
+
+
+                    <div class="field"><label id="cph_ddlDocType_label">النوع</label><select name="ctl00$cph$ddlDocType" id="cph_ddlDocType">
+			<option selected="selected" value="-1">اختر</option>
+			<option value="0">طلبات البيع</option>
+			<option value="1">فاتورة مبيعات</option>
+			<option value="3">فاتورة مبيعات نقدية</option>
+			<option value="4">فاتورة مبيعات اجلة</option>
+			<option value="5">فاتورة مردود مبيعات</option>
+
+		</select></div>
+
+                    <div class="field"><label id="cph_ddlOrderStatus_label">حالة طلب البيع</label><select name="ctl00$cph$ddlOrderStatus" id="cph_ddlOrderStatus">
+			<option selected="selected" value="-1">اختر</option>
+			<option value="0">تم الغاؤه</option>
+			<option value="1">ليس له فاتورة معتمدة</option>
+			<option value="2">له فاتورة معتمدة</option>
+
+		</select></div>
+                    <div class="field"><label id="cph_ddlTaxy_label">الضريبة</label><select name="ctl00$cph$ddlTaxy" id="cph_ddlTaxy">
+			<option selected="selected" value="-1">اختر</option>
+			<option value="0">ضريبية</option>
+			<option value="1">غير ضريبية</option>
+
+		</select></div>
+                    <div class="field"><label id="cph_ddlDiscount_label">الخصم</label><select name="ctl00$cph$ddlDiscount" id="cph_ddlDiscount">
+			<option selected="selected" value="-1">اختر</option>
+			<option value="0">بخصم</option>
+			<option value="1">بدون خصم</option>
+
+		</select></div>
+                    <div class="field"><label id="cph_ddlFirstPaidMethod_label">طريقة الدفع</label><select name="ctl00$cph$ddlFirstPaidMethod" id="cph_ddlFirstPaidMethod">
+			<option selected="selected" value="-1">اختر</option>
+			<option value="0">نقدي</option>
+			<option value="1">البنك</option>
+			<option value="2">نقدي / بنكي</option>
+			<option value="3">بدون دفع</option>
+
+		</select></div>
+                    <div class="field"><label id="cph_ddlDueStatus_label">حالة التحصيل / السداد</label><select name="ctl00$cph$ddlDueStatus" id="cph_ddlDueStatus">
+			<option selected="selected" value="-1">اختر</option>
+			<option value="0">غير مستحق التحصيل / السداد</option>
+			<option value="1">مستحق التحصيل / السداد</option>
+
+		</select></div>
+                    <div class="field"><label id="cph_ddleInvoiceMode_label">نظام الضرائب الالكترونية</label><select name="ctl00$cph$ddleInvoiceMode" id="cph_ddleInvoiceMode">
+			<option selected="selected" value="-1">اختر</option>
+			<option value="0">تعطيل</option>
+			<option value="1">الفاتورة الالكترونية المصرية</option>
+			<option value="2">الايصال الالكتروني المصري</option>
+			<option value="3">الفاتورة الالكترونية المصرية للتصدير</option>
+			<option value="4">فاتورة سعودية ضريبية</option>
+			<option value="5">فاتورة سعودية ضريبية مبسّطة</option>
+
+		</select></div>
+                    <div class="field"><label id="cph_txtUserRefNo_label">رقم المرجع</label><input name="ctl00$cph$txtUserRefNo" type="text" id="cph_txtUserRefNo" class=" TextBox" OriginalValue="" /></div>
+                    <div id="cph_acCreatedBy_dvMain" class="field">
+    <label id="cph_acCreatedBy_label">
+        انشأ بواسطة</label>
+    <input name="ctl00$cph$acCreatedBy$txtAutoCompleteText" type="text" id="cph_acCreatedBy_txtAutoCompleteText" class="AutoCompleteText TextBox" />
+    <input name="ctl00$cph$acCreatedBy$hfAutocomplete" type="text" id="cph_acCreatedBy_hfAutocomplete" class="hf_Autocomplete" />
+    
+</div>
+
+                    <div id="cph_acApprovedBy_dvMain" class="field">
+    <label id="cph_acApprovedBy_label">
+        اعتمد بواسطة</label>
+    <input name="ctl00$cph$acApprovedBy$txtAutoCompleteText" type="text" id="cph_acApprovedBy_txtAutoCompleteText" class="AutoCompleteText TextBox" />
+    <input name="ctl00$cph$acApprovedBy$hfAutocomplete" type="text" id="cph_acApprovedBy_hfAutocomplete" class="hf_Autocomplete" />
+    
+</div>
+
+                    <div class="field"><label id="cph_txtFromNetTotal_label">من صافي</label><input name="ctl00$cph$txtFromNetTotal" type="text" id="cph_txtFromNetTotal" class=" TextBox" OriginalValue="" decimal="true" inputmode="decimal" /></div>
+                    <div class="field"><label id="cph_txtToNetTotal_label">الى صافي</label><input name="ctl00$cph$txtToNetTotal" type="text" id="cph_txtToNetTotal" class=" TextBox" OriginalValue="" decimal="true" inputmode="decimal" /></div>
+                    <div class="field"><label id="cph_txtNotes_label">ملاحظات</label><input name="ctl00$cph$txtNotes" type="text" id="cph_txtNotes" class=" TextBox" OriginalValue="" /></div>
+                    <div class="field"><label id="cph_ddlOrderBy_label">ترتيب ب</label><select name="ctl00$cph$ddlOrderBy" id="cph_ddlOrderBy">
+			<option selected="selected" value="0">التاريخ</option>
+			<option value="1">الاعلى اجمالي</option>
+			<option value="2">الاعلى صافي</option>
+			<option value="3">الاعلى خصما</option>
+			<option value="4">المسلسل</option>
+
+		</select></div>
+                    <div class="field"><label class="CheckBoxContainer"><input id="cph_chksShowNotes" type="checkbox" name="ctl00$cph$chksShowNotes" /><span class="checkmark"></span><span class="lablelText">عرض الملاحظات</span></label></div>
+                    <div class="field"><label class="CheckBoxContainer"><input id="cph_chkHideDetails" type="checkbox" name="ctl00$cph$chkHideDetails" /><span class="checkmark"></span><span class="lablelText">اخفاء التفاصيل</span></label></div>
+                    <div class="field"><label class="CheckBoxContainer"><input id="cph_chkHideAreas" type="checkbox" name="ctl00$cph$chkHideAreas" /><span class="checkmark"></span><span class="lablelText">اخفاء المناطق</span></label></div>
+                    <div class="field"><label class="CheckBoxContainer"><input id="cph_chkHideReps" type="checkbox" name="ctl00$cph$chkHideReps" /><span class="checkmark"></span><span class="lablelText">اخفاء المناديب</span></label></div>
+                </div>
+            </div>
+            <div style="clear: both;">
+            </div>
+            <div class="btnDiv">
+                <input type="submit" name="ctl00$cph$btnShow" value="عرض" onclick="javascript:WebForm_DoPostBackWithOptions(new WebForm_PostBackOptions(&quot;ctl00$cph$btnShow&quot;, &quot;&quot;, true, &quot;search&quot;, &quot;&quot;, false, false))" id="cph_btnShow" class="button" />
+                <input type="submit" name="ctl00$cph$btnExportToExcel" value="تصدير لاكسل" onclick="javascript:WebForm_DoPostBackWithOptions(new WebForm_PostBackOptions(&quot;ctl00$cph$btnExportToExcel&quot;, &quot;&quot;, true, &quot;search&quot;, &quot;&quot;, false, false))" id="cph_btnExportToExcel" class="button" />
+                <input type="submit" name="ctl00$cph$btnClearSrch" value="تفريغ" id="cph_btnClearSrch" class="button" />
+            </div>
+        </div>
+    
+	</div>
+    <iframe id="cph_ifViewer" name="ifViewer" class="ifViewer" scrolling="yes" frameborder="0"></iframe>
+
+                
+</div>
+            <br />
+            
+            
+            
+        </div>
+    
+
+<script type="text/javascript">
+//<![CDATA[
+Sys.Extended.UI.Localization.SetLocale("ar");window._IsHaveUnSavedChanges=false; window.parent._IsHaveUnSavedChanges=false;Sys.Application.add_init(function() {
+    $create(Sys.Extended.UI.CalendarBehavior, {"format":"d/M/yyyy","id":"cph_ctl13","popupPosition":1}, {"shown":onCalendarClientShown}, null, $get("cph_txtDateFrom"));
+});
+Sys.Application.add_init(function() {
+    $create(Sys.Extended.UI.CalendarBehavior, {"format":"d/M/yyyy","id":"cph_ctl14","popupPosition":1}, {"shown":onCalendarClientShown}, null, $get("cph_txtDateTo"));
+});
+Sys.Application.add_init(function() {
+    $create(Sys.Extended.UI.CalendarBehavior, {"format":"d/M/yyyy","id":"cph_ctl15","popupPosition":1}, {"shown":onCalendarClientShown}, null, $get("cph_txtMatDateFrom"));
+});
+Sys.Application.add_init(function() {
+    $create(Sys.Extended.UI.CalendarBehavior, {"format":"d/M/yyyy","id":"cph_ctl16","popupPosition":1}, {"shown":onCalendarClientShown}, null, $get("cph_txtMatDateTo"));
+});
+//]]>
+</script>
+</form>
+    <script type="text/javascript">
+        var fiscalYearStart = '1/1/2022';
+        var fiscalYearEnd = '31/12/2026';
+        var WinID = '622a5182-24e1-4373-bc7c-1ccc1f7fc601';
+        var appRootPath = '../'
+        function SetPageTitle() {
+            $(".treeview li a", window.parent.document).removeClass("ActiveMenuLink");
+            $("a[name=pageID_" + '173' + "]", window.parent.document).addClass("ActiveMenuLink");
+            $("#pageImg").attr("src", '../Images/mod-reports.png');
+            $("#lblPageTitle").text('البيع');
+            $("title", window.parent.document).text('Mega Cash | ' + 'البيع');
+        }
+
+
+        $(document).ready(function () {
+            if (window != window.top &&
+                !new URLSearchParams(window.location.search).has("OverrideDatabase") &&
+                window.parent.TheXData != 'eCaONV+iYJx4A0SpGq/ODu5FOZixQA5exIa0g93gZfY=') {
+                window.parent.location.reload();
+            }
+        });
+
+        function WebForm_OnSubmit() {
+
+            $("input").removeClass("ErrorValidateControl");
+            if (typeof (ValidatorOnSubmit) == "function" && ValidatorOnSubmit() == false) {
+                for (var i in Page_Validators) {
+
+                    try {
+                        var control = document.getElementById(Page_Validators[i].controltovalidate);
+                        if (!Page_Validators[i].isvalid) {
+
+                            if ($(control).attr("class") != undefined && $(control).attr("class").indexOf("hf_Autocomplete") != -1) {
+                                $(control).prevAll("input").addClass("ErrorValidateControl");
+                            }
+                            else {
+
+                                $(control).addClass("ErrorValidateControl");
+                            }
+                        }
+                    } catch (e) { }
+                }
+                isValidationSuccess = false;
+                return false;
+            }
+            isValidationSuccess = true;
+            return true;
+        }
+
+        function WebForm_TextBoxKeyHandler(event) {
+
+            if (event.keyCode == 13) {
+
+                let target = event.target || event.srcElement;
+                if (target.value == $(target).attr("OriginalValue")) return true;
+
+                if ((typeof (target) != "undefined") && (target != null)) {
+                    if (typeof (target.onchange) != "undefined") {
+                        target.onchange();
+                        event.cancelBubble = true;
+                        if (event.stopPropagation) event.stopPropagation();
+                        return ($(target).closest('table.grd').length > 0);
+                    }
+                }
+            }
+            return true;
+        }
+
+    </script>
+</body>
+</html>

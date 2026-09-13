@@ -350,6 +350,33 @@ export default function ReportHub({ title, section, icon, reports, procedure }: 
     "description",
   ] as const;
 
+  /** ترتيب أعمدة فواتير البيع/الشراء — حقول Easy الحالية بترتيب منطقي (أعمدة ميجا من الإكسل لاحقاً) */
+  const SALES_PURCHASES_COLUMN_ORDER = [
+    "documentNumber",
+    "date",
+    "dueDate",
+    "partyCode",
+    "partyName",
+    "branchName",
+    "warehouseName",
+    "repName",
+    "areaName",
+    "currencyCode",
+    "exchangeRate",
+    "foreignTotal",
+    "subtotal",
+    "discount",
+    "tax",
+    "total",
+    "paid",
+    "remaining",
+    "paymentType",
+    "status",
+  ] as const;
+
+  const isSalesOrPurchases =
+    slug === "accountingreports-sales" || slug === "accountingreports-purchases";
+
   const columns = useMemo(() => {
     if (!rows.length) return [];
     const keys = Object.keys(rows[0] as object).filter((k) => !["drillSlug", "section"].includes(k));
@@ -357,12 +384,14 @@ export default function ReportHub({ title, section, icon, reports, procedure }: 
       ? ACCOUNT_STATEMENT_COLUMN_ORDER
       : isCustomerItemStatement
         ? CUSTOMER_ITEM_STATEMENT_COLUMN_ORDER
-        : null;
+        : isSalesOrPurchases
+          ? SALES_PURCHASES_COLUMN_ORDER
+          : null;
     if (!order) return keys;
     const preferred = order.filter((k) => keys.includes(k));
     const rest = keys.filter((k) => !(order as readonly string[]).includes(k));
     return [...preferred, ...rest];
-  }, [rows, isAccountStatement, isCustomerItemStatement]);
+  }, [rows, isAccountStatement, isCustomerItemStatement, isSalesOrPurchases]);
 
   const totals = useMemo(() => {
     // ميجا: الإجمالي صف داخل البيانات («اجمالي حركات الفترة») — لا نضاعفه في تذييل الجدول
@@ -628,7 +657,7 @@ export default function ReportHub({ title, section, icon, reports, procedure }: 
                       <Input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="w-40" />
                     </div>
                     <div>
-                      <Label className="text-xs">إلى تاريخ</Label>
+                      <Label className="text-xs">الى تاريخ</Label>
                       <Input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="w-40" />
                     </div>
                   </>
@@ -737,7 +766,7 @@ export default function ReportHub({ title, section, icon, reports, procedure }: 
                       <Input type="date" value={dueDateFrom} onChange={(e) => setDueDateFrom(e.target.value)} className="w-40" />
                     </div>
                     <div>
-                      <Label className="text-xs">تاريخ استحقاق إلى</Label>
+                      <Label className="text-xs">تاريخ استحقاق الى</Label>
                       <Input type="date" value={dueDateTo} onChange={(e) => setDueDateTo(e.target.value)} className="w-40" />
                     </div>
                   </>

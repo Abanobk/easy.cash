@@ -1169,6 +1169,13 @@ export async function salesInvoicesReport(db: Db, filters: ReportFilters) {
         filters.repId
           ? sql`(${salesInvoices.salesRepId} = ${filters.repId} OR ${customers.salesRepId} = ${filters.repId})`
           : undefined,
+        // ميجا تقرير البيع: فلتر الصنف / الفئة يقيّد الفواتير التي تحتوي الصنف
+        filters.itemId
+          ? sql`exists (select 1 from sales_invoice_items sii where sii.invoiceId = ${salesInvoices.id} and sii.itemId = ${filters.itemId} and sii.tenantId = ${filters.tenantId})`
+          : undefined,
+        filters.categoryId
+          ? sql`exists (select 1 from sales_invoice_items sii inner join items it on it.id = sii.itemId where sii.invoiceId = ${salesInvoices.id} and it.categoryId = ${filters.categoryId} and sii.tenantId = ${filters.tenantId})`
+          : undefined,
         filters.search
           ? sql`(${salesInvoices.number} LIKE ${`%${filters.search}%`} OR ${customers.name} LIKE ${`%${filters.search}%`})`
           : undefined)))
@@ -1235,6 +1242,13 @@ export async function purchasesInvoicesReport(db: Db, filters: ReportFilters) {
         filters.currencyCode ? eq(purchaseInvoices.currencyCode, filters.currencyCode) : undefined,
         taxFilterCond(purchaseInvoices.tax, filters.taxFilter),
         discountFilterCond(purchaseInvoices.discount, filters.discountFilter),
+        // ميجا تقرير الشراء: فلتر الصنف / الفئة يقيّد الفواتير التي تحتوي الصنف
+        filters.itemId
+          ? sql`exists (select 1 from purchase_invoice_items pii where pii.invoiceId = ${purchaseInvoices.id} and pii.itemId = ${filters.itemId} and pii.tenantId = ${filters.tenantId})`
+          : undefined,
+        filters.categoryId
+          ? sql`exists (select 1 from purchase_invoice_items pii inner join items it on it.id = pii.itemId where pii.invoiceId = ${purchaseInvoices.id} and it.categoryId = ${filters.categoryId} and pii.tenantId = ${filters.tenantId})`
+          : undefined,
         filters.search
           ? sql`(${purchaseInvoices.number} LIKE ${`%${filters.search}%`} OR ${suppliers.name} LIKE ${`%${filters.search}%`})`
           : undefined)))

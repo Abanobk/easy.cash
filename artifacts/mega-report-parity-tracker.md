@@ -3,32 +3,37 @@
 Goal: Easy Cash reports match Mega Cash (filters + columns + behavior) with **no invented labels**.
 
 ## Status legend
-- `filters_done` — Mega filter labels verified and wired in Easy (may omit Mega-only options with UNKNOWN semantics)
+- `filters_done` — Mega filter labels verified and wired in Easy
+- `filters_partial` — core Mega filters wired; Mega-only options deferred
 - `columns_unknown` — Mega grid headers not yet observed after عرض
 - `columns_done` — Mega headers verified and Easy columns/labels aligned
-- `pending` — not started
 - `menu_aligned` — sidebar grouping matches Mega screenshots
 
-## Menu organization (2026-09-13)
-Full Mega sidebar map + live filter scan: `artifacts/mega-report-menu/MENU-MAP.md`  
-Live filter dump: `artifacts/mega-report-menu/mega-report-filters-scan.json` (~75 report forms opened)
+## Menu (2026-09-13)
+Full map: `artifacts/mega-report-menu/MENU-MAP.md`  
+Live filters: `artifacts/mega-report-menu/mega-report-filters-scan.json`
 
-**Nav fix applied:** under التحصيل والسداد Mega shows **الاستحقاقات** (`/AccountingReports/Dues.aspx`), not supplier aging. Easy now:
-- Collection group: شيكات صادرة/واردة · اقساط عملاء · معاملات نقدية وبنكية · **الاستحقاقات** (`accountingreports-dues`, filters wired, data stub until dues entity exists)
-- Supplier aging (×3) moved under **تقارير المشتريات** (mirrors customer aging under sales; matches permission-tree)
+Nav fix: التحصيل والسداد → **الاستحقاقات** (`accountingreports-dues`); أعمار الموردين تحت المشتريات.
 
-## P0 (accounting core)
-| Easy slug | Mega page | Filters | Columns |
-|-----------|-----------|---------|---------|
-| `finalreports-trialbalance` | TrialBalance | filters_done (customerGrouping from Mega PDFs 2026-09-13) | columns_done + formal PDF + grouping rows |
-| `finalreports-generalledger` | `/FinalReports/GeneralLedger.aspx` | filters_done | columns_done (Excel) + formal PDF |
-| `accountingreports-accountstatment` | `/AccountingReports/AccountStatment.aspx` | filters_done + 3 checkboxes | columns_done + Mega-style PDF |
-| `accountingreports-customeraccountstatementbyitems` | CustomerAccountStatementByItems | filters_partial | columns_done from PDF |
+## P0 — accounting core
+| Easy slug | Filters | Columns |
+|-----------|---------|---------|
+| `finalreports-trialbalance` | filters_done (customerGrouping) | columns_done + PDF |
+| `finalreports-generalledger` | filters_done | columns_done + PDF |
+| `accountingreports-accountstatment` | filters_done + 3 checkboxes | columns_done + PDF |
+| `accountingreports-customeraccountstatementbyitems` | filters_partial | columns_done from PDF |
 
-## Wave 1 — Sales (next)
-Open Mega → عرض → Excel for: `sales`, `grosscustomersalesbyitems`, `customerssales`, statements/aging as needed. Filter labels already captured in scan JSON.
+## Wave 1 — sales / purchases (in progress)
+| Easy slug | Filters | Columns |
+|-----------|---------|---------|
+| `accountingreports-sales` | filters_partial (+ item/category 2026-09-13) | columns_unknown — **need Mega Excel** |
+| `accountingreports-customerssales` | filters_partial (from live scan) | columns_unknown |
+| `accountingreports-grosscustomersalesbyitems` | filters_partial | columns_unknown |
+| `accountingreports-purchases` | filters_partial (+ item/category) | columns_unknown |
+| `accountingreports-vendorspurchases` | filters_partial | columns_unknown |
+| `accountingreports-grossvendorpurchasesbyitems` | filters_partial | columns_unknown |
 
-## Inventory
-`artifacts/mega-easy-report-inventory.json` (~77 entries including `accountingreports-dues`).
+Details + upload ask: `artifacts/mega-wave1-sales/WAVE1.md`
 
-See also: `artifacts/mega-what-we-need-next.md`.
+## Blocker
+Mega `ifViewer` blank + Excel download blocked in automation (same as P0). Need user Excel after عرض for wave-1 column labels.
