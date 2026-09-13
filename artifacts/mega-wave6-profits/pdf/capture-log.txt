@@ -1,0 +1,134 @@
+logged in https://km.mega-cash.net/
+=== itemsprofits
+prep itemsprofits {
+  okFrom: true,
+  okTo: true,
+  okAsOf: false,
+  from: '1/1/2022',
+  to: '3/1/2022',
+  hasBtn: true,
+  btnId: 'cph_btnShow',
+  hasViewer: true,
+  dateIds: [ 'cph_txtDateFrom', 'cph_txtDateTo' ],
+  selectIds: [
+    'ddlNumDecimals',
+    'ddlNumAlign',
+    'ddlExcelFormat',
+    'ddlDisableLinks',
+    'ddlOverrideDatabases',
+    'cph_ddlProfitStatus',
+    'cph_ddlOrderBy'
+  ],
+  nearbyFilterHints: [ 'الفرع', 'الفرع', 'من تاريخ', 'من تاريخ' ]
+}
+itemsprofits tick 0 wait true val true auth false src undefined urls 0
+itemsprofits tick 1 wait true val true auth false src undefined urls 0
+itemsprofits tick 2 wait true val true auth false src undefined urls 0
+itemsprofits tick 3 wait true val true auth false src undefined urls 0
+NET itemsprofits POST 200 https://km.mega-cash.net/AccountingReports/ItemsProfits.aspx 1
+NET itemsprofits GET 200 https://km.mega-cash.net/showreport/geWUAQj-YgS9CS-mv5VLBDadgXLTbqzPu6EAIoHy-CRf3U-KWaDkIyKHw8SZKU4Rrpvb2KtqUzdcgIhgPVmM 0
+NET itemsprofits GET 200 https://km.mega-cash.net/showreport/geWUAQj-YgS9CS-mv5VLBDadgXLTbqzPu6EAIoHy-CRf3U-KWaDkIyKHw8SZKU4Rrpvb2KtqUzdcgIhgPVmM 2
+itemsprofits tick 4 wait false val true auth false src /showreport/geWUAQj-YgS9CS-mv5VLBDadgXLTbqzPu6EAIoHy-CRf3U-KWaDkIyKHw8SZKU4Rrpvb2KtqUzdcgIhgPVmMv4l8ecIP5IHTxF5MOMBDpVZZ6QJQQtp5iSfj8AaOTdrCupCSDQ2/ارباح الاصناف.ashx?show=1 urls 9
+saved itemsprofits.pdf 73997
+=== customersprofits
+prep customersprofits {
+  okFrom: true,
+  okTo: true,
+  okAsOf: false,
+  from: '1/1/2022',
+  to: '3/1/2022',
+  hasBtn: true,
+  btnId: 'cph_btnShow',
+  hasViewer: true,
+  dateIds: [ 'cph_txtDateFrom', 'cph_txtDateTo' ],
+  selectIds: [
+    'ddlNumDecimals',
+    'ddlNumAlign',
+    'ddlExcelFormat',
+    'ddlDisableLinks',
+    'ddlOverrideDatabases',
+    'cph_ddlOrderBy'
+  ],
+  nearbyFilterHints: [ 'الفرع', 'الفرع', 'من تاريخ', 'من تاريخ' ]
+}
+NET customersprofits POST 200 https://km.mega-cash.net/AccountingReports/CustomersProfits.aspx 1
+customersprofits tick 0 wait false val false auth false src /showreport/aEHxJ8KKaDjgPGEMzs3qGOkgWax4xIR77nuTL9vkpyxAlA6VYsGvtaR_veqAzeNryLDl8w2jap8N8LPJVYlTrUNIxoa1i0BonpEp4JjQ7pxhP8NCZxItaw0T54lWCDDLACBx-A2/ارباح العملاء.ashx?show=1 urls 4
+NET customersprofits GET 200 https://km.mega-cash.net/showreport/aEHxJ8KKaDjgPGEMzs3qGOkgWax4xIR77nuTL9vkpyxAlA6VYsGvtaR_veqAzeNryLDl8w2jap8N8LPJVYlT 0
+NET customersprofits GET 200 https://km.mega-cash.net/showreport/aEHxJ8KKaDjgPGEMzs3qGOkgWax4xIR77nuTL9vkpyxAlA6VYsGvtaR_veqAzeNryLDl8w2jap8N8LPJVYlT 2
+saved customersprofits.pdf 68893
+=== invoiceprofits
+prep invoiceprofits {
+  okFrom: true,
+  okTo: true,
+  okAsOf: false,
+  from: '1/1/2022',
+  to: '3/1/2022',
+  hasBtn: true,
+  btnId: 'cph_btnShow',
+  hasViewer: true,
+  dateIds: [ 'cph_txtDateFrom', 'cph_txtDateTo' ],
+  selectIds: [
+    'ddlNumDecimals',
+    'ddlNumAlign',
+    'ddlExcelFormat',
+    'ddlDisableLinks',
+    'ddlOverrideDatabases',
+    'cph_ddlDocType',
+    'cph_ddlProfitStatus',
+    'cph_ddlOrderBy'
+  ],
+  nearbyFilterHints: [ 'الفرع', 'الفرع', 'من تاريخ', 'من تاريخ' ]
+}
+invoiceprofits tick 0 wait true val true auth false src undefined urls 0
+NET invoiceprofits POST 200 https://km.mega-cash.net/AccountingReports/InvoiceProfits.aspx 1
+NET invoiceprofits GET 200 https://km.mega-cash.net/showreport/rTUr8iG1i_X46ASd0i9RCtZvMLnx4EqQn7Cw55u8jLbozVjdLSMYp1v53wCsYaqrgF-cgRhu20ojwALAR_s2 0
+NET invoiceprofits GET 200 https://km.mega-cash.net/showreport/rTUr8iG1i_X46ASd0i9RCtZvMLnx4EqQn7Cw55u8jLbozVjdLSMYp1v53wCsYaqrgF-cgRhu20ojwALAR_s2 2
+invoiceprofits tick 1 wait false val true auth false src /showreport/rTUr8iG1i_X46ASd0i9RCtZvMLnx4EqQn7Cw55u8jLbozVjdLSMYp1v53wCsYaqrgF-cgRhu20ojwALAR_s2PyuRm6gxU4H9HEFvR2nIu8kYZvYvhn_XPLJk-FxJTWFKdMvLBA2/ارباح الفواتير.ashx?show=1 urls 9
+saved invoiceprofits.pdf 81221
+=== creditsages
+=== creditsagesbyyear
+=== creditsagesbyhalfyear
+SUMMARY [
+  {
+    "key": "itemsprofits",
+    "pdf": true,
+    "err": null,
+    "from": "1/1/2022",
+    "to": "3/1/2022",
+    "gate": null
+  },
+  {
+    "key": "customersprofits",
+    "pdf": true,
+    "err": null,
+    "from": "1/1/2022",
+    "to": "3/1/2022",
+    "gate": null
+  },
+  {
+    "key": "invoiceprofits",
+    "pdf": true,
+    "err": null,
+    "from": "1/1/2022",
+    "to": "3/1/2022",
+    "gate": null
+  },
+  {
+    "key": "creditsages",
+    "pdf": false,
+    "err": "authorization-denied",
+    "gate": true
+  },
+  {
+    "key": "creditsagesbyyear",
+    "pdf": false,
+    "err": "redirected-to-startscreen",
+    "gate": true
+  },
+  {
+    "key": "creditsagesbyhalfyear",
+    "pdf": false,
+    "err": "redirected-to-startscreen",
+    "gate": true
+  }
+]

@@ -1,0 +1,232 @@
+{
+  "at": "2026-09-13T19:30:41.224Z",
+  "results": [
+    {
+      "key": "itemsprofits",
+      "featureKey": "accountingreports-itemsprofits",
+      "path": "/AccountingReports/ItemsProfits.aspx",
+      "gate": {
+        "href": "https://km.mega-cash.net/AccountingReports/ItemsProfits.aspx",
+        "authDenied": false,
+        "startScreen": false,
+        "hasShow": true,
+        "hasDateFrom": true,
+        "hint": " ارباح الاصناف تلقائي (4) تلقائي (3) تلقائي (2) تلقائي (1) 0 1 2 3 4 يسار وسط يمين اكسل بالتنسيق اكسل بدون تنسيق تفعيل الروابط تعطيل الروابط KM-01_01_2022 بحث بحث الفرع من تاريخ الى تاريخ نوع سعر العميل فئة العميل / المورد المنطقة العميل فرع العميل مدير المبيعات مندوب المبيعات المخزن الباركود الفئة فئة بديلة الصنف رقم "
+      },
+      "prep": {
+        "okFrom": true,
+        "okTo": true,
+        "okAsOf": false,
+        "from": "1/1/2022",
+        "to": "3/1/2022",
+        "hasBtn": true,
+        "btnId": "cph_btnShow",
+        "hasViewer": true,
+        "dateIds": [
+          "cph_txtDateFrom",
+          "cph_txtDateTo"
+        ],
+        "selectIds": [
+          "ddlNumDecimals",
+          "ddlNumAlign",
+          "ddlExcelFormat",
+          "ddlDisableLinks",
+          "ddlOverrideDatabases",
+          "cph_ddlProfitStatus",
+          "cph_ddlOrderBy"
+        ],
+        "nearbyFilterHints": [
+          "الفرع",
+          "الفرع",
+          "من تاريخ",
+          "من تاريخ"
+        ]
+      },
+      "foundUrls": [
+        "/showreport/geWUAQj-YgS9CS-mv5VLBDadgXLTbqzPu6EAIoHy-CRf3U-KWaDkIyKHw8SZKU4Rrpvb2KtqUzdcgIhgPVmMv4l8ecIP5IHTxF5MOMBDpVZZ6QJQQtp5iSfj8AaOTdrCupCSDQ2/ارباح",
+        "https://km.mega-cash.net/showreport/geWUAQj-YgS9CS-mv5VLBDadgXLTbqzPu6EAIoHy-CRf3U-KWaDkIyKHw8SZKU4Rrpvb2KtqUzdcgIhgPVmMv4l8ecIP5IHTxF5MOMBDpVZZ6QJQQtp5iSfj8AaOTdrCupCSDQ2/%D8%A7%D8%B1%D8%A8%D8%A7%D8%AD%20%D8%A7%D9%84%D8%A7%D8%B5%D9%86%D8%A7%D9%81.ashx?show=1",
+        "/showreport/geWUAQj-YgS9CS-mv5VLBDadgXLTbqzPu6EAIoHy-CRf3U-KWaDkIyKHw8SZKU4Rrpvb2KtqUzdcgIhgPVmMv4l8ecIP5IHTxF5MOMBDpVZZ6QJQQtp5iSfj8AaOTdrCupCSDQ2/%D8%A7%D8%B1%D8%A8%D8%A7%D8%AD%20%D8%A7%D9%84%D8%A7%D8%B5%D9%86%D8%A7%D9%81.ashx?show=1",
+        "https://km.mega-cash.net/downloadreport/geWUAQj-YgS9CS-mv5VLBDadgXLTbqzPu6EAIoHy-CRf3U-KWaDkIyKHw8SZKU4Rrpvb2KtqUzdcgIhgPVmMv4l8ecIP5IHTxF5MOMBDpVZZ6QJQQtp5iSfj8AaOTdrCupCSDQ2/%D8%A7%D8%B1%D8%A8%D8%A7%D8%AD%20%D8%A7%D9%84%D8%A7%D8%B5%D9%86%D8%A7%D9%81.ashx?show=1",
+        "/showreport/geWUAQj-YgS9CS-mv5VLBDadgXLTbqzPu6EAIoHy-CRf3U-KWaDkIyKHw8SZKU4Rrpvb2KtqUzdcgIhgPVmMv4l8ecIP5IHTxF5MOMBDpVZZ6QJQQtp5iSfj8AaOTdrCupCSDQ2/ارباح الاصناف.ashx?show=1"
+      ],
+      "finalSrc": "/showreport/geWUAQj-YgS9CS-mv5VLBDadgXLTbqzPu6EAIoHy-CRf3U-KWaDkIyKHw8SZKU4Rrpvb2KtqUzdcgIhgPVmMv4l8ecIP5IHTxF5MOMBDpVZZ6QJQQtp5iSfj8AaOTdrCupCSDQ2/ارباح الاصناف.ashx?show=1",
+      "pdfPath": "artifacts/mega-wave6-profits/pdf/itemsprofits.pdf",
+      "saved": [
+        {
+          "vu": "https://km.mega-cash.net/showreport/geWUAQj-YgS9CS-mv5VLBDadgXLTbqzPu6EAIoHy-CRf3U-KWaDkIyKHw8SZKU4Rrpvb2KtqUzdcgIhgPVmMv4l8ecIP5IHTxF5MOMBDpVZZ6QJQQtp5iSfj8AaOTdrCupCSDQ2/ارباح",
+          "status": 200,
+          "size": 73997,
+          "name": "itemsprofits.pdf"
+        }
+      ],
+      "netHits": 3,
+      "error": null
+    },
+    {
+      "key": "customersprofits",
+      "featureKey": "accountingreports-customersprofits",
+      "path": "/AccountingReports/CustomersProfits.aspx",
+      "gate": {
+        "href": "https://km.mega-cash.net/AccountingReports/CustomersProfits.aspx",
+        "authDenied": false,
+        "startScreen": false,
+        "hasShow": true,
+        "hasDateFrom": true,
+        "hint": " ارباح العملاء تلقائي (4) تلقائي (3) تلقائي (2) تلقائي (1) 0 1 2 3 4 يسار وسط يمين اكسل بالتنسيق اكسل بدون تنسيق تفعيل الروابط تعطيل الروابط KM-01_01_2022 بحث بحث الفرع من تاريخ الى تاريخ فئة العميل / المورد نوع سعر العميل المنطقة العميل مدير المبيعات مندوب المبيعات مسلسل الفاتورة ترتيب ب الاسم الاعلى ربحا الاعلى مبيعا"
+      },
+      "prep": {
+        "okFrom": true,
+        "okTo": true,
+        "okAsOf": false,
+        "from": "1/1/2022",
+        "to": "3/1/2022",
+        "hasBtn": true,
+        "btnId": "cph_btnShow",
+        "hasViewer": true,
+        "dateIds": [
+          "cph_txtDateFrom",
+          "cph_txtDateTo"
+        ],
+        "selectIds": [
+          "ddlNumDecimals",
+          "ddlNumAlign",
+          "ddlExcelFormat",
+          "ddlDisableLinks",
+          "ddlOverrideDatabases",
+          "cph_ddlOrderBy"
+        ],
+        "nearbyFilterHints": [
+          "الفرع",
+          "الفرع",
+          "من تاريخ",
+          "من تاريخ"
+        ]
+      },
+      "foundUrls": [
+        "/showreport/aEHxJ8KKaDjgPGEMzs3qGOkgWax4xIR77nuTL9vkpyxAlA6VYsGvtaR_veqAzeNryLDl8w2jap8N8LPJVYlTrUNIxoa1i0BonpEp4JjQ7pxhP8NCZxItaw0T54lWCDDLACBx-A2/ارباح",
+        "https://km.mega-cash.net/showreport/aEHxJ8KKaDjgPGEMzs3qGOkgWax4xIR77nuTL9vkpyxAlA6VYsGvtaR_veqAzeNryLDl8w2jap8N8LPJVYlTrUNIxoa1i0BonpEp4JjQ7pxhP8NCZxItaw0T54lWCDDLACBx-A2/%D8%A7%D8%B1%D8%A8%D8%A7%D8%AD%20%D8%A7%D9%84%D8%B9%D9%85%D9%84%D8%A7%D8%A1.ashx?show=1",
+        "https://km.mega-cash.net/downloadreport/aEHxJ8KKaDjgPGEMzs3qGOkgWax4xIR77nuTL9vkpyxAlA6VYsGvtaR_veqAzeNryLDl8w2jap8N8LPJVYlTrUNIxoa1i0BonpEp4JjQ7pxhP8NCZxItaw0T54lWCDDLACBx-A2/%D8%A7%D8%B1%D8%A8%D8%A7%D8%AD%20%D8%A7%D9%84%D8%B9%D9%85%D9%84%D8%A7%D8%A1.ashx?show=1",
+        "/showreport/aEHxJ8KKaDjgPGEMzs3qGOkgWax4xIR77nuTL9vkpyxAlA6VYsGvtaR_veqAzeNryLDl8w2jap8N8LPJVYlTrUNIxoa1i0BonpEp4JjQ7pxhP8NCZxItaw0T54lWCDDLACBx-A2/ارباح العملاء.ashx?show=1"
+      ],
+      "finalSrc": "/showreport/aEHxJ8KKaDjgPGEMzs3qGOkgWax4xIR77nuTL9vkpyxAlA6VYsGvtaR_veqAzeNryLDl8w2jap8N8LPJVYlTrUNIxoa1i0BonpEp4JjQ7pxhP8NCZxItaw0T54lWCDDLACBx-A2/ارباح العملاء.ashx?show=1",
+      "pdfPath": "artifacts/mega-wave6-profits/pdf/customersprofits.pdf",
+      "saved": [
+        {
+          "vu": "https://km.mega-cash.net/showreport/aEHxJ8KKaDjgPGEMzs3qGOkgWax4xIR77nuTL9vkpyxAlA6VYsGvtaR_veqAzeNryLDl8w2jap8N8LPJVYlTrUNIxoa1i0BonpEp4JjQ7pxhP8NCZxItaw0T54lWCDDLACBx-A2/ارباح",
+          "status": 200,
+          "size": 68893,
+          "name": "customersprofits.pdf"
+        }
+      ],
+      "netHits": 3,
+      "error": null
+    },
+    {
+      "key": "invoiceprofits",
+      "featureKey": "accountingreports-invoiceprofits",
+      "path": "/AccountingReports/InvoiceProfits.aspx",
+      "gate": {
+        "href": "https://km.mega-cash.net/AccountingReports/InvoiceProfits.aspx",
+        "authDenied": false,
+        "startScreen": false,
+        "hasShow": true,
+        "hasDateFrom": true,
+        "hint": " ارباح الفواتير تلقائي (4) تلقائي (3) تلقائي (2) تلقائي (1) 0 1 2 3 4 يسار وسط يمين اكسل بالتنسيق اكسل بدون تنسيق تفعيل الروابط تعطيل الروابط KM-01_01_2022 بحث بحث الفرع من تاريخ الى تاريخ المخزن الباركود الفئة فئة بديلة الصنف نوع سعر العميل فئة العميل / المورد المنطقة العميل فرع العميل مدير المبيعات مندوب المبيعات الم"
+      },
+      "prep": {
+        "okFrom": true,
+        "okTo": true,
+        "okAsOf": false,
+        "from": "1/1/2022",
+        "to": "3/1/2022",
+        "hasBtn": true,
+        "btnId": "cph_btnShow",
+        "hasViewer": true,
+        "dateIds": [
+          "cph_txtDateFrom",
+          "cph_txtDateTo"
+        ],
+        "selectIds": [
+          "ddlNumDecimals",
+          "ddlNumAlign",
+          "ddlExcelFormat",
+          "ddlDisableLinks",
+          "ddlOverrideDatabases",
+          "cph_ddlDocType",
+          "cph_ddlProfitStatus",
+          "cph_ddlOrderBy"
+        ],
+        "nearbyFilterHints": [
+          "الفرع",
+          "الفرع",
+          "من تاريخ",
+          "من تاريخ"
+        ]
+      },
+      "foundUrls": [
+        "/showreport/rTUr8iG1i_X46ASd0i9RCtZvMLnx4EqQn7Cw55u8jLbozVjdLSMYp1v53wCsYaqrgF-cgRhu20ojwALAR_s2PyuRm6gxU4H9HEFvR2nIu8kYZvYvhn_XPLJk-FxJTWFKdMvLBA2/ارباح",
+        "https://km.mega-cash.net/showreport/rTUr8iG1i_X46ASd0i9RCtZvMLnx4EqQn7Cw55u8jLbozVjdLSMYp1v53wCsYaqrgF-cgRhu20ojwALAR_s2PyuRm6gxU4H9HEFvR2nIu8kYZvYvhn_XPLJk-FxJTWFKdMvLBA2/%D8%A7%D8%B1%D8%A8%D8%A7%D8%AD%20%D8%A7%D9%84%D9%81%D9%88%D8%A7%D8%AA%D9%8A%D8%B1.ashx?show=1",
+        "/showreport/rTUr8iG1i_X46ASd0i9RCtZvMLnx4EqQn7Cw55u8jLbozVjdLSMYp1v53wCsYaqrgF-cgRhu20ojwALAR_s2PyuRm6gxU4H9HEFvR2nIu8kYZvYvhn_XPLJk-FxJTWFKdMvLBA2/%D8%A7%D8%B1%D8%A8%D8%A7%D8%AD%20%D8%A7%D9%84%D9%81%D9%88%D8%A7%D8%AA%D9%8A%D8%B1.ashx?show=1",
+        "https://km.mega-cash.net/downloadreport/rTUr8iG1i_X46ASd0i9RCtZvMLnx4EqQn7Cw55u8jLbozVjdLSMYp1v53wCsYaqrgF-cgRhu20ojwALAR_s2PyuRm6gxU4H9HEFvR2nIu8kYZvYvhn_XPLJk-FxJTWFKdMvLBA2/%D8%A7%D8%B1%D8%A8%D8%A7%D8%AD%20%D8%A7%D9%84%D9%81%D9%88%D8%A7%D8%AA%D9%8A%D8%B1.ashx?show=1",
+        "/showreport/rTUr8iG1i_X46ASd0i9RCtZvMLnx4EqQn7Cw55u8jLbozVjdLSMYp1v53wCsYaqrgF-cgRhu20ojwALAR_s2PyuRm6gxU4H9HEFvR2nIu8kYZvYvhn_XPLJk-FxJTWFKdMvLBA2/ارباح الفواتير.ashx?show=1"
+      ],
+      "finalSrc": "/showreport/rTUr8iG1i_X46ASd0i9RCtZvMLnx4EqQn7Cw55u8jLbozVjdLSMYp1v53wCsYaqrgF-cgRhu20ojwALAR_s2PyuRm6gxU4H9HEFvR2nIu8kYZvYvhn_XPLJk-FxJTWFKdMvLBA2/ارباح الفواتير.ashx?show=1",
+      "pdfPath": "artifacts/mega-wave6-profits/pdf/invoiceprofits.pdf",
+      "saved": [
+        {
+          "vu": "https://km.mega-cash.net/showreport/rTUr8iG1i_X46ASd0i9RCtZvMLnx4EqQn7Cw55u8jLbozVjdLSMYp1v53wCsYaqrgF-cgRhu20ojwALAR_s2PyuRm6gxU4H9HEFvR2nIu8kYZvYvhn_XPLJk-FxJTWFKdMvLBA2/ارباح",
+          "status": 200,
+          "size": 81221,
+          "name": "invoiceprofits.pdf"
+        }
+      ],
+      "netHits": 3,
+      "error": null
+    },
+    {
+      "key": "creditsages",
+      "featureKey": "accountingreports-creditsages",
+      "path": "/AccountingReports/CreditsAges.aspx",
+      "error": "authorization-denied",
+      "gate": {
+        "href": "https://km.mega-cash.net/Main/Authorization.aspx",
+        "authDenied": true,
+        "startScreen": false,
+        "hasShow": false,
+        "hasDateFrom": false,
+        "hint": " الوصول مرفوض! ليس لديك صلاحيات كافية للوصول للصفحة المطلوبة "
+      },
+      "pdfPath": null
+    },
+    {
+      "key": "creditsagesbyyear",
+      "featureKey": "accountingreports-creditsagesbyyear",
+      "path": "/AccountingReports/CreditsAgesByYear.aspx",
+      "error": "redirected-to-startscreen",
+      "gate": {
+        "href": "https://km.mega-cash.net/Main/StartScreen.aspx",
+        "authDenied": false,
+        "startScreen": true,
+        "hasShow": false,
+        "hasDateFrom": false,
+        "hint": " مرحبا موعد تجديد الاشتراك الخاص بكم فى 15/6/2027 (200 دولار امريكي) "
+      },
+      "pdfPath": null
+    },
+    {
+      "key": "creditsagesbyhalfyear",
+      "featureKey": "accountingreports-creditsagesbyhalfyear",
+      "path": "/AccountingReports/CreditsAgesByHalfYear.aspx",
+      "error": "redirected-to-startscreen",
+      "gate": {
+        "href": "https://km.mega-cash.net/Main/StartScreen.aspx",
+        "authDenied": false,
+        "startScreen": true,
+        "hasShow": false,
+        "hasDateFrom": false,
+        "hint": " مرحبا موعد تجديد الاشتراك الخاص بكم فى 15/6/2027 (200 دولار امريكي) "
+      },
+      "pdfPath": null
+    }
+  ]
+}
