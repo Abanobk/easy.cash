@@ -28,7 +28,6 @@ Slugs = `featureKey` من `client/src/config/erp-navigation.ts` (مصدر الح
 | 4 | Collection / checks / dues / leftovers ×10 | ✅ partial + honesty |
 | **5** | **Final leftovers ×6** | ✅ partial (subledger account capture) |
 | **6** | Profits ×3 + credits ages | ✅ partial (credits blocked) |
-| 6 | Profits ×3 + credits ages gap ×3 | ⬜ |
 | 7 | Reps ×4 | ✅ partial |
 | 8 | Production ×2 | ✅ partial |
 | 9 | HR ×7 | ✅ partial |
