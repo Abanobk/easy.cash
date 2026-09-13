@@ -517,6 +517,52 @@ export default function ReportHub({ title, section, icon, reports, procedure }: 
     "date", "documentNumber", "accountCode", "accountName", "description", "costCenter", "debit", "credit", "balance",
   ] as const;
 
+  // موجة 7–10 — مندوبين / إنتاج / HR / أصول
+  const GROSS_REP_SALES_BY_ITEMS_COLUMN_ORDER = [
+    "itemName", "quantity", "unitName", "unitPrice", "discount", "total",
+  ] as const;
+  const REPS_COLLECTINGS_COLUMN_ORDER = [
+    "rowNum", "collectionDate", "serial", "customerName", "amount", "invoiceSerial",
+  ] as const;
+  const REP_DAILY_COLUMN_ORDER = [
+    "serial", "repName", "sales", "returns", "netSales", "collection", "checkCollection",
+    "totalCollection", "debit", "collectionCommission", "salesCommission", "profit", "profitRatio",
+  ] as const;
+  const REP_DEBIT_COLUMN_ORDER = [
+    "customerName", "sales", "returns", "collection", "checkCollection", "debit",
+  ] as const;
+  const PRODUCTION_ORDERS_COLUMN_ORDER = [
+    "lineLabel", "value", "rawMaterial", "barcode", "quantity", "scrapQty", "unitName", "rawCost", "scrapCost", "totalCost",
+  ] as const;
+  const PRODUCTION_MATERIALS_COLUMN_ORDER = [
+    "warehouseName", "barcode", "itemName", "batchNumber", "quantity", "unitName", "cost",
+  ] as const;
+  const HR_ATTENDANCE_COLUMN_ORDER = [
+    "date", "checkInTime", "checkOutTime", "workHours", "permissionHours", "missionPermissionHours",
+    "delayHours", "overtimeHours", "unknownHours", "noCheckIn", "noCheckOut", "workOnLeave",
+    "absenceMission", "vacationDays", "partialVacationDays", "weeklyVacationDays", "officialVacationDays",
+  ] as const;
+  const HR_VACATIONS_COLUMN_ORDER = ["vacationType", "startDate", "endDate", "approved"] as const;
+  const HR_PAYROLL_LIST_COLUMN_ORDER = [
+    "name", "basicSalary", "advances", "workWithDeduction", "tax", "insurance", "penaltyDeduction",
+    "lateDeduction", "permissionDeduction", "absenceDeduction", "otherDeductions", "vacationWithDeduction",
+    "overtimeIncrease", "holidayWork", "incentives", "otherIncreases", "allowances", "netSalary",
+  ] as const;
+  const HR_UNDER_REQUEST_COLUMN_ORDER = [
+    "name", "nationalId", "jobTitle", "qualityTestResult", "speedTestResult", "testDate", "phone", "alternatePhone",
+  ] as const;
+  const HR_LOANS_LIST_COLUMN_ORDER = [
+    "serial", "branchName", "date", "startDate", "amount", "creditAccount", "installmentCount", "installmentStatus", "notes",
+  ] as const;
+  const CARD_FIELD_COLUMN_ORDER = ["lineLabel", "value"] as const;
+  const DEPRECIATION_COLUMN_ORDER = [
+    "name", "currency", "exchangeRate", "purchaseDate", "operationDate", "depreciationRate", "assetValue",
+    "depreciationAsOf", "periodDepreciation", "accumulatedDepreciation", "netBookValue",
+  ] as const;
+  const SOLD_ASSETS_COLUMN_ORDER = [
+    "name", "assetValue", "lastUsage", "saleDate", "depreciation", "salePrice", "profitLoss",
+  ] as const;
+
   const isSales = slug === "accountingreports-sales";
   const isPurchases = slug === "accountingreports-purchases";
   const isCustomersSales = slug === "accountingreports-customerssales";
@@ -557,6 +603,22 @@ export default function ReportHub({ title, section, icon, reports, procedure }: 
     slug === "finalreports-financialstatment" ||
     slug === "finalreports-cashflow";
   const isSubledger = slug === "finalreports-subledger";
+  const isGrossRepSalesByItems = slug === "accountingreports-grossrepsalesbyitems";
+  const isRepsCollectings = slug === "accountingreports-repscollectings";
+  const isRepDaily = slug === "accountingreports-repdaily";
+  const isRepDebit = slug === "accountingreports-repdebit";
+  const isProductionOrders = slug === "accountingreports-productionorders";
+  const isProductionMaterials = slug === "accountingreports-productionmaterials";
+  const isHrAttendance = slug === "hrreports-attendance";
+  const isHrVacations = slug === "hrreports-employeesvactions";
+  const isHrPayroll = slug === "hrreports-employeespayroll";
+  const isHrPayrollList = slug === "hrreports-employeespayroll-list";
+  const isHrUnderRequest = slug === "hrreports-employeesunderrequest";
+  const isHrEmployeesList = slug === "hrreports-employeeslist";
+  const isHrLoansList = slug === "hrreports-loans-list";
+  const isFixedAssetsDep = slug === "fixedassetsreports-dep" || slug === "fixedassetsreports-depruns";
+  const isSoldFixedAssets = slug === "fixedassetsreports-soldfixedassets";
+  const isCardFieldReport = isHrPayroll || isHrEmployeesList || isProductionOrders;
 
   const isSalesOrPurchases = isSales || isPurchases;
 
@@ -641,19 +703,47 @@ export default function ReportHub({ title, section, icon, reports, procedure }: 
                                                                       ? FINAL_STATEMENT_COLUMN_ORDER
                                                                       : isSubledger
                                                                         ? SUBLEDGER_COLUMN_ORDER
-                                                                        : null;
+                                                                        : isGrossRepSalesByItems
+                                                                          ? GROSS_REP_SALES_BY_ITEMS_COLUMN_ORDER
+                                                                          : isRepsCollectings
+                                                                            ? REPS_COLLECTINGS_COLUMN_ORDER
+                                                                            : isRepDaily
+                                                                              ? REP_DAILY_COLUMN_ORDER
+                                                                              : isRepDebit
+                                                                                ? REP_DEBIT_COLUMN_ORDER
+                                                                                : isProductionOrders
+                                                                                  ? PRODUCTION_ORDERS_COLUMN_ORDER
+                                                                                  : isProductionMaterials
+                                                                                    ? PRODUCTION_MATERIALS_COLUMN_ORDER
+                                                                                    : isHrAttendance
+                                                                                      ? HR_ATTENDANCE_COLUMN_ORDER
+                                                                                      : isHrVacations
+                                                                                        ? HR_VACATIONS_COLUMN_ORDER
+                                                                                        : isHrPayrollList
+                                                                                          ? HR_PAYROLL_LIST_COLUMN_ORDER
+                                                                                          : isHrUnderRequest
+                                                                                            ? HR_UNDER_REQUEST_COLUMN_ORDER
+                                                                                            : isHrLoansList
+                                                                                              ? HR_LOANS_LIST_COLUMN_ORDER
+                                                                                              : isCardFieldReport
+                                                                                                ? CARD_FIELD_COLUMN_ORDER
+                                                                                                : isFixedAssetsDep
+                                                                                                  ? DEPRECIATION_COLUMN_ORDER
+                                                                                                  : isSoldFixedAssets
+                                                                                                    ? SOLD_ASSETS_COLUMN_ORDER
+                                                                                                    : null;
     if (!order) return keys;
     const preferred = order.filter((k) => keys.includes(k));
     // لتقارير ميجا ذات ترتيب ثابت: لا نعرض أعمدة إضافية (مثل profit/itemCode) خارج ترتيب ميجا
-    const megaStrict = isCustomersSales || isVendorsPurchases || isGrossSalesByItems || isGrossPurchasesByItems || isSales || isPurchases || isCustomerStatement || isVendorStatement || isCustomersList || isVendorsList || isCustomersSummary || isAreasSummary || isVendorsSummary || isLastPrices || isMatureInvoices || isMatureReceipts || isMonthlySalesByItems || isSalesOrders || isPurchaseOrders || isDebitsAges || isChecks || isCustomersInstallments || isPayments || isDues || isCashStatement || isCostCenterStatement || isDashboard || isBranchesSummary || isMonthlyExpenses || isFinalStatement || isSubledger || isItemsProfits || isCustomersProfits || isInvoiceProfits || isCreditsAges;
+    const megaStrict = isCustomersSales || isVendorsPurchases || isGrossSalesByItems || isGrossPurchasesByItems || isSales || isPurchases || isCustomerStatement || isVendorStatement || isCustomersList || isVendorsList || isCustomersSummary || isAreasSummary || isVendorsSummary || isLastPrices || isMatureInvoices || isMatureReceipts || isMonthlySalesByItems || isSalesOrders || isPurchaseOrders || isDebitsAges || isChecks || isCustomersInstallments || isPayments || isDues || isCashStatement || isCostCenterStatement || isDashboard || isBranchesSummary || isMonthlyExpenses || isFinalStatement || isSubledger || isItemsProfits || isCustomersProfits || isInvoiceProfits || isCreditsAges || isGrossRepSalesByItems || isRepsCollectings || isRepDaily || isRepDebit || isProductionOrders || isProductionMaterials || isHrAttendance || isHrVacations || isHrPayroll || isHrPayrollList || isHrUnderRequest || isHrEmployeesList || isHrLoansList || isFixedAssetsDep || isSoldFixedAssets;
     if (megaStrict) return preferred.length ? preferred : keys;
     const rest = keys.filter((k) => !(order as readonly string[]).includes(k));
     return [...preferred, ...rest];
-  }, [rows, isAccountStatement, isCustomerItemStatement, isSales, isPurchases, isCustomersSales, isVendorsPurchases, isGrossSalesByItems, isGrossPurchasesByItems, isCustomerStatement, isVendorStatement, isCustomersList, isVendorsList, isCustomersSummary, isAreasSummary, isVendorsSummary, isLastPrices, isMatureInvoices, isMatureReceipts, isMonthlySalesByItems, isSalesOrders, isPurchaseOrders, isDebitsAges, isItemsProfits, isCustomersProfits, isInvoiceProfits, isCreditsAges, isChecks, isCustomersInstallments, isPayments, isDues, isCashStatement, isCostCenterStatement, isDashboard, isBranchesSummary, isMonthlyExpenses, isFinalStatement, isSubledger]);
+  }, [rows, isAccountStatement, isCustomerItemStatement, isSales, isPurchases, isCustomersSales, isVendorsPurchases, isGrossSalesByItems, isGrossPurchasesByItems, isCustomerStatement, isVendorStatement, isCustomersList, isVendorsList, isCustomersSummary, isAreasSummary, isVendorsSummary, isLastPrices, isMatureInvoices, isMatureReceipts, isMonthlySalesByItems, isSalesOrders, isPurchaseOrders, isDebitsAges, isItemsProfits, isCustomersProfits, isInvoiceProfits, isCreditsAges, isChecks, isCustomersInstallments, isPayments, isDues, isCashStatement, isCostCenterStatement, isDashboard, isBranchesSummary, isMonthlyExpenses, isFinalStatement, isSubledger, isGrossRepSalesByItems, isRepsCollectings, isRepDaily, isRepDebit, isProductionOrders, isProductionMaterials, isHrAttendance, isHrVacations, isHrPayroll, isHrPayrollList, isHrUnderRequest, isHrEmployeesList, isHrLoansList, isCardFieldReport, isFixedAssetsDep, isSoldFixedAssets]);
 
   const totals = useMemo(() => {
     // ميجا: الإجمالي صف داخل البيانات («اجمالي حركات الفترة») — لا نضاعفه في تذييل الجدول
-    if (isAccountStatement || isFinalStatement) return null;
+    if (isAccountStatement || isFinalStatement || isCardFieldReport) return null;
     const result: Record<string, number> = {};
     let hasAny = false;
     for (const col of columns) {
@@ -673,7 +763,7 @@ export default function ReportHub({ title, section, icon, reports, procedure }: 
       }
     }
     return hasAny ? result : null;
-  }, [rows, columns, isAccountStatement]);
+  }, [rows, columns, isAccountStatement, isCardFieldReport]);
 
   const handleSearch = () => {
     // ميجا ميزان: «تجميع فئة عملاء» يطلب اختيار فئة قبل العرض

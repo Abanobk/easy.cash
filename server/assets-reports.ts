@@ -16,118 +16,69 @@ function num(v: unknown) {
   return Number(v ?? 0);
 }
 
+/** ميجا Dep.aspx — نفس الأعمدة لـ fixedassetsreports-dep و fixedassetsreports-depruns */
+async function depreciationMegaReport(db: Db, f: ReportFilters): Promise<ReportRow[]> {
+  const asOf = f.dateTo || f.dateFrom || new Date().toISOString().slice(0, 10);
+  const asOfPeriod = String(asOf).slice(0, 7);
+
+  const assets = await db.select().from(fixedAssets)
+    .where(tenantWhere(fixedAssets, f.tenantId, eq(fixedAssets.status, "active")));
+
+  const lines = await db
+    .select({
+      assetId: depreciationRunLines.assetId,
+      amount: depreciationRunLines.amount,
+      period: depreciationRuns.period,
+    })
+    .from(depreciationRunLines)
+    .innerJoin(depreciationRuns, eq(depreciationRunLines.runId, depreciationRuns.id))
+    .where(tenantWhere(depreciationRunLines, f.tenantId));
+
+  const postedByAsset = new Map<number, { total: number; periodTotal: number }>();
+  for (const line of lines) {
+    const cur = postedByAsset.get(line.assetId) || { total: 0, periodTotal: 0 };
+    const amt = num(line.amount);
+    cur.total += amt;
+    if (String(line.period) === asOfPeriod) cur.periodTotal += amt;
+    postedByAsset.set(line.assetId, cur);
+  }
+
+  return assets.map((a) => {
+    const purchase = num(a.purchasePrice);
+    const current = num(a.currentValue);
+    const rate = num(a.depreciationRate);
+    const posted = postedByAsset.get(a.id);
+    const accumulatedDepreciation = posted?.total ?? Math.max(0, purchase - current);
+    const periodDepreciation = posted?.periodTotal ?? 0;
+    const depreciationAsOf = Math.max(0, accumulatedDepreciation - periodDepreciation);
+    const netBookValue = Math.max(0, purchase - accumulatedDepreciation);
+    return {
+      name: a.name,
+      currency: "ج.م",
+      exchangeRate: 1,
+      purchaseDate: a.purchaseDate ? toDateStr(a.purchaseDate) : "",
+      operationDate: a.purchaseDate ? toDateStr(a.purchaseDate) : "",
+      depreciationRate: rate,
+      assetValue: purchase,
+      depreciationAsOf: Number(depreciationAsOf.toFixed(2)),
+      periodDepreciation: Number(periodDepreciation.toFixed(2)),
+      accumulatedDepreciation: Number(accumulatedDepreciation.toFixed(2)),
+      netBookValue: Number(netBookValue.toFixed(2)),
+      _category: a.category || "",
+    };
+  });
+}
+
 const HANDLERS: Record<string, (db: Db, f: ReportFilters) => Promise<ReportRow[]>> = {
-  "fixedassetsreports-dep": async (db, f) => {
-    const assets = await db.select().from(fixedAssets)
-      .where(tenantWhere(fixedAssets, f.tenantId, eq(fixedAssets.status, "active")));
-
-    const runFilter = [];
-    if (f.dateFrom) runFilter.push(gte(depreciationRuns.period, String(f.dateFrom).slice(0, 7)));
-    if (f.dateTo) runFilter.push(lte(depreciationRuns.period, String(f.dateTo).slice(0, 7)));
-
-    const lines = await db
-      .select({
-        assetId: depreciationRunLines.assetId,
-        amount: depreciationRunLines.amount,
-        period: depreciationRuns.period,
-        journalReference: depreciationRuns.journalReference,
-      })
-      .from(depreciationRunLines)
-      .innerJoin(depreciationRuns, eq(depreciationRunLines.runId, depreciationRuns.id))
-      .where(
-        tenantWhere(
-          depreciationRunLines,
-          f.tenantId,
-          runFilter.length ? and(...runFilter) : undefined,
-        ),
-      );
-
-    const postedByAsset = new Map<number, { total: number; lastPeriod: string; lastRef: string }>();
-    for (const line of lines) {
-      const cur = postedByAsset.get(line.assetId) || { total: 0, lastPeriod: "", lastRef: "" };
-      cur.total += num(line.amount);
-      if (!cur.lastPeriod || String(line.period) > cur.lastPeriod) {
-        cur.lastPeriod = String(line.period);
-        cur.lastRef = String(line.journalReference || "");
-      }
-      postedByAsset.set(line.assetId, cur);
-    }
-
-    return assets.map((a) => {
-      const purchase = num(a.purchasePrice);
-      const current = num(a.currentValue);
-      const rate = num(a.depreciationRate);
-      const posted = postedByAsset.get(a.id);
-      const postedTotal = posted?.total ?? 0;
-      const annualDep = rate ? purchase * (rate / 100) : 0;
-      return {
-        code: a.code || "",
-        name: a.name,
-        category: a.category || "",
-        purchasePrice: purchase,
-        currentValue: current,
-        postedDepreciation: Number(postedTotal.toFixed(2)),
-        bookAccumulated: Number(Math.max(0, purchase - current).toFixed(2)),
-        monthlyTheoretical: Number((annualDep / 12).toFixed(2)),
-        depreciationRate: rate,
-        purchaseDate: a.purchaseDate ? toDateStr(a.purchaseDate) : "",
-        lastPostedPeriod: posted?.lastPeriod || "",
-        lastJournalRef: posted?.lastRef || "",
-        source: postedTotal > 0 ? "depreciation_runs" : "no_posted_runs",
-      };
-    });
-  },
-  "fixedassetsreports-depruns": async (db, f) => {
-    const runFilter = [];
-    if (f.dateFrom) runFilter.push(gte(depreciationRuns.period, String(f.dateFrom).slice(0, 7)));
-    if (f.dateTo) runFilter.push(lte(depreciationRuns.period, String(f.dateTo).slice(0, 7)));
-
-    const runs = await db
-      .select()
-      .from(depreciationRuns)
-      .where(tenantWhere(depreciationRuns, f.tenantId, runFilter.length ? and(...runFilter) : undefined))
-      .orderBy(depreciationRuns.period);
-
-    const rows: ReportRow[] = [];
-    for (const run of runs) {
-      const detail = await db
-        .select({
-          assetCode: fixedAssets.code,
-          assetName: fixedAssets.name,
-          amount: depreciationRunLines.amount,
-        })
-        .from(depreciationRunLines)
-        .innerJoin(fixedAssets, eq(depreciationRunLines.assetId, fixedAssets.id))
-        .where(tenantWhere(depreciationRunLines, f.tenantId, eq(depreciationRunLines.runId, run.id)));
-
-      if (!detail.length) {
-        rows.push({
-          period: run.period,
-          journalReference: run.journalReference || "",
-          totalAmount: num(run.totalAmount),
-          assetCode: "—",
-          assetName: "مجمّع (بدون تفاصيل)",
-          lineAmount: num(run.totalAmount),
-        });
-        continue;
-      }
-
-      for (const line of detail) {
-        rows.push({
-          period: run.period,
-          journalReference: run.journalReference || "",
-          totalAmount: num(run.totalAmount),
-          assetCode: line.assetCode || "",
-          assetName: line.assetName,
-          lineAmount: num(line.amount),
-        });
-      }
-    }
-    return rows;
-  },
+  "fixedassetsreports-dep": depreciationMegaReport,
+  /** نفس صفحة ميجا Dep.aspx — نفس الأعمدة */
+  "fixedassetsreports-depruns": depreciationMegaReport,
   "fixedassetsreports-soldfixedassets": async (db, f) => {
+    const dateParts = [];
+    if (f.dateFrom) dateParts.push(gte(assetSales.date, f.dateFrom as any));
+    if (f.dateTo) dateParts.push(lte(assetSales.date, f.dateTo as any));
+
     const rows = await db.select({
-      code: fixedAssets.code,
       name: fixedAssets.name,
       category: fixedAssets.category,
       purchasePrice: fixedAssets.purchasePrice,
@@ -135,27 +86,25 @@ const HANDLERS: Record<string, (db: Db, f: ReportFilters) => Promise<ReportRow[]
       purchaseDate: fixedAssets.purchaseDate,
       saleDate: assetSales.date,
       saleAmount: assetSales.amount,
-      buyer: assetSales.buyer,
-      notes: assetSales.notes,
     }).from(fixedAssets)
-      .leftJoin(assetSales, eq(assetSales.assetId, fixedAssets.id))
-      .where(tenantWhere(fixedAssets, f.tenantId, eq(fixedAssets.status, "disposed")));
+      .innerJoin(assetSales, eq(assetSales.assetId, fixedAssets.id))
+      .where(tenantWhere(fixedAssets, f.tenantId,
+        eq(fixedAssets.status, "disposed"),
+        dateParts.length ? and(...dateParts) : undefined));
     return rows.map((a) => {
       const purchase = num(a.purchasePrice);
       const sale = num(a.saleAmount);
       const book = num(a.currentValue);
+      const depreciation = Math.max(0, purchase - book);
       return {
-        code: a.code || "",
         name: a.name,
-        category: a.category || "",
-        purchasePrice: purchase,
-        bookValue: book,
-        saleAmount: sale,
-        gainLoss: sale - book,
-        buyer: a.buyer || "",
-        purchaseDate: a.purchaseDate ? toDateStr(a.purchaseDate) : "",
+        assetValue: purchase,
+        lastUsage: a.purchaseDate ? toDateStr(a.purchaseDate) : "",
         saleDate: a.saleDate ? toDateStr(a.saleDate) : "",
-        notes: a.notes || "",
+        depreciation: Number(depreciation.toFixed(2)),
+        salePrice: sale,
+        profitLoss: Number((sale - book).toFixed(2)),
+        _category: a.category || "",
       };
     });
   },

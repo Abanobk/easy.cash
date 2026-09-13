@@ -4410,6 +4410,9 @@ const reportsRouter = router({
     slug: z.string(),
     dateFrom: z.string().optional(),
     dateTo: z.string().optional(),
+    branchId: z.number().optional(),
+    currencyCode: z.string().optional(),
+    search: z.string().optional(),
   })).query(async ({ ctx, input }) => {
     await assertEntityAction(ctx, "reports", input.slug, "viewDoc");
     const db = await getDb();

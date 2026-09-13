@@ -3205,10 +3205,11 @@ export async function repSalesByItemsReport(db: Db, filters: ReportFilters) {
     repName: salesReps.name,
     itemCode: items.code,
     itemName: items.name,
+    unitName: items.unit,
     quantity: salesInvoiceItems.quantity,
+    price: salesInvoiceItems.price,
+    discountPct: salesInvoiceItems.discount,
     total: salesInvoiceItems.total,
-    purchasePrice: items.purchasePrice,
-    commissionRate: sql<string>`COALESCE(${customerSalesReps.commissionRate}, ${salesReps.commissionRate})`,
   }).from(salesInvoiceItems)
     .innerJoin(salesInvoices, eq(salesInvoiceItems.invoiceId, salesInvoices.id))
     .innerJoin(customers, eq(salesInvoices.customerId, customers.id))
@@ -3226,27 +3227,35 @@ export async function repSalesByItemsReport(db: Db, filters: ReportFilters) {
         filters.itemId ? eq(salesInvoiceItems.itemId, filters.itemId) : undefined,
         filters.categoryId ? eq(items.categoryId, filters.categoryId) : undefined)));
 
-  const map = new Map<string, { repName: string; itemCode: string; itemName: string; quantity: number; total: number; profit: number; commissionRate: number }>();
+  type Acc = { itemName: string; unitName: string; quantity: number; gross: number; discount: number; total: number };
+  const map = new Map<string, Acc>();
   for (const r of rows) {
     if (!r.repName) continue;
     const key = `${r.repName}-${r.itemCode || r.itemName}`;
+    const qty = num(r.quantity);
+    const price = num(r.price);
     const cur = map.get(key) || {
-      repName: r.repName,
-      itemCode: r.itemCode || "",
       itemName: r.itemName || "",
+      unitName: r.unitName || "",
       quantity: 0,
+      gross: 0,
+      discount: 0,
       total: 0,
-      profit: 0,
-      commissionRate: num(r.commissionRate),
     };
-    cur.quantity += num(r.quantity);
+    cur.quantity += qty;
+    cur.gross += qty * price;
+    cur.discount += qty * price * (num(r.discountPct) / 100);
     cur.total += num(r.total);
-    cur.profit += num(r.total) - num(r.purchasePrice) * num(r.quantity);
+    if (!cur.unitName && r.unitName) cur.unitName = r.unitName;
     map.set(key, cur);
   }
   return Array.from(map.values()).map((v) => ({
-    ...v,
-    commission: v.total * v.commissionRate / 100,
+    itemName: v.itemName,
+    quantity: v.quantity,
+    unitName: v.unitName,
+    unitPrice: v.quantity ? Number((v.gross / v.quantity).toFixed(4)) : 0,
+    discount: Number(v.discount.toFixed(2)),
+    total: Number(v.total.toFixed(2)),
   }));
 }
 
@@ -3257,7 +3266,6 @@ export async function repCollectingsReport(db: Db, filters: ReportFilters) {
     amount: string | null;
     customerName: string | null;
     repName: string | null;
-    commissionRate: string | null;
     description: string | null;
     channel: string | null;
     sign: number;
@@ -3265,17 +3273,14 @@ export async function repCollectingsReport(db: Db, filters: ReportFilters) {
 
   const mapRow = (r: Raw) => {
     const amount = num(r.amount) * r.sign;
-    const commissionRate = num(r.commissionRate);
     return {
-      date: dateOnly(r.date),
-      documentNumber: r.number || "—",
-      repName: r.repName || "",
+      collectionDate: dateOnly(r.date),
+      serial: r.number || "—",
       customerName: r.customerName || "",
       amount,
-      commissionRate,
-      commission: amount * commissionRate / 100,
-      channel: r.channel || "",
-      description: r.description || "",
+      invoiceSerial: r.description || "",
+      _channel: r.channel || "",
+      _repName: r.repName || "",
     };
   };
 
@@ -3286,7 +3291,7 @@ export async function repCollectingsReport(db: Db, filters: ReportFilters) {
     amount: cashTransactions.amount,
     customerName: customers.name,
     repName: salesReps.name,
-    commissionRate: sql<string>`COALESCE(${customerSalesReps.commissionRate}, ${salesReps.commissionRate})`,
+    reference: cashTransactions.reference,
     description: cashTransactions.description,
     type: cashTransactions.type,
   }).from(cashTransactions)
@@ -3310,7 +3315,7 @@ export async function repCollectingsReport(db: Db, filters: ReportFilters) {
     amount: bankTransactions.amount,
     customerName: customers.name,
     repName: salesReps.name,
-    commissionRate: sql<string>`COALESCE(${customerSalesReps.commissionRate}, ${salesReps.commissionRate})`,
+    reference: bankTransactions.reference,
     description: bankTransactions.description,
     type: bankTransactions.type,
   }).from(bankTransactions)
@@ -3335,7 +3340,6 @@ export async function repCollectingsReport(db: Db, filters: ReportFilters) {
     amount: checks.amount,
     customerName: customers.name,
     repName: salesReps.name,
-    commissionRate: sql<string>`COALESCE(${customerSalesReps.commissionRate}, ${salesReps.commissionRate})`,
     description: checks.description,
   }).from(checks)
     .innerJoin(customers, eq(checks.customerId, customers.id))
@@ -3354,35 +3358,51 @@ export async function repCollectingsReport(db: Db, filters: ReportFilters) {
 
   const mapped = [
     ...cashRows.map((r) => mapRow({
-      ...r,
+      date: r.date,
+      number: r.number,
+      amount: r.amount,
+      customerName: r.customerName,
+      repName: r.repName,
+      description: r.reference || r.description || "",
       channel: r.type === "pay_customer" ? "رد نقدي للعميل" : "نقدية",
       sign: r.type === "pay_customer" ? -1 : 1,
     })),
     ...bankRows.map((r) => mapRow({
-      ...r,
+      date: r.date,
+      number: r.number,
+      amount: r.amount,
+      customerName: r.customerName,
+      repName: r.repName,
+      description: r.reference || r.description || "",
       channel: r.type === "withdraw_customer" ? "رد بنكي للعميل" : "بنك",
       sign: r.type === "withdraw_customer" ? -1 : 1,
     })),
     ...checkRows.map((r) => mapRow({
       ...r,
       number: r.number,
+      description: r.description || "",
       channel: "شيك محصّل",
       sign: 1,
-      description: r.description || "تحصيل بشيك",
     })),
   ];
 
-  return mapped.sort((a, b) => String(b.date).localeCompare(String(a.date)));
+  return mapped
+    .sort((a, b) => String(b.collectionDate).localeCompare(String(a.collectionDate)))
+    .map((r, i) => {
+      const { _channel, _repName, ...out } = r;
+      return { rowNum: i + 1, ...out };
+    });
 }
 
 export async function repDailyReport(db: Db, filters: ReportFilters) {
-  const collections = await repCollectingsReport(db, filters);
   const dateParts = dateConds(salesInvoices, filters.dateFrom, filters.dateTo);
+  const returnDateParts = dateConds(salesReturns, filters.dateFrom, filters.dateTo);
+
   const salesRows = await db.select({
-    date: salesInvoices.date,
+    repId: salesReps.id,
     repName: salesReps.name,
     total: salesInvoices.total,
-    paid: salesInvoices.paid,
+    commissionRate: sql<string>`COALESCE(${salesReps.commissionRate}, 0)`,
   }).from(salesInvoices)
     .innerJoin(customers, eq(salesInvoices.customerId, customers.id))
     .leftJoin(salesReps, sql`COALESCE(${salesInvoices.salesRepId}, ${customers.salesRepId}) = ${salesReps.id}`)
@@ -3391,65 +3411,255 @@ export async function repDailyReport(db: Db, filters: ReportFilters) {
         repInvoiceFilter(filters),
         reportBranchCond(salesInvoices.branchId, filters))));
 
-  type DayAgg = {
-    date: string;
-    repName: string;
-    salesTotal: number;
-    salesPaid: number;
-    invoicesCount: number;
-    totalCollected: number;
-    collectionsCount: number;
-  };
-  const map = new Map<string, DayAgg>();
-  for (const r of salesRows) {
-    const repName = r.repName || "بدون مندوب";
-    const date = dateOnly(r.date);
-    const key = `${date}-${repName}`;
-    const cur = map.get(key) || {
-      date, repName, salesTotal: 0, salesPaid: 0, invoicesCount: 0, totalCollected: 0, collectionsCount: 0,
-    };
-    cur.salesTotal += num(r.total);
-    cur.salesPaid += num(r.paid);
-    cur.invoicesCount += 1;
-    map.set(key, cur);
-  }
-  for (const r of collections) {
-    const key = `${r.date}-${r.repName || "بدون مندوب"}`;
-    const cur = map.get(key) || {
-      date: String(r.date),
-      repName: String(r.repName || "بدون مندوب"),
-      salesTotal: 0,
-      salesPaid: 0,
-      invoicesCount: 0,
-      totalCollected: 0,
-      collectionsCount: 0,
-    };
-    cur.totalCollected += num(r.amount);
-    cur.collectionsCount += 1;
-    map.set(key, cur);
-  }
-  return Array.from(map.values()).sort((a, b) => a.date.localeCompare(b.date) || a.repName.localeCompare(b.repName));
-}
-
-export async function repDebitReport(db: Db, filters: ReportFilters) {
-  const rows = await db.select({
-    customerName: customers.name,
-    phone: customers.phone,
-    balance: customers.balance,
-    creditLimit: customers.creditLimit,
+  const returnRows = await db.select({
+    repId: salesReps.id,
     repName: salesReps.name,
+    total: salesReturns.total,
+  }).from(salesReturns)
+    .innerJoin(customers, eq(salesReturns.customerId, customers.id))
+    .leftJoin(salesReps, eq(customers.salesRepId, salesReps.id))
+    .where(tenantWhere(salesReturns, filters.tenantId,
+      and(eq(salesReturns.status, "confirmed"), ...(returnDateParts.length ? [and(...returnDateParts)] : []),
+        repCustomerFilter(filters),
+        reportBranchCond(customers.branchId, filters))));
+
+  const cashDate = dateConds(cashTransactions, filters.dateFrom, filters.dateTo);
+  const cashRows = await db.select({
+    repId: salesReps.id,
+    repName: salesReps.name,
+    amount: cashTransactions.amount,
+    type: cashTransactions.type,
+    commissionRate: sql<string>`COALESCE(${customerSalesReps.commissionRate}, ${salesReps.commissionRate}, 0)`,
+  }).from(cashTransactions)
+    .innerJoin(customers, eq(cashTransactions.customerId, customers.id))
+    .innerJoin(customerSalesReps, and(
+      eq(customerSalesReps.customerId, customers.id),
+      eq(customerSalesReps.tenantId, filters.tenantId),
+    ))
+    .leftJoin(salesReps, eq(customerSalesReps.salesRepId, salesReps.id))
+    .where(tenantWhere(cashTransactions, filters.tenantId,
+      and(inArray(cashTransactions.type, ["receive_customer", "pay_customer"]),
+        ...(cashDate.length ? [and(...cashDate)] : []),
+        filters.repId ? eq(customerSalesReps.salesRepId, filters.repId) : undefined)));
+
+  const bankDate = dateConds(bankTransactions, filters.dateFrom, filters.dateTo);
+  const bankRows = await db.select({
+    repId: salesReps.id,
+    repName: salesReps.name,
+    amount: bankTransactions.amount,
+    type: bankTransactions.type,
+    commissionRate: sql<string>`COALESCE(${customerSalesReps.commissionRate}, ${salesReps.commissionRate}, 0)`,
+  }).from(bankTransactions)
+    .innerJoin(customers, eq(bankTransactions.customerId, customers.id))
+    .innerJoin(customerSalesReps, and(
+      eq(customerSalesReps.customerId, customers.id),
+      eq(customerSalesReps.tenantId, filters.tenantId),
+    ))
+    .leftJoin(salesReps, eq(customerSalesReps.salesRepId, salesReps.id))
+    .where(tenantWhere(bankTransactions, filters.tenantId,
+      and(inArray(bankTransactions.type, ["deposit_customer", "withdraw_customer"]),
+        ...(bankDate.length ? [and(...bankDate)] : []),
+        filters.repId ? eq(customerSalesReps.salesRepId, filters.repId) : undefined)));
+
+  const checkDate = dateConds(checks, filters.dateFrom, filters.dateTo);
+  const checkRows = await db.select({
+    repId: salesReps.id,
+    repName: salesReps.name,
+    amount: checks.amount,
+    commissionRate: sql<string>`COALESCE(${customerSalesReps.commissionRate}, ${salesReps.commissionRate}, 0)`,
+  }).from(checks)
+    .innerJoin(customers, eq(checks.customerId, customers.id))
+    .innerJoin(customerSalesReps, and(
+      eq(customerSalesReps.customerId, customers.id),
+      eq(customerSalesReps.tenantId, filters.tenantId),
+    ))
+    .leftJoin(salesReps, eq(customerSalesReps.salesRepId, salesReps.id))
+    .where(tenantWhere(checks, filters.tenantId,
+      and(eq(checks.type, "incoming"), eq(checks.status, "cleared"),
+        ...(checkDate.length ? [and(...checkDate)] : []),
+        filters.repId ? eq(customerSalesReps.salesRepId, filters.repId) : undefined)));
+
+  type RepAgg = {
+    repId: number | null;
+    repName: string;
+    sales: number;
+    returns: number;
+    collection: number;
+    checkCollection: number;
+    commissionRate: number;
+    debit: number;
+  };
+  const map = new Map<string, RepAgg>();
+  const keyOf = (repId: number | null, repName: string | null) => String(repId ?? repName ?? "none");
+  const ensure = (repId: number | null, repName: string | null, commissionRate = 0) => {
+    const repLabel = repName || "بدون مندوب";
+    const key = keyOf(repId, repLabel);
+    const cur = map.get(key) || {
+      repId, repName: repLabel, sales: 0, returns: 0, collection: 0, checkCollection: 0, commissionRate, debit: 0,
+    };
+    if (!cur.commissionRate && commissionRate) cur.commissionRate = commissionRate;
+    map.set(key, cur);
+    return cur;
+  };
+
+  for (const r of salesRows) ensure(r.repId, r.repName, num(r.commissionRate)).sales += num(r.total);
+  for (const r of returnRows) ensure(r.repId, r.repName).returns += num(r.total);
+  for (const r of cashRows) {
+    const sign = r.type === "pay_customer" ? -1 : 1;
+    ensure(r.repId, r.repName, num(r.commissionRate)).collection += num(r.amount) * sign;
+  }
+  for (const r of bankRows) {
+    const sign = r.type === "withdraw_customer" ? -1 : 1;
+    ensure(r.repId, r.repName, num(r.commissionRate)).collection += num(r.amount) * sign;
+  }
+  for (const r of checkRows) ensure(r.repId, r.repName, num(r.commissionRate)).checkCollection += num(r.amount);
+
+  const debitRows = await db.select({
+    repId: salesReps.id,
+    repName: salesReps.name,
+    balance: customers.balance,
   }).from(customers)
     .leftJoin(salesReps, eq(customers.salesRepId, salesReps.id))
     .where(tenantWhere(customers, filters.tenantId,
-      and(sql`${customers.balance} > 0`, repCustomerFilter(filters))))
+      and(sql`${customers.balance} > 0`, repCustomerFilter(filters))));
+  for (const r of debitRows) ensure(r.repId, r.repName).debit += num(r.balance);
+
+  let serial = 0;
+  return Array.from(map.values())
+    .sort((a, b) => a.repName.localeCompare(b.repName))
+    .map((v) => {
+      serial += 1;
+      const netSales = v.sales - v.returns;
+      const totalCollection = v.collection + v.checkCollection;
+      const salesCommission = netSales * v.commissionRate / 100;
+      const collectionCommission = totalCollection * v.commissionRate / 100;
+      const profit = netSales - totalCollection;
+      const profitRatio = netSales ? Number(((profit / netSales) * 100).toFixed(2)) : 0;
+      return {
+        serial,
+        repName: v.repName,
+        sales: Number(v.sales.toFixed(2)),
+        returns: Number(v.returns.toFixed(2)),
+        netSales: Number(netSales.toFixed(2)),
+        collection: Number(v.collection.toFixed(2)),
+        checkCollection: Number(v.checkCollection.toFixed(2)),
+        totalCollection: Number(totalCollection.toFixed(2)),
+        debit: Number(v.debit.toFixed(2)),
+        collectionCommission: Number(collectionCommission.toFixed(2)),
+        salesCommission: Number(salesCommission.toFixed(2)),
+        profit: Number(profit.toFixed(2)),
+        profitRatio,
+      };
+    });
+}
+
+export async function repDebitReport(db: Db, filters: ReportFilters) {
+  const dateParts = dateConds(salesInvoices, filters.dateFrom, filters.dateTo);
+  const returnDateParts = dateConds(salesReturns, filters.dateFrom, filters.dateTo);
+
+  const custRows = await db.select({
+    id: customers.id,
+    customerName: customers.name,
+    balance: customers.balance,
+  }).from(customers)
+    .leftJoin(salesReps, eq(customers.salesRepId, salesReps.id))
+    .where(tenantWhere(customers, filters.tenantId,
+      and(
+        filters.hideZeroBalances === false ? undefined : sql`${customers.balance} > 0`,
+        repCustomerFilter(filters),
+        reportBranchCond(customers.branchId, filters),
+      )))
     .orderBy(customers.name);
 
-  return rows.map((r) => ({
-    repName: r.repName || "",
-    customerName: r.customerName,
-    phone: r.phone || "",
-    balance: num(r.balance),
-    creditLimit: num(r.creditLimit),
+  type CustAgg = { customerName: string; sales: number; returns: number; collection: number; checkCollection: number; debit: number };
+  const map = new Map<number, CustAgg>();
+  for (const c of custRows) {
+    map.set(c.id, {
+      customerName: c.customerName,
+      sales: 0,
+      returns: 0,
+      collection: 0,
+      checkCollection: 0,
+      debit: num(c.balance),
+    });
+  }
+  if (!map.size) return [];
+
+  const customerIds = [...map.keys()];
+  const salesRows = await db.select({
+    customerId: salesInvoices.customerId,
+    total: salesInvoices.total,
+  }).from(salesInvoices)
+    .where(tenantWhere(salesInvoices, filters.tenantId,
+      and(salesPostedFilter(), inArray(salesInvoices.customerId, customerIds),
+        ...(dateParts.length ? [and(...dateParts)] : []))));
+  for (const r of salesRows) {
+    const cur = map.get(r.customerId);
+    if (cur) cur.sales += num(r.total);
+  }
+
+  const returnRows = await db.select({
+    customerId: salesReturns.customerId,
+    total: salesReturns.total,
+  }).from(salesReturns)
+    .where(tenantWhere(salesReturns, filters.tenantId,
+      and(eq(salesReturns.status, "confirmed"), inArray(salesReturns.customerId, customerIds),
+        ...(returnDateParts.length ? [and(...returnDateParts)] : []))));
+  for (const r of returnRows) {
+    const cur = map.get(r.customerId);
+    if (cur) cur.returns += num(r.total);
+  }
+
+  const cashDate = dateConds(cashTransactions, filters.dateFrom, filters.dateTo);
+  const cashRows = await db.select({
+    customerId: cashTransactions.customerId,
+    amount: cashTransactions.amount,
+    type: cashTransactions.type,
+  }).from(cashTransactions)
+    .where(tenantWhere(cashTransactions, filters.tenantId,
+      and(inArray(cashTransactions.customerId, customerIds),
+        inArray(cashTransactions.type, ["receive_customer", "pay_customer"]),
+        ...(cashDate.length ? [and(...cashDate)] : []))));
+  for (const r of cashRows) {
+    const cur = map.get(r.customerId!);
+    if (cur) cur.collection += num(r.amount) * (r.type === "pay_customer" ? -1 : 1);
+  }
+
+  const bankDate = dateConds(bankTransactions, filters.dateFrom, filters.dateTo);
+  const bankRows = await db.select({
+    customerId: bankTransactions.customerId,
+    amount: bankTransactions.amount,
+    type: bankTransactions.type,
+  }).from(bankTransactions)
+    .where(tenantWhere(bankTransactions, filters.tenantId,
+      and(inArray(bankTransactions.customerId, customerIds),
+        inArray(bankTransactions.type, ["deposit_customer", "withdraw_customer"]),
+        ...(bankDate.length ? [and(...bankDate)] : []))));
+  for (const r of bankRows) {
+    const cur = map.get(r.customerId!);
+    if (cur) cur.collection += num(r.amount) * (r.type === "withdraw_customer" ? -1 : 1);
+  }
+
+  const checkDate = dateConds(checks, filters.dateFrom, filters.dateTo);
+  const checkRows = await db.select({
+    customerId: checks.customerId,
+    amount: checks.amount,
+  }).from(checks)
+    .where(tenantWhere(checks, filters.tenantId,
+      and(inArray(checks.customerId, customerIds), eq(checks.type, "incoming"), eq(checks.status, "cleared"),
+        ...(checkDate.length ? [and(...checkDate)] : []))));
+  for (const r of checkRows) {
+    const cur = map.get(r.customerId!);
+    if (cur) cur.checkCollection += num(r.amount);
+  }
+
+  return Array.from(map.values()).map((v) => ({
+    customerName: v.customerName,
+    sales: Number(v.sales.toFixed(2)),
+    returns: Number(v.returns.toFixed(2)),
+    collection: Number(v.collection.toFixed(2)),
+    checkCollection: Number(v.checkCollection.toFixed(2)),
+    debit: Number(v.debit.toFixed(2)),
   }));
 }
 

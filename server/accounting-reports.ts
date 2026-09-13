@@ -68,6 +68,13 @@ function toDateStr(v: unknown): string {
 
 export type ReportRow = Record<string, unknown>;
 
+const PRODUCTION_ORDER_STATUS: Record<string, string> = {
+  draft: "مسودة",
+  in_progress: "قيد التنفيذ",
+  completed: "مكتمل",
+  cancelled: "ملغى",
+};
+
 async function productionOrdersReport(db: Db, f: ReportFilters) {
   const dateParts = [];
   if (f.dateFrom) dateParts.push(gte(productionOrders.date, f.dateFrom as any));
@@ -79,30 +86,96 @@ async function productionOrdersReport(db: Db, f: ReportFilters) {
   } else if (f.branchIds?.length) {
     dateParts.push(sql`EXISTS (SELECT 1 FROM warehouses bw WHERE bw.id = ${productionOrders.warehouseId} AND bw.branchId IN (${sql.join(f.branchIds.map((id) => sql`${id}`), sql`, `)}))`);
   }
-  const rows = await db.select({
+  const orders = await db.select({
+    id: productionOrders.id,
     number: productionOrders.number,
     date: productionOrders.date,
     quantity: productionOrders.quantity,
     status: productionOrders.status,
     wipCostAmount: productionOrders.wipCostAmount,
+    batchNumber: productionOrders.batchNumber,
+    referenceNumber: productionOrders.referenceNumber,
+    notes: productionOrders.notes,
     productName: sql<string>`p.name`,
     productCode: sql<string>`p.code`,
+    productUnit: sql<string>`p.unit`,
     warehouseName: sql<string>`w.name`,
+    branchName: sql<string>`b.name`,
   }).from(productionOrders)
     .where(tenantWhere(productionOrders, f.tenantId, ...(dateParts.length ? [and(...dateParts)] : [])))
     .leftJoin(sql`items p`, sql`p.id = ${productionOrders.productId}`)
     .leftJoin(sql`warehouses w`, sql`w.id = ${productionOrders.warehouseId}`)
+    .leftJoin(sql`branches b`, sql`b.id = ${productionOrders.branchId}`)
     .orderBy(desc(productionOrders.date));
-  return rows.map((r) => ({
-    number: r.number,
-    date: toDateStr(r.date),
-    productCode: r.productCode || "",
-    productName: r.productName || "",
-    warehouseName: r.warehouseName || "",
-    quantity: Number(r.quantity),
-    wipCost: Number(r.wipCostAmount || 0),
-    status: r.status,
-  }));
+
+  const out: ReportRow[] = [];
+  for (const order of orders) {
+    const qty = Number(order.quantity);
+    const wipCost = Number(order.wipCostAmount || 0);
+    const unitCost = qty ? wipCost / qty : 0;
+    const statusLabel = PRODUCTION_ORDER_STATUS[String(order.status)] || String(order.status);
+
+    const headerFields: [string, string | number][] = [
+      ["المنتج التام", order.productName || ""],
+      ["الباركود", order.productCode || ""],
+      ["الفرع", order.branchName || ""],
+      ["التاريخ", toDateStr(order.date)],
+      ["المسلسل", order.number],
+      ["رقم التشغيلة", order.batchNumber || ""],
+      ["تكلفة المواد الخام", wipCost],
+      ["تكلفة التوالف", 0],
+      ["مصروفات", 0],
+      ["الكمية المستلمة", qty],
+      ["اجمالى التكلفة", wipCost],
+      ["الحالة", statusLabel],
+      ["الكمية", qty],
+      ["وحدة القياس", order.productUnit || ""],
+      ["مخزن الاستلام", order.warehouseName || ""],
+      ["تاريخ الاستلام", toDateStr(order.date)],
+      ["تاريخ الانتاج", toDateStr(order.date)],
+      ["تاريخ الانتهاء", ""],
+      ["تكلفة الوحدة", Number(unitCost.toFixed(2))],
+      ["رقم المرجع", order.referenceNumber || ""],
+    ];
+    if (order.notes) headerFields.push(["ملاحظات", order.notes]);
+
+    if (!f.hideDetails) {
+      for (const [label, value] of headerFields) {
+        out.push({ lineLabel: label, value: String(value ?? "") });
+      }
+    }
+
+    const materials = await db.select({
+      itemName: sql<string>`i.name`,
+      itemCode: sql<string>`i.code`,
+      itemUnit: sql<string>`i.unit`,
+      quantity: productionOrderMaterials.quantity,
+      scrapPercent: productionOrderMaterials.scrapPercent,
+      unitCost: sql<string>`COALESCE(NULLIF(i.averageCost, 0), i.purchasePrice)`,
+    }).from(productionOrderMaterials)
+      .leftJoin(sql`items i`, sql`i.id = ${productionOrderMaterials.itemId}`)
+      .where(tenantWhere(productionOrderMaterials, f.tenantId, eq(productionOrderMaterials.orderId, order.id)));
+
+    for (const m of materials) {
+      const baseQty = Number(m.quantity || 0);
+      const scrapPct = Number(m.scrapPercent || 0);
+      const scrapQty = baseQty * (scrapPct / 100);
+      const unitCost = Number(m.unitCost || 0);
+      const rawCost = baseQty * unitCost;
+      const scrapCost = scrapQty * unitCost;
+      out.push({
+        rawMaterial: m.itemName || "",
+        barcode: m.itemCode || "",
+        quantity: baseQty,
+        scrapQty: Number(scrapQty.toFixed(3)),
+        unitName: m.itemUnit || "",
+        rawCost: Number(rawCost.toFixed(2)),
+        scrapCost: Number(scrapCost.toFixed(2)),
+        totalCost: Number((rawCost + scrapCost).toFixed(2)),
+      });
+    }
+  }
+  return out;
 }
 
 async function productionMaterialsReport(db: Db, f: ReportFilters) {
@@ -118,12 +191,11 @@ async function productionMaterialsReport(db: Db, f: ReportFilters) {
   }
   const rows = await db.select({
     orderNumber: productionOrders.number,
-    date: productionOrders.date,
-    status: productionOrders.status,
-    orderQty: productionOrders.quantity,
+    batchNumber: productionOrders.batchNumber,
     warehouseName: sql<string>`w.name`,
     itemCode: sql<string>`i.code`,
     itemName: sql<string>`i.name`,
+    itemUnit: sql<string>`i.unit`,
     qtyPerUnit: productionOrderMaterials.quantity,
     scrapPercent: productionOrderMaterials.scrapPercent,
     unitCost: sql<string>`COALESCE(NULLIF(i.averageCost, 0), i.purchasePrice)`,
@@ -134,28 +206,19 @@ async function productionMaterialsReport(db: Db, f: ReportFilters) {
     .where(tenantWhere(productionOrderMaterials, f.tenantId, ...(dateParts.length ? [and(...dateParts)] : [])))
     .orderBy(desc(productionOrders.date));
   return rows.map((r) => {
-    const orderQty = Number(r.orderQty || 0);
-    const perUnit = Number(r.qtyPerUnit || 0);
+    const baseQty = Number(r.qtyPerUnit || 0);
     const scrapPct = Number(r.scrapPercent || 0);
-    const baseQty = perUnit * orderQty;
     const scrapQty = baseQty * (scrapPct / 100);
     const totalQty = baseQty + scrapQty;
     const unitCost = Number(r.unitCost || 0);
     return {
-      orderNumber: r.orderNumber,
-      date: toDateStr(r.date),
-      status: r.status,
       warehouseName: r.warehouseName || "",
-      itemCode: r.itemCode || "",
+      barcode: r.itemCode || "",
       itemName: r.itemName || "",
-      qtyPerUnit: perUnit,
-      orderQty,
-      baseQty,
-      scrapPercent: scrapPct,
-      scrapQty,
-      totalQty,
-      unitCost,
-      totalCost: totalQty * unitCost,
+      batchNumber: r.batchNumber || "",
+      quantity: Number(totalQty.toFixed(3)),
+      unitName: r.itemUnit || "",
+      cost: Number((totalQty * unitCost).toFixed(2)),
     };
   });
 }

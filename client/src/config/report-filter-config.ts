@@ -52,10 +52,10 @@ const ACCOUNTING_FILTERS: Record<string, ReportEntityFilter[]> = {
   "accountingreports-purchaseorders": ["supplier", "branch", "warehouse", "item", "category"],
   "accountingreports-matureinvoices": ["customer", "branch", "currency"],
   "accountingreports-maturereceipts": ["supplier", "branch", "currency"],
-  "accountingreports-grossrepsalesbyitems": ["rep", "branch", "warehouse", "item", "category"],
-  "accountingreports-repscollectings": ["rep"],
-  "accountingreports-repdaily": ["rep", "branch"],
-  "accountingreports-repdebit": ["rep"],
+  "accountingreports-grossrepsalesbyitems": ["rep", "branch", "warehouse", "item", "category", "area", "customer"],
+  "accountingreports-repscollectings": ["rep", "branch", "area", "customer"],
+  "accountingreports-repdaily": ["rep", "branch", "area"],
+  "accountingreports-repdebit": ["rep", "branch", "area", "customer"],
   "accountingreports-branchessummary": ["branch", "currency"],
   "accountingreports-areassummary": ["branch", "area", "currency"],
   "accountingreports-grosscustomersalesbyitems": ["item", "category", "rep", "branch", "warehouse", "customer"],
@@ -90,10 +90,20 @@ const FINAL_FILTERS: Record<string, ReportEntityFilter[]> = {
   "finalreports-financialstatment": ["branch"],
 };
 
+const HR_FILTERS: Record<string, ReportEntityFilter[]> = {
+  "hrreports-attendance": ["branch"],
+  "hrreports-employeesvactions": [],
+  "hrreports-employeespayroll": [],
+  "hrreports-employeespayroll-list": [],
+  "hrreports-employeesunderrequest": [],
+  "hrreports-employeeslist": [],
+  "hrreports-loans-list": ["branch", "currency"],
+};
+
 const ASSETS_FILTERS: Record<string, ReportEntityFilter[]> = {
-  "fixedassetsreports-dep": [],
-  "fixedassetsreports-depruns": [],
-  "fixedassetsreports-soldfixedassets": [],
+  "fixedassetsreports-dep": ["branch", "currency"],
+  "fixedassetsreports-depruns": ["branch", "currency"],
+  "fixedassetsreports-soldfixedassets": ["branch"],
 };
 
 /** فلاتر تقارير المخازن من مسح ميجا (artifacts/mega-report-menu/FILTERS-BY-REPORT.md) */
@@ -114,6 +124,7 @@ export function getReportEntityFilters(section: string, slug: string): ReportEnt
   if (section === "accounting") return ACCOUNTING_FILTERS[slug] || [];
   if (section === "final") return FINAL_FILTERS[slug] || [];
   if (section === "assets") return ASSETS_FILTERS[slug] || [];
+  if (section === "hr") return HR_FILTERS[slug] || [];
   if (section === "inventory") return INVENTORY_FILTERS[slug] || [];
   // featureKey-style slugs also used from hub
   if (slug.startsWith("invreports-")) return INVENTORY_FILTERS[slug] || [];

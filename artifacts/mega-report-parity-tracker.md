@@ -28,10 +28,10 @@ Slugs = `featureKey` من `client/src/config/erp-navigation.ts` (مصدر الح
 | 4 | Collection / checks / dues / leftovers ×10 | ✅ partial + honesty |
 | **5** | **Final leftovers ×6** | ✅ partial (subledger account capture) |
 | 6 | Profits ×3 + credits ages gap ×3 | ⬜ |
-| 7 | Reps ×4 | ⬜ |
-| 8 | Production ×2 | ⬜ |
-| 9 | HR ×7 | ⬜ |
-| 10 | Fixed assets ×3 | ⬜ |
+| 7 | Reps ×4 | ✅ partial |
+| 8 | Production ×2 | ✅ partial |
+| 9 | HR ×7 | ✅ partial |
+| 10 | Fixed assets ×3 | ✅ partial |
 
 ---
 
@@ -131,34 +131,34 @@ Slugs = `featureKey` من `client/src/config/erp-navigation.ts` (مصدر الح
 ## Wave 7 — reps
 | Easy slug | Mega path | Filters | Columns | Evidence | Notes |
 |-----------|-----------|---------|---------|----------|-------|
-| `accountingreports-grossrepsalesbyitems` | `/AccountingReports/GrossRepSalesByItems.aspx` | todo | todo | - | |
-| `accountingreports-repscollectings` | `/AccountingReports/RepsCollectings.aspx` | todo | todo | - | |
-| `accountingreports-repdaily` | `/AccountingReports/RepDaily.aspx` | todo | todo | - | |
-| `accountingreports-repdebit` | `/AccountingReports/RepDebit.aspx` | todo | todo | - | |
+| `accountingreports-grossrepsalesbyitems` | `/AccountingReports/GrossRepSalesByItems.aspx` | partial | done | `mega-wave7-reps/` | region/rep grouping not rendered; grid cols match PDF |
+| `accountingreports-repscollectings` | `/AccountingReports/RepsCollectings.aspx` | partial | done | `mega-wave7-reps/` | region/rep footers deferred; invoiceSerial from reference |
+| `accountingreports-repdaily` | `/AccountingReports/RepDaily.aspx` | partial | done | `mega-wave7-reps/` | per-rep period aggregate; profit/commission approximated |
+| `accountingreports-repdebit` | `/AccountingReports/RepDebit.aspx` | partial | done | `mega-wave7-reps/` | debit = current balance; period sales/returns/collections |
 
 ## Wave 8 — production
 | Easy slug | Mega path | Filters | Columns | Evidence | Notes |
 |-----------|-----------|---------|---------|----------|-------|
-| `accountingreports-productionorders` | `/AccountingReports/ProductionOrders.aspx` | todo | todo | - | |
-| `accountingreports-productionmaterials` | `/AccountingReports/ProductionMaterials.aspx` | todo | todo | - | |
+| `accountingreports-productionorders` | `/AccountingReports/ProductionOrders.aspx` | partial | partial | `mega-wave8-production/` | card header as lineLabel/value; materials grid; scrap/expense fields partial |
+| `accountingreports-productionmaterials` | `/AccountingReports/ProductionMaterials.aspx` | partial | done | `mega-wave8-production/` | batch from order; warehouse from order header |
 
 ## Wave 9 — HR
 | Easy slug | Mega path | Filters | Columns | Evidence | Notes |
 |-----------|-----------|---------|---------|----------|-------|
-| `hrreports-attendance` | `/HRReports/Attendance.aspx` | todo | todo | - | |
-| `hrreports-employeesvactions` | `/HRReports/EmployeesVactions.aspx` | todo | todo | - | |
-| `hrreports-employeespayroll` | `/HRReports/EmployeesPayroll.aspx` | todo | todo | - | |
-| `hrreports-employeespayroll-list` | `/HRReports/EmployeesPayroll.aspx/List` | todo | todo | - | |
-| `hrreports-employeesunderrequest` | `/HRReports/EmployeesUnderRequest.aspx` | todo | todo | - | |
-| `hrreports-employeeslist` | `/HRReports/EmployeesList.aspx` | todo | todo | - | |
-| `hrreports-loans-list` | `/HRReports/Loans.aspx/List` | todo | todo | - | |
+| `hrreports-attendance` | `/HRReports/Attendance.aspx` | partial | partial | `mega-wave9-hr/` | 17 Mega cols wired; permission/mission/weekly cols empty (no Easy source) |
+| `hrreports-employeesvactions` | `/HRReports/EmployeesVactions.aspx` | partial | done | `mega-wave9-hr/` | employee grouping via `_employeeName` hidden |
+| `hrreports-employeespayroll` | `/HRReports/EmployeesPayroll.aspx` | partial | partial | `mega-wave9-hr/` | card as lineLabel/value; payroll breakdown approximated from payroll table |
+| `hrreports-employeespayroll-list` | `/HRReports/EmployeesPayroll.aspx/List` | partial | partial | `mega-wave9-hr/` | wide grid; several deduction cols map to payroll aggregates only |
+| `hrreports-employeesunderrequest` | `/HRReports/EmployeesUnderRequest.aspx` | partial | partial | `mega-wave9-hr/` | test/nationalId cols empty — schema gap |
+| `hrreports-employeeslist` | `/HRReports/EmployeesList.aspx` | partial | partial | `mega-wave9-hr/` | card lineLabel/value; many profile fields empty in schema |
+| `hrreports-loans-list` | `/HRReports/Loans.aspx/List` | partial | partial | `mega-wave9-hr/` | uses salary_advances; branch/installments/creditAccount empty |
 
 ## Wave 10 — fixed assets
 | Easy slug | Mega path | Filters | Columns | Evidence | Notes |
 |-----------|-----------|---------|---------|----------|-------|
-| `fixedassetsreports-dep` | `/FixedAssetsReports/Dep.aspx` | todo | todo | - | |
-| `fixedassetsreports-depruns` | `/FixedAssetsReports/Dep.aspx` | todo | todo | - | same Mega page family |
-| `fixedassetsreports-soldfixedassets` | `/FixedAssetsReports/SoldFixedAssets.aspx` | todo | todo | - | |
+| `fixedassetsreports-dep` | `/FixedAssetsReports/Dep.aspx` | partial | done | `mega-wave10-assets/` | as-of = dateTo; currency fixed ج.م |
+| `fixedassetsreports-depruns` | `/FixedAssetsReports/Dep.aspx` | partial | done | `mega-wave10-assets/` | **same Mega page/columns as dep** — shared handler |
+| `fixedassetsreports-soldfixedassets` | `/FixedAssetsReports/SoldFixedAssets.aspx` | partial | done | `mega-wave10-assets/` | lastUsage ≈ purchaseDate; category grouping deferred |
 
 ---
 
