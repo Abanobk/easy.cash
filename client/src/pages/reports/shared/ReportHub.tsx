@@ -15,6 +15,7 @@ import { reportColumnLabel, REPORT_TOTAL_COLUMNS } from "@/config/report-column-
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { printTableReport, printGroupedInvoiceReport, printAccountStatementReport, printFormalAccountingReport } from "@/lib/print-report";
+import { toast } from "sonner";
 
 type ReportProcedure = "accountingBySlug" | "finalBySlug" | "hrBySlug" | "assetsBySlug";
 
@@ -274,6 +275,9 @@ export default function ReportHub({ title, section, icon, reports, procedure }: 
     { enabled: needs("warehouse") || needs("branch") },
   );
   const { data: categoriesList } = trpc.items.categories.useQuery(undefined, { enabled: needs("category") });
+  const { data: contactCategoriesList } = trpc.contactCategories.list.useQuery(undefined, {
+    enabled: slug === "finalreports-trialbalance" && customerGrouping === "byCategory",
+  });
   const { data: areasList } = trpc.parity.sales.areas.list.useQuery(undefined, { enabled: needs("area") });
   const { data: exchangeRatesList } = trpc.parity.settings.exchangeRates.list.useQuery(undefined, { enabled: needs("currency") });
 
@@ -385,6 +389,11 @@ export default function ReportHub({ title, section, icon, reports, procedure }: 
   }, [rows, columns, isAccountStatement]);
 
   const handleSearch = () => {
+    // ميجا ميزان: «تجميع فئة عملاء» يطلب اختيار فئة قبل العرض
+    if (slug === "finalreports-trialbalance" && customerGrouping === "byCategory" && !categoryId) {
+      toast.error("يجب اختيار فئة عملاء");
+      return;
+    }
     setQuery({
       slug,
       ...(reportMeta?.needsDates ? { dateFrom, dateTo } : {}),
@@ -777,7 +786,15 @@ export default function ReportHub({ title, section, icon, reports, procedure }: 
                   <>
                     <div>
                       <Label className="text-xs">طريقة تجميع العملاء</Label>
-                      <Select value={customerGrouping || "none"} onValueChange={(v) => setCustomerGrouping(v === "none" ? "" : v)}>
+                      <Select
+                        value={customerGrouping || "none"}
+                        onValueChange={(v) => {
+                          const next = v === "none" ? "" : v;
+                          setCustomerGrouping(next);
+                          // ميجا يطلب فئة فقط مع «تجميع فئة عملاء»
+                          if (next !== "byCategory") setCategoryId("");
+                        }}
+                      >
                         <SelectTrigger className="w-52"><SelectValue placeholder="اختر" /></SelectTrigger>
                         <SelectContent>
                           <SelectItem value="none">اختر</SelectItem>
@@ -787,6 +804,22 @@ export default function ReportHub({ title, section, icon, reports, procedure }: 
                         </SelectContent>
                       </Select>
                     </div>
+                    {customerGrouping === "byCategory" && (
+                      <div>
+                        <Label className="text-xs">فئة العملاء</Label>
+                        <Select value={categoryId || "none"} onValueChange={(v) => setCategoryId(v === "none" ? "" : v)}>
+                          <SelectTrigger className="w-52"><SelectValue placeholder="اختر فئة" /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="none">اختر فئة</SelectItem>
+                            {(contactCategoriesList || [])
+                              .filter((c: { type?: string }) => !c.type || c.type === "customer" || c.type === "both")
+                              .map((c: { id: number; name: string }) => (
+                                <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>
+                              ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
                     <div>
                       <Label className="text-xs">مستوى العرض</Label>
                       <Select value={displayLevel || "all"} onValueChange={(v) => setDisplayLevel(v === "all" ? "" : v)}>

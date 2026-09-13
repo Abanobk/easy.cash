@@ -69,7 +69,7 @@ export type ReportFilters = {
    * مرجع PDF ميجا 2026-09-13:
    * - all: سطر واحد «مجمع العملاء (كل العملاء)»
    * - zeroBalances: «مجمع العملاء (الارصدة الصفرية)» + تفصيل العملاء غير الصفريين
-   * - byCategory: تجميع حسب فئة العميل (بانتظار PDF ميجا لتأكيد التسمية)
+   * - byCategory: ميجا يطلب اختيار فئة عملاء (`categoryId`) قبل العرض
    */
   customerGrouping?: "all" | "zeroBalances" | "byCategory";
   /** ميجا كشف حساب: عرض حركات الرصيد الافتتاحي */
@@ -924,36 +924,28 @@ async function applyCustomerGroupingToTrialBalance(
       }));
     }
   } else {
-    // byCategory — تجميع حسب فئة العميل (تسمية الصف بانتظار PDF ميجا)
-    const cats = await db.select({ id: contactCategories.id, name: contactCategories.name })
+    // byCategory — ميجا يطلب إدخال/اختيار فئة قبل العرض (تأكيد المستخدم 2026-09-13)
+    if (filters.categoryId == null) {
+      // ميجا يمنع العرض بدون فئة — الواجهة تمنع البحث؛ هنا نُبقي الشجرة كما هي
+      return rows;
+    }
+    const [cat] = await db.select({ id: contactCategories.id, name: contactCategories.name })
       .from(contactCategories)
-      .where(tenantWhere(contactCategories, filters.tenantId));
-    const catName = new Map(cats.map((c) => [c.id, c.name]));
-    const groups = new Map<string, { openingNet: number; periodDebit: number; periodCredit: number; closingNet: number }>();
-    for (const m of metrics) {
-      const label = m.categoryId != null && catName.has(m.categoryId)
-        ? `مجمع العملاء (${catName.get(m.categoryId)})`
-        : "مجمع العملاء (بدون فئة)";
-      const g = groups.get(label) || { openingNet: 0, periodDebit: 0, periodCredit: 0, closingNet: 0 };
-      g.openingNet += m.openingNet;
-      g.periodDebit += m.periodDebit;
-      g.periodCredit += m.periodCredit;
-      g.closingNet += m.closingNet;
-      groups.set(label, g);
-    }
-    for (const [name, g] of [...groups.entries()].sort((a, b) => a[0].localeCompare(b[0], "ar"))) {
-      detail.push(tbRowFromNets({
-        accountCode: "",
-        accountName: name,
-        openingNet: g.openingNet,
-        periodDebit: g.periodDebit,
-        periodCredit: g.periodCredit,
-        closingNet: g.closingNet,
-      }));
-    }
-    if (!detail.length) {
-      detail.push({ ...leaf, accountCode: "", accountName: "مجمع العملاء (كل العملاء)" });
-    }
+      .where(tenantWhere(contactCategories, filters.tenantId, eq(contactCategories.id, filters.categoryId)));
+    const catLabel = cat?.name || `فئة #${filters.categoryId}`;
+    const subset = metrics.filter((m) => m.categoryId === filters.categoryId);
+    const gOpen = subset.reduce((s, m) => s + m.openingNet, 0);
+    const gPd = subset.reduce((s, m) => s + m.periodDebit, 0);
+    const gPc = subset.reduce((s, m) => s + m.periodCredit, 0);
+    const gClose = subset.reduce((s, m) => s + m.closingNet, 0);
+    detail.push(tbRowFromNets({
+      accountCode: "",
+      accountName: `مجمع العملاء (${catLabel})`,
+      openingNet: gOpen,
+      periodDebit: gPd,
+      periodCredit: gPc,
+      closingNet: gClose,
+    }));
   }
 
   const remove = new Set(arIdxs);
