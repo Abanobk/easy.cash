@@ -1,0 +1,328 @@
+{
+  "at": "2026-09-13T19:46:08.465Z",
+  "results": [
+    {
+      "key": "grossrepsalesbyitems",
+      "featureKey": "accountingreports-grossrepsalesbyitems",
+      "path": "/AccountingReports/GrossRepSalesByItems.aspx",
+      "wave": 7,
+      "note": null,
+      "gate": {
+        "href": "https://km.mega-cash.net/AccountingReports/GrossRepSalesByItems.aspx",
+        "authDenied": false,
+        "startScreen": false,
+        "hasShow": true,
+        "hasDateFrom": true,
+        "hasAsOf": false,
+        "hasMonth": false,
+        "title": "",
+        "hint": " مبيعات المندوبين بالاصناف تلقائي (4) تلقائي (3) تلقائي (2) تلقائي (1) 0 1 2 3 4 يسار وسط يمين اكسل بالتنسيق اكسل بدون تنسيق تفعيل الروابط تعطيل الروابط KM-01_01_2022 بحث بحث الفرع العملة اختر جنيه مصري جنيه استرليني جنيه سوداني درهم اماراتي درهم مغربي دولار امريكي دينار اردني دينار عراقي دينار كويتي دينار ليبي روبل روسي روبية هندي ريال ايراني ريال سعودي ريا"
+      },
+      "prep": {
+        "okFrom": true,
+        "okTo": true,
+        "okAsOf": false,
+        "monthYear": null,
+        "hireDates": null,
+        "from": "1/1/2022",
+        "to": "3/1/2022",
+        "hasBtn": true,
+        "btnId": "cph_btnShow",
+        "hasViewer": true,
+        "dateIds": [
+          "cph_txtDateFrom",
+          "cph_txtDateTo"
+        ],
+        "selectIds": [
+          "ddlNumDecimals",
+          "ddlNumAlign",
+          "ddlExcelFormat",
+          "ddlDisableLinks",
+          "ddlOverrideDatabases",
+          "cph_ddlCurrency",
+          "cph_ddlShowPriceType"
+        ],
+        "nearbyFilterHints": [
+          "مبيعات المندوبين بالاصناف",
+          "الفرع",
+          "الفرع",
+          "من تاريخ",
+          "من تاريخ"
+        ]
+      },
+      "foundUrls": [
+        "/showreport/Q1E5NPTEI4mXOZ_oqC1EVod5E1zDSYekJygFIc39Mb4R9cNdTlf07mr0xAj1mTj5if7nyPW-GTL_9n1khoX467plrEChXhGUATVCNkkjrUqlmYgrWt16cQl-g5Ef2M8nb5nrBsMLKP6AkG05wOIqn_c2dPc1/مبيعات",
+        "https://km.mega-cash.net/showreport/Q1E5NPTEI4mXOZ_oqC1EVod5E1zDSYekJygFIc39Mb4R9cNdTlf07mr0xAj1mTj5if7nyPW-GTL_9n1khoX467plrEChXhGUATVCNkkjrUqlmYgrWt16cQl-g5Ef2M8nb5nrBsMLKP6AkG05wOIqn_c2dPc1/%D9%85%D8%A8%D9%8A%D8%B9%D8%A7%D8%AA%20%D8%A7%D9%84%D9%85%D9%86%D8%AF%D9%88%D8%A8%D9%8A%D9%86%20%D8%A8%D8%A7%D9%84%D8%A7%D8%B5%D9%86%D8%A7%D9%81.ashx?show=1",
+        "/showreport/Q1E5NPTEI4mXOZ_oqC1EVod5E1zDSYekJygFIc39Mb4R9cNdTlf07mr0xAj1mTj5if7nyPW-GTL_9n1khoX467plrEChXhGUATVCNkkjrUqlmYgrWt16cQl-g5Ef2M8nb5nrBsMLKP6AkG05wOIqn_c2dPc1/%D9%85%D8%A8%D9%8A%D8%B9%D8%A7%D8%AA%20%D8%A7%D9%84%D9%85%D9%86%D8%AF%D9%88%D8%A8%D9%8A%D9%86%20%D8%A8%D8%A7%D9%84%D8%A7%D8%B5%D9%86%D8%A7%D9%81.ashx?show=1",
+        "https://km.mega-cash.net/downloadreport/Q1E5NPTEI4mXOZ_oqC1EVod5E1zDSYekJygFIc39Mb4R9cNdTlf07mr0xAj1mTj5if7nyPW-GTL_9n1khoX467plrEChXhGUATVCNkkjrUqlmYgrWt16cQl-g5Ef2M8nb5nrBsMLKP6AkG05wOIqn_c2dPc1/%D9%85%D8%A8%D9%8A%D8%B9%D8%A7%D8%AA%20%D8%A7%D9%84%D9%85%D9%86%D8%AF%D9%88%D8%A8%D9%8A%D9%86%20%D8%A8%D8%A7%D9%84%D8%A7%D8%B5%D9%86%D8%A7%D9%81.ashx?show=1",
+        "/showreport/Q1E5NPTEI4mXOZ_oqC1EVod5E1zDSYekJygFIc39Mb4R9cNdTlf07mr0xAj1mTj5if7nyPW-GTL_9n1khoX467plrEChXhGUATVCNkkjrUqlmYgrWt16cQl-g5Ef2M8nb5nrBsMLKP6AkG05wOIqn_c2dPc1/مبيعات المندوبين بالاصناف.ashx?show=1"
+      ],
+      "finalSrc": "/showreport/Q1E5NPTEI4mXOZ_oqC1EVod5E1zDSYekJygFIc39Mb4R9cNdTlf07mr0xAj1mTj5if7nyPW-GTL_9n1khoX467plrEChXhGUATVCNkkjrUqlmYgrWt16cQl-g5Ef2M8nb5nrBsMLKP6AkG05wOIqn_c2dPc1/مبيعات المندوبين بالاصناف.ashx?show=1",
+      "pdfPath": "artifacts/mega-wave7-reps/pdf/grossrepsalesbyitems.pdf",
+      "saved": [
+        {
+          "vu": "https://km.mega-cash.net/showreport/Q1E5NPTEI4mXOZ_oqC1EVod5E1zDSYekJygFIc39Mb4R9cNdTlf07mr0xAj1mTj5if7nyPW-GTL_9n1khoX467plrEChXhGUATVCNkkjrUqlmYgrWt16cQl-g5Ef2M8nb5nrBsMLKP6AkG05wOIqn_c2dPc1/مبيعات",
+          "status": 200,
+          "size": 97512,
+          "name": "grossrepsalesbyitems.pdf"
+        }
+      ],
+      "netHits": 3,
+      "lastSnap": {
+        "src": "/showreport/Q1E5NPTEI4mXOZ_oqC1EVod5E1zDSYekJygFIc39Mb4R9cNdTlf07mr0xAj1mTj5if7nyPW-GTL_9n1khoX467plrEChXhGUATVCNkkjrUqlmYgrWt16cQl-g5Ef2M8nb5nrBsMLKP6AkG05wOIqn_c2dPc1/مبيعات المندوبين بالاصناف.ashx?show=1",
+        "srcProp": "https://km.mega-cash.net/showreport/Q1E5NPTEI4mXOZ_oqC1EVod5E1zDSYekJygFIc39Mb4R9cNdTlf07mr0xAj1mTj5if7nyPW-GTL_9n1khoX467plrEChXhGUATVCNkkjrUqlmYgrWt16cQl-g5Ef2M8nb5nrBsMLKP6AkG05wOIqn_c2dPc1/%D9%85%D8%A8%D9%8A%D8%B9%D8%A7%D8%AA%20%D8%A7%D9%84%D9%85%D9%86%D8%AF%D9%88%D8%A8%D9%8A%D9%86%20%D8%A8%D8%A7%D9%84%D8%A7%D8%B5%D9%86%D8%A7%D9%81.ashx?show=1",
+        "waitText": false,
+        "validation": true,
+        "authDenied": false,
+        "emptyHint": false,
+        "lnk": [
+          "https://km.mega-cash.net/showreport/Q1E5NPTEI4mXOZ_oqC1EVod5E1zDSYekJygFIc39Mb4R9cNdTlf07mr0xAj1mTj5if7nyPW-GTL_9n1khoX467plrEChXhGUATVCNkkjrUqlmYgrWt16cQl-g5Ef2M8nb5nrBsMLKP6AkG05wOIqn_c2dPc1/%D9%85%D8%A8%D9%8A%D8%B9%D8%A7%D8%AA%20%D8%A7%D9%84%D9%85%D9%86%D8%AF%D9%88%D8%A8%D9%8A%D9%86%20%D8%A8%D8%A7%D9%84%D8%A7%D8%B5%D9%86%D8%A7%D9%81.ashx?show=1",
+          "https://km.mega-cash.net/downloadreport/Q1E5NPTEI4mXOZ_oqC1EVod5E1zDSYekJygFIc39Mb4R9cNdTlf07mr0xAj1mTj5if7nyPW-GTL_9n1khoX467plrEChXhGUATVCNkkjrUqlmYgrWt16cQl-g5Ef2M8nb5nrBsMLKP6AkG05wOIqn_c2dPc1/%D9%85%D8%A8%D9%8A%D8%B9%D8%A7%D8%AA%20%D8%A7%D9%84%D9%85%D9%86%D8%AF%D9%88%D8%A8%D9%8A%D9%86%20%D8%A8%D8%A7%D9%84%D8%A7%D8%B5%D9%86%D8%A7%D9%81.ashx?show=1"
+        ],
+        "hint": " مبيعات المندوبين بالاصناف تلقائي (4) تلقائي (3) تلقائي (2) تلقائي (1) 0 1 2 3 4 يسار وسط يمين اكسل بالتنسيق اكسل بدون تنسيق تفعيل الروابط تعطيل الروابط KM-01_01_2022 بحث بحث الفرع العملة اختر جنيه مصري جنيه استرليني جنيه سوداني درهم اماراتي درهم مغربي دولار امريكي دينار اردني دي"
+      },
+      "error": null
+    },
+    {
+      "key": "repscollectings",
+      "featureKey": "accountingreports-repscollectings",
+      "path": "/AccountingReports/RepsCollectings.aspx",
+      "wave": 7,
+      "note": null,
+      "gate": {
+        "href": "https://km.mega-cash.net/AccountingReports/RepsCollectings.aspx",
+        "authDenied": false,
+        "startScreen": false,
+        "hasShow": true,
+        "hasDateFrom": true,
+        "hasAsOf": false,
+        "hasMonth": false,
+        "title": "",
+        "hint": " تحصيلات المندوبين تلقائي (4) تلقائي (3) تلقائي (2) تلقائي (1) 0 1 2 3 4 يسار وسط يمين اكسل بالتنسيق اكسل بدون تنسيق تفعيل الروابط تعطيل الروابط KM-01_01_2022 بحث بحث الفرع العملة اختر جنيه مصري جنيه استرليني جنيه سوداني درهم اماراتي درهم مغربي دولار امريكي دينار اردني دينار عراقي دينار كويتي دينار ليبي روبل روسي روبية هندي ريال ايراني ريال سعودي ريال عماني "
+      },
+      "prep": {
+        "okFrom": true,
+        "okTo": true,
+        "okAsOf": false,
+        "monthYear": null,
+        "hireDates": null,
+        "from": "1/1/2022",
+        "to": "3/1/2022",
+        "hasBtn": true,
+        "btnId": "cph_btnShow",
+        "hasViewer": true,
+        "dateIds": [
+          "cph_txtDateFrom",
+          "cph_txtDateTo"
+        ],
+        "selectIds": [
+          "ddlNumDecimals",
+          "ddlNumAlign",
+          "ddlExcelFormat",
+          "ddlDisableLinks",
+          "ddlOverrideDatabases",
+          "cph_ddlCurrency"
+        ],
+        "nearbyFilterHints": [
+          "تحصيلات المندوبين",
+          "الفرع",
+          "الفرع",
+          "من تاريخ",
+          "من تاريخ"
+        ]
+      },
+      "foundUrls": [
+        "/showreport/Uf1QqqP1gugUBNSdnncPMRgkozyF3brhnwDiw-J7vI_i5JmmpFYQHCNxmeduBAfhjjWTbEuUcsj6XRI0hEBlGXOSV1ZpSlCkljV92Ab1UTce-iKkNSh_rNU0EjS2IgWCEnnv9A2/تحصيلات",
+        "https://km.mega-cash.net/showreport/Uf1QqqP1gugUBNSdnncPMRgkozyF3brhnwDiw-J7vI_i5JmmpFYQHCNxmeduBAfhjjWTbEuUcsj6XRI0hEBlGXOSV1ZpSlCkljV92Ab1UTce-iKkNSh_rNU0EjS2IgWCEnnv9A2/%D8%AA%D8%AD%D8%B5%D9%8A%D9%84%D8%A7%D8%AA%20%D8%A7%D9%84%D9%85%D9%86%D8%AF%D9%88%D8%A8%D9%8A%D9%86.ashx?show=1",
+        "/showreport/Uf1QqqP1gugUBNSdnncPMRgkozyF3brhnwDiw-J7vI_i5JmmpFYQHCNxmeduBAfhjjWTbEuUcsj6XRI0hEBlGXOSV1ZpSlCkljV92Ab1UTce-iKkNSh_rNU0EjS2IgWCEnnv9A2/%D8%AA%D8%AD%D8%B5%D9%8A%D9%84%D8%A7%D8%AA%20%D8%A7%D9%84%D9%85%D9%86%D8%AF%D9%88%D8%A8%D9%8A%D9%86.ashx?show=1",
+        "https://km.mega-cash.net/downloadreport/Uf1QqqP1gugUBNSdnncPMRgkozyF3brhnwDiw-J7vI_i5JmmpFYQHCNxmeduBAfhjjWTbEuUcsj6XRI0hEBlGXOSV1ZpSlCkljV92Ab1UTce-iKkNSh_rNU0EjS2IgWCEnnv9A2/%D8%AA%D8%AD%D8%B5%D9%8A%D9%84%D8%A7%D8%AA%20%D8%A7%D9%84%D9%85%D9%86%D8%AF%D9%88%D8%A8%D9%8A%D9%86.ashx?show=1",
+        "/showreport/Uf1QqqP1gugUBNSdnncPMRgkozyF3brhnwDiw-J7vI_i5JmmpFYQHCNxmeduBAfhjjWTbEuUcsj6XRI0hEBlGXOSV1ZpSlCkljV92Ab1UTce-iKkNSh_rNU0EjS2IgWCEnnv9A2/تحصيلات المندوبين.ashx?show=1"
+      ],
+      "finalSrc": "/showreport/Uf1QqqP1gugUBNSdnncPMRgkozyF3brhnwDiw-J7vI_i5JmmpFYQHCNxmeduBAfhjjWTbEuUcsj6XRI0hEBlGXOSV1ZpSlCkljV92Ab1UTce-iKkNSh_rNU0EjS2IgWCEnnv9A2/تحصيلات المندوبين.ashx?show=1",
+      "pdfPath": "artifacts/mega-wave7-reps/pdf/repscollectings.pdf",
+      "saved": [
+        {
+          "vu": "https://km.mega-cash.net/showreport/Uf1QqqP1gugUBNSdnncPMRgkozyF3brhnwDiw-J7vI_i5JmmpFYQHCNxmeduBAfhjjWTbEuUcsj6XRI0hEBlGXOSV1ZpSlCkljV92Ab1UTce-iKkNSh_rNU0EjS2IgWCEnnv9A2/تحصيلات",
+          "status": 200,
+          "size": 72823,
+          "name": "repscollectings.pdf"
+        }
+      ],
+      "netHits": 3,
+      "lastSnap": {
+        "src": "/showreport/Uf1QqqP1gugUBNSdnncPMRgkozyF3brhnwDiw-J7vI_i5JmmpFYQHCNxmeduBAfhjjWTbEuUcsj6XRI0hEBlGXOSV1ZpSlCkljV92Ab1UTce-iKkNSh_rNU0EjS2IgWCEnnv9A2/تحصيلات المندوبين.ashx?show=1",
+        "srcProp": "https://km.mega-cash.net/showreport/Uf1QqqP1gugUBNSdnncPMRgkozyF3brhnwDiw-J7vI_i5JmmpFYQHCNxmeduBAfhjjWTbEuUcsj6XRI0hEBlGXOSV1ZpSlCkljV92Ab1UTce-iKkNSh_rNU0EjS2IgWCEnnv9A2/%D8%AA%D8%AD%D8%B5%D9%8A%D9%84%D8%A7%D8%AA%20%D8%A7%D9%84%D9%85%D9%86%D8%AF%D9%88%D8%A8%D9%8A%D9%86.ashx?show=1",
+        "waitText": false,
+        "validation": true,
+        "authDenied": false,
+        "emptyHint": false,
+        "lnk": [
+          "https://km.mega-cash.net/showreport/Uf1QqqP1gugUBNSdnncPMRgkozyF3brhnwDiw-J7vI_i5JmmpFYQHCNxmeduBAfhjjWTbEuUcsj6XRI0hEBlGXOSV1ZpSlCkljV92Ab1UTce-iKkNSh_rNU0EjS2IgWCEnnv9A2/%D8%AA%D8%AD%D8%B5%D9%8A%D9%84%D8%A7%D8%AA%20%D8%A7%D9%84%D9%85%D9%86%D8%AF%D9%88%D8%A8%D9%8A%D9%86.ashx?show=1",
+          "https://km.mega-cash.net/downloadreport/Uf1QqqP1gugUBNSdnncPMRgkozyF3brhnwDiw-J7vI_i5JmmpFYQHCNxmeduBAfhjjWTbEuUcsj6XRI0hEBlGXOSV1ZpSlCkljV92Ab1UTce-iKkNSh_rNU0EjS2IgWCEnnv9A2/%D8%AA%D8%AD%D8%B5%D9%8A%D9%84%D8%A7%D8%AA%20%D8%A7%D9%84%D9%85%D9%86%D8%AF%D9%88%D8%A8%D9%8A%D9%86.ashx?show=1"
+        ],
+        "hint": " تحصيلات المندوبين تلقائي (4) تلقائي (3) تلقائي (2) تلقائي (1) 0 1 2 3 4 يسار وسط يمين اكسل بالتنسيق اكسل بدون تنسيق تفعيل الروابط تعطيل الروابط KM-01_01_2022 بحث بحث الفرع العملة اختر جنيه مصري جنيه استرليني جنيه سوداني درهم اماراتي درهم مغربي دولار امريكي دينار اردني دينار عراق"
+      },
+      "error": null
+    },
+    {
+      "key": "repdaily",
+      "featureKey": "accountingreports-repdaily",
+      "path": "/AccountingReports/RepDaily.aspx",
+      "wave": 7,
+      "note": null,
+      "gate": {
+        "href": "https://km.mega-cash.net/AccountingReports/RepDaily.aspx",
+        "authDenied": false,
+        "startScreen": false,
+        "hasShow": true,
+        "hasDateFrom": true,
+        "hasAsOf": false,
+        "hasMonth": false,
+        "title": "",
+        "hint": " يومية مندوب تلقائي (4) تلقائي (3) تلقائي (2) تلقائي (1) 0 1 2 3 4 يسار وسط يمين اكسل بالتنسيق اكسل بدون تنسيق تفعيل الروابط تعطيل الروابط KM-01_01_2022 بحث بحث الفرع من تاريخ الى تاريخ فئة العميل / المورد المنطقة مدير المبيعات مندوب المبيعات ترتيب ب الاسم الاعلى مبيعا الاعلى تحصيلا الاعلى مديونية الاعلى ربحا الاعلى نسبة ارباح اخفاء العمليات بدون مندوب اخفاء"
+      },
+      "prep": {
+        "okFrom": true,
+        "okTo": true,
+        "okAsOf": false,
+        "monthYear": null,
+        "hireDates": null,
+        "from": "1/1/2022",
+        "to": "3/1/2022",
+        "hasBtn": true,
+        "btnId": "cph_btnShow",
+        "hasViewer": true,
+        "dateIds": [
+          "cph_txtDateFrom",
+          "cph_txtDateTo"
+        ],
+        "selectIds": [
+          "ddlNumDecimals",
+          "ddlNumAlign",
+          "ddlExcelFormat",
+          "ddlDisableLinks",
+          "ddlOverrideDatabases",
+          "cph_ddlOrderBy"
+        ],
+        "nearbyFilterHints": [
+          "يومية مندوب",
+          "الفرع",
+          "الفرع",
+          "من تاريخ",
+          "من تاريخ"
+        ]
+      },
+      "foundUrls": [
+        "/showreport/55l9dm4TlD83p1o4eFXbjjprz2RVxfPplTWX0GHZOXlwBX2HEmyruKDkJdeo-br5SB61zif2BxMVPw4SXcD0TsfnQspXWICm_ZnD0OkHfWXfTERX8ErUiC1PVHvru1h4isUhfg2/يومية",
+        "https://km.mega-cash.net/showreport/55l9dm4TlD83p1o4eFXbjjprz2RVxfPplTWX0GHZOXlwBX2HEmyruKDkJdeo-br5SB61zif2BxMVPw4SXcD0TsfnQspXWICm_ZnD0OkHfWXfTERX8ErUiC1PVHvru1h4isUhfg2/%D9%8A%D9%88%D9%85%D9%8A%D8%A9%20%D9%85%D9%86%D8%AF%D9%88%D8%A8.ashx?show=1",
+        "https://km.mega-cash.net/downloadreport/55l9dm4TlD83p1o4eFXbjjprz2RVxfPplTWX0GHZOXlwBX2HEmyruKDkJdeo-br5SB61zif2BxMVPw4SXcD0TsfnQspXWICm_ZnD0OkHfWXfTERX8ErUiC1PVHvru1h4isUhfg2/%D9%8A%D9%88%D9%85%D9%8A%D8%A9%20%D9%85%D9%86%D8%AF%D9%88%D8%A8.ashx?show=1",
+        "/showreport/55l9dm4TlD83p1o4eFXbjjprz2RVxfPplTWX0GHZOXlwBX2HEmyruKDkJdeo-br5SB61zif2BxMVPw4SXcD0TsfnQspXWICm_ZnD0OkHfWXfTERX8ErUiC1PVHvru1h4isUhfg2/يومية مندوب.ashx?show=1"
+      ],
+      "finalSrc": "/showreport/55l9dm4TlD83p1o4eFXbjjprz2RVxfPplTWX0GHZOXlwBX2HEmyruKDkJdeo-br5SB61zif2BxMVPw4SXcD0TsfnQspXWICm_ZnD0OkHfWXfTERX8ErUiC1PVHvru1h4isUhfg2/يومية مندوب.ashx?show=1",
+      "pdfPath": "artifacts/mega-wave7-reps/pdf/repdaily.pdf",
+      "saved": [
+        {
+          "vu": "https://km.mega-cash.net/showreport/55l9dm4TlD83p1o4eFXbjjprz2RVxfPplTWX0GHZOXlwBX2HEmyruKDkJdeo-br5SB61zif2BxMVPw4SXcD0TsfnQspXWICm_ZnD0OkHfWXfTERX8ErUiC1PVHvru1h4isUhfg2/يومية",
+          "status": 200,
+          "size": 69109,
+          "name": "repdaily.pdf"
+        }
+      ],
+      "netHits": 3,
+      "lastSnap": {
+        "src": "/showreport/55l9dm4TlD83p1o4eFXbjjprz2RVxfPplTWX0GHZOXlwBX2HEmyruKDkJdeo-br5SB61zif2BxMVPw4SXcD0TsfnQspXWICm_ZnD0OkHfWXfTERX8ErUiC1PVHvru1h4isUhfg2/يومية مندوب.ashx?show=1",
+        "srcProp": "https://km.mega-cash.net/showreport/55l9dm4TlD83p1o4eFXbjjprz2RVxfPplTWX0GHZOXlwBX2HEmyruKDkJdeo-br5SB61zif2BxMVPw4SXcD0TsfnQspXWICm_ZnD0OkHfWXfTERX8ErUiC1PVHvru1h4isUhfg2/%D9%8A%D9%88%D9%85%D9%8A%D8%A9%20%D9%85%D9%86%D8%AF%D9%88%D8%A8.ashx?show=1",
+        "waitText": false,
+        "validation": false,
+        "authDenied": false,
+        "emptyHint": false,
+        "lnk": [
+          "https://km.mega-cash.net/showreport/55l9dm4TlD83p1o4eFXbjjprz2RVxfPplTWX0GHZOXlwBX2HEmyruKDkJdeo-br5SB61zif2BxMVPw4SXcD0TsfnQspXWICm_ZnD0OkHfWXfTERX8ErUiC1PVHvru1h4isUhfg2/%D9%8A%D9%88%D9%85%D9%8A%D8%A9%20%D9%85%D9%86%D8%AF%D9%88%D8%A8.ashx?show=1",
+          "https://km.mega-cash.net/downloadreport/55l9dm4TlD83p1o4eFXbjjprz2RVxfPplTWX0GHZOXlwBX2HEmyruKDkJdeo-br5SB61zif2BxMVPw4SXcD0TsfnQspXWICm_ZnD0OkHfWXfTERX8ErUiC1PVHvru1h4isUhfg2/%D9%8A%D9%88%D9%85%D9%8A%D8%A9%20%D9%85%D9%86%D8%AF%D9%88%D8%A8.ashx?show=1"
+        ],
+        "hint": " يومية مندوب تلقائي (4) تلقائي (3) تلقائي (2) تلقائي (1) 0 1 2 3 4 يسار وسط يمين اكسل بالتنسيق اكسل بدون تنسيق تفعيل الروابط تعطيل الروابط KM-01_01_2022 بحث بحث الفرع من تاريخ الى تاريخ فئة العميل / المورد المنطقة مدير المبيعات مندوب المبيعات ترتيب ب الاسم الاعلى مبيعا الاعلى تحص"
+      },
+      "error": null
+    },
+    {
+      "key": "repdebit",
+      "featureKey": "accountingreports-repdebit",
+      "path": "/AccountingReports/RepDebit.aspx",
+      "wave": 7,
+      "note": null,
+      "gate": {
+        "href": "https://km.mega-cash.net/AccountingReports/RepDebit.aspx",
+        "authDenied": false,
+        "startScreen": false,
+        "hasShow": true,
+        "hasDateFrom": true,
+        "hasAsOf": false,
+        "hasMonth": false,
+        "title": "",
+        "hint": " مديونية مندوب تلقائي (4) تلقائي (3) تلقائي (2) تلقائي (1) 0 1 2 3 4 يسار وسط يمين اكسل بالتنسيق اكسل بدون تنسيق تفعيل الروابط تعطيل الروابط KM-01_01_2022 بحث بحث الفرع من تاريخ الى تاريخ فئة العميل / المورد المنطقة العميل مدير المبيعات مندوب المبيعات عرض المديونيات الصفرية "
+      },
+      "prep": {
+        "okFrom": true,
+        "okTo": true,
+        "okAsOf": false,
+        "monthYear": null,
+        "hireDates": null,
+        "from": "1/1/2022",
+        "to": "3/1/2022",
+        "hasBtn": true,
+        "btnId": "cph_btnShow",
+        "hasViewer": true,
+        "dateIds": [
+          "cph_txtDateFrom",
+          "cph_txtDateTo"
+        ],
+        "selectIds": [
+          "ddlNumDecimals",
+          "ddlNumAlign",
+          "ddlExcelFormat",
+          "ddlDisableLinks",
+          "ddlOverrideDatabases"
+        ],
+        "nearbyFilterHints": [
+          "مديونية مندوب",
+          "الفرع",
+          "الفرع",
+          "من تاريخ",
+          "من تاريخ"
+        ]
+      },
+      "foundUrls": [
+        "/showreport/vZinT2HU9cefB3yy1AY4uBsvd0W9wOzzD06R0v7UDqULHwK3h6LDU5m0gUP2FyLDmMdwm4TweqxHLZ6GIZTnRl5Y40-XzSj0nDYy72GpoQNczhZBPI7-LD5UhVRCNZHHQ_wxpA2/مديونية",
+        "https://km.mega-cash.net/showreport/vZinT2HU9cefB3yy1AY4uBsvd0W9wOzzD06R0v7UDqULHwK3h6LDU5m0gUP2FyLDmMdwm4TweqxHLZ6GIZTnRl5Y40-XzSj0nDYy72GpoQNczhZBPI7-LD5UhVRCNZHHQ_wxpA2/%D9%85%D8%AF%D9%8A%D9%88%D9%86%D9%8A%D8%A9%20%D9%85%D9%86%D8%AF%D9%88%D8%A8.ashx?show=1",
+        "/showreport/vZinT2HU9cefB3yy1AY4uBsvd0W9wOzzD06R0v7UDqULHwK3h6LDU5m0gUP2FyLDmMdwm4TweqxHLZ6GIZTnRl5Y40-XzSj0nDYy72GpoQNczhZBPI7-LD5UhVRCNZHHQ_wxpA2/%D9%85%D8%AF%D9%8A%D9%88%D9%86%D9%8A%D8%A9%20%D9%85%D9%86%D8%AF%D9%88%D8%A8.ashx?show=1",
+        "https://km.mega-cash.net/downloadreport/vZinT2HU9cefB3yy1AY4uBsvd0W9wOzzD06R0v7UDqULHwK3h6LDU5m0gUP2FyLDmMdwm4TweqxHLZ6GIZTnRl5Y40-XzSj0nDYy72GpoQNczhZBPI7-LD5UhVRCNZHHQ_wxpA2/%D9%85%D8%AF%D9%8A%D9%88%D9%86%D9%8A%D8%A9%20%D9%85%D9%86%D8%AF%D9%88%D8%A8.ashx?show=1",
+        "/showreport/vZinT2HU9cefB3yy1AY4uBsvd0W9wOzzD06R0v7UDqULHwK3h6LDU5m0gUP2FyLDmMdwm4TweqxHLZ6GIZTnRl5Y40-XzSj0nDYy72GpoQNczhZBPI7-LD5UhVRCNZHHQ_wxpA2/مديونية مندوب.ashx?show=1"
+      ],
+      "finalSrc": "/showreport/vZinT2HU9cefB3yy1AY4uBsvd0W9wOzzD06R0v7UDqULHwK3h6LDU5m0gUP2FyLDmMdwm4TweqxHLZ6GIZTnRl5Y40-XzSj0nDYy72GpoQNczhZBPI7-LD5UhVRCNZHHQ_wxpA2/مديونية مندوب.ashx?show=1",
+      "pdfPath": "artifacts/mega-wave7-reps/pdf/repdebit.pdf",
+      "saved": [
+        {
+          "vu": "https://km.mega-cash.net/showreport/vZinT2HU9cefB3yy1AY4uBsvd0W9wOzzD06R0v7UDqULHwK3h6LDU5m0gUP2FyLDmMdwm4TweqxHLZ6GIZTnRl5Y40-XzSj0nDYy72GpoQNczhZBPI7-LD5UhVRCNZHHQ_wxpA2/مديونية",
+          "status": 200,
+          "size": 66946,
+          "name": "repdebit.pdf"
+        }
+      ],
+      "netHits": 3,
+      "lastSnap": {
+        "src": "/showreport/vZinT2HU9cefB3yy1AY4uBsvd0W9wOzzD06R0v7UDqULHwK3h6LDU5m0gUP2FyLDmMdwm4TweqxHLZ6GIZTnRl5Y40-XzSj0nDYy72GpoQNczhZBPI7-LD5UhVRCNZHHQ_wxpA2/مديونية مندوب.ashx?show=1",
+        "srcProp": "https://km.mega-cash.net/showreport/vZinT2HU9cefB3yy1AY4uBsvd0W9wOzzD06R0v7UDqULHwK3h6LDU5m0gUP2FyLDmMdwm4TweqxHLZ6GIZTnRl5Y40-XzSj0nDYy72GpoQNczhZBPI7-LD5UhVRCNZHHQ_wxpA2/%D9%85%D8%AF%D9%8A%D9%88%D9%86%D9%8A%D8%A9%20%D9%85%D9%86%D8%AF%D9%88%D8%A8.ashx?show=1",
+        "waitText": false,
+        "validation": false,
+        "authDenied": false,
+        "emptyHint": false,
+        "lnk": [
+          "https://km.mega-cash.net/showreport/vZinT2HU9cefB3yy1AY4uBsvd0W9wOzzD06R0v7UDqULHwK3h6LDU5m0gUP2FyLDmMdwm4TweqxHLZ6GIZTnRl5Y40-XzSj0nDYy72GpoQNczhZBPI7-LD5UhVRCNZHHQ_wxpA2/%D9%85%D8%AF%D9%8A%D9%88%D9%86%D9%8A%D8%A9%20%D9%85%D9%86%D8%AF%D9%88%D8%A8.ashx?show=1",
+          "https://km.mega-cash.net/downloadreport/vZinT2HU9cefB3yy1AY4uBsvd0W9wOzzD06R0v7UDqULHwK3h6LDU5m0gUP2FyLDmMdwm4TweqxHLZ6GIZTnRl5Y40-XzSj0nDYy72GpoQNczhZBPI7-LD5UhVRCNZHHQ_wxpA2/%D9%85%D8%AF%D9%8A%D9%88%D9%86%D9%8A%D8%A9%20%D9%85%D9%86%D8%AF%D9%88%D8%A8.ashx?show=1"
+        ],
+        "hint": " مديونية مندوب تلقائي (4) تلقائي (3) تلقائي (2) تلقائي (1) 0 1 2 3 4 يسار وسط يمين اكسل بالتنسيق اكسل بدون تنسيق تفعيل الروابط تعطيل الروابط KM-01_01_2022 بحث بحث الفرع من تاريخ الى تاريخ فئة العميل / المورد المنطقة العميل مدير المبيعات مندوب المبيعات عرض المديونيات الصفرية "
+      },
+      "error": null
+    }
+  ]
+}

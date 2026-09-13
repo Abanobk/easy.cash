@@ -1,0 +1,168 @@
+{
+  "at": "2026-09-13T19:46:08.465Z",
+  "results": [
+    {
+      "key": "dep",
+      "featureKey": "fixedassetsreports-dep",
+      "path": "/FixedAssetsReports/Dep.aspx",
+      "wave": 10,
+      "note": "same page also mapped as fixedassetsreports-depruns",
+      "gate": {
+        "href": "https://km.mega-cash.net/FixedAssetsReports/Dep.aspx",
+        "authDenied": false,
+        "startScreen": false,
+        "hasShow": true,
+        "hasDateFrom": false,
+        "hasAsOf": true,
+        "hasMonth": false,
+        "title": "",
+        "hint": " اهلاكات الاصول الثابته تلقائي (4) تلقائي (3) تلقائي (2) تلقائي (1) 0 1 2 3 4 يسار وسط يمين اكسل بالتنسيق اكسل بدون تنسيق تفعيل الروابط تعطيل الروابط KM-01_01_2022 بحث بحث الفرع العملة اختر جنيه مصري جنيه استرليني جنيه سوداني درهم اماراتي درهم مغربي دولار امريكي دينار اردني دينار عراقي دينار كويتي دينار ليبي روبل روسي روبية هندي ريال ايراني ريال سعودي ريال ع"
+      },
+      "prep": {
+        "okFrom": true,
+        "okTo": true,
+        "okAsOf": true,
+        "monthYear": null,
+        "hireDates": null,
+        "from": "3/1/2022",
+        "to": "3/1/2022",
+        "hasBtn": true,
+        "btnId": "cph_btnShow",
+        "hasViewer": true,
+        "dateIds": [
+          "cph_txtDate"
+        ],
+        "selectIds": [
+          "ddlNumDecimals",
+          "ddlNumAlign",
+          "ddlExcelFormat",
+          "ddlDisableLinks",
+          "ddlOverrideDatabases",
+          "cph_ddlCurrency",
+          "cph_ddlIsClosed",
+          "cph_ddlSaleStatus"
+        ],
+        "nearbyFilterHints": [
+          "الفرع",
+          "الفرع",
+          "التاريخ",
+          "التاريخ"
+        ]
+      },
+      "foundUrls": [
+        "/showreport/CywCgyI2wB86PNRi6Sm-k3ee1qXpUHX7FPWTePcWep8o5jcrKJUsdC9eypIecQZLR1hQ1YcoWJO_A8ymsD791UCoTHvtvtkaHliSLUE3caRZECs4sJNx-7iRhgArjBR8bibraA2/اهلاكات",
+        "https://km.mega-cash.net/showreport/CywCgyI2wB86PNRi6Sm-k3ee1qXpUHX7FPWTePcWep8o5jcrKJUsdC9eypIecQZLR1hQ1YcoWJO_A8ymsD791UCoTHvtvtkaHliSLUE3caRZECs4sJNx-7iRhgArjBR8bibraA2/%D8%A7%D9%87%D9%84%D8%A7%D9%83%D8%A7%D8%AA%20%D8%A7%D9%84%D8%A7%D8%B5%D9%88%D9%84%20%D8%A7%D9%84%D8%AB%D8%A7%D8%A8%D8%AA%D9%87.ashx?show=1",
+        "/showreport/CywCgyI2wB86PNRi6Sm-k3ee1qXpUHX7FPWTePcWep8o5jcrKJUsdC9eypIecQZLR1hQ1YcoWJO_A8ymsD791UCoTHvtvtkaHliSLUE3caRZECs4sJNx-7iRhgArjBR8bibraA2/%D8%A7%D9%87%D9%84%D8%A7%D9%83%D8%A7%D8%AA%20%D8%A7%D9%84%D8%A7%D8%B5%D9%88%D9%84%20%D8%A7%D9%84%D8%AB%D8%A7%D8%A8%D8%AA%D9%87.ashx?show=1",
+        "https://km.mega-cash.net/downloadreport/CywCgyI2wB86PNRi6Sm-k3ee1qXpUHX7FPWTePcWep8o5jcrKJUsdC9eypIecQZLR1hQ1YcoWJO_A8ymsD791UCoTHvtvtkaHliSLUE3caRZECs4sJNx-7iRhgArjBR8bibraA2/%D8%A7%D9%87%D9%84%D8%A7%D9%83%D8%A7%D8%AA%20%D8%A7%D9%84%D8%A7%D8%B5%D9%88%D9%84%20%D8%A7%D9%84%D8%AB%D8%A7%D8%A8%D8%AA%D9%87.ashx?show=1",
+        "/showreport/CywCgyI2wB86PNRi6Sm-k3ee1qXpUHX7FPWTePcWep8o5jcrKJUsdC9eypIecQZLR1hQ1YcoWJO_A8ymsD791UCoTHvtvtkaHliSLUE3caRZECs4sJNx-7iRhgArjBR8bibraA2/اهلاكات الاصول الثابته.ashx?show=1"
+      ],
+      "finalSrc": "/showreport/CywCgyI2wB86PNRi6Sm-k3ee1qXpUHX7FPWTePcWep8o5jcrKJUsdC9eypIecQZLR1hQ1YcoWJO_A8ymsD791UCoTHvtvtkaHliSLUE3caRZECs4sJNx-7iRhgArjBR8bibraA2/اهلاكات الاصول الثابته.ashx?show=1",
+      "pdfPath": "artifacts/mega-wave10-assets/pdf/dep.pdf",
+      "saved": [
+        {
+          "vu": "https://km.mega-cash.net/showreport/CywCgyI2wB86PNRi6Sm-k3ee1qXpUHX7FPWTePcWep8o5jcrKJUsdC9eypIecQZLR1hQ1YcoWJO_A8ymsD791UCoTHvtvtkaHliSLUE3caRZECs4sJNx-7iRhgArjBR8bibraA2/اهلاكات",
+          "status": 200,
+          "size": 79326,
+          "name": "dep.pdf"
+        }
+      ],
+      "netHits": 3,
+      "lastSnap": {
+        "src": "/showreport/CywCgyI2wB86PNRi6Sm-k3ee1qXpUHX7FPWTePcWep8o5jcrKJUsdC9eypIecQZLR1hQ1YcoWJO_A8ymsD791UCoTHvtvtkaHliSLUE3caRZECs4sJNx-7iRhgArjBR8bibraA2/اهلاكات الاصول الثابته.ashx?show=1",
+        "srcProp": "https://km.mega-cash.net/showreport/CywCgyI2wB86PNRi6Sm-k3ee1qXpUHX7FPWTePcWep8o5jcrKJUsdC9eypIecQZLR1hQ1YcoWJO_A8ymsD791UCoTHvtvtkaHliSLUE3caRZECs4sJNx-7iRhgArjBR8bibraA2/%D8%A7%D9%87%D9%84%D8%A7%D9%83%D8%A7%D8%AA%20%D8%A7%D9%84%D8%A7%D8%B5%D9%88%D9%84%20%D8%A7%D9%84%D8%AB%D8%A7%D8%A8%D8%AA%D9%87.ashx?show=1",
+        "waitText": false,
+        "validation": true,
+        "authDenied": false,
+        "emptyHint": false,
+        "lnk": [
+          "https://km.mega-cash.net/showreport/CywCgyI2wB86PNRi6Sm-k3ee1qXpUHX7FPWTePcWep8o5jcrKJUsdC9eypIecQZLR1hQ1YcoWJO_A8ymsD791UCoTHvtvtkaHliSLUE3caRZECs4sJNx-7iRhgArjBR8bibraA2/%D8%A7%D9%87%D9%84%D8%A7%D9%83%D8%A7%D8%AA%20%D8%A7%D9%84%D8%A7%D8%B5%D9%88%D9%84%20%D8%A7%D9%84%D8%AB%D8%A7%D8%A8%D8%AA%D9%87.ashx?show=1",
+          "https://km.mega-cash.net/downloadreport/CywCgyI2wB86PNRi6Sm-k3ee1qXpUHX7FPWTePcWep8o5jcrKJUsdC9eypIecQZLR1hQ1YcoWJO_A8ymsD791UCoTHvtvtkaHliSLUE3caRZECs4sJNx-7iRhgArjBR8bibraA2/%D8%A7%D9%87%D9%84%D8%A7%D9%83%D8%A7%D8%AA%20%D8%A7%D9%84%D8%A7%D8%B5%D9%88%D9%84%20%D8%A7%D9%84%D8%AB%D8%A7%D8%A8%D8%AA%D9%87.ashx?show=1"
+        ],
+        "hint": " اهلاكات الاصول الثابته تلقائي (4) تلقائي (3) تلقائي (2) تلقائي (1) 0 1 2 3 4 يسار وسط يمين اكسل بالتنسيق اكسل بدون تنسيق تفعيل الروابط تعطيل الروابط KM-01_01_2022 بحث بحث الفرع العملة اختر جنيه مصري جنيه استرليني جنيه سوداني درهم اماراتي درهم مغربي دولار امريكي دينار اردني دينار"
+      },
+      "error": null
+    },
+    {
+      "key": "soldfixedassets",
+      "featureKey": "fixedassetsreports-soldfixedassets",
+      "path": "/FixedAssetsReports/SoldFixedAssets.aspx",
+      "wave": 10,
+      "note": null,
+      "gate": {
+        "href": "https://km.mega-cash.net/FixedAssetsReports/SoldFixedAssets.aspx",
+        "authDenied": false,
+        "startScreen": false,
+        "hasShow": true,
+        "hasDateFrom": true,
+        "hasAsOf": false,
+        "hasMonth": false,
+        "title": "",
+        "hint": " الاصول المباعه تلقائي (4) تلقائي (3) تلقائي (2) تلقائي (1) 0 1 2 3 4 يسار وسط يمين اكسل بالتنسيق اكسل بدون تنسيق تفعيل الروابط تعطيل الروابط KM-01_01_2022 بحث بحث الفرع من تاريخ الى تاريخ الفئة الاصل "
+      },
+      "prep": {
+        "okFrom": true,
+        "okTo": true,
+        "okAsOf": false,
+        "monthYear": null,
+        "hireDates": null,
+        "from": "1/1/2022",
+        "to": "3/1/2022",
+        "hasBtn": true,
+        "btnId": "cph_btnShow",
+        "hasViewer": true,
+        "dateIds": [
+          "cph_txtDateFrom",
+          "cph_txtDateTo"
+        ],
+        "selectIds": [
+          "ddlNumDecimals",
+          "ddlNumAlign",
+          "ddlExcelFormat",
+          "ddlDisableLinks",
+          "ddlOverrideDatabases"
+        ],
+        "nearbyFilterHints": [
+          "الفرع\nمن تاريخ\nالى تاريخ\nالفئة\nالاصل",
+          "الفرع\nمن تاريخ\nالى تاريخ\nالفئة\nالاصل",
+          "الفرع\nمن تاريخ\nالى تاريخ",
+          "الفرع",
+          "الفرع",
+          "من تاريخ",
+          "من تاريخ"
+        ]
+      },
+      "foundUrls": [
+        "/showreport/FZE7pVTYgTXp0CLS_ZuC4rVcTyZXuccuaCuSJyUOMucVqvm-tZSlRGtuHoGzsNEk4Pde-oIMGyApbC7JN9rPY0IrjbDX0tGOr23hgzpzHWmCedWbcGAtKRoxU5AV78dazvDzvQ2/الاصول",
+        "https://km.mega-cash.net/showreport/FZE7pVTYgTXp0CLS_ZuC4rVcTyZXuccuaCuSJyUOMucVqvm-tZSlRGtuHoGzsNEk4Pde-oIMGyApbC7JN9rPY0IrjbDX0tGOr23hgzpzHWmCedWbcGAtKRoxU5AV78dazvDzvQ2/%D8%A7%D9%84%D8%A7%D8%B5%D9%88%D9%84%20%D8%A7%D9%84%D9%85%D8%A8%D8%A7%D8%B9%D9%87.ashx?show=1",
+        "/showreport/FZE7pVTYgTXp0CLS_ZuC4rVcTyZXuccuaCuSJyUOMucVqvm-tZSlRGtuHoGzsNEk4Pde-oIMGyApbC7JN9rPY0IrjbDX0tGOr23hgzpzHWmCedWbcGAtKRoxU5AV78dazvDzvQ2/%D8%A7%D9%84%D8%A7%D8%B5%D9%88%D9%84%20%D8%A7%D9%84%D9%85%D8%A8%D8%A7%D8%B9%D9%87.ashx?show=1",
+        "https://km.mega-cash.net/downloadreport/FZE7pVTYgTXp0CLS_ZuC4rVcTyZXuccuaCuSJyUOMucVqvm-tZSlRGtuHoGzsNEk4Pde-oIMGyApbC7JN9rPY0IrjbDX0tGOr23hgzpzHWmCedWbcGAtKRoxU5AV78dazvDzvQ2/%D8%A7%D9%84%D8%A7%D8%B5%D9%88%D9%84%20%D8%A7%D9%84%D9%85%D8%A8%D8%A7%D8%B9%D9%87.ashx?show=1",
+        "/showreport/FZE7pVTYgTXp0CLS_ZuC4rVcTyZXuccuaCuSJyUOMucVqvm-tZSlRGtuHoGzsNEk4Pde-oIMGyApbC7JN9rPY0IrjbDX0tGOr23hgzpzHWmCedWbcGAtKRoxU5AV78dazvDzvQ2/الاصول المباعه.ashx?show=1"
+      ],
+      "finalSrc": "/showreport/FZE7pVTYgTXp0CLS_ZuC4rVcTyZXuccuaCuSJyUOMucVqvm-tZSlRGtuHoGzsNEk4Pde-oIMGyApbC7JN9rPY0IrjbDX0tGOr23hgzpzHWmCedWbcGAtKRoxU5AV78dazvDzvQ2/الاصول المباعه.ashx?show=1",
+      "pdfPath": "artifacts/mega-wave10-assets/pdf/soldfixedassets.pdf",
+      "saved": [
+        {
+          "vu": "https://km.mega-cash.net/showreport/FZE7pVTYgTXp0CLS_ZuC4rVcTyZXuccuaCuSJyUOMucVqvm-tZSlRGtuHoGzsNEk4Pde-oIMGyApbC7JN9rPY0IrjbDX0tGOr23hgzpzHWmCedWbcGAtKRoxU5AV78dazvDzvQ2/الاصول",
+          "status": 200,
+          "size": 69849,
+          "name": "soldfixedassets.pdf"
+        }
+      ],
+      "netHits": 3,
+      "lastSnap": {
+        "src": "/showreport/FZE7pVTYgTXp0CLS_ZuC4rVcTyZXuccuaCuSJyUOMucVqvm-tZSlRGtuHoGzsNEk4Pde-oIMGyApbC7JN9rPY0IrjbDX0tGOr23hgzpzHWmCedWbcGAtKRoxU5AV78dazvDzvQ2/الاصول المباعه.ashx?show=1",
+        "srcProp": "https://km.mega-cash.net/showreport/FZE7pVTYgTXp0CLS_ZuC4rVcTyZXuccuaCuSJyUOMucVqvm-tZSlRGtuHoGzsNEk4Pde-oIMGyApbC7JN9rPY0IrjbDX0tGOr23hgzpzHWmCedWbcGAtKRoxU5AV78dazvDzvQ2/%D8%A7%D9%84%D8%A7%D8%B5%D9%88%D9%84%20%D8%A7%D9%84%D9%85%D8%A8%D8%A7%D8%B9%D9%87.ashx?show=1",
+        "waitText": false,
+        "validation": false,
+        "authDenied": false,
+        "emptyHint": false,
+        "lnk": [
+          "https://km.mega-cash.net/showreport/FZE7pVTYgTXp0CLS_ZuC4rVcTyZXuccuaCuSJyUOMucVqvm-tZSlRGtuHoGzsNEk4Pde-oIMGyApbC7JN9rPY0IrjbDX0tGOr23hgzpzHWmCedWbcGAtKRoxU5AV78dazvDzvQ2/%D8%A7%D9%84%D8%A7%D8%B5%D9%88%D9%84%20%D8%A7%D9%84%D9%85%D8%A8%D8%A7%D8%B9%D9%87.ashx?show=1",
+          "https://km.mega-cash.net/downloadreport/FZE7pVTYgTXp0CLS_ZuC4rVcTyZXuccuaCuSJyUOMucVqvm-tZSlRGtuHoGzsNEk4Pde-oIMGyApbC7JN9rPY0IrjbDX0tGOr23hgzpzHWmCedWbcGAtKRoxU5AV78dazvDzvQ2/%D8%A7%D9%84%D8%A7%D8%B5%D9%88%D9%84%20%D8%A7%D9%84%D9%85%D8%A8%D8%A7%D8%B9%D9%87.ashx?show=1"
+        ],
+        "hint": " الاصول المباعه تلقائي (4) تلقائي (3) تلقائي (2) تلقائي (1) 0 1 2 3 4 يسار وسط يمين اكسل بالتنسيق اكسل بدون تنسيق تفعيل الروابط تعطيل الروابط KM-01_01_2022 بحث بحث الفرع من تاريخ الى تاريخ الفئة الاصل "
+      },
+      "error": null
+    }
+  ]
+}

@@ -1,0 +1,248 @@
+logged in https://km.mega-cash.net/
+=== W7 grossrepsalesbyitems
+prep grossrepsalesbyitems {"okFrom":true,"okTo":true,"okAsOf":false,"monthYear":null,"hireDates":null,"from":"1/1/2022","to":"3/1/2022","hasBtn":true,"btnId":"cph_btnShow","hasViewer":true,"dateIds":["cph_txtDateFrom","cph_txtDateTo"],"selectIds":["ddlNumDecimals","ddlNumAlign","ddlExcelFormat","ddlDisableLinks","ddlOverrideDatabases","cph_ddlCurrency","cph_ddlShowPriceType"],"nearbyFilterHints":["مبيعات المندوبين بالاصناف","الفرع","الفرع","من تاريخ","من تاريخ"]}
+grossrepsalesbyitems tick 0 wait true val true auth false src undefined urls 0
+grossrepsalesbyitems tick 1 wait true val true auth false src undefined urls 0
+grossrepsalesbyitems tick 2 wait true val true auth false src undefined urls 0
+grossrepsalesbyitems tick 3 wait true val true auth false src undefined urls 0
+NET grossrepsalesbyitems POST 200 https://km.mega-cash.net/AccountingReports/GrossRepSalesByItems.aspx 1
+NET grossrepsalesbyitems GET 200 https://km.mega-cash.net/showreport/Q1E5NPTEI4mXOZ_oqC1EVod5E1zDSYekJygFIc39Mb4R9cNdTlf07mr0xAj1mTj5if7nyPW-GTL_9n1khoX4 0
+NET grossrepsalesbyitems GET 200 https://km.mega-cash.net/showreport/Q1E5NPTEI4mXOZ_oqC1EVod5E1zDSYekJygFIc39Mb4R9cNdTlf07mr0xAj1mTj5if7nyPW-GTL_9n1khoX4 2
+grossrepsalesbyitems tick 4 wait false val true auth false src /showreport/Q1E5NPTEI4mXOZ_oqC1EVod5E1zDSYekJygFIc39Mb4R9cNdTlf07mr0xAj1mTj5if7nyPW-GTL_9n1khoX467plrEChXhGUATVCNkkjrUqlmYgrWt16cQl-g5Ef2M8nb5nrBsMLKP6AkG05wOIqn_c2dPc1/مبيعات المندوبين بالاصناف.ashx?show=1 urls 9
+saved grossrepsalesbyitems.pdf 97512
+=== W7 repscollectings
+prep repscollectings {"okFrom":true,"okTo":true,"okAsOf":false,"monthYear":null,"hireDates":null,"from":"1/1/2022","to":"3/1/2022","hasBtn":true,"btnId":"cph_btnShow","hasViewer":true,"dateIds":["cph_txtDateFrom","cph_txtDateTo"],"selectIds":["ddlNumDecimals","ddlNumAlign","ddlExcelFormat","ddlDisableLinks","ddlOverrideDatabases","cph_ddlCurrency"],"nearbyFilterHints":["تحصيلات المندوبين","الفرع","الفرع","من تاريخ","من تاريخ"]}
+NET repscollectings POST 200 https://km.mega-cash.net/AccountingReports/RepsCollectings.aspx 1
+NET repscollectings GET 200 https://km.mega-cash.net/showreport/Uf1QqqP1gugUBNSdnncPMRgkozyF3brhnwDiw-J7vI_i5JmmpFYQHCNxmeduBAfhjjWTbEuUcsj6XRI0hEBl 0
+NET repscollectings GET 200 https://km.mega-cash.net/showreport/Uf1QqqP1gugUBNSdnncPMRgkozyF3brhnwDiw-J7vI_i5JmmpFYQHCNxmeduBAfhjjWTbEuUcsj6XRI0hEBl 2
+repscollectings tick 0 wait false val true auth false src /showreport/Uf1QqqP1gugUBNSdnncPMRgkozyF3brhnwDiw-J7vI_i5JmmpFYQHCNxmeduBAfhjjWTbEuUcsj6XRI0hEBlGXOSV1ZpSlCkljV92Ab1UTce-iKkNSh_rNU0EjS2IgWCEnnv9A2/تحصيلات المندوبين.ashx?show=1 urls 9
+saved repscollectings.pdf 72823
+=== W7 repdaily
+prep repdaily {"okFrom":true,"okTo":true,"okAsOf":false,"monthYear":null,"hireDates":null,"from":"1/1/2022","to":"3/1/2022","hasBtn":true,"btnId":"cph_btnShow","hasViewer":true,"dateIds":["cph_txtDateFrom","cph_txtDateTo"],"selectIds":["ddlNumDecimals","ddlNumAlign","ddlExcelFormat","ddlDisableLinks","ddlOverrideDatabases","cph_ddlOrderBy"],"nearbyFilterHints":["يومية مندوب","الفرع","الفرع","من تاريخ","من تاريخ"]}
+NET repdaily POST 200 https://km.mega-cash.net/AccountingReports/RepDaily.aspx 1
+repdaily tick 0 wait false val false auth false src /showreport/55l9dm4TlD83p1o4eFXbjjprz2RVxfPplTWX0GHZOXlwBX2HEmyruKDkJdeo-br5SB61zif2BxMVPw4SXcD0TsfnQspXWICm_ZnD0OkHfWXfTERX8ErUiC1PVHvru1h4isUhfg2/يومية مندوب.ashx?show=1 urls 4
+NET repdaily GET 200 https://km.mega-cash.net/showreport/55l9dm4TlD83p1o4eFXbjjprz2RVxfPplTWX0GHZOXlwBX2HEmyruKDkJdeo-br5SB61zif2BxMVPw4SXcD0 0
+NET repdaily GET 200 https://km.mega-cash.net/showreport/55l9dm4TlD83p1o4eFXbjjprz2RVxfPplTWX0GHZOXlwBX2HEmyruKDkJdeo-br5SB61zif2BxMVPw4SXcD0 2
+saved repdaily.pdf 69109
+=== W7 repdebit
+prep repdebit {"okFrom":true,"okTo":true,"okAsOf":false,"monthYear":null,"hireDates":null,"from":"1/1/2022","to":"3/1/2022","hasBtn":true,"btnId":"cph_btnShow","hasViewer":true,"dateIds":["cph_txtDateFrom","cph_txtDateTo"],"selectIds":["ddlNumDecimals","ddlNumAlign","ddlExcelFormat","ddlDisableLinks","ddlOverrideDatabases"],"nearbyFilterHints":["مديونية مندوب","الفرع","الفرع","من تاريخ","من تاريخ"]}
+repdebit tick 0 wait true val false auth false src undefined urls 0
+NET repdebit POST 200 https://km.mega-cash.net/AccountingReports/RepDebit.aspx 1
+NET repdebit GET 200 https://km.mega-cash.net/showreport/vZinT2HU9cefB3yy1AY4uBsvd0W9wOzzD06R0v7UDqULHwK3h6LDU5m0gUP2FyLDmMdwm4TweqxHLZ6GIZTn 0
+NET repdebit GET 200 https://km.mega-cash.net/showreport/vZinT2HU9cefB3yy1AY4uBsvd0W9wOzzD06R0v7UDqULHwK3h6LDU5m0gUP2FyLDmMdwm4TweqxHLZ6GIZTn 2
+repdebit tick 1 wait false val false auth false src /showreport/vZinT2HU9cefB3yy1AY4uBsvd0W9wOzzD06R0v7UDqULHwK3h6LDU5m0gUP2FyLDmMdwm4TweqxHLZ6GIZTnRl5Y40-XzSj0nDYy72GpoQNczhZBPI7-LD5UhVRCNZHHQ_wxpA2/مديونية مندوب.ashx?show=1 urls 9
+saved repdebit.pdf 66946
+=== W8 productionorders
+prep productionorders {"okFrom":true,"okTo":true,"okAsOf":false,"monthYear":null,"hireDates":null,"from":"1/1/2022","to":"3/1/2022","hasBtn":true,"btnId":"cph_btnShow","hasViewer":true,"dateIds":["cph_txtDateFrom","cph_txtDateTo","cph_txtReceiveDateFrom","cph_txtReceiveDateTo"],"selectIds":["ddlNumDecimals","ddlNumAlign","ddlExcelFormat","ddlDisableLinks","ddlOverrideDatabases","cph_ddlReceiveStatus","cph_ddlOrderBy"],"nearbyFilterHints":["اوامر الانتاج","الفرع","الفرع","من تاريخ","من تاريخ"]}
+productionorders tick 0 wait true val true auth false src undefined urls 0
+productionorders tick 1 wait true val true auth false src undefined urls 0
+NET productionorders POST 200 https://km.mega-cash.net/AccountingReports/ProductionOrders.aspx 1
+NET productionorders GET 200 https://km.mega-cash.net/showreport/3jrAWjgzQsBewhw-rVd7i_cU8E2N6bDVDGNZWXH3Lw1I0NWPU28-NVbOdZZad3PBkHyO5_yq9KEkmodR1IwD 0
+NET productionorders GET 200 https://km.mega-cash.net/showreport/3jrAWjgzQsBewhw-rVd7i_cU8E2N6bDVDGNZWXH3Lw1I0NWPU28-NVbOdZZad3PBkHyO5_yq9KEkmodR1IwD 2
+productionorders tick 2 wait false val true auth false src /showreport/3jrAWjgzQsBewhw-rVd7i_cU8E2N6bDVDGNZWXH3Lw1I0NWPU28-NVbOdZZad3PBkHyO5_yq9KEkmodR1IwDK7f1azB2gXPpk6YvcBu0yvS1UKK6eC3VFieWiCQDupQ9WA8iBA2/اوامر الانتاج.ashx?show=1 urls 9
+saved productionorders.pdf 113073
+=== W8 productionmaterials
+prep productionmaterials {"okFrom":true,"okTo":true,"okAsOf":false,"monthYear":null,"hireDates":null,"from":"1/1/2022","to":"3/1/2022","hasBtn":true,"btnId":"cph_btnShow","hasViewer":true,"dateIds":["cph_txtDateFrom","cph_txtDateTo"],"selectIds":["ddlNumDecimals","ddlNumAlign","ddlExcelFormat","ddlDisableLinks","ddlOverrideDatabases","cph_ddlQtyType","cph_ddlReceiveStatus","cph_ddlOrderBy"],"nearbyFilterHints":["خامات وتوالف الانتاج","الفرع","الفرع","من تاريخ","من تاريخ"]}
+NET productionmaterials POST 200 https://km.mega-cash.net/AccountingReports/ProductionMaterials.aspx 1
+NET productionmaterials GET 200 https://km.mega-cash.net/showreport/RlCse2B4YAfUYCgt6E7RmGlxPJ7_znJrnJsKRjwjk5EzLKO5NVeigcFS9ZnmNb4BYUu6rz0KK5DrKSrL3GOJ 0
+productionmaterials tick 0 wait false val true auth false src /showreport/RlCse2B4YAfUYCgt6E7RmGlxPJ7_znJrnJsKRjwjk5EzLKO5NVeigcFS9ZnmNb4BYUu6rz0KK5DrKSrL3GOJWiBq4AFNktBcN0yF1daFiSwdQ3kleAU4we3zwL3RMbbWOeUFGQ2/خامات وتوالف الانتاج.ashx?show=1 urls 6
+NET productionmaterials GET 200 https://km.mega-cash.net/showreport/RlCse2B4YAfUYCgt6E7RmGlxPJ7_znJrnJsKRjwjk5EzLKO5NVeigcFS9ZnmNb4BYUu6rz0KK5DrKSrL3GOJ 2
+saved productionmaterials.pdf 81736
+=== W9 attendance
+prep attendance {"okFrom":true,"okTo":true,"okAsOf":false,"monthYear":null,"hireDates":null,"hasBtn":true,"btnId":"cph_btnShow","hasViewer":true,"dateIds":["cph_txtFromDateSrch","cph_txtToDateSrch"],"selectIds":["ddlNumDecimals","ddlNumAlign","ddlExcelFormat","ddlDisableLinks","ddlOverrideDatabases"],"nearbyFilterHints":["حضور وانصراف الموظفين","الفرع\nالادارة\nالموظف\nمن تاريخ\nالى تاريخ","الفرع\nالادارة\nالموظف\nمن تاريخ\nالى تاريخ","الفرع\nالادارة\nالموظف","الفرع","الفرع","الادارة","الادارة","الموظف","الموظف
+NET attendance POST 200 https://km.mega-cash.net/HRReports/Attendance.aspx 1
+NET attendance GET 200 https://km.mega-cash.net/showreport/E7GXRLzETCU-X_oCFvoeLbZds0Ts5du7jQ2db8uC6gB8gLOkYuL1GIrVise5r1shhGsCN-ynwv83AHENsE-T 0
+NET attendance GET 200 https://km.mega-cash.net/showreport/E7GXRLzETCU-X_oCFvoeLbZds0Ts5du7jQ2db8uC6gB8gLOkYuL1GIrVise5r1shhGsCN-ynwv83AHENsE-T 2
+attendance tick 0 wait false val false auth false src /showreport/E7GXRLzETCU-X_oCFvoeLbZds0Ts5du7jQ2db8uC6gB8gLOkYuL1GIrVise5r1shhGsCN-ynwv83AHENsE-TssxCIddfwOPpYfAoc0KrupfrVzfnh8TNSaNPgJ4dVTX-fSS6WQ2/حضور وانصراف الموظفين.ashx?show=1 urls 9
+saved attendance.pdf 120919
+=== W9 employeesvactions
+prep employeesvactions {"okFrom":true,"okTo":true,"okAsOf":false,"monthYear":null,"hireDates":null,"hasBtn":true,"btnId":"cph_btnShow","hasViewer":true,"dateIds":["cph_txtFromDateSrch","cph_txtToDateSrch"],"selectIds":["ddlNumDecimals","ddlNumAlign","ddlExcelFormat","ddlDisableLinks","ddlOverrideDatabases","cph_ddlStatus"],"nearbyFilterHints":["اجازات الموظفين","الفرع\nالموظف\nالنوع","الفرع","الفرع","الموظف","الموظف","من تاريخ","من تاريخ"]}
+NET employeesvactions POST 200 https://km.mega-cash.net/HRReports/EmployeesVactions.aspx 1
+NET employeesvactions GET 200 https://km.mega-cash.net/showreport/y_LMtw5vD726FQSO3k0T7kM6zJrh6oXF2c3tt71weL-wiIAjTgNw4B_UTaH1NGhaFVNfbJgyih_Tib6_7TVf 0
+NET employeesvactions GET 200 https://km.mega-cash.net/showreport/y_LMtw5vD726FQSO3k0T7kM6zJrh6oXF2c3tt71weL-wiIAjTgNw4B_UTaH1NGhaFVNfbJgyih_Tib6_7TVf 2
+employeesvactions tick 0 wait false val true auth false src /showreport/y_LMtw5vD726FQSO3k0T7kM6zJrh6oXF2c3tt71weL-wiIAjTgNw4B_UTaH1NGhaFVNfbJgyih_Tib6_7TVf7Tda85qJep0z8p9RCPKmS4EfuNMlDVtBBPcmmN6jUSkqa0rxdg2/اجازات الموظفين.ashx?show=1 urls 9
+saved employeesvactions.pdf 82632
+=== W9 employeespayroll
+prep employeespayroll {"okFrom":false,"okTo":false,"okAsOf":false,"monthYear":{"fromMonth":"cph_ddlFromMonth=يناير (1)","fromYear":"cph_ddlFromYear=2022 (2022)","toMonth":"cph_ddlToMonth=مارس (3)","toYear":"cph_ddlToYear=2022 (2022)"},"hireDates":null,"hasBtn":true,"btnId":"cph_btnShow","hasViewer":true,"dateIds":[],"selectIds":["ddlNumDecimals","ddlNumAlign","ddlExcelFormat","ddlDisableLinks","ddlOverrideDatabases","cph_ddlCurrency","cph_ddlFromMonth","cph_ddlFromYear","cph_ddlToMonth","cph_ddlToYear"],"nearbyFilter
+NET employeespayroll POST 200 https://km.mega-cash.net/HRReports/EmployeesPayroll.aspx 1
+NET employeespayroll GET 200 https://km.mega-cash.net/showreport/a6zuG0UNxDZLQJyS6ax4i0FIiELWJFUR20JXqFlP1oafcC4LAYpD0Lr-mVnS0IoOWRLgpLFFgNJE_WGdxptG 0
+NET employeespayroll GET 200 https://km.mega-cash.net/showreport/a6zuG0UNxDZLQJyS6ax4i0FIiELWJFUR20JXqFlP1oafcC4LAYpD0Lr-mVnS0IoOWRLgpLFFgNJE_WGdxptG 2
+employeespayroll tick 0 wait false val true auth false src /showreport/a6zuG0UNxDZLQJyS6ax4i0FIiELWJFUR20JXqFlP1oafcC4LAYpD0Lr-mVnS0IoOWRLgpLFFgNJE_WGdxptGAYg5hZGWGxUUMU5z_TsUPUDM5bAarMMggQCTgfN3QhvoIXqx-A2/رواتب الموظفين.ashx?show=1 urls 9
+saved employeespayroll.pdf 107929
+=== W9 employeespayroll-list
+prep employeespayroll-list {"okFrom":false,"okTo":false,"okAsOf":false,"monthYear":{"fromMonth":"cph_ddlFromMonth=يناير (1)","fromYear":"cph_ddlFromYear=2022 (2022)","toMonth":"cph_ddlToMonth=مارس (3)","toYear":"cph_ddlToYear=2022 (2022)"},"hireDates":null,"hasBtn":true,"btnId":"cph_btnShow","hasViewer":true,"dateIds":[],"selectIds":["ddlNumDecimals","ddlNumAlign","ddlExcelFormat","ddlDisableLinks","ddlOverrideDatabases","cph_ddlCurrency","cph_ddlFromMonth","cph_ddlFromYear","cph_ddlToMonth","cph_ddlToYear"],"nearbyFilter
+NET employeespayroll-list POST 200 https://km.mega-cash.net/HRReports/EmployeesPayroll.aspx/List 1
+NET employeespayroll-list GET 200 https://km.mega-cash.net/showreport/j5YpYaIECV-75HUiJLr5GqgA_x7v33_BXddVWKpIvmDvo-nL_uwwSrIR_TavEOihR4F_icFH1SZuttmqY4OA 0
+employeespayroll-list tick 0 wait false val true auth false src /showreport/j5YpYaIECV-75HUiJLr5GqgA_x7v33_BXddVWKpIvmDvo-nL_uwwSrIR_TavEOihR4F_icFH1SZuttmqY4OAgAdHsKZ1E5pg1ghEoE3BPT9ELhucnp3PtLQKBwGuR42s5fk5Qg2/قائمة رواتب الموظفين.ashx?show=1 urls 6
+NET employeespayroll-list GET 200 https://km.mega-cash.net/showreport/j5YpYaIECV-75HUiJLr5GqgA_x7v33_BXddVWKpIvmDvo-nL_uwwSrIR_TavEOihR4F_icFH1SZuttmqY4OA 2
+saved employeespayroll-list.pdf 99753
+=== W9 employeesunderrequest
+prep employeesunderrequest {"okFrom":true,"okTo":true,"okAsOf":false,"monthYear":null,"hireDates":null,"from":"1/1/2022","to":"3/1/2022","hasBtn":true,"btnId":"cph_btnShow","hasViewer":true,"dateIds":["cph_txtDateFrom","cph_txtDateTo"],"selectIds":["ddlNumDecimals","ddlNumAlign","ddlExcelFormat","ddlDisableLinks","ddlOverrideDatabases"],"nearbyFilterHints":["موظفين تحت الطلب","بحث\nالاسم\nالوظيفة\nمن تاريخ\nالى تاريخ","الاسم\nالوظيفة\nمن تاريخ\nالى تاريخ","الاسم\nالوظيفة\nمن تاريخ\nالى تاريخ","من تاريخ\nالى تاريخ","من تار
+NET employeesunderrequest POST 200 https://km.mega-cash.net/HRReports/EmployeesUnderRequest.aspx 1
+NET employeesunderrequest GET 200 https://km.mega-cash.net/showreport/2-ICbT29XBpWraHcAtmnIL3LfBnbliToaxa7sgHg1CFaUzvF8zn-I2dxGThrJM95EWRN9rp1dmQ-YeRXaHDy 0
+NET employeesunderrequest GET 200 https://km.mega-cash.net/showreport/2-ICbT29XBpWraHcAtmnIL3LfBnbliToaxa7sgHg1CFaUzvF8zn-I2dxGThrJM95EWRN9rp1dmQ-YeRXaHDy 2
+employeesunderrequest tick 0 wait false val false auth false src /showreport/2-ICbT29XBpWraHcAtmnIL3LfBnbliToaxa7sgHg1CFaUzvF8zn-I2dxGThrJM95EWRN9rp1dmQ-YeRXaHDyj5J6l6MpvmBHc0rtDa3M_yLb7GgZmDJ-F55dgx8xDr9wVH0Dpw2/موظفين تحت الطلب.ashx?show=1 urls 9
+saved employeesunderrequest.pdf 70837
+=== W9 employeeslist
+prep employeeslist {"okFrom":true,"okTo":true,"okAsOf":false,"monthYear":null,"hireDates":{"from":true,"to":true},"hasBtn":true,"btnId":"cph_btnShow","hasViewer":true,"dateIds":["cph_txtFromDateSrch","cph_txtToDateSrch"],"selectIds":["ddlNumDecimals","ddlNumAlign","ddlExcelFormat","ddlDisableLinks","ddlOverrideDatabases","cph_ddlCurrency","cph_ddlTerminationStatus"],"nearbyFilterHints":["قائمة الموظفين","الفرع","الفرع","الادارة","الادارة","تاريخ التعيين من","تاريخ التعيين من"]}
+employeeslist tick 0 wait true val true auth false src undefined urls 0
+NET employeeslist POST 200 https://km.mega-cash.net/HRReports/EmployeesList.aspx 1
+NET employeeslist GET 200 https://km.mega-cash.net/showreport/HAr93iuuc2mDNrjicdIayINfklgW1rPxDL4pRhQSMlwBF-Axjs_Z-aL9GA_m3KK1mtnSXsoexxT8rZRglXrx 0
+NET employeeslist GET 200 https://km.mega-cash.net/showreport/HAr93iuuc2mDNrjicdIayINfklgW1rPxDL4pRhQSMlwBF-Axjs_Z-aL9GA_m3KK1mtnSXsoexxT8rZRglXrx 2
+employeeslist tick 1 wait false val true auth false src /showreport/HAr93iuuc2mDNrjicdIayINfklgW1rPxDL4pRhQSMlwBF-Axjs_Z-aL9GA_m3KK1mtnSXsoexxT8rZRglXrxbYq5TC07UOCPXs9hrtNB28FTvSHS1dGj_tYf5QRQrMpWWLS4VQ2/قائمة الموظفين.ashx?show=1 urls 9
+saved employeeslist.pdf 114246
+=== W9 loans-list
+prep loans-list {"okFrom":true,"okTo":true,"okAsOf":false,"monthYear":null,"hireDates":null,"hasBtn":true,"btnId":"cph_btnShow","hasViewer":true,"dateIds":["cph_txtFromDateSrch","cph_txtToDateSrch"],"selectIds":["ddlNumDecimals","ddlNumAlign","ddlExcelFormat","ddlDisableLinks","ddlOverrideDatabases","cph_ddlCurrency","cph_ddlInstallmentStatus"],"nearbyFilterHints":["الفرع","الفرع","من تاريخ","من تاريخ"]}
+NET loans-list POST 200 https://km.mega-cash.net/HRReports/Loans.aspx/List 1
+NET loans-list GET 200 https://km.mega-cash.net/showreport/UAZGZBdNVfqqCWTyYFmMp3ofcGBEMDyaxGeJlLq6h6aoJ-tpmEQd6kvUJBS6eyhaWQaqrWiZIT3DFJHkDjoL 0
+NET loans-list GET 200 https://km.mega-cash.net/showreport/UAZGZBdNVfqqCWTyYFmMp3ofcGBEMDyaxGeJlLq6h6aoJ-tpmEQd6kvUJBS6eyhaWQaqrWiZIT3DFJHkDjoL 2
+loans-list tick 0 wait false val true auth false src /showreport/UAZGZBdNVfqqCWTyYFmMp3ofcGBEMDyaxGeJlLq6h6aoJ-tpmEQd6kvUJBS6eyhaWQaqrWiZIT3DFJHkDjoLbQEvSYsKw_Wnq4KM08CPCQkjJkKUTSk6BCzZUcvEY3yag8ESaA2/السلف.ashx?show=1 urls 9
+saved loans-list.pdf 73949
+=== W9 loans
+=== W10 dep
+prep dep {"okFrom":true,"okTo":true,"okAsOf":true,"monthYear":null,"hireDates":null,"from":"3/1/2022","to":"3/1/2022","hasBtn":true,"btnId":"cph_btnShow","hasViewer":true,"dateIds":["cph_txtDate"],"selectIds":["ddlNumDecimals","ddlNumAlign","ddlExcelFormat","ddlDisableLinks","ddlOverrideDatabases","cph_ddlCurrency","cph_ddlIsClosed","cph_ddlSaleStatus"],"nearbyFilterHints":["الفرع","الفرع","التاريخ","التاريخ"]}
+NET dep POST 200 https://km.mega-cash.net/FixedAssetsReports/Dep.aspx 1
+NET dep GET 200 https://km.mega-cash.net/showreport/CywCgyI2wB86PNRi6Sm-k3ee1qXpUHX7FPWTePcWep8o5jcrKJUsdC9eypIecQZLR1hQ1YcoWJO_A8ymsD79 0
+NET dep GET 200 https://km.mega-cash.net/showreport/CywCgyI2wB86PNRi6Sm-k3ee1qXpUHX7FPWTePcWep8o5jcrKJUsdC9eypIecQZLR1hQ1YcoWJO_A8ymsD79 2
+dep tick 0 wait false val true auth false src /showreport/CywCgyI2wB86PNRi6Sm-k3ee1qXpUHX7FPWTePcWep8o5jcrKJUsdC9eypIecQZLR1hQ1YcoWJO_A8ymsD791UCoTHvtvtkaHliSLUE3caRZECs4sJNx-7iRhgArjBR8bibraA2/اهلاكات الاصول الثابته.ashx?show=1 urls 9
+saved dep.pdf 79326
+=== W10 soldfixedassets
+prep soldfixedassets {"okFrom":true,"okTo":true,"okAsOf":false,"monthYear":null,"hireDates":null,"from":"1/1/2022","to":"3/1/2022","hasBtn":true,"btnId":"cph_btnShow","hasViewer":true,"dateIds":["cph_txtDateFrom","cph_txtDateTo"],"selectIds":["ddlNumDecimals","ddlNumAlign","ddlExcelFormat","ddlDisableLinks","ddlOverrideDatabases"],"nearbyFilterHints":["الفرع\nمن تاريخ\nالى تاريخ\nالفئة\nالاصل","الفرع\nمن تاريخ\nالى تاريخ\nالفئة\nالاصل","الفرع\nمن تاريخ\nالى تاريخ","الفرع","الفرع","من تاريخ","من تاريخ"]}
+soldfixedassets tick 0 wait true val false auth false src undefined urls 0
+NET soldfixedassets POST 200 https://km.mega-cash.net/FixedAssetsReports/SoldFixedAssets.aspx 1
+NET soldfixedassets GET 200 https://km.mega-cash.net/showreport/FZE7pVTYgTXp0CLS_ZuC4rVcTyZXuccuaCuSJyUOMucVqvm-tZSlRGtuHoGzsNEk4Pde-oIMGyApbC7JN9rP 0
+NET soldfixedassets GET 200 https://km.mega-cash.net/showreport/FZE7pVTYgTXp0CLS_ZuC4rVcTyZXuccuaCuSJyUOMucVqvm-tZSlRGtuHoGzsNEk4Pde-oIMGyApbC7JN9rP 2
+soldfixedassets tick 1 wait false val false auth false src /showreport/FZE7pVTYgTXp0CLS_ZuC4rVcTyZXuccuaCuSJyUOMucVqvm-tZSlRGtuHoGzsNEk4Pde-oIMGyApbC7JN9rPY0IrjbDX0tGOr23hgzpzHWmCedWbcGAtKRoxU5AV78dazvDzvQ2/الاصول المباعه.ashx?show=1 urls 9
+saved soldfixedassets.pdf 69849
+SUMMARY [
+  {
+    "wave": 7,
+    "key": "grossrepsalesbyitems",
+    "pdf": true,
+    "err": null,
+    "from": "1/1/2022",
+    "to": "3/1/2022",
+    "gate": null
+  },
+  {
+    "wave": 7,
+    "key": "repscollectings",
+    "pdf": true,
+    "err": null,
+    "from": "1/1/2022",
+    "to": "3/1/2022",
+    "gate": null
+  },
+  {
+    "wave": 7,
+    "key": "repdaily",
+    "pdf": true,
+    "err": null,
+    "from": "1/1/2022",
+    "to": "3/1/2022",
+    "gate": null
+  },
+  {
+    "wave": 7,
+    "key": "repdebit",
+    "pdf": true,
+    "err": null,
+    "from": "1/1/2022",
+    "to": "3/1/2022",
+    "gate": null
+  },
+  {
+    "wave": 8,
+    "key": "productionorders",
+    "pdf": true,
+    "err": null,
+    "from": "1/1/2022",
+    "to": "3/1/2022",
+    "gate": null
+  },
+  {
+    "wave": 8,
+    "key": "productionmaterials",
+    "pdf": true,
+    "err": null,
+    "from": "1/1/2022",
+    "to": "3/1/2022",
+    "gate": null
+  },
+  {
+    "wave": 9,
+    "key": "attendance",
+    "pdf": true,
+    "err": null,
+    "gate": null
+  },
+  {
+    "wave": 9,
+    "key": "employeesvactions",
+    "pdf": true,
+    "err": null,
+    "gate": null
+  },
+  {
+    "wave": 9,
+    "key": "employeespayroll",
+    "pdf": true,
+    "err": null,
+    "gate": null
+  },
+  {
+    "wave": 9,
+    "key": "employeespayroll-list",
+    "pdf": true,
+    "err": null,
+    "gate": null
+  },
+  {
+    "wave": 9,
+    "key": "employeesunderrequest",
+    "pdf": true,
+    "err": null,
+    "from": "1/1/2022",
+    "to": "3/1/2022",
+    "gate": null
+  },
+  {
+    "wave": 9,
+    "key": "employeeslist",
+    "pdf": true,
+    "err": null,
+    "gate": null
+  },
+  {
+    "wave": 9,
+    "key": "loans-list",
+    "pdf": true,
+    "err": null,
+    "gate": null
+  },
+  {
+    "wave": 9,
+    "key": "loans",
+    "pdf": false,
+    "err": "authorization-denied",
+    "gate": true
+  },
+  {
+    "wave": 10,
+    "key": "dep",
+    "pdf": true,
+    "err": null,
+    "from": "3/1/2022",
+    "to": "3/1/2022",
+    "gate": null
+  },
+  {
+    "wave": 10,
+    "key": "soldfixedassets",
+    "pdf": true,
+    "err": null,
+    "from": "1/1/2022",
+    "to": "3/1/2022",
+    "gate": null
+  }
+]

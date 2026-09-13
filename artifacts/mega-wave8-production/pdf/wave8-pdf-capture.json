@@ -1,0 +1,171 @@
+{
+  "at": "2026-09-13T19:46:08.465Z",
+  "results": [
+    {
+      "key": "productionorders",
+      "featureKey": "accountingreports-productionorders",
+      "path": "/AccountingReports/ProductionOrders.aspx",
+      "wave": 8,
+      "note": null,
+      "gate": {
+        "href": "https://km.mega-cash.net/AccountingReports/ProductionOrders.aspx",
+        "authDenied": false,
+        "startScreen": false,
+        "hasShow": true,
+        "hasDateFrom": true,
+        "hasAsOf": false,
+        "hasMonth": false,
+        "title": "",
+        "hint": " اوامر الانتاج تلقائي (4) تلقائي (3) تلقائي (2) تلقائي (1) 0 1 2 3 4 يسار وسط يمين اكسل بالتنسيق اكسل بدون تنسيق تفعيل الروابط تعطيل الروابط KM-01_01_2022 بحث بحث الفرع من تاريخ الى تاريخ مخزن الاستلام باركود التام فئة المنتج التام فئة بديلة المنتج التام منتج تام رقم تشغيلة التام تاريخ الاستلام من تاريخ الاستلام الى المسلسل رقم المرجع حالة التسليم اختر مستلم"
+      },
+      "prep": {
+        "okFrom": true,
+        "okTo": true,
+        "okAsOf": false,
+        "monthYear": null,
+        "hireDates": null,
+        "from": "1/1/2022",
+        "to": "3/1/2022",
+        "hasBtn": true,
+        "btnId": "cph_btnShow",
+        "hasViewer": true,
+        "dateIds": [
+          "cph_txtDateFrom",
+          "cph_txtDateTo",
+          "cph_txtReceiveDateFrom",
+          "cph_txtReceiveDateTo"
+        ],
+        "selectIds": [
+          "ddlNumDecimals",
+          "ddlNumAlign",
+          "ddlExcelFormat",
+          "ddlDisableLinks",
+          "ddlOverrideDatabases",
+          "cph_ddlReceiveStatus",
+          "cph_ddlOrderBy"
+        ],
+        "nearbyFilterHints": [
+          "اوامر الانتاج",
+          "الفرع",
+          "الفرع",
+          "من تاريخ",
+          "من تاريخ"
+        ]
+      },
+      "foundUrls": [
+        "/showreport/3jrAWjgzQsBewhw-rVd7i_cU8E2N6bDVDGNZWXH3Lw1I0NWPU28-NVbOdZZad3PBkHyO5_yq9KEkmodR1IwDK7f1azB2gXPpk6YvcBu0yvS1UKK6eC3VFieWiCQDupQ9WA8iBA2/اوامر",
+        "https://km.mega-cash.net/showreport/3jrAWjgzQsBewhw-rVd7i_cU8E2N6bDVDGNZWXH3Lw1I0NWPU28-NVbOdZZad3PBkHyO5_yq9KEkmodR1IwDK7f1azB2gXPpk6YvcBu0yvS1UKK6eC3VFieWiCQDupQ9WA8iBA2/%D8%A7%D9%88%D8%A7%D9%85%D8%B1%20%D8%A7%D9%84%D8%A7%D9%86%D8%AA%D8%A7%D8%AC.ashx?show=1",
+        "/showreport/3jrAWjgzQsBewhw-rVd7i_cU8E2N6bDVDGNZWXH3Lw1I0NWPU28-NVbOdZZad3PBkHyO5_yq9KEkmodR1IwDK7f1azB2gXPpk6YvcBu0yvS1UKK6eC3VFieWiCQDupQ9WA8iBA2/%D8%A7%D9%88%D8%A7%D9%85%D8%B1%20%D8%A7%D9%84%D8%A7%D9%86%D8%AA%D8%A7%D8%AC.ashx?show=1",
+        "https://km.mega-cash.net/downloadreport/3jrAWjgzQsBewhw-rVd7i_cU8E2N6bDVDGNZWXH3Lw1I0NWPU28-NVbOdZZad3PBkHyO5_yq9KEkmodR1IwDK7f1azB2gXPpk6YvcBu0yvS1UKK6eC3VFieWiCQDupQ9WA8iBA2/%D8%A7%D9%88%D8%A7%D9%85%D8%B1%20%D8%A7%D9%84%D8%A7%D9%86%D8%AA%D8%A7%D8%AC.ashx?show=1",
+        "/showreport/3jrAWjgzQsBewhw-rVd7i_cU8E2N6bDVDGNZWXH3Lw1I0NWPU28-NVbOdZZad3PBkHyO5_yq9KEkmodR1IwDK7f1azB2gXPpk6YvcBu0yvS1UKK6eC3VFieWiCQDupQ9WA8iBA2/اوامر الانتاج.ashx?show=1"
+      ],
+      "finalSrc": "/showreport/3jrAWjgzQsBewhw-rVd7i_cU8E2N6bDVDGNZWXH3Lw1I0NWPU28-NVbOdZZad3PBkHyO5_yq9KEkmodR1IwDK7f1azB2gXPpk6YvcBu0yvS1UKK6eC3VFieWiCQDupQ9WA8iBA2/اوامر الانتاج.ashx?show=1",
+      "pdfPath": "artifacts/mega-wave8-production/pdf/productionorders.pdf",
+      "saved": [
+        {
+          "vu": "https://km.mega-cash.net/showreport/3jrAWjgzQsBewhw-rVd7i_cU8E2N6bDVDGNZWXH3Lw1I0NWPU28-NVbOdZZad3PBkHyO5_yq9KEkmodR1IwDK7f1azB2gXPpk6YvcBu0yvS1UKK6eC3VFieWiCQDupQ9WA8iBA2/اوامر",
+          "status": 200,
+          "size": 113073,
+          "name": "productionorders.pdf"
+        }
+      ],
+      "netHits": 3,
+      "lastSnap": {
+        "src": "/showreport/3jrAWjgzQsBewhw-rVd7i_cU8E2N6bDVDGNZWXH3Lw1I0NWPU28-NVbOdZZad3PBkHyO5_yq9KEkmodR1IwDK7f1azB2gXPpk6YvcBu0yvS1UKK6eC3VFieWiCQDupQ9WA8iBA2/اوامر الانتاج.ashx?show=1",
+        "srcProp": "https://km.mega-cash.net/showreport/3jrAWjgzQsBewhw-rVd7i_cU8E2N6bDVDGNZWXH3Lw1I0NWPU28-NVbOdZZad3PBkHyO5_yq9KEkmodR1IwDK7f1azB2gXPpk6YvcBu0yvS1UKK6eC3VFieWiCQDupQ9WA8iBA2/%D8%A7%D9%88%D8%A7%D9%85%D8%B1%20%D8%A7%D9%84%D8%A7%D9%86%D8%AA%D8%A7%D8%AC.ashx?show=1",
+        "waitText": false,
+        "validation": true,
+        "authDenied": false,
+        "emptyHint": false,
+        "lnk": [
+          "https://km.mega-cash.net/showreport/3jrAWjgzQsBewhw-rVd7i_cU8E2N6bDVDGNZWXH3Lw1I0NWPU28-NVbOdZZad3PBkHyO5_yq9KEkmodR1IwDK7f1azB2gXPpk6YvcBu0yvS1UKK6eC3VFieWiCQDupQ9WA8iBA2/%D8%A7%D9%88%D8%A7%D9%85%D8%B1%20%D8%A7%D9%84%D8%A7%D9%86%D8%AA%D8%A7%D8%AC.ashx?show=1",
+          "https://km.mega-cash.net/downloadreport/3jrAWjgzQsBewhw-rVd7i_cU8E2N6bDVDGNZWXH3Lw1I0NWPU28-NVbOdZZad3PBkHyO5_yq9KEkmodR1IwDK7f1azB2gXPpk6YvcBu0yvS1UKK6eC3VFieWiCQDupQ9WA8iBA2/%D8%A7%D9%88%D8%A7%D9%85%D8%B1%20%D8%A7%D9%84%D8%A7%D9%86%D8%AA%D8%A7%D8%AC.ashx?show=1"
+        ],
+        "hint": " اوامر الانتاج تلقائي (4) تلقائي (3) تلقائي (2) تلقائي (1) 0 1 2 3 4 يسار وسط يمين اكسل بالتنسيق اكسل بدون تنسيق تفعيل الروابط تعطيل الروابط KM-01_01_2022 بحث بحث الفرع من تاريخ الى تاريخ مخزن الاستلام باركود التام فئة المنتج التام فئة بديلة المنتج التام منتج تام رقم تشغيلة التام"
+      },
+      "error": null
+    },
+    {
+      "key": "productionmaterials",
+      "featureKey": "accountingreports-productionmaterials",
+      "path": "/AccountingReports/ProductionMaterials.aspx",
+      "wave": 8,
+      "note": null,
+      "gate": {
+        "href": "https://km.mega-cash.net/AccountingReports/ProductionMaterials.aspx",
+        "authDenied": false,
+        "startScreen": false,
+        "hasShow": true,
+        "hasDateFrom": true,
+        "hasAsOf": false,
+        "hasMonth": false,
+        "title": "",
+        "hint": " خامات وتوالف الانتاج تلقائي (4) تلقائي (3) تلقائي (2) تلقائي (1) 0 1 2 3 4 يسار وسط يمين اكسل بالتنسيق اكسل بدون تنسيق تفعيل الروابط تعطيل الروابط KM-01_01_2022 بحث بحث الفرع من تاريخ الى تاريخ مخزن الخامات باركود الخام فئة الخام الخامة رقم تشغيلة الخام باركود المنتج التام فئة المنتج التام منتج تام رقم تشغيلة المنتج التام النوع اختر خامات توالف حالة التسليم"
+      },
+      "prep": {
+        "okFrom": true,
+        "okTo": true,
+        "okAsOf": false,
+        "monthYear": null,
+        "hireDates": null,
+        "from": "1/1/2022",
+        "to": "3/1/2022",
+        "hasBtn": true,
+        "btnId": "cph_btnShow",
+        "hasViewer": true,
+        "dateIds": [
+          "cph_txtDateFrom",
+          "cph_txtDateTo"
+        ],
+        "selectIds": [
+          "ddlNumDecimals",
+          "ddlNumAlign",
+          "ddlExcelFormat",
+          "ddlDisableLinks",
+          "ddlOverrideDatabases",
+          "cph_ddlQtyType",
+          "cph_ddlReceiveStatus",
+          "cph_ddlOrderBy"
+        ],
+        "nearbyFilterHints": [
+          "خامات وتوالف الانتاج",
+          "الفرع",
+          "الفرع",
+          "من تاريخ",
+          "من تاريخ"
+        ]
+      },
+      "foundUrls": [
+        "/showreport/RlCse2B4YAfUYCgt6E7RmGlxPJ7_znJrnJsKRjwjk5EzLKO5NVeigcFS9ZnmNb4BYUu6rz0KK5DrKSrL3GOJWiBq4AFNktBcN0yF1daFiSwdQ3kleAU4we3zwL3RMbbWOeUFGQ2/خامات",
+        "https://km.mega-cash.net/showreport/RlCse2B4YAfUYCgt6E7RmGlxPJ7_znJrnJsKRjwjk5EzLKO5NVeigcFS9ZnmNb4BYUu6rz0KK5DrKSrL3GOJWiBq4AFNktBcN0yF1daFiSwdQ3kleAU4we3zwL3RMbbWOeUFGQ2/%D8%AE%D8%A7%D9%85%D8%A7%D8%AA%20%D9%88%D8%AA%D9%88%D8%A7%D9%84%D9%81%20%D8%A7%D9%84%D8%A7%D9%86%D8%AA%D8%A7%D8%AC.ashx?show=1",
+        "https://km.mega-cash.net/downloadreport/RlCse2B4YAfUYCgt6E7RmGlxPJ7_znJrnJsKRjwjk5EzLKO5NVeigcFS9ZnmNb4BYUu6rz0KK5DrKSrL3GOJWiBq4AFNktBcN0yF1daFiSwdQ3kleAU4we3zwL3RMbbWOeUFGQ2/%D8%AE%D8%A7%D9%85%D8%A7%D8%AA%20%D9%88%D8%AA%D9%88%D8%A7%D9%84%D9%81%20%D8%A7%D9%84%D8%A7%D9%86%D8%AA%D8%A7%D8%AC.ashx?show=1",
+        "/showreport/RlCse2B4YAfUYCgt6E7RmGlxPJ7_znJrnJsKRjwjk5EzLKO5NVeigcFS9ZnmNb4BYUu6rz0KK5DrKSrL3GOJWiBq4AFNktBcN0yF1daFiSwdQ3kleAU4we3zwL3RMbbWOeUFGQ2/خامات وتوالف الانتاج.ashx?show=1"
+      ],
+      "finalSrc": "/showreport/RlCse2B4YAfUYCgt6E7RmGlxPJ7_znJrnJsKRjwjk5EzLKO5NVeigcFS9ZnmNb4BYUu6rz0KK5DrKSrL3GOJWiBq4AFNktBcN0yF1daFiSwdQ3kleAU4we3zwL3RMbbWOeUFGQ2/خامات وتوالف الانتاج.ashx?show=1",
+      "pdfPath": "artifacts/mega-wave8-production/pdf/productionmaterials.pdf",
+      "saved": [
+        {
+          "vu": "https://km.mega-cash.net/showreport/RlCse2B4YAfUYCgt6E7RmGlxPJ7_znJrnJsKRjwjk5EzLKO5NVeigcFS9ZnmNb4BYUu6rz0KK5DrKSrL3GOJWiBq4AFNktBcN0yF1daFiSwdQ3kleAU4we3zwL3RMbbWOeUFGQ2/خامات",
+          "status": 200,
+          "size": 81736,
+          "name": "productionmaterials.pdf"
+        }
+      ],
+      "netHits": 3,
+      "lastSnap": {
+        "src": "/showreport/RlCse2B4YAfUYCgt6E7RmGlxPJ7_znJrnJsKRjwjk5EzLKO5NVeigcFS9ZnmNb4BYUu6rz0KK5DrKSrL3GOJWiBq4AFNktBcN0yF1daFiSwdQ3kleAU4we3zwL3RMbbWOeUFGQ2/خامات وتوالف الانتاج.ashx?show=1",
+        "srcProp": "https://km.mega-cash.net/showreport/RlCse2B4YAfUYCgt6E7RmGlxPJ7_znJrnJsKRjwjk5EzLKO5NVeigcFS9ZnmNb4BYUu6rz0KK5DrKSrL3GOJWiBq4AFNktBcN0yF1daFiSwdQ3kleAU4we3zwL3RMbbWOeUFGQ2/%D8%AE%D8%A7%D9%85%D8%A7%D8%AA%20%D9%88%D8%AA%D9%88%D8%A7%D9%84%D9%81%20%D8%A7%D9%84%D8%A7%D9%86%D8%AA%D8%A7%D8%AC.ashx?show=1",
+        "waitText": false,
+        "validation": true,
+        "authDenied": false,
+        "emptyHint": false,
+        "lnk": [
+          "https://km.mega-cash.net/showreport/RlCse2B4YAfUYCgt6E7RmGlxPJ7_znJrnJsKRjwjk5EzLKO5NVeigcFS9ZnmNb4BYUu6rz0KK5DrKSrL3GOJWiBq4AFNktBcN0yF1daFiSwdQ3kleAU4we3zwL3RMbbWOeUFGQ2/%D8%AE%D8%A7%D9%85%D8%A7%D8%AA%20%D9%88%D8%AA%D9%88%D8%A7%D9%84%D9%81%20%D8%A7%D9%84%D8%A7%D9%86%D8%AA%D8%A7%D8%AC.ashx?show=1",
+          "https://km.mega-cash.net/downloadreport/RlCse2B4YAfUYCgt6E7RmGlxPJ7_znJrnJsKRjwjk5EzLKO5NVeigcFS9ZnmNb4BYUu6rz0KK5DrKSrL3GOJWiBq4AFNktBcN0yF1daFiSwdQ3kleAU4we3zwL3RMbbWOeUFGQ2/%D8%AE%D8%A7%D9%85%D8%A7%D8%AA%20%D9%88%D8%AA%D9%88%D8%A7%D9%84%D9%81%20%D8%A7%D9%84%D8%A7%D9%86%D8%AA%D8%A7%D8%AC.ashx?show=1"
+        ],
+        "hint": " خامات وتوالف الانتاج تلقائي (4) تلقائي (3) تلقائي (2) تلقائي (1) 0 1 2 3 4 يسار وسط يمين اكسل بالتنسيق اكسل بدون تنسيق تفعيل الروابط تعطيل الروابط KM-01_01_2022 بحث بحث الفرع من تاريخ الى تاريخ مخزن الخامات باركود الخام فئة الخام الخامة رقم تشغيلة الخام باركود المنتج التام فئة ا"
+      },
+      "error": null
+    }
+  ]
+}
