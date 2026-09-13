@@ -11,8 +11,8 @@ Goal: Easy Cash reports match Mega Cash (filters + columns + behavior) with **no
 ## P0 (in progress)
 | Easy slug | Mega page | Filters | Columns |
 |-----------|-----------|---------|---------|
-| `finalreports-trialbalance` | `/FinalReports/TrialBalance.aspx` | filters_done (partial Mega-only opts pending) | columns_done (Excel 2026-09-13) |
-| `finalreports-generalledger` | `/FinalReports/GeneralLedger.aspx` | filters_done | columns_done (Excel 2026-09-13) |
+| `finalreports-trialbalance` | `/FinalReports/TrialBalance.aspx` | filters_done (partial Mega-only opts pending) | columns_done (Excel 2026-09-13) + PDF formal print |
+| `finalreports-generalledger` | `/FinalReports/GeneralLedger.aspx` | filters_done | columns_done (Excel 2026-09-13) + PDF formal print |
 | `accountingreports-accountstatment` | `/AccountingReports/AccountStatment.aspx` | filters_done (partial Mega-only opts pending) | columns_done (Excel 2026-09-13) + PDF print Mega-style |
 
 ## Easy current row shapes (Mega-verified where noted — do not invent labels)
@@ -25,3 +25,6 @@ Need Mega **grid headers** (screenshot after عرض with data, or Excel export f
 
 ## Inventory
 See `artifacts/mega-easy-report-inventory.json` (~72 Easy report paths / ~76 Mega URL mappings). Next waves after P0 columns: sales, purchases, inventory, then remaining accounting/final reports.
+
+
+انظر أيضاً: `artifacts/mega-what-we-need-next.md` (قائمة ما نحتاجه من ميجا للموجة التالية).

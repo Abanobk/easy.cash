@@ -14,7 +14,7 @@ import { getReportEntityFilters, type ReportEntityFilter } from "@/config/report
 import { reportColumnLabel, REPORT_TOTAL_COLUMNS } from "@/config/report-column-labels";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import { printTableReport, printGroupedInvoiceReport, printAccountStatementReport } from "@/lib/print-report";
+import { printTableReport, printGroupedInvoiceReport, printAccountStatementReport, printFormalAccountingReport } from "@/lib/print-report";
 
 type ReportProcedure = "accountingBySlug" | "finalBySlug" | "hrBySlug" | "assetsBySlug";
 
@@ -459,6 +459,34 @@ export default function ReportHub({ title, section, icon, reports, procedure }: 
         accountLabel,
         currencyCode: code,
         rows: rows as Record<string, unknown>[],
+        companyName: companyProps.companyName,
+        companyAddress: companyProps.companyAddress,
+        companyPhone: companyProps.companyPhone,
+        companyMobile: company?.phone2 ?? undefined,
+        companyLogo: companyProps.companyLogo,
+      });
+      return;
+    }
+
+    const isTrialBalance = slug === "finalreports-trialbalance";
+    const isGeneralLedger = slug === "finalreports-generalledger";
+    if (isTrialBalance || isGeneralLedger) {
+      printFormalAccountingReport({
+        reportName: isTrialBalance ? "ميزان المراجعة" : "الاستاذ العام",
+        dateFrom: query.dateFrom,
+        dateTo: query.dateTo,
+        columns: columns.map((key) => ({ key, label: reportColumnLabel(key) })),
+        rows: rows as Record<string, unknown>[],
+        numericKeys: isTrialBalance
+          ? ["openingDebit", "openingCredit", "periodDebit", "periodCredit", "closingDebit", "closingCredit"]
+          : ["debit", "credit", "balance"],
+        dateKeys: isGeneralLedger ? ["date"] : [],
+        isSpecialRow: isGeneralLedger
+          ? (row) => {
+              const d = String(row.date ?? "");
+              return d === "رصيد سابق" || d === "اجمالى" || d === "اجمالي";
+            }
+          : undefined,
         companyName: companyProps.companyName,
         companyAddress: companyProps.companyAddress,
         companyPhone: companyProps.companyPhone,
