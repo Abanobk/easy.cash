@@ -20,10 +20,10 @@ const ACCOUNTING_FILTERS: Record<string, ReportEntityFilter[]> = {
   // ميجا كشف حساب (AccountStatment.aspx): الفرع، العملة، من/الى، اسم الحساب، مركز التكلفة
   // (الحساب المقابل / نوع القيد / اعتمد بواسطة / ملاحظات / checkboxes — لاحقاً بعد تأكيد السلوك)
   "accountingreports-accountstatment": ["branch", "account", "costCenter", "currency"],
-  "accountingreports-accountstatment-cash": ["branch", "account"],
+  "accountingreports-accountstatment-cash": ["branch", "account", "currency"],
   "accountingreports-customerstatment": ["customer", "branch", "area", "currency"],
   "accountingreports-vendorstatment": ["supplier", "branch", "currency"],
-  "accountingreports-costcenterstatment": ["costCenter"],
+  "accountingreports-costcenterstatment": ["costCenter", "branch", "currency"],
   "accountingreports-customeraccountstatementbyitems": ["branch", "customer", "currency", "item"],
   "accountingreports-vendoraccountstatementbyitems": ["supplier", "item"],
   // ميجا Sales.aspx: فرع، عملة، تواريخ، استحقاق، مخزن، فئة، صنف، مندوب، منطقة، عميل، ضريبة، خصم، دفع، تحصيل…
@@ -32,11 +32,16 @@ const ACCOUNTING_FILTERS: Record<string, ReportEntityFilter[]> = {
   "accountingreports-purchases": ["supplier", "branch", "warehouse", "item", "category", "paymentType", "currency", "dueDate", "paymentStatus", "taxFilter", "discountFilter"],
   "accountingreports-customerssales": ["customer", "branch", "area", "rep", "paymentType"],
   "accountingreports-vendorspurchases": ["supplier", "branch", "paymentType"],
-  "accountingreports-payments": ["customer", "supplier", "branch"],
+  // ميجا Payments.aspx: فرع، عملة، مندوب، منطقة، عميل/مورد…
+  "accountingreports-payments": ["customer", "supplier", "branch", "currency", "rep", "area"],
   // ميجا Dues.aspx: الفرع، العملة، من/الى، اسم الحساب، رقم المرجع، حالة السداد
   "accountingreports-dues": ["branch", "currency", "account", "paymentStatus"],
-  "accountingreports-checks-checkin": ["customer"],
-  "accountingreports-checks-checkout": ["supplier"],
+  // ميجا Checks CheckIn: فرع، عملة، استحقاق، مستلم، منطقة، مندوب، حالة الشيك…
+  "accountingreports-checks-checkin": ["customer", "branch", "currency", "area", "rep", "dueDate", "paymentStatus"],
+  // ميجا Checks CheckOut: فرع، عملة، استحقاق، مستفيد، حالة الشيك…
+  "accountingreports-checks-checkout": ["supplier", "branch", "currency", "dueDate", "paymentStatus"],
+  // ميجا CustomersInstallments.aspx: فرع، عملة، منطقة، عميل، حالة التحصيل…
+  "accountingreports-customersinstallments": ["customer", "branch", "currency", "area", "paymentStatus"],
   "accountingreports-debitsages": ["customer", "branch", "area", "rep"],
   "accountingreports-debitsagesbyyear": ["customer", "branch", "area", "rep"],
   "accountingreports-debitsagesbyhalfyear": ["customer", "branch", "area", "rep"],
@@ -48,7 +53,7 @@ const ACCOUNTING_FILTERS: Record<string, ReportEntityFilter[]> = {
   "accountingreports-repscollectings": ["rep"],
   "accountingreports-repdaily": ["rep", "branch"],
   "accountingreports-repdebit": ["rep"],
-  "accountingreports-branchessummary": ["branch"],
+  "accountingreports-branchessummary": ["branch", "currency"],
   "accountingreports-areassummary": ["branch", "area", "currency"],
   "accountingreports-grosscustomersalesbyitems": ["item", "category", "rep", "branch", "warehouse", "customer"],
   "accountingreports-grossvendorpurchasesbyitems": ["item", "category", "branch", "warehouse", "supplier"],
@@ -61,9 +66,9 @@ const ACCOUNTING_FILTERS: Record<string, ReportEntityFilter[]> = {
   "accountingreports-vendorssummary": ["branch", "currency"],
   "accountingreports-customerslist": ["branch", "area", "rep", "currency"],
   "accountingreports-vendorslist": ["branch", "currency"],
-  "accountingreports-dashboard": ["branch", "paymentType"],
+  "accountingreports-dashboard": ["branch", "currency"],
   "accountingreports-lastprices": ["item", "customer", "supplier", "branch", "category"],
-  "accountingreports-monthlyexpenses": ["account", "costCenter"],
+  "accountingreports-monthlyexpenses": ["account", "costCenter", "branch"],
   "accountingreports-productionorders": ["warehouse", "branch", "item"],
   "accountingreports-productionmaterials": ["item", "warehouse", "branch"],
 };

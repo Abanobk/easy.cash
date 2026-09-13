@@ -3,6 +3,7 @@ import type { Db } from "./db";
 import { customerDebtAgingReport, supplierDebtAgingReport } from "./debt-aging";
 import {
   accounts,
+  bankAccounts,
   bankTransactions,
   branches,
   cashTransactions,
@@ -1553,33 +1554,70 @@ export async function salesInvoicesDetailedReport(db: Db, filters: ReportFilters
 
 export async function checksReport(db: Db, filters: ReportFilters, type: "incoming" | "outgoing") {
   const dateParts = dateConds(checks, filters.dateFrom, filters.dateTo);
+  const dueParts: any[] = [];
+  if (filters.dueDateFrom) dueParts.push(gte(checks.dueDate, filters.dueDateFrom as any));
+  if (filters.dueDateTo) dueParts.push(lte(checks.dueDate, filters.dueDateTo as any));
+
   const rows = await db.select({
     number: checks.number,
+    checkNumber: checks.checkNumber,
     date: checks.date,
     dueDate: checks.dueDate,
     amount: checks.amount,
     status: checks.status,
     customerName: customers.name,
     supplierName: suppliers.name,
+    customerBranchName: branches.name,
+    supplierBranchId: suppliers.branchId,
+    bankName: bankAccounts.bankName,
+    depositAccount: bankAccounts.name,
   }).from(checks)
     .leftJoin(customers, eq(checks.customerId, customers.id))
     .leftJoin(suppliers, eq(checks.supplierId, suppliers.id))
+    .leftJoin(bankAccounts, eq(checks.bankAccountId, bankAccounts.id))
+    .leftJoin(branches, eq(customers.branchId, branches.id))
     .where(tenantWhere(checks, filters.tenantId,
-      and(eq(checks.type, type), ...(dateParts.length ? [and(...dateParts)] : []),
+      and(eq(checks.type, type), ...(dateParts.length ? [and(...dateParts)] : []), ...dueParts,
         type === "incoming" && filters.customerId ? eq(checks.customerId, filters.customerId) : undefined,
         type === "outgoing" && filters.supplierId ? eq(checks.supplierId, filters.supplierId) : undefined,
+        filters.branchId ? (type === "incoming" ? eq(customers.branchId, filters.branchId) : eq(suppliers.branchId, filters.branchId)) : undefined,
+        filters.paymentStatus === "paid" ? eq(checks.status, "cleared") : undefined,
+        filters.paymentStatus === "unpaid" ? inArray(checks.status, ["pending", "deposited"]) : undefined,
         filters.search
-          ? sql`(${checks.number} LIKE ${`%${filters.search}%`} OR ${customers.name} LIKE ${`%${filters.search}%`} OR ${suppliers.name} LIKE ${`%${filters.search}%`})`
+          ? sql`(${checks.number} LIKE ${`%${filters.search}%`} OR ${checks.checkNumber} LIKE ${`%${filters.search}%`} OR ${customers.name} LIKE ${`%${filters.search}%`} OR ${suppliers.name} LIKE ${`%${filters.search}%`})`
           : undefined)))
     .orderBy(desc(checks.date));
 
-  return rows.map((r) => ({
-    checkNumber: r.number,
+  // supplier branch names in a second pass if needed
+  const supplierBranchIds = Array.from(new Set(rows.map((r) => r.supplierBranchId).filter(Boolean))) as number[];
+  const supplierBranchMap = new Map<number, string>();
+  if (supplierBranchIds.length) {
+    const br = await db.select({ id: branches.id, name: branches.name }).from(branches).where(inArray(branches.id, supplierBranchIds));
+    for (const b of br) supplierBranchMap.set(b.id, b.name);
+  }
+
+  const statusLabel = (s: string | null) => {
+    const map: Record<string, string> = {
+      pending: "تحت التحصيل",
+      deposited: "تحت التحصيل",
+      cleared: "محصل",
+      bounced: "مرفوض",
+      cancelled: "ملغي",
+    };
+    return map[String(s || "")] || s || "";
+  };
+
+  return rows.map((r, idx) => ({
+    documentNumber: idx + 1,
+    checkNumber: r.checkNumber || r.number || "",
+    bankName: r.bankName || "",
+    depositAccount: r.depositAccount || "",
+    amount: num(r.amount),
     date: dateOnly(r.date),
     dueDate: dateOnly(r.dueDate),
-    partyName: r.customerName || r.supplierName || "",
-    amount: num(r.amount),
-    status: r.status,
+    status: statusLabel(r.status),
+    branchName: r.customerBranchName || (r.supplierBranchId ? supplierBranchMap.get(r.supplierBranchId) || "" : ""),
+    currency: filters.currencyCode || "جنيه مصري",
   }));
 }
 
@@ -2533,9 +2571,16 @@ export async function vendorItemStatementReport(db: Db, filters: ReportFilters) 
 
 export async function costCenterStatementReport(db: Db, filters: ReportFilters) {
   const lines = await loadPostedJournalLines(db, filters);
-  if (!filters.costCenterId) return lines;
-  const [cc] = await db.select().from(costCenters).where(eq(costCenters.id, filters.costCenterId));
-  return lines.map((l) => ({ ...l, costCenter: cc?.name || "" }));
+  if (!filters.costCenterId) return [];
+  // ميجا: رقم المستند | الوصف | الرصيد | دائن | مدين | التاريخ
+  return lines.map((l) => ({
+    documentNumber: l.documentNumber || "",
+    description: l.description || "",
+    balance: num(l.balance),
+    credit: num(l.credit),
+    debit: num(l.debit),
+    date: l.date,
+  }));
 }
 
 export async function monthlyExpensesReport(db: Db, filters: ReportFilters) {
@@ -2543,19 +2588,23 @@ export async function monthlyExpensesReport(db: Db, filters: ReportFilters) {
     .from(accounts).where(tenantWhere(accounts, filters.tenantId, eq(accounts.type, "expense")));
   const expenseIds = new Set(expenseAccounts.map((a) => a.id));
   const lines = await loadPostedJournalLines(db, filters);
-  const map = new Map<string, { month: string; accountCode: string; accountName: string; debit: number; credit: number; net: number }>();
+  type Row = { accountName: string; jan: number; feb: number; mar: number; apr: number; may: number; jun: number; jul: number; aug: number; sep: number; oct: number; nov: number; dec: number; total: number };
+  const map = new Map<string, Row>();
+  const monthKeys = ["jan","feb","mar","apr","may","jun","jul","aug","sep","oct","nov","dec"] as const;
   for (const l of lines) {
     const acc = expenseAccounts.find((a) => a.code === l.accountCode);
     if (!acc || !expenseIds.has(acc.id)) continue;
-    const month = String(l.date).slice(0, 7);
-    const key = `${month}-${acc.code}`;
-    const cur = map.get(key) || { month, accountCode: acc.code, accountName: acc.name, debit: 0, credit: 0, net: 0 };
-    cur.debit += num(l.debit);
-    cur.credit += num(l.credit);
-    cur.net += num(l.debit) - num(l.credit);
-    map.set(key, cur);
+    if (filters.accountId && acc.id !== filters.accountId) continue;
+    const monthNum = Number(String(l.date).slice(5, 7));
+    if (!monthNum || monthNum < 1 || monthNum > 12) continue;
+    const cur = map.get(acc.code) || { accountName: acc.name, jan: 0, feb: 0, mar: 0, apr: 0, may: 0, jun: 0, jul: 0, aug: 0, sep: 0, oct: 0, nov: 0, dec: 0, total: 0 };
+    const key = monthKeys[monthNum - 1];
+    const net = num(l.debit) - num(l.credit);
+    cur[key] += net;
+    cur.total += net;
+    map.set(acc.code, cur);
   }
-  return Array.from(map.values()).sort((a, b) => a.month.localeCompare(b.month) || a.accountCode.localeCompare(b.accountCode));
+  return Array.from(map.values()).sort((a, b) => a.accountName.localeCompare(b.accountName, "ar"));
 }
 
 export async function itemsProfitsReport(db: Db, filters: ReportFilters) {
@@ -2795,6 +2844,7 @@ export async function branchesSummaryReport(db: Db, filters: ReportFilters) {
   const salesDate = dateConds(salesInvoices, filters.dateFrom, filters.dateTo);
   const purchaseDate = dateConds(purchaseInvoices, filters.dateFrom, filters.dateTo);
   const cashDate = dateConds(cashTransactions, filters.dateFrom, filters.dateTo);
+  const returnDate = dateConds(salesReturns, filters.dateFrom, filters.dateTo);
 
   const sales = await db.select({
     branchId: salesInvoices.branchId,
@@ -2821,10 +2871,22 @@ export async function branchesSummaryReport(db: Db, filters: ReportFilters) {
     .where(tenantWhere(cashTransactions, filters.tenantId,
       ...(cashDate.length ? [and(...cashDate)] : [])));
 
-  type BranchAgg = { sales: number; paid: number; remaining: number; salesCount: number; purchases: number; purchaseCount: number; collected: number };
+  // مردود مبيعات — عبر عميل → فرع (تقريب ميجا)
+  const returns = await db.select({
+    branchId: customers.branchId,
+    total: salesReturns.total,
+  }).from(salesReturns)
+    .leftJoin(customers, eq(salesReturns.customerId, customers.id))
+    .where(tenantWhere(salesReturns, filters.tenantId,
+      ...(returnDate.length ? [and(...returnDate)] : [])));
+
+  type BranchAgg = {
+    sales: number; paid: number; remaining: number; salesCount: number;
+    purchases: number; purchaseCount: number; collected: number; disbursed: number; salesReturns: number;
+  };
   const map = new Map<number, BranchAgg>();
   const ensure = (id: number): BranchAgg => {
-    const cur = map.get(id) || { sales: 0, paid: 0, remaining: 0, salesCount: 0, purchases: 0, purchaseCount: 0, collected: 0 };
+    const cur = map.get(id) || { sales: 0, paid: 0, remaining: 0, salesCount: 0, purchases: 0, purchaseCount: 0, collected: 0, disbursed: 0, salesReturns: 0 };
     map.set(id, cur);
     return cur;
   };
@@ -2843,40 +2905,30 @@ export async function branchesSummaryReport(db: Db, filters: ReportFilters) {
     cur.purchaseCount += 1;
   }
   for (const c of collections) {
-    if (!c.branchId || !String(c.type).includes("receive")) continue;
-    ensure(c.branchId).collected += num(c.amount);
+    if (!c.branchId) continue;
+    const t = String(c.type);
+    if (t.includes("receive")) ensure(c.branchId).collected += num(c.amount);
+    if (t.includes("pay")) ensure(c.branchId).disbursed += num(c.amount);
+  }
+  for (const r of returns) {
+    if (!r.branchId) continue;
+    ensure(r.branchId).salesReturns += num(r.total);
   }
 
-  const custCounts = await db.select({ branchId: customers.branchId, count: sql<number>`count(*)` })
-    .from(customers).where(tenantWhere(customers, filters.tenantId)).groupBy(customers.branchId);
-  const custMap = new Map(custCounts.map((c) => [c.branchId!, Number(c.count)]));
-
-  const supplierCounts = await db.select({ branchId: suppliers.branchId, count: sql<number>`count(*)` })
-    .from(suppliers).where(tenantWhere(suppliers, filters.tenantId)).groupBy(suppliers.branchId);
-  const supplierMap = new Map(supplierCounts.map((c) => [c.branchId!, Number(c.count)]));
-
-  const warehouseCounts = await db.select({ branchId: warehouses.branchId, count: sql<number>`count(*)` })
-    .from(warehouses).where(tenantWhere(warehouses, filters.tenantId)).groupBy(warehouses.branchId);
-  const warehouseMap = new Map(warehouseCounts.map((c) => [c.branchId!, Number(c.count)]));
-
-  return branchRows.map((b) => {
-    const a = map.get(b.id) || { sales: 0, paid: 0, remaining: 0, salesCount: 0, purchases: 0, purchaseCount: 0, collected: 0 };
+  // رصيد خزائن تقريبي: مدفوعات قبض − صرف على مستوى الفرع خلال الفترة + لا رصيد افتتاحي دقيق بدون ربط خزينة↔فرع
+  return branchRows.map((b, idx) => {
+    const a = map.get(b.id) || { sales: 0, paid: 0, remaining: 0, salesCount: 0, purchases: 0, purchaseCount: 0, collected: 0, disbursed: 0, salesReturns: 0 };
+    const netSales = a.sales - a.salesReturns;
     return {
+      disbursement: a.disbursed,
+      netSales,
+      documentNumber: idx + 1,
+      netPurchases: a.purchases,
+      cashBalance: a.collected - a.disbursed,
+      collection: a.collected,
+      salesReturns: a.salesReturns,
+      sales: a.sales,
       branchName: b.name,
-      address: b.address || "",
-      phone: b.phone || "",
-      customersCount: custMap.get(b.id) || 0,
-      suppliersCount: supplierMap.get(b.id) || 0,
-      warehousesCount: warehouseMap.get(b.id) || 0,
-      salesInvoicesCount: a.salesCount,
-      salesTotal: a.sales,
-      salesPaid: a.paid,
-      salesRemaining: a.remaining,
-      purchasesInvoicesCount: a.purchaseCount,
-      purchasesTotal: a.purchases,
-      collectionsTotal: a.collected,
-      netSalesPurchases: a.sales - a.purchases,
-      isActive: b.isActive ? "نعم" : "لا",
     };
   });
 }
@@ -3227,42 +3279,69 @@ export async function subLedgerReport(db: Db, filters: ReportFilters) {
   return lines.filter((l) => leafCodes.has(String(l.accountCode)));
 }
 
-function isCashLikeAccount(code: string, name: string) {
+export function isCashLikeAccount(code: string, name: string) {
   const n = name.toLowerCase();
   return n.includes("نقد") || n.includes("خزينة") || n.includes("cash") || n.includes("بنك") || n.includes("bank") || /^11/.test(code) || /^12/.test(code);
 }
 
 export async function cashAccountStatementReport(db: Db, filters: ReportFilters) {
+  // ميجا كشف حساب خزائن: نفس روح كشف الحساب (رقم مستند/قيد/وصف/سعر صرف/رصيد/دائن/مدين/تاريخ)
   if (filters.accountId) {
-    return loadPostedJournalLines(db, filters);
+    const rows = await accountStatementReport(db, filters);
+    return rows.map((r) => ({
+      documentNumber: r.documentNumber ?? "",
+      entryNumber: r.entryNumber ?? "",
+      description: r.description ?? "",
+      exchangeRate: r.exchangeRate ?? 1,
+      balance: num(r.balance),
+      credit: num(r.credit),
+      debit: num(r.debit),
+      date: r.date ?? "",
+    }));
   }
   const accountRows = await db.select({ id: accounts.id, code: accounts.code, name: accounts.name }).from(accounts)
     .where(tenantWhere(accounts, filters.tenantId, eq(accounts.isActive, true), eq(accounts.isParent, false)));
   const cashIds = accountRows.filter((a) => isCashLikeAccount(a.code, a.name)).map((a) => a.id);
-  if (!cashIds.length) return paymentsReport(db, filters);
+  if (!cashIds.length) return [];
 
-  const lines: Awaited<ReturnType<typeof loadPostedJournalLines>> = [];
+  const out: Record<string, unknown>[] = [];
   for (const id of cashIds) {
-    const part = await loadPostedJournalLines(db, { ...filters, accountId: id });
-    lines.push(...part);
+    const part = await accountStatementReport(db, { ...filters, accountId: id });
+    for (const r of part) {
+      out.push({
+        documentNumber: r.documentNumber ?? "",
+        entryNumber: r.entryNumber ?? "",
+        description: r.description ?? "",
+        exchangeRate: r.exchangeRate ?? 1,
+        balance: num(r.balance),
+        credit: num(r.credit),
+        debit: num(r.debit),
+        date: r.date ?? "",
+      });
+    }
   }
-  return lines.sort((a, b) => String(a.date).localeCompare(String(b.date)) || String(a.documentNumber).localeCompare(String(b.documentNumber)));
+  return out.sort((a, b) => String(a.date).localeCompare(String(b.date)) || String(a.documentNumber).localeCompare(String(b.documentNumber)));
 }
 
 export async function paymentsReport(db: Db, filters: ReportFilters) {
   const cashDate = dateConds(cashTransactions, filters.dateFrom, filters.dateTo);
   const bankDate = dateConds(bankTransactions, filters.dateFrom, filters.dateTo);
+
+  const cashAcc = accounts;
   const cashRows = await db.select({
     date: cashTransactions.date,
     type: cashTransactions.type,
     amount: cashTransactions.amount,
     description: cashTransactions.description,
     number: cashTransactions.number,
+    reference: cashTransactions.reference,
     customerName: customers.name,
     supplierName: suppliers.name,
+    accountName: cashAcc.name,
   }).from(cashTransactions)
     .leftJoin(customers, eq(cashTransactions.customerId, customers.id))
     .leftJoin(suppliers, eq(cashTransactions.supplierId, suppliers.id))
+    .leftJoin(cashAcc, eq(cashTransactions.accountId, cashAcc.id))
     .where(tenantWhere(cashTransactions, filters.tenantId,
       ...(cashDate.length ? [and(...cashDate)] : []),
       filters.customerId ? eq(cashTransactions.customerId, filters.customerId) : undefined,
@@ -3272,6 +3351,7 @@ export async function paymentsReport(db: Db, filters: ReportFilters) {
         ? sql`(${cashTransactions.number} LIKE ${`%${filters.search}%`} OR ${customers.name} LIKE ${`%${filters.search}%`} OR ${suppliers.name} LIKE ${`%${filters.search}%`} OR ${cashTransactions.description} LIKE ${`%${filters.search}%`})`
         : undefined))
     .orderBy(desc(cashTransactions.date));
+
   const bankRows = await db.select({
     date: bankTransactions.date,
     type: bankTransactions.type,
@@ -3281,9 +3361,11 @@ export async function paymentsReport(db: Db, filters: ReportFilters) {
     reference: bankTransactions.reference,
     customerName: customers.name,
     supplierName: suppliers.name,
+    bankAccountName: bankAccounts.name,
   }).from(bankTransactions)
     .leftJoin(customers, eq(bankTransactions.customerId, customers.id))
     .leftJoin(suppliers, eq(bankTransactions.supplierId, suppliers.id))
+    .leftJoin(bankAccounts, eq(bankTransactions.bankAccountId, bankAccounts.id))
     .where(tenantWhere(bankTransactions, filters.tenantId,
       ...(bankDate.length ? [and(...bankDate)] : []),
       filters.customerId ? eq(bankTransactions.customerId, filters.customerId) : undefined,
@@ -3294,43 +3376,39 @@ export async function paymentsReport(db: Db, filters: ReportFilters) {
         : undefined))
     .orderBy(desc(bankTransactions.date));
 
-  const directionLabel = (t: string) => {
-    const map: Record<string, string> = {
-      receive: "قبض",
-      pay: "صرف",
-      receive_customer: "تحصيل عميل",
-      pay_customer: "رد للعميل",
-      pay_supplier: "دفع مورد",
-      deposit: "إيداع",
-      withdraw: "سحب",
-      deposit_customer: "إيداع عميل",
-      withdraw_customer: "رد بنكي للعميل",
-      withdraw_supplier: "سحب لمورد",
-    };
-    return map[t] || t;
-  };
-
+  const isInflow = (t: string) => /receive|deposit/.test(t);
   const result: Record<string, unknown>[] = [];
+  let serial = 0;
   for (const c of cashRows) {
+    serial += 1;
+    const party = c.customerName || c.supplierName || "";
+    const cashName = c.accountName || "نقدية";
+    const inflow = isInflow(String(c.type));
     result.push({
-      date: dateOnly(c.date),
-      type: "نقدية",
-      direction: directionLabel(String(c.type)),
-      partyName: c.customerName || c.supplierName || "",
+      documentNumber: serial,
+      invoiceRef: c.reference || "",
+      repName: "",
       amount: num(c.amount),
-      description: c.description || "",
-      reference: c.number || "",
+      creditAccount: inflow ? party || "—" : cashName,
+      debitAccount: inflow ? cashName : party || "—",
+      voucherNumber: c.number || "",
+      date: dateOnly(c.date),
     });
   }
   for (const b of bankRows) {
+    serial += 1;
+    const party = b.customerName || b.supplierName || "";
+    const bankName = b.bankAccountName || "بنك";
+    const inflow = isInflow(String(b.type));
     result.push({
-      date: dateOnly(b.date),
-      type: "بنكية",
-      direction: directionLabel(String(b.type)),
-      partyName: b.customerName || b.supplierName || "",
+      documentNumber: serial,
+      invoiceRef: b.reference || "",
+      repName: "",
       amount: num(b.amount),
-      description: b.description || "",
-      reference: b.reference || b.number || "",
+      creditAccount: inflow ? party || "—" : bankName,
+      debitAccount: inflow ? bankName : party || "—",
+      voucherNumber: b.number || "",
+      date: dateOnly(b.date),
     });
   }
   return result.sort((a, b) => String(a.date).localeCompare(String(b.date)));

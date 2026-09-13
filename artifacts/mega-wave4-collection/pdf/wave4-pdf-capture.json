@@ -1,0 +1,363 @@
+{
+  "at": "2026-09-13T18:03:05.518Z",
+  "results": [
+    {
+      "key": "checks-out",
+      "featureKey": "accountingreports-checks-checkout",
+      "path": "/AccountingReports/Checks.aspx/CheckOut",
+      "prep": {
+        "okFrom": false,
+        "okTo": false,
+        "hasBtn": true,
+        "btnId": "cph_btnShow",
+        "hasViewer": true,
+        "dateIds": [
+          "cph_txtDateFromSrch",
+          "cph_txtDateToSrch",
+          "cph_txtMatDateFrom",
+          "cph_txtMatDateTo",
+          "cph_txtColDateFrom",
+          "cph_txtColDateTo"
+        ]
+      },
+      "foundUrls": [
+        "/showreport/t89ztb1VK67aM6apmMzEHfKhhJFgVn2RJlktJvuJIuWLYxIGV8aFrtAv7BNf7p6znDve-hj0jjbjqvFR_9wJSdEjg5RUbvm7R4waENLVqOFBMGsu0/الشيكات",
+        "https://km.mega-cash.net/showreport/t89ztb1VK67aM6apmMzEHfKhhJFgVn2RJlktJvuJIuWLYxIGV8aFrtAv7BNf7p6znDve-hj0jjbjqvFR_9wJSdEjg5RUbvm7R4waENLVqOFBMGsu0/%D8%A7%D9%84%D8%B4%D9%8A%D9%83%D8%A7%D8%AA%20%D8%A7%D9%84%D8%B5%D8%A7%D8%AF%D8%B1%D8%A9.ashx?show=1",
+        "/showreport/t89ztb1VK67aM6apmMzEHfKhhJFgVn2RJlktJvuJIuWLYxIGV8aFrtAv7BNf7p6znDve-hj0jjbjqvFR_9wJSdEjg5RUbvm7R4waENLVqOFBMGsu0/%D8%A7%D9%84%D8%B4%D9%8A%D9%83%D8%A7%D8%AA%20%D8%A7%D9%84%D8%B5%D8%A7%D8%AF%D8%B1%D8%A9.ashx?show=1",
+        "https://km.mega-cash.net/downloadreport/t89ztb1VK67aM6apmMzEHfKhhJFgVn2RJlktJvuJIuWLYxIGV8aFrtAv7BNf7p6znDve-hj0jjbjqvFR_9wJSdEjg5RUbvm7R4waENLVqOFBMGsu0/%D8%A7%D9%84%D8%B4%D9%8A%D9%83%D8%A7%D8%AA%20%D8%A7%D9%84%D8%B5%D8%A7%D8%AF%D8%B1%D8%A9.ashx?show=1",
+        "/showreport/t89ztb1VK67aM6apmMzEHfKhhJFgVn2RJlktJvuJIuWLYxIGV8aFrtAv7BNf7p6znDve-hj0jjbjqvFR_9wJSdEjg5RUbvm7R4waENLVqOFBMGsu0/الشيكات الصادرة.ashx?show=1"
+      ],
+      "finalSrc": "/showreport/t89ztb1VK67aM6apmMzEHfKhhJFgVn2RJlktJvuJIuWLYxIGV8aFrtAv7BNf7p6znDve-hj0jjbjqvFR_9wJSdEjg5RUbvm7R4waENLVqOFBMGsu0/الشيكات الصادرة.ashx?show=1",
+      "pdfPath": "artifacts/mega-wave4-collection/pdf/checks-out.pdf",
+      "saved": [
+        {
+          "vu": "https://km.mega-cash.net/showreport/t89ztb1VK67aM6apmMzEHfKhhJFgVn2RJlktJvuJIuWLYxIGV8aFrtAv7BNf7p6znDve-hj0jjbjqvFR_9wJSdEjg5RUbvm7R4waENLVqOFBMGsu0/الشيكات",
+          "status": 200,
+          "size": 742537,
+          "name": "checks-out.pdf"
+        }
+      ],
+      "netHits": 3
+    },
+    {
+      "key": "checks-in",
+      "featureKey": "accountingreports-checks-checkin",
+      "path": "/AccountingReports/Checks.aspx/CheckIn",
+      "prep": {
+        "okFrom": false,
+        "okTo": false,
+        "hasBtn": true,
+        "btnId": "cph_btnShow",
+        "hasViewer": true,
+        "dateIds": [
+          "cph_txtDateFromSrch",
+          "cph_txtDateToSrch",
+          "cph_txtMatDateFrom",
+          "cph_txtMatDateTo",
+          "cph_txtColDateFrom",
+          "cph_txtColDateTo"
+        ]
+      },
+      "foundUrls": [
+        "/showreport/MRH6HOKuvSO6HouVVt2CNI8X0c26ZrfFIyzF3RZVfKTbR0gDaINWNRv0wpcCSlw6swIE_qit2nkizbuSUJJGdAEavHRLnDgDp3u4_8rbZ_V1gp_Y0/الشيكات",
+        "https://km.mega-cash.net/showreport/MRH6HOKuvSO6HouVVt2CNI8X0c26ZrfFIyzF3RZVfKTbR0gDaINWNRv0wpcCSlw6swIE_qit2nkizbuSUJJGdAEavHRLnDgDp3u4_8rbZ_V1gp_Y0/%D8%A7%D9%84%D8%B4%D9%8A%D9%83%D8%A7%D8%AA%20%D8%A7%D9%84%D9%88%D8%A7%D8%B1%D8%AF%D8%A9.ashx?show=1",
+        "https://km.mega-cash.net/downloadreport/MRH6HOKuvSO6HouVVt2CNI8X0c26ZrfFIyzF3RZVfKTbR0gDaINWNRv0wpcCSlw6swIE_qit2nkizbuSUJJGdAEavHRLnDgDp3u4_8rbZ_V1gp_Y0/%D8%A7%D9%84%D8%B4%D9%8A%D9%83%D8%A7%D8%AA%20%D8%A7%D9%84%D9%88%D8%A7%D8%B1%D8%AF%D8%A9.ashx?show=1",
+        "/showreport/MRH6HOKuvSO6HouVVt2CNI8X0c26ZrfFIyzF3RZVfKTbR0gDaINWNRv0wpcCSlw6swIE_qit2nkizbuSUJJGdAEavHRLnDgDp3u4_8rbZ_V1gp_Y0/الشيكات الواردة.ashx?show=1"
+      ],
+      "finalSrc": "/showreport/MRH6HOKuvSO6HouVVt2CNI8X0c26ZrfFIyzF3RZVfKTbR0gDaINWNRv0wpcCSlw6swIE_qit2nkizbuSUJJGdAEavHRLnDgDp3u4_8rbZ_V1gp_Y0/الشيكات الواردة.ashx?show=1",
+      "pdfPath": "artifacts/mega-wave4-collection/pdf/checks-in.pdf",
+      "saved": [
+        {
+          "vu": "https://km.mega-cash.net/showreport/MRH6HOKuvSO6HouVVt2CNI8X0c26ZrfFIyzF3RZVfKTbR0gDaINWNRv0wpcCSlw6swIE_qit2nkizbuSUJJGdAEavHRLnDgDp3u4_8rbZ_V1gp_Y0/الشيكات",
+          "status": 200,
+          "size": 1472148,
+          "name": "checks-in.pdf"
+        }
+      ],
+      "netHits": 3
+    },
+    {
+      "key": "customers-installments",
+      "featureKey": "accountingreports-customersinstallments",
+      "path": "/AccountingReports/CustomersInstallments.aspx",
+      "prep": {
+        "okFrom": true,
+        "okTo": true,
+        "from": "1/1/2022",
+        "to": "3/1/2022",
+        "hasBtn": true,
+        "btnId": "cph_btnShow",
+        "hasViewer": true,
+        "dateIds": [
+          "cph_txtDateFrom",
+          "cph_txtDateTo"
+        ]
+      },
+      "foundUrls": [
+        "/showreport/GyxKMMq48IkP4EwYxrtE6seHx3054V7c0-nJw9CwEDlzEk1mq9BviAD0vWE2K2eKArDc2tRRg92YAHvXmX3Ls_5WptzyCqTb7r7cp3NEEVbFnJYvc0OEMrhQDWnJCQyoIeJBdw2/اقساط",
+        "https://km.mega-cash.net/showreport/GyxKMMq48IkP4EwYxrtE6seHx3054V7c0-nJw9CwEDlzEk1mq9BviAD0vWE2K2eKArDc2tRRg92YAHvXmX3Ls_5WptzyCqTb7r7cp3NEEVbFnJYvc0OEMrhQDWnJCQyoIeJBdw2/%D8%A7%D9%82%D8%B3%D8%A7%D8%B7%20%D8%A7%D9%84%D8%B9%D9%85%D9%84%D8%A7%D8%A1.ashx?show=1",
+        "/showreport/GyxKMMq48IkP4EwYxrtE6seHx3054V7c0-nJw9CwEDlzEk1mq9BviAD0vWE2K2eKArDc2tRRg92YAHvXmX3Ls_5WptzyCqTb7r7cp3NEEVbFnJYvc0OEMrhQDWnJCQyoIeJBdw2/%D8%A7%D9%82%D8%B3%D8%A7%D8%B7%20%D8%A7%D9%84%D8%B9%D9%85%D9%84%D8%A7%D8%A1.ashx?show=1",
+        "https://km.mega-cash.net/downloadreport/GyxKMMq48IkP4EwYxrtE6seHx3054V7c0-nJw9CwEDlzEk1mq9BviAD0vWE2K2eKArDc2tRRg92YAHvXmX3Ls_5WptzyCqTb7r7cp3NEEVbFnJYvc0OEMrhQDWnJCQyoIeJBdw2/%D8%A7%D9%82%D8%B3%D8%A7%D8%B7%20%D8%A7%D9%84%D8%B9%D9%85%D9%84%D8%A7%D8%A1.ashx?show=1",
+        "/showreport/GyxKMMq48IkP4EwYxrtE6seHx3054V7c0-nJw9CwEDlzEk1mq9BviAD0vWE2K2eKArDc2tRRg92YAHvXmX3Ls_5WptzyCqTb7r7cp3NEEVbFnJYvc0OEMrhQDWnJCQyoIeJBdw2/اقساط العملاء.ashx?show=1"
+      ],
+      "finalSrc": "/showreport/GyxKMMq48IkP4EwYxrtE6seHx3054V7c0-nJw9CwEDlzEk1mq9BviAD0vWE2K2eKArDc2tRRg92YAHvXmX3Ls_5WptzyCqTb7r7cp3NEEVbFnJYvc0OEMrhQDWnJCQyoIeJBdw2/اقساط العملاء.ashx?show=1",
+      "pdfPath": "artifacts/mega-wave4-collection/pdf/customers-installments.pdf",
+      "saved": [
+        {
+          "vu": "https://km.mega-cash.net/showreport/GyxKMMq48IkP4EwYxrtE6seHx3054V7c0-nJw9CwEDlzEk1mq9BviAD0vWE2K2eKArDc2tRRg92YAHvXmX3Ls_5WptzyCqTb7r7cp3NEEVbFnJYvc0OEMrhQDWnJCQyoIeJBdw2/اقساط",
+          "status": 200,
+          "size": 63043,
+          "name": "customers-installments.pdf"
+        }
+      ],
+      "netHits": 3
+    },
+    {
+      "key": "payments",
+      "featureKey": "accountingreports-payments",
+      "path": "/AccountingReports/Payments.aspx",
+      "prep": {
+        "okFrom": false,
+        "okTo": false,
+        "hasBtn": true,
+        "btnId": "cph_btnShow",
+        "hasViewer": true,
+        "dateIds": [
+          "cph_txtDateFromSrch",
+          "cph_txtDateToSrch"
+        ]
+      },
+      "foundUrls": [
+        "/showreport/VRIhaYceyscTRv53vXKHe9L-Ih_bnzQTkVKAImTcm71Ps8nzqg5m8t62XvDL9GPafroarERYQF6bl0FVYEwaR6GnWE8fDLxUtppHddWwqGhJo3q186gsKK0tM18b87wb7dM_Yg2/معاملات",
+        "https://km.mega-cash.net/showreport/VRIhaYceyscTRv53vXKHe9L-Ih_bnzQTkVKAImTcm71Ps8nzqg5m8t62XvDL9GPafroarERYQF6bl0FVYEwaR6GnWE8fDLxUtppHddWwqGhJo3q186gsKK0tM18b87wb7dM_Yg2/%D9%85%D8%B9%D8%A7%D9%85%D9%84%D8%A7%D8%AA%20%D9%86%D9%82%D8%AF%D9%8A%D8%A9%20%D9%88%D8%A8%D9%86%D9%83%D9%8A%D8%A9.ashx?show=1",
+        "/showreport/VRIhaYceyscTRv53vXKHe9L-Ih_bnzQTkVKAImTcm71Ps8nzqg5m8t62XvDL9GPafroarERYQF6bl0FVYEwaR6GnWE8fDLxUtppHddWwqGhJo3q186gsKK0tM18b87wb7dM_Yg2/%D9%85%D8%B9%D8%A7%D9%85%D9%84%D8%A7%D8%AA%20%D9%86%D9%82%D8%AF%D9%8A%D8%A9%20%D9%88%D8%A8%D9%86%D9%83%D9%8A%D8%A9.ashx?show=1",
+        "https://km.mega-cash.net/downloadreport/VRIhaYceyscTRv53vXKHe9L-Ih_bnzQTkVKAImTcm71Ps8nzqg5m8t62XvDL9GPafroarERYQF6bl0FVYEwaR6GnWE8fDLxUtppHddWwqGhJo3q186gsKK0tM18b87wb7dM_Yg2/%D9%85%D8%B9%D8%A7%D9%85%D9%84%D8%A7%D8%AA%20%D9%86%D9%82%D8%AF%D9%8A%D8%A9%20%D9%88%D8%A8%D9%86%D9%83%D9%8A%D8%A9.ashx?show=1",
+        "/showreport/VRIhaYceyscTRv53vXKHe9L-Ih_bnzQTkVKAImTcm71Ps8nzqg5m8t62XvDL9GPafroarERYQF6bl0FVYEwaR6GnWE8fDLxUtppHddWwqGhJo3q186gsKK0tM18b87wb7dM_Yg2/معاملات نقدية وبنكية.ashx?show=1"
+      ],
+      "finalSrc": "/showreport/VRIhaYceyscTRv53vXKHe9L-Ih_bnzQTkVKAImTcm71Ps8nzqg5m8t62XvDL9GPafroarERYQF6bl0FVYEwaR6GnWE8fDLxUtppHddWwqGhJo3q186gsKK0tM18b87wb7dM_Yg2/معاملات نقدية وبنكية.ashx?show=1",
+      "pdfPath": "artifacts/mega-wave4-collection/pdf/payments.pdf",
+      "saved": [
+        {
+          "vu": "https://km.mega-cash.net/showreport/VRIhaYceyscTRv53vXKHe9L-Ih_bnzQTkVKAImTcm71Ps8nzqg5m8t62XvDL9GPafroarERYQF6bl0FVYEwaR6GnWE8fDLxUtppHddWwqGhJo3q186gsKK0tM18b87wb7dM_Yg2/معاملات",
+          "status": 200,
+          "size": 1904508,
+          "name": "payments.pdf"
+        }
+      ],
+      "netHits": 3
+    },
+    {
+      "key": "dues",
+      "featureKey": "accountingreports-dues",
+      "path": "/AccountingReports/Dues.aspx",
+      "prep": {
+        "okFrom": true,
+        "okTo": true,
+        "from": "1/1/2022",
+        "to": "3/1/2022",
+        "hasBtn": true,
+        "btnId": "cph_btnShow",
+        "hasViewer": true,
+        "dateIds": [
+          "cph_txtDateFrom",
+          "cph_txtDateTo"
+        ]
+      },
+      "foundUrls": [
+        "/showreport/jqDj_T_bzKBwzP5J9Q-uSXnu9E51ubEWC7mn-gWaSw-9M2IgVeGUSIaqkWrlcJnyyQskS8vvZ8Uup0TJR6Hahb9RTwfN7fd3gFM1fPXAiRkhgLdC0/الاستحقاقات.ashx?show=1",
+        "https://km.mega-cash.net/showreport/jqDj_T_bzKBwzP5J9Q-uSXnu9E51ubEWC7mn-gWaSw-9M2IgVeGUSIaqkWrlcJnyyQskS8vvZ8Uup0TJR6Hahb9RTwfN7fd3gFM1fPXAiRkhgLdC0/%D8%A7%D9%84%D8%A7%D8%B3%D8%AA%D8%AD%D9%82%D8%A7%D9%82%D8%A7%D8%AA.ashx?show=1",
+        "/showreport/jqDj_T_bzKBwzP5J9Q-uSXnu9E51ubEWC7mn-gWaSw-9M2IgVeGUSIaqkWrlcJnyyQskS8vvZ8Uup0TJR6Hahb9RTwfN7fd3gFM1fPXAiRkhgLdC0/%D8%A7%D9%84%D8%A7%D8%B3%D8%AA%D8%AD%D9%82%D8%A7%D9%82%D8%A7%D8%AA.ashx?show=1",
+        "https://km.mega-cash.net/downloadreport/jqDj_T_bzKBwzP5J9Q-uSXnu9E51ubEWC7mn-gWaSw-9M2IgVeGUSIaqkWrlcJnyyQskS8vvZ8Uup0TJR6Hahb9RTwfN7fd3gFM1fPXAiRkhgLdC0/%D8%A7%D9%84%D8%A7%D8%B3%D8%AA%D8%AD%D9%82%D8%A7%D9%82%D8%A7%D8%AA.ashx?show=1"
+      ],
+      "finalSrc": "/showreport/jqDj_T_bzKBwzP5J9Q-uSXnu9E51ubEWC7mn-gWaSw-9M2IgVeGUSIaqkWrlcJnyyQskS8vvZ8Uup0TJR6Hahb9RTwfN7fd3gFM1fPXAiRkhgLdC0/الاستحقاقات.ashx?show=1",
+      "pdfPath": "artifacts/mega-wave4-collection/pdf/dues.pdf",
+      "saved": [
+        {
+          "vu": "https://km.mega-cash.net/showreport/jqDj_T_bzKBwzP5J9Q-uSXnu9E51ubEWC7mn-gWaSw-9M2IgVeGUSIaqkWrlcJnyyQskS8vvZ8Uup0TJR6Hahb9RTwfN7fd3gFM1fPXAiRkhgLdC0/الاستحقاقات.ashx?show=1",
+          "status": 200,
+          "size": 61516,
+          "name": "dues.pdf"
+        }
+      ],
+      "netHits": 3
+    },
+    {
+      "key": "account-statement-cash",
+      "featureKey": "accountingreports-accountstatment-cash",
+      "path": "/AccountingReports/AccountStatment.aspx/Cash",
+      "prep": {
+        "okFrom": true,
+        "okTo": true,
+        "from": "1/1/2022",
+        "to": "3/1/2022",
+        "hasBtn": true,
+        "btnId": "cph_btnShow",
+        "hasViewer": true,
+        "dateIds": [
+          "cph_txtDateFrom",
+          "cph_txtDateTo"
+        ]
+      },
+      "foundUrls": [
+        "/showreport/80yCo5higA7KRXfLqMCRMQ2rBoHfuZJLfazOEMHAd1XQ1HOGC2z6ecvi5XtSY2IOaiQs2jKgzB9S9MQwe6zJWs3OPIb5K0uJJY9spL7juZ_tAjniPrHR9bGziwyMgJUe_89hxw2/كشف",
+        "https://km.mega-cash.net/showreport/80yCo5higA7KRXfLqMCRMQ2rBoHfuZJLfazOEMHAd1XQ1HOGC2z6ecvi5XtSY2IOaiQs2jKgzB9S9MQwe6zJWs3OPIb5K0uJJY9spL7juZ_tAjniPrHR9bGziwyMgJUe_89hxw2/%D9%83%D8%B4%D9%81%20%D8%AD%D8%B3%D8%A7%D8%A8%20%D8%AE%D8%B2%D8%A7%D8%A6%D9%86.ashx?show=1",
+        "/showreport/80yCo5higA7KRXfLqMCRMQ2rBoHfuZJLfazOEMHAd1XQ1HOGC2z6ecvi5XtSY2IOaiQs2jKgzB9S9MQwe6zJWs3OPIb5K0uJJY9spL7juZ_tAjniPrHR9bGziwyMgJUe_89hxw2/%D9%83%D8%B4%D9%81%20%D8%AD%D8%B3%D8%A7%D8%A8%20%D8%AE%D8%B2%D8%A7%D8%A6%D9%86.ashx?show=1",
+        "https://km.mega-cash.net/downloadreport/80yCo5higA7KRXfLqMCRMQ2rBoHfuZJLfazOEMHAd1XQ1HOGC2z6ecvi5XtSY2IOaiQs2jKgzB9S9MQwe6zJWs3OPIb5K0uJJY9spL7juZ_tAjniPrHR9bGziwyMgJUe_89hxw2/%D9%83%D8%B4%D9%81%20%D8%AD%D8%B3%D8%A7%D8%A8%20%D8%AE%D8%B2%D8%A7%D8%A6%D9%86.ashx?show=1",
+        "/showreport/80yCo5higA7KRXfLqMCRMQ2rBoHfuZJLfazOEMHAd1XQ1HOGC2z6ecvi5XtSY2IOaiQs2jKgzB9S9MQwe6zJWs3OPIb5K0uJJY9spL7juZ_tAjniPrHR9bGziwyMgJUe_89hxw2/كشف حساب خزائن.ashx?show=1"
+      ],
+      "finalSrc": "/showreport/80yCo5higA7KRXfLqMCRMQ2rBoHfuZJLfazOEMHAd1XQ1HOGC2z6ecvi5XtSY2IOaiQs2jKgzB9S9MQwe6zJWs3OPIb5K0uJJY9spL7juZ_tAjniPrHR9bGziwyMgJUe_89hxw2/كشف حساب خزائن.ashx?show=1",
+      "pdfPath": "artifacts/mega-wave4-collection/pdf/account-statement-cash.pdf",
+      "saved": [
+        {
+          "vu": "https://km.mega-cash.net/showreport/80yCo5higA7KRXfLqMCRMQ2rBoHfuZJLfazOEMHAd1XQ1HOGC2z6ecvi5XtSY2IOaiQs2jKgzB9S9MQwe6zJWs3OPIb5K0uJJY9spL7juZ_tAjniPrHR9bGziwyMgJUe_89hxw2/كشف",
+          "status": 200,
+          "size": 63835,
+          "name": "account-statement-cash.pdf"
+        }
+      ],
+      "netHits": 3
+    },
+    {
+      "key": "cost-center-statement",
+      "featureKey": "accountingreports-costcenterstatment",
+      "path": "/AccountingReports/CostCenterStatment.aspx",
+      "prep": {
+        "okFrom": true,
+        "okTo": true,
+        "from": "1/1/2022",
+        "to": "3/1/2022",
+        "hasBtn": true,
+        "btnId": "cph_btnShow",
+        "hasViewer": true,
+        "dateIds": [
+          "cph_txtDateFrom",
+          "cph_txtDateTo"
+        ]
+      },
+      "foundUrls": [
+        "/showreport/SVV_F24YCQCgoNw113PAJcTEZZRGAvsSI3UojkDZIsQm-9MzT-bquPOYpohPu8gS8O4wBbRJXoRBMofo1KyH26Hz92tlQs4PaXDb0S0Ex1WSdD_VJdlM5f9Fk6HTYu5LVUjuLA2/كشف",
+        "https://km.mega-cash.net/showreport/SVV_F24YCQCgoNw113PAJcTEZZRGAvsSI3UojkDZIsQm-9MzT-bquPOYpohPu8gS8O4wBbRJXoRBMofo1KyH26Hz92tlQs4PaXDb0S0Ex1WSdD_VJdlM5f9Fk6HTYu5LVUjuLA2/%D9%83%D8%B4%D9%81%20%D8%AD%D8%B3%D8%A7%D8%A8%20%D9%85%D8%B1%D9%83%D8%B2%20%D8%AA%D9%83%D9%84%D9%81%D8%A9.ashx?show=1",
+        "/showreport/SVV_F24YCQCgoNw113PAJcTEZZRGAvsSI3UojkDZIsQm-9MzT-bquPOYpohPu8gS8O4wBbRJXoRBMofo1KyH26Hz92tlQs4PaXDb0S0Ex1WSdD_VJdlM5f9Fk6HTYu5LVUjuLA2/%D9%83%D8%B4%D9%81%20%D8%AD%D8%B3%D8%A7%D8%A8%20%D9%85%D8%B1%D9%83%D8%B2%20%D8%AA%D9%83%D9%84%D9%81%D8%A9.ashx?show=1",
+        "https://km.mega-cash.net/downloadreport/SVV_F24YCQCgoNw113PAJcTEZZRGAvsSI3UojkDZIsQm-9MzT-bquPOYpohPu8gS8O4wBbRJXoRBMofo1KyH26Hz92tlQs4PaXDb0S0Ex1WSdD_VJdlM5f9Fk6HTYu5LVUjuLA2/%D9%83%D8%B4%D9%81%20%D8%AD%D8%B3%D8%A7%D8%A8%20%D9%85%D8%B1%D9%83%D8%B2%20%D8%AA%D9%83%D9%84%D9%81%D8%A9.ashx?show=1",
+        "/showreport/SVV_F24YCQCgoNw113PAJcTEZZRGAvsSI3UojkDZIsQm-9MzT-bquPOYpohPu8gS8O4wBbRJXoRBMofo1KyH26Hz92tlQs4PaXDb0S0Ex1WSdD_VJdlM5f9Fk6HTYu5LVUjuLA2/كشف حساب مركز تكلفة.ashx?show=1"
+      ],
+      "finalSrc": "/showreport/SVV_F24YCQCgoNw113PAJcTEZZRGAvsSI3UojkDZIsQm-9MzT-bquPOYpohPu8gS8O4wBbRJXoRBMofo1KyH26Hz92tlQs4PaXDb0S0Ex1WSdD_VJdlM5f9Fk6HTYu5LVUjuLA2/كشف حساب مركز تكلفة.ashx?show=1",
+      "pdfPath": "artifacts/mega-wave4-collection/pdf/cost-center-statement.pdf",
+      "saved": [
+        {
+          "vu": "https://km.mega-cash.net/showreport/SVV_F24YCQCgoNw113PAJcTEZZRGAvsSI3UojkDZIsQm-9MzT-bquPOYpohPu8gS8O4wBbRJXoRBMofo1KyH26Hz92tlQs4PaXDb0S0Ex1WSdD_VJdlM5f9Fk6HTYu5LVUjuLA2/كشف",
+          "status": 200,
+          "size": 62887,
+          "name": "cost-center-statement.pdf"
+        }
+      ],
+      "netHits": 3
+    },
+    {
+      "key": "dashboard",
+      "featureKey": "accountingreports-dashboard",
+      "path": "/AccountingReports/Dashboard.aspx",
+      "prep": {
+        "okFrom": false,
+        "okTo": false,
+        "hasBtn": true,
+        "btnId": "cph_btnShow",
+        "hasViewer": true,
+        "dateIds": [
+          "cph_txtDateFromSrch",
+          "cph_txtDateToSrch"
+        ]
+      },
+      "foundUrls": [
+        "/showreport/Eu5Ur63ZdFuCVoe_81s5mCPAUpE49VUi68TccLn7QbDjKSHdeJCOx6OU8YNTC-GF3NHy5nFZlRr7idnJgSXR9X9Xz-lkXVt_QTACDA6RW26i9rjmvy7AcEZBdj1d8YlajSZzqQ2/ملخص",
+        "https://km.mega-cash.net/showreport/Eu5Ur63ZdFuCVoe_81s5mCPAUpE49VUi68TccLn7QbDjKSHdeJCOx6OU8YNTC-GF3NHy5nFZlRr7idnJgSXR9X9Xz-lkXVt_QTACDA6RW26i9rjmvy7AcEZBdj1d8YlajSZzqQ2/%D9%85%D9%84%D8%AE%D8%B5%20%D8%A7%D9%84%D8%A7%D8%B9%D9%85%D8%A7%D9%84.ashx?show=1",
+        "/showreport/Eu5Ur63ZdFuCVoe_81s5mCPAUpE49VUi68TccLn7QbDjKSHdeJCOx6OU8YNTC-GF3NHy5nFZlRr7idnJgSXR9X9Xz-lkXVt_QTACDA6RW26i9rjmvy7AcEZBdj1d8YlajSZzqQ2/%D9%85%D9%84%D8%AE%D8%B5%20%D8%A7%D9%84%D8%A7%D8%B9%D9%85%D8%A7%D9%84.ashx?show=1",
+        "https://km.mega-cash.net/downloadreport/Eu5Ur63ZdFuCVoe_81s5mCPAUpE49VUi68TccLn7QbDjKSHdeJCOx6OU8YNTC-GF3NHy5nFZlRr7idnJgSXR9X9Xz-lkXVt_QTACDA6RW26i9rjmvy7AcEZBdj1d8YlajSZzqQ2/%D9%85%D9%84%D8%AE%D8%B5%20%D8%A7%D9%84%D8%A7%D8%B9%D9%85%D8%A7%D9%84.ashx?show=1",
+        "/showreport/Eu5Ur63ZdFuCVoe_81s5mCPAUpE49VUi68TccLn7QbDjKSHdeJCOx6OU8YNTC-GF3NHy5nFZlRr7idnJgSXR9X9Xz-lkXVt_QTACDA6RW26i9rjmvy7AcEZBdj1d8YlajSZzqQ2/ملخص الاعمال.ashx?show=1"
+      ],
+      "finalSrc": "/showreport/Eu5Ur63ZdFuCVoe_81s5mCPAUpE49VUi68TccLn7QbDjKSHdeJCOx6OU8YNTC-GF3NHy5nFZlRr7idnJgSXR9X9Xz-lkXVt_QTACDA6RW26i9rjmvy7AcEZBdj1d8YlajSZzqQ2/ملخص الاعمال.ashx?show=1",
+      "pdfPath": "artifacts/mega-wave4-collection/pdf/dashboard.pdf",
+      "saved": [
+        {
+          "vu": "https://km.mega-cash.net/showreport/Eu5Ur63ZdFuCVoe_81s5mCPAUpE49VUi68TccLn7QbDjKSHdeJCOx6OU8YNTC-GF3NHy5nFZlRr7idnJgSXR9X9Xz-lkXVt_QTACDA6RW26i9rjmvy7AcEZBdj1d8YlajSZzqQ2/ملخص",
+          "status": 200,
+          "size": 158884,
+          "name": "dashboard.pdf"
+        }
+      ],
+      "netHits": 3
+    },
+    {
+      "key": "branches-summary",
+      "featureKey": "accountingreports-branchessummary",
+      "path": "/AccountingReports/BranchesSummary.aspx",
+      "prep": {
+        "okFrom": true,
+        "okTo": true,
+        "from": "1/1/2022",
+        "to": "3/1/2022",
+        "hasBtn": true,
+        "btnId": "cph_btnShow",
+        "hasViewer": true,
+        "dateIds": [
+          "cph_txtDateFrom",
+          "cph_txtDateTo"
+        ]
+      },
+      "foundUrls": [
+        "/showreport/bK7kCtxmmPiE83MO9WbDSjhw9wMZSlysfh2rWxUNfe0sfjEmIN7EG6zZCL-5bTntIDQXHqc_FG3tCFwz9H5ugEntM-yXqa_kfLoB9wYAVTVP8gi-o6bnTyjADVQGoq6VSZO1Ow2/ملخص",
+        "https://km.mega-cash.net/showreport/bK7kCtxmmPiE83MO9WbDSjhw9wMZSlysfh2rWxUNfe0sfjEmIN7EG6zZCL-5bTntIDQXHqc_FG3tCFwz9H5ugEntM-yXqa_kfLoB9wYAVTVP8gi-o6bnTyjADVQGoq6VSZO1Ow2/%D9%85%D9%84%D8%AE%D8%B5%20%D8%AD%D8%B1%D9%83%D8%A9%20%D8%A7%D9%84%D9%81%D8%B1%D9%88%D8%B9.ashx?show=1",
+        "/showreport/bK7kCtxmmPiE83MO9WbDSjhw9wMZSlysfh2rWxUNfe0sfjEmIN7EG6zZCL-5bTntIDQXHqc_FG3tCFwz9H5ugEntM-yXqa_kfLoB9wYAVTVP8gi-o6bnTyjADVQGoq6VSZO1Ow2/%D9%85%D9%84%D8%AE%D8%B5%20%D8%AD%D8%B1%D9%83%D8%A9%20%D8%A7%D9%84%D9%81%D8%B1%D9%88%D8%B9.ashx?show=1",
+        "https://km.mega-cash.net/downloadreport/bK7kCtxmmPiE83MO9WbDSjhw9wMZSlysfh2rWxUNfe0sfjEmIN7EG6zZCL-5bTntIDQXHqc_FG3tCFwz9H5ugEntM-yXqa_kfLoB9wYAVTVP8gi-o6bnTyjADVQGoq6VSZO1Ow2/%D9%85%D9%84%D8%AE%D8%B5%20%D8%AD%D8%B1%D9%83%D8%A9%20%D8%A7%D9%84%D9%81%D8%B1%D9%88%D8%B9.ashx?show=1",
+        "/showreport/bK7kCtxmmPiE83MO9WbDSjhw9wMZSlysfh2rWxUNfe0sfjEmIN7EG6zZCL-5bTntIDQXHqc_FG3tCFwz9H5ugEntM-yXqa_kfLoB9wYAVTVP8gi-o6bnTyjADVQGoq6VSZO1Ow2/ملخص حركة الفروع.ashx?show=1"
+      ],
+      "finalSrc": "/showreport/bK7kCtxmmPiE83MO9WbDSjhw9wMZSlysfh2rWxUNfe0sfjEmIN7EG6zZCL-5bTntIDQXHqc_FG3tCFwz9H5ugEntM-yXqa_kfLoB9wYAVTVP8gi-o6bnTyjADVQGoq6VSZO1Ow2/ملخص حركة الفروع.ashx?show=1",
+      "pdfPath": "artifacts/mega-wave4-collection/pdf/branches-summary.pdf",
+      "saved": [
+        {
+          "vu": "https://km.mega-cash.net/showreport/bK7kCtxmmPiE83MO9WbDSjhw9wMZSlysfh2rWxUNfe0sfjEmIN7EG6zZCL-5bTntIDQXHqc_FG3tCFwz9H5ugEntM-yXqa_kfLoB9wYAVTVP8gi-o6bnTyjADVQGoq6VSZO1Ow2/ملخص",
+          "status": 200,
+          "size": 72356,
+          "name": "branches-summary.pdf"
+        }
+      ],
+      "netHits": 3
+    },
+    {
+      "key": "monthly-expenses",
+      "featureKey": "accountingreports-monthlyexpenses",
+      "path": "/AccountingReports/MonthlyExpenses.aspx",
+      "prep": {
+        "okFrom": true,
+        "okTo": true,
+        "from": "1/1/2022",
+        "to": "3/1/2022",
+        "hasBtn": true,
+        "btnId": "cph_btnShow",
+        "hasViewer": true,
+        "dateIds": [
+          "cph_txtDateFrom",
+          "cph_txtDateTo"
+        ]
+      },
+      "foundUrls": [
+        "/showreport/NxhCEbjH8AEamMxJz4zUxXDrOvSszkN2PBQD9n0URPwziP8aDmxTyJF2FTANjunU35XhdU5I5nUNs0wrbe9BV-u3Ag-cN7x7-LxLqg7g7CM4rf32UCdkFvVoI_aGjC6gxe4fXA2/المصروفات",
+        "https://km.mega-cash.net/showreport/NxhCEbjH8AEamMxJz4zUxXDrOvSszkN2PBQD9n0URPwziP8aDmxTyJF2FTANjunU35XhdU5I5nUNs0wrbe9BV-u3Ag-cN7x7-LxLqg7g7CM4rf32UCdkFvVoI_aGjC6gxe4fXA2/%D8%A7%D9%84%D9%85%D8%B5%D8%B1%D9%88%D9%81%D8%A7%D8%AA%20%D8%B4%D9%87%D8%B1%D9%8A%D8%A7.ashx?show=1",
+        "/showreport/NxhCEbjH8AEamMxJz4zUxXDrOvSszkN2PBQD9n0URPwziP8aDmxTyJF2FTANjunU35XhdU5I5nUNs0wrbe9BV-u3Ag-cN7x7-LxLqg7g7CM4rf32UCdkFvVoI_aGjC6gxe4fXA2/%D8%A7%D9%84%D9%85%D8%B5%D8%B1%D9%88%D9%81%D8%A7%D8%AA%20%D8%B4%D9%87%D8%B1%D9%8A%D8%A7.ashx?show=1",
+        "https://km.mega-cash.net/downloadreport/NxhCEbjH8AEamMxJz4zUxXDrOvSszkN2PBQD9n0URPwziP8aDmxTyJF2FTANjunU35XhdU5I5nUNs0wrbe9BV-u3Ag-cN7x7-LxLqg7g7CM4rf32UCdkFvVoI_aGjC6gxe4fXA2/%D8%A7%D9%84%D9%85%D8%B5%D8%B1%D9%88%D9%81%D8%A7%D8%AA%20%D8%B4%D9%87%D8%B1%D9%8A%D8%A7.ashx?show=1",
+        "/showreport/NxhCEbjH8AEamMxJz4zUxXDrOvSszkN2PBQD9n0URPwziP8aDmxTyJF2FTANjunU35XhdU5I5nUNs0wrbe9BV-u3Ag-cN7x7-LxLqg7g7CM4rf32UCdkFvVoI_aGjC6gxe4fXA2/المصروفات شهريا.ashx?show=1"
+      ],
+      "finalSrc": "/showreport/NxhCEbjH8AEamMxJz4zUxXDrOvSszkN2PBQD9n0URPwziP8aDmxTyJF2FTANjunU35XhdU5I5nUNs0wrbe9BV-u3Ag-cN7x7-LxLqg7g7CM4rf32UCdkFvVoI_aGjC6gxe4fXA2/المصروفات شهريا.ashx?show=1",
+      "pdfPath": "artifacts/mega-wave4-collection/pdf/monthly-expenses.pdf",
+      "saved": [
+        {
+          "vu": "https://km.mega-cash.net/showreport/NxhCEbjH8AEamMxJz4zUxXDrOvSszkN2PBQD9n0URPwziP8aDmxTyJF2FTANjunU35XhdU5I5nUNs0wrbe9BV-u3Ag-cN7x7-LxLqg7g7CM4rf32UCdkFvVoI_aGjC6gxe4fXA2/المصروفات",
+          "status": 200,
+          "size": 71559,
+          "name": "monthly-expenses.pdf"
+        }
+      ],
+      "netHits": 3
+    }
+  ]
+}

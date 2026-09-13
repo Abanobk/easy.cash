@@ -6,6 +6,8 @@ import {
   checksReport,
   costCenterStatementReport,
   cashAccountStatementReport,
+  isCashLikeAccount,
+  getAccountBalancesAsOf,
   customerItemStatementReport,
   customerStatementReport,
   customersListReport,
@@ -181,30 +183,59 @@ const HANDLERS: Record<string, (db: Db, f: ReportFilters) => Promise<ReportRow[]
   "accountingreports-monthlysalesbyitemstotals": monthlySalesTotalsReport,
   "accountingreports-payments": paymentsReport,
   /** ميجا `/AccountingReports/Dues.aspx` — فلاتر مؤكدة؛ لا جدول استحقاقات في Easy بعد — رجّع فاضي لحد ما يتبني الكيان */
-  "accountingreports-dues": async () => [],
+  "accountingreports-dues": async (db, f) => {
+    // تقريب ميجا Dues من فواتير البيع ذات المتبقي — لا كيان استحقاقات منفصل بعد
+    const dateParts = [] as any[];
+    if (f.dateFrom) dateParts.push(gte(salesInvoices.date, f.dateFrom as any));
+    if (f.dateTo) dateParts.push(lte(salesInvoices.date, f.dateTo as any));
+    const rows = await db.select({
+      number: salesInvoices.number,
+      date: salesInvoices.date,
+      total: salesInvoices.total,
+      paid: salesInvoices.paid,
+      remaining: salesInvoices.remaining,
+      customerName: customers.name,
+    }).from(salesInvoices)
+      .leftJoin(customers, eq(salesInvoices.customerId, customers.id))
+      .where(and(
+        eq(salesInvoices.tenantId, f.tenantId),
+        sql`CAST(${salesInvoices.remaining} AS DECIMAL(15,2)) > 0`,
+        ...dateParts,
+        f.branchId ? eq(salesInvoices.branchId, f.branchId) : undefined,
+        f.customerId ? eq(salesInvoices.customerId, f.customerId) : undefined,
+        f.paymentStatus === "paid" ? sql`CAST(${salesInvoices.remaining} AS DECIMAL(15,2)) <= 0` : undefined,
+        f.paymentStatus === "unpaid" ? sql`CAST(${salesInvoices.paid} AS DECIMAL(15,2)) = 0` : undefined,
+        f.paymentStatus === "partial" ? sql`CAST(${salesInvoices.paid} AS DECIMAL(15,2)) > 0 AND CAST(${salesInvoices.remaining} AS DECIMAL(15,2)) > 0` : undefined,
+      ))
+      .orderBy(desc(salesInvoices.date));
+    return rows.map((r, idx) => {
+      const paid = Number(r.paid) || 0;
+      const remaining = Number(r.remaining) || 0;
+      let status = "غير مسدد";
+      if (remaining <= 0.0001) status = "مسدد";
+      else if (paid > 0) status = "جزئي";
+      return {
+        documentNumber: idx + 1,
+        accountName: r.customerName || r.number || "—",
+        date: toDateStr(r.date),
+        amount: Number(r.total) || 0,
+        paid,
+        status,
+        settlementDate: "",
+      };
+    });
+  },
   "accountingreports-dashboard": async (db, f) => {
-    const sales = await salesInvoicesReport(db, f);
-    const purchases = await purchasesInvoicesReport(db, f);
-    const payments = await paymentsReport(db, f);
-    const totalSales = sales.reduce((s, r) => s + Number(r.total), 0);
-    const totalPurchases = purchases.reduce((s, r) => s + Number(r.total), 0);
-    const totalCollected = payments
-      .filter((p) => String(p.direction).includes("receive") || String(p.direction).includes("deposit"))
-      .reduce((s, p) => s + Number(p.amount), 0);
-    const totalPaid = payments
-      .filter((p) => String(p.direction).includes("pay") || String(p.direction).includes("withdraw"))
-      .reduce((s, p) => s + Number(p.amount), 0);
-    const grossMargin = totalSales - totalPurchases;
-
-    return [
-      { metric: "إجمالي المبيعات", value: totalSales, drillSlug: "accountingreports-sales", section: "accounting" },
-      { metric: "إجمالي المشتريات", value: totalPurchases, drillSlug: "accountingreports-purchases", section: "accounting" },
-      { metric: "هامش إجمالي تقريبي", value: grossMargin, drillSlug: "finalreports-incomestatment", section: "final" },
-      { metric: "عدد فواتير البيع", value: sales.length, drillSlug: "accountingreports-sales", section: "accounting" },
-      { metric: "عدد فواتير الشراء", value: purchases.length, drillSlug: "accountingreports-purchases", section: "accounting" },
-      { metric: "تحصيلات نقدية/بنكية", value: totalCollected, drillSlug: "accountingreports-payments", section: "accounting" },
-      { metric: "مدفوعات نقدية/بنكية", value: totalPaid, drillSlug: "accountingreports-payments", section: "accounting" },
-    ];
+    // ميجا ملخص الأعمال: أرصدة خزائن/نقدية (الاسم | العملة | الرصيد)
+    const bals = await getAccountBalancesAsOf(db, f.tenantId, f.dateTo);
+    return bals
+      .filter((a: any) => isCashLikeAccount(String(a.code || ""), String(a.name || "")) && !a.isParent)
+      .map((a: any) => ({
+        name: a.name,
+        currency: f.currencyCode || "جنيه مصري",
+        balance: Number(a.balance) || 0,
+      }))
+      .sort((a: any, b: any) => String(a.name).localeCompare(String(b.name), "ar"));
   },
   /**
    * ميجا PDF: مسلسل | المنطقة | العميل | الاجمالي | الخصومات | الضرائب | اضافات | الصافي | المديونية | اخر بيع | اخر تحصيل
@@ -446,7 +477,7 @@ const HANDLERS: Record<string, (db: Db, f: ReportFilters) => Promise<ReportRow[]
   "accountingreports-customerssummary": customersSummaryReport,
   "accountingreports-vendorssummary": vendorsSummaryReport,
   "accountingreports-customersinstallments": async (db, f) => {
-    const dateParts = [];
+    const dateParts = [] as any[];
     if (f.dateFrom) dateParts.push(gte(installments.dueDate, f.dateFrom as any));
     if (f.dateTo) dateParts.push(lte(installments.dueDate, f.dateTo as any));
     const rows = await db.select({
@@ -454,19 +485,26 @@ const HANDLERS: Record<string, (db: Db, f: ReportFilters) => Promise<ReportRow[]
       amount: installments.amount,
       paidAmount: installments.paidAmount,
       status: installments.status,
+      paidDate: installments.paidDate,
       partyName: loans.partyName,
-      loanNumber: loans.number,
     }).from(installments)
       .innerJoin(loans, eq(installments.loanId, loans.id))
-      .where(and(...(dateParts.length ? dateParts : [])));
-    return rows.map((r) => ({
-      customerName: r.partyName || "—",
-      loanNumber: r.loanNumber,
-      dueDate: toDateStr(r.dueDate),
+      .where(and(
+        eq(installments.tenantId, f.tenantId),
+        ...dateParts,
+        f.paymentStatus === "paid" ? eq(installments.status, "paid") : undefined,
+        f.paymentStatus === "unpaid" ? inArray(installments.status, ["pending", "overdue"]) : undefined,
+      ));
+    const statusLabel = (s: string) => ({ pending: "تحت التحصيل", paid: "محصل", overdue: "متأخر" } as Record<string, string>)[s] || s;
+    return rows.map((r, idx) => ({
+      documentNumber: idx + 1,
+      collectionDate: r.paidDate ? toDateStr(r.paidDate) : "",
       amount: Number(r.amount),
-      paid: Number(r.paidAmount),
-      remaining: Number(r.amount) - Number(r.paidAmount),
-      status: r.status,
+      repName: "",
+      date: toDateStr(r.dueDate),
+      customerName: r.partyName || "—",
+      paid: Number(r.paidAmount) || 0,
+      status: statusLabel(String(r.status || "")),
     }));
   },
   "accountingreports-grossrepsalesbyitems": repSalesByItemsReport,
