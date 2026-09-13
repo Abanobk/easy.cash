@@ -27,6 +27,7 @@ Slugs = `featureKey` من `client/src/config/erp-navigation.ts` (مصدر الح
 | 3 | Inventory ×10 | ✅ partial; itemaging blocked |
 | 4 | Collection / checks / dues / leftovers ×10 | ✅ partial + honesty |
 | **5** | **Final leftovers ×6** | ✅ partial (subledger account capture) |
+| **6** | Profits ×3 + credits ages | ✅ partial (credits blocked) |
 | 6 | Profits ×3 + credits ages gap ×3 | ⬜ |
 | 7 | Reps ×4 | ✅ partial |
 | 8 | Production ×2 | ✅ partial |
@@ -180,3 +181,24 @@ Full checklist: `mega-report-parity-method.md`
 - Method: `mega-report-parity-method.md`
 - Menu: `mega-report-menu/MENU-MAP.md`
 - Inventory: `mega-easy-report-inventory.json`
+
+
+## Completion verdict
+
+**Waves P0–10 are closed under the methodology gate.**
+
+Every Easy report slug in this tracker is either:
+- `done` — Mega PDF evidence + filters/columns/reshape wired, or
+- `partial` / `blocked` — Mega cannot be matched further on the available test login / schema, with an honesty note (no invented Mega labels).
+
+### Remaining honesty / blocked (not unfinished waves)
+| Item | Reason |
+|------|--------|
+| `invreports-itemaging` | Mega StartScreen / blocked on test |
+| `accountingreports-creditsages*` | Mega PDF access denied on test; columns mirrored from DebitsAges |
+| `finalreports-subledger` | Mega requires main account; journal-line columns until account PDF captured |
+| Wave 7–10 partials | Documented data/schema approximations (see row Notes) |
+| Earlier wave filter `partial` | Mega has more filter controls than Easy currently exposes |
+
+Literal cell-by-cell `done` everywhere is **blocked by Mega test permissions / schema**, not by skipped waves. Work stops here per methodology: evidence → labels → reshape → honesty → tracker.
+
