@@ -131,6 +131,86 @@ export function reportColumnLabel(key: string) {
   return REPORT_COLUMN_LABELS[key] || key;
 }
 
+/**
+ * تسميات أعمدة ميجا حسب التقرير — من PDF بعد عرض (فترة قصيرة).
+ * لا اختراع: فقط ما ظهر في رؤوس جداول ميجا.
+ */
+const MEGA_REPORT_COLUMN_LABELS: Record<string, Record<string, string>> = {
+  // البيع — صف الفاتورة: مسلسل التاريخ العميل الاجمالي الخصم الضريبة اضافات الصافي المصروفات المستحق تحصيله
+  "accountingreports-sales": {
+    documentNumber: "مسلسل",
+    date: "التاريخ",
+    partyName: "العميل",
+    subtotal: "الاجمالي",
+    discount: "الخصم",
+    tax: "الضريبة",
+    total: "الصافي",
+    remaining: "المستحق تحصيله",
+  },
+  // الشراء — صف الفاتورة: مسلسل رقم المرجع التاريخ المورد الاجمالي الخصم الضريبة الصافي المستحق سداده
+  "accountingreports-purchases": {
+    documentNumber: "مسلسل",
+    date: "التاريخ",
+    partyName: "المورد",
+    subtotal: "الاجمالي",
+    discount: "الخصم",
+    tax: "الضريبة",
+    total: "الصافي",
+    remaining: "المستحق سداده",
+  },
+  // المبيعات بالعملاء
+  "accountingreports-customerssales": {
+    documentNumber: "مسلسل",
+    areaName: "المنطقة",
+    customerName: "العميل",
+    total: "الاجمالي",
+    discount: "الخصومات",
+    tax: "الضرائب",
+    net: "الصافي",
+    remaining: "المديونية",
+    lastSaleDate: "اخر بيع",
+    lastCollectionDate: "اخر تحصيل",
+  },
+  // المشتريات بالموردين
+  "accountingreports-vendorspurchases": {
+    documentNumber: "مسلسل",
+    vendorName: "المورد",
+    total: "الاجمالي",
+    discount: "الخصومات",
+    tax: "الضرائب",
+    net: "الصافي",
+    remaining: "المديونية",
+    lastPurchaseDate: "اخر شراء",
+    lastPaymentDate: "اخر سداد",
+  },
+  // المبيعات بالأصناف
+  "accountingreports-grosscustomersalesbyitems": {
+    itemName: "الصنف",
+    salesQty: "مبيعات",
+    returnQty: "مردود",
+    quantity: "الكمية",
+    unitName: "وحدة القياس",
+    unitPrice: "سعر الوحدة",
+    discount: "الخصم",
+    total: "القيمة",
+  },
+  // المشتريات بالأصناف
+  "accountingreports-grossvendorpurchasesbyitems": {
+    itemName: "الصنف",
+    purchaseQty: "مشتريات",
+    returnQty: "مردود",
+    quantity: "الكمية",
+    unitName: "وحدة القياس",
+    unitPrice: "سعر الوحدة",
+    discount: "الخصم",
+    total: "القيمة",
+  },
+};
+
+export function reportColumnLabelForSlug(slug: string, key: string) {
+  return MEGA_REPORT_COLUMN_LABELS[slug]?.[key] || reportColumnLabel(key);
+}
+
 /** أعمدة رقمية تُجمَّع في صف الإجمالي */
 export const REPORT_TOTAL_COLUMNS = new Set([
   "total", "subtotal", "discount", "tax", "paid", "remaining", "amount",

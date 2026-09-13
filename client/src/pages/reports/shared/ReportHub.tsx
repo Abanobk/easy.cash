@@ -11,7 +11,7 @@ import { Download, Printer, Search } from "lucide-react";
 import * as XLSX from "xlsx";
 import type { ReportSectionDef } from "@/config/report-sections";
 import { getReportEntityFilters, type ReportEntityFilter } from "@/config/report-filter-config";
-import { reportColumnLabel, REPORT_TOTAL_COLUMNS } from "@/config/report-column-labels";
+import { reportColumnLabel, reportColumnLabelForSlug, REPORT_TOTAL_COLUMNS } from "@/config/report-column-labels";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { printTableReport, printGroupedInvoiceReport, printAccountStatementReport, printFormalAccountingReport } from "@/lib/print-report";
@@ -350,32 +350,42 @@ export default function ReportHub({ title, section, icon, reports, procedure }: 
     "description",
   ] as const;
 
-  /** ترتيب أعمدة فواتير البيع/الشراء — حقول Easy الحالية بترتيب منطقي (أعمدة ميجا من الإكسل لاحقاً) */
-  const SALES_PURCHASES_COLUMN_ORDER = [
+  /**
+   * ترتيب أعمدة فواتير البيع — من PDF ميجا (صف الفاتورة):
+   * مسلسل | التاريخ | العميل | الاجمالي | الخصم | الضريبة | اضافات | الصافي | المصروفات | المستحق تحصيله
+   * (اضافات/المصروفات غير موجودة في Easy بعد — باقي الحقول الإضافية بعد أعمدة ميجا)
+   */
+  const SALES_COLUMN_ORDER = [
     "documentNumber",
     "date",
-    "dueDate",
-    "partyCode",
     "partyName",
-    "branchName",
-    "warehouseName",
-    "repName",
-    "areaName",
-    "currencyCode",
-    "exchangeRate",
-    "foreignTotal",
     "subtotal",
     "discount",
     "tax",
     "total",
-    "paid",
     "remaining",
-    "paymentType",
-    "status",
   ] as const;
 
-  const isSalesOrPurchases =
-    slug === "accountingreports-sales" || slug === "accountingreports-purchases";
+  /**
+   * ترتيب أعمدة فواتير الشراء — من PDF ميجا:
+   * مسلسل | رقم المرجع | التاريخ | المورد | الاجمالي | الخصم | الضريبة | الصافي | المستحق سداده
+   */
+  const PURCHASES_COLUMN_ORDER = [
+    "documentNumber",
+    "date",
+    "partyName",
+    "subtotal",
+    "discount",
+    "tax",
+    "total",
+    "remaining",
+  ] as const;
+
+  const isSales = slug === "accountingreports-sales";
+  const isPurchases = slug === "accountingreports-purchases";
+  const isSalesOrPurchases = isSales || isPurchases;
+
+  const columnLabel = (key: string) => reportColumnLabelForSlug(slug, key);
 
   const columns = useMemo(() => {
     if (!rows.length) return [];
@@ -384,14 +394,16 @@ export default function ReportHub({ title, section, icon, reports, procedure }: 
       ? ACCOUNT_STATEMENT_COLUMN_ORDER
       : isCustomerItemStatement
         ? CUSTOMER_ITEM_STATEMENT_COLUMN_ORDER
-        : isSalesOrPurchases
-          ? SALES_PURCHASES_COLUMN_ORDER
-          : null;
+        : isSales
+          ? SALES_COLUMN_ORDER
+          : isPurchases
+            ? PURCHASES_COLUMN_ORDER
+            : null;
     if (!order) return keys;
     const preferred = order.filter((k) => keys.includes(k));
     const rest = keys.filter((k) => !(order as readonly string[]).includes(k));
     return [...preferred, ...rest];
-  }, [rows, isAccountStatement, isCustomerItemStatement, isSalesOrPurchases]);
+  }, [rows, isAccountStatement, isCustomerItemStatement, isSales, isPurchases]);
 
   const totals = useMemo(() => {
     // ميجا: الإجمالي صف داخل البيانات («اجمالي حركات الفترة») — لا نضاعفه في تذييل الجدول
@@ -631,7 +643,7 @@ export default function ReportHub({ title, section, icon, reports, procedure }: 
       title: reportMeta?.title || title,
       dateFrom: reportMeta?.needsDates ? query.dateFrom : undefined,
       dateTo: reportMeta?.needsDates ? query.dateTo : undefined,
-      columns: columns.map((key) => ({ key, label: reportColumnLabel(key) })),
+      columns: columns.map((key) => ({ key, label: columnLabel(key) })),
       rows: rows as Record<string, unknown>[],
       totals,
       ...companyProps,
@@ -940,7 +952,7 @@ export default function ReportHub({ title, section, icon, reports, procedure }: 
                   <thead>
                     <tr style={{ background: "var(--ink-700)", color: "white" }}>
                       {columns.map((col) => (
-                        <th key={col} className="px-3 py-2 text-right font-medium whitespace-nowrap">{reportColumnLabel(col)}</th>
+                        <th key={col} className="px-3 py-2 text-right font-medium whitespace-nowrap">{columnLabel(col)}</th>
                       ))}
                     </tr>
                   </thead>

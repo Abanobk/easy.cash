@@ -1,29 +1,79 @@
-# موجة 1 — أعمدة مبيعات/مشتريات من إكسل ميجا
+# موجة 1 — أعمدة من PDF ميجا (فترة قصيرة)
 
-التقاط: 2026-09-13T12:13:54.213Z · شركة `KM-01_01_2022`
+التقاط حي: `km.mega-cash.net` · شركة `KM-01_01_2022` · من `1/1/2022` الى `3/1/2022` · زر **عرض** → PDF.
 
-مصدر فقط من ملف الإكسل بعد عرض — بدون اختراع عناوين.
+مرجع السلوك: ميجا. لا اختراع عناوين.
 
-## sales (`accountingreports-sales`)
-- Mega: `https://km.mega-cash.net/AccountingReports/Sales.aspx`
-- ⚠️ لم تُستخرج أعمدة: no-download
+## طريقة التحميل (آلية)
 
-## customers_sales (`accountingreports-customerssales`)
-- Mega: `https://km.mega-cash.net/AccountingReports/CustomersSales.aspx`
-- ⚠️ لم تُستخرج أعمدة: no-download
+بعد عرض، ميجا يضع مصدر العارض على `/showreport/.../*.ashx?show=1` ويمكن التحميل عبر `/downloadreport/...`.
 
-## gross_customer_sales_by_items (`accountingreports-grosscustomersalesbyitems`)
-- Mega: `https://km.mega-cash.net/AccountingReports/GrossCustomerSalesByItems.aspx`
-- ⚠️ لم تُستخرج أعمدة: no-download
+## الملفات
 
-## purchases (`accountingreports-purchases`)
-- Mega: `https://km.mega-cash.net/AccountingReports/Purchases.aspx`
-- ⚠️ لم تُستخرج أعمدة: no-download
+| تقرير | PDF |
+|--------|-----|
+| البيع | `pdf/sales.pdf` |
+| المبيعات بالعملاء | `pdf/customers-sales.pdf` |
+| المبيعات بالأصناف | `pdf/gross-customer-sales-by-items.pdf` |
+| الشراء | `pdf/purchases.pdf` |
+| المشتريات بالموردين | `pdf/vendors-purchases.pdf` |
+| المشتريات بالأصناف | `pdf/gross-vendor-purchases-by-items.pdf` |
 
-## vendors_purchases (`accountingreports-vendorspurchases`)
-- Mega: `https://km.mega-cash.net/AccountingReports/VendorsPurchases.aspx`
-- ⚠️ لم تُستخرج أعمدة: no-download
+## أعمدة رؤوس الفواتير (من PDF)
 
-## gross_vendor_purchases_by_items (`accountingreports-grossvendorpurchasesbyitems`)
-- Mega: `https://km.mega-cash.net/AccountingReports/GrossVendorPurchasesByItems.aspx`
-- ⚠️ لم تُستخرج أعمدة: no-download
+### البيع (`accountingreports-sales`)
+صف الفاتورة (RTL): **مسلسل | التاريخ | العميل | الاجمالي | الخصم | الضريبة | اضافات | الصافي | المصروفات | المستحق تحصيله**
+
+تفاصيل الأصناف تحت كل فاتورة: **الصنف | سعر الوحدة | الكمية | وحدة / تشغيلة | الاجمالي | الخصم | الضريبة | الصافي**
+
+Easy (قائمة فواتير مسطحة) — مطابقة صف الفاتورة قدر الإمكان:
+| Easy | ميجا |
+|------|------|
+| documentNumber | مسلسل |
+| date | التاريخ |
+| partyName | العميل |
+| subtotal | الاجمالي |
+| discount | الخصم |
+| tax | الضريبة |
+| total | الصافي |
+| remaining | المستحق تحصيله |
+
+لم تُضف بعد في Easy: **اضافات**، **المصروفات** (أعمدة ميجا ظاهرة في PDF بلا حقل مقابل جاهز).
+
+### الشراء (`accountingreports-purchases`)
+صف الفاتورة: **مسلسل | رقم المرجع | التاريخ | المورد | الاجمالي | الخصم | الضريبة | الصافي | المستحق سداده**
+
+| Easy | ميجا |
+|------|------|
+| documentNumber | مسلسل |
+| date | التاريخ |
+| partyName | المورد |
+| subtotal | الاجمالي |
+| discount | الخصم |
+| tax | الضريبة |
+| total | الصافي |
+| remaining | المستحق سداده |
+
+لم تُضف بعد: **رقم المرجع**.
+
+### المبيعات بالعملاء
+**مسلسل | المنطقة | العميل | الاجمالي | الخصومات | الضرائب | اضافات | الصافي | المديونية | اخر بيع | اخر تحصيل**
+
+### المشتريات بالموردين
+**مسلسل | المورد | الاجمالي | الخصومات | الضرائب | الصافي | المديونية | اخر شراء | اخر سداد**
+
+### المبيعات بالأصناف
+**الصنف | مبيعات | مردود | الكمية | وحدة القياس | سعر الوحدة | الخصم | القيمة**
+
+### المشتريات بالأصناف
+**الصنف | مشتريات | مردود | الكمية | وحدة القياس | سعر الوحدة | الخصم | القيمة**
+
+## ما تغيّر في Easy
+
+- ترتيب/تسميات أعمدة **البيع** و**الشراء** من PDF ميجا (`reportColumnLabelForSlug` + ترتيب الأعمدة في `ReportHub`).
+- فلاتر صنف/فئة كانت مضافة سابقاً من مسح فورم ميجا.
+
+## متبقي (بيانات/شكل التقرير)
+
+- حقول ميجا الناقصة: اضافات، مصروفات، رقم المرجع.
+- تقارير التجميع (بالعملاء/بالأصناف): تسميات ميجا جاهزة في الخريطة؛ شكل الصفوف ما زال تجميع Easy وليس تخطيط PDF الهرمي.
