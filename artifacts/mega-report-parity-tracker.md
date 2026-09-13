@@ -13,7 +13,8 @@ Goal: Easy Cash reports match Mega Cash (filters + columns + behavior) with **no
 |-----------|-----------|---------|---------|
 | `finalreports-trialbalance` | `/FinalReports/TrialBalance.aspx` | filters_done (partial Mega-only opts pending) | columns_done (Excel 2026-09-13) + PDF formal print |
 | `finalreports-generalledger` | `/FinalReports/GeneralLedger.aspx` | filters_done | columns_done (Excel 2026-09-13) + PDF formal print |
-| `accountingreports-accountstatment` | `/AccountingReports/AccountStatment.aspx` | filters_done (partial Mega-only opts pending) | columns_done (Excel 2026-09-13) + PDF print Mega-style |
+| `accountingreports-accountstatment` | `/AccountingReports/AccountStatment.aspx` | filters_done + 3 checkboxes (opening/counter/hideDetails) | columns_done + PDF print Mega-style |
+| `accountingreports-customeraccountstatementbyitems` | CustomerAccountStatementByItems | filters_partial (branch/currency/customer/item) | columns_done from PDF 2026-09-13 |
 
 ## Easy current row shapes (Mega-verified where noted — do not invent labels)
 - Trial Balance (from Mega Excel): `accountCode`, `accountName`, `openingDebit`, `openingCredit`, `periodDebit`, `periodCredit`, `closingDebit`, `closingCredit` — see `artifacts/mega-trial-balance/COLUMNS.md`

@@ -254,6 +254,8 @@ export type PrintAccountStatementOptions = {
   companyMobile?: string;
   companyLogo?: string | null;
   printedBy?: string;
+  notes?: string;
+  optionFlags?: string[];
 };
 
 /**
@@ -274,6 +276,8 @@ export function printAccountStatementReport(opts: PrintAccountStatementOptions) 
     companyMobile,
     companyLogo,
     printedBy,
+    notes,
+    optionFlags = [],
   } = opts;
 
   const currencyName = currencyLabel || CURRENCY_AR[currencyCode] || currencyCode || "جنيه مصري";
@@ -281,7 +285,9 @@ export function printAccountStatementReport(opts: PrintAccountStatementOptions) 
   const toStr = fmtDateMega(dateTo);
   // ميجا: «كشف حساب فى الفترة من … الى … بالعملة …»
   const title = `كشف حساب فى الفترة من ${fromStr || "—"} الى ${toStr || "—"} بالعملة ${currencyName}`;
-  const metaLine = `من تاريخ: ${fromStr || "—"}    الى تاريخ: ${toStr || "—"}    اسم الحساب: ${accountLabel}`;
+  const optionsText = optionFlags.length ? `    ${optionFlags.join("    ")}` : "";
+  const notesText = notes ? `    ملاحظات: ${notes}` : "";
+  const metaLine = `من تاريخ: ${fromStr || "—"}    الى تاريخ: ${toStr || "—"}    اسم الحساب: ${accountLabel}${optionsText}${notesText}`;
   const printedAt = new Date().toLocaleString("ar-EG", {
     year: "numeric",
     month: "numeric",

@@ -31,6 +31,20 @@ export const REPORT_COLUMN_LABELS: Record<string, string> = {
   phone: "الهاتف",
   email: "البريد",
   balance: "الرصيد",
+
+  // كشف حساب عميل بالأصناف — أعمدة ميجا (PDF 2026-09-13)
+  outQty: "صادر كمية",
+  outPrice: "صادر سعر",
+  outTotal: "صادر اجمالي",
+  inQty: "وارد كمية",
+  inPrice: "وارد سعر",
+  inTotal: "وارد اجمالي",
+  cashBankIn: "استلام نقدية / ايداع بنكي",
+  cashBankOut: "صرف نقدية / سحب بنكي",
+  checkCollected: "شيك محصل / تحت التحصيل",
+  checkRejected: "شيك مرفوض",
+  otherOps: "عمليات اخرى",
+
   creditLimit: "حد الائتمان",
   category: "التصنيف",
   metric: "المؤشر",

@@ -4301,6 +4301,10 @@ const reportsRouter = router({
     paymentStatus: z.enum(["paid", "partial", "unpaid"]).optional(),
     taxFilter: z.enum(["with", "without"]).optional(),
     discountFilter: z.enum(["with", "without"]).optional(),
+    showOpeningMovements: z.boolean().optional(),
+    showCounterAccounts: z.boolean().optional(),
+    hideDetails: z.boolean().optional(),
+    notes: z.string().optional(),
   })).query(async ({ ctx, input }) => {
     await assertEntityAction(ctx, "reports", input.slug, "viewDoc");
     const db = await getDb();
@@ -4359,6 +4363,7 @@ const reportsRouter = router({
     displayLevel: z.number().int().min(1).max(10).optional(),
     activityStatus: z.enum(["active", "inactive"]).optional(),
     orderBy: z.enum(["code", "name", "balance"]).optional(),
+    customerGrouping: z.enum(["all", "zeroBalances", "byCategory"]).optional(),
   })).query(async ({ ctx, input }) => {
     await assertEntityAction(ctx, "reports", input.slug, "viewDoc");
     const db = await getDb();

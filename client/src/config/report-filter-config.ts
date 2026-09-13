@@ -24,7 +24,7 @@ const ACCOUNTING_FILTERS: Record<string, ReportEntityFilter[]> = {
   "accountingreports-customerstatment": ["customer"],
   "accountingreports-vendorstatment": ["supplier"],
   "accountingreports-costcenterstatment": ["costCenter"],
-  "accountingreports-customeraccountstatementbyitems": ["customer", "item"],
+  "accountingreports-customeraccountstatementbyitems": ["branch", "customer", "currency", "item"],
   "accountingreports-vendoraccountstatementbyitems": ["supplier", "item"],
   "accountingreports-sales": ["customer", "branch", "warehouse", "rep", "area", "paymentType", "currency", "dueDate", "paymentStatus", "taxFilter", "discountFilter"],
   "accountingreports-purchases": ["supplier", "branch", "warehouse", "paymentType", "currency", "dueDate", "paymentStatus", "taxFilter", "discountFilter"],
