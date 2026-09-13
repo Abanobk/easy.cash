@@ -507,6 +507,67 @@ const MEGA_REPORT_COLUMN_LABELS: Record<string, Record<string, string>> = {
     credit: "دائن",
     balance: "الرصيد",
   },
+  // موجة 6 — أرباح + أعمار دائنين (artifacts/mega-wave6-profits)
+  "accountingreports-itemsprofits": {
+    itemName: "الصنف",
+    salesQty: "مبيعات",
+    salesValue: "قيمة المبيعات",
+    returnQty: "مردود",
+    returnValue: "قيمة المردود",
+    netSalesQty: "صافى مبيعات",
+    netSalesValue: "صافى قيمة المبيعات",
+    discounts: "خصومات",
+    salesCost: "تكلفة مبيعات",
+    returnCost: "تكلفة مردود",
+    netSalesCost: "صافى تكلفة المبيعات",
+    profit: "الربح",
+    profitRatio: "نسبة الربحية",
+  },
+  "accountingreports-customersprofits": {
+    serial: "مسلسل",
+    areaName: "المنطقة",
+    customerName: "العميل",
+    netSales: "صافي المبيعات",
+    profit: "الارباح",
+    profitRatio: "نسبة الربحية",
+  },
+  "accountingreports-invoiceprofits": {
+    serial: "المسلسل",
+    date: "التاريخ",
+    customerName: "العميل",
+    gross: "الاجمالي",
+    discount: "الخصم",
+    tax: "الضرائب",
+    additions: "اضافات",
+    net: "الصافي",
+    expenses: "المصروفات",
+    profit: "الربح",
+    profitRatio: "نسبة الربح",
+  },
+  // CreditsAges PDF blocked on test login — mirrored from DebitsAges Mega (wave2) with party=المورد
+  "accountingreports-creditsages": {
+    documentNumber: "مسلسل",
+    supplierName: "المورد",
+    current: "اقل من",
+    days30: "30",
+    days60: "60",
+    days90: "90",
+    over90: "اكثر من",
+    total: "الاجمالي",
+  },
+  "accountingreports-creditsagesbyyear": {
+    documentNumber: "مسلسل",
+    supplierName: "المورد",
+    total: "الاجمالي",
+  },
+  "accountingreports-creditsagesbyhalfyear": {
+    documentNumber: "مسلسل",
+    supplierName: "المورد",
+    firstHalf: "اقل من",
+    secondHalf: "اكثر من",
+    over: "اكثر من",
+    total: "الاجمالي",
+  },
 };
 
 export function reportColumnLabelForSlug(slug: string, key: string) {
@@ -515,6 +576,8 @@ export function reportColumnLabelForSlug(slug: string, key: string) {
 
 /** أعمدة رقمية تُجمَّع في صف الإجمالي */
 export const REPORT_TOTAL_COLUMNS = new Set([
+  "salesQty", "salesValue", "returnQty", "returnValue", "netSalesQty", "netSalesValue", "discounts", "salesCost", "returnCost", "netSalesCost", "profit", "profitRatio", "netSales", "gross", "net", "expenses",
+
   "total", "subtotal", "discount", "tax", "additions", "expenses", "paid", "remaining", "amount",
   "salesQty", "purchaseQty", "returnQty", "unitPrice", "net",
   "sales", "salesReturns", "collections", "otherOps", "balanceToDate", "previousBalance", "netSales",

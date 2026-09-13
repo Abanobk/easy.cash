@@ -74,9 +74,9 @@ Slugs = `featureKey` من `client/src/config/erp-navigation.ts` (مصدر الح
 | `accountingreports-debitsages` | partial | done | `mega-wave2-sales/` | |
 | `accountingreports-debitsagesbyyear` | partial | done | `mega-wave2-sales/` | |
 | `accountingreports-debitsagesbyhalfyear` | partial | done | `mega-wave2-sales/` | |
-| `accountingreports-creditsages` | partial | todo | - | **gap** |
-| `accountingreports-creditsagesbyyear` | partial | todo | - | **gap** |
-| `accountingreports-creditsagesbyhalfyear` | partial | todo | - | **gap** |
+| `accountingreports-creditsages` | partial | partial | blocked | mirrored DebitsAges |
+| `accountingreports-creditsagesbyyear` | partial | partial | blocked | mirrored DebitsAges |
+| `accountingreports-creditsagesbyhalfyear` | partial | partial | blocked | mirrored DebitsAges |
 
 ## Wave 3 — inventory
 | Easy slug | Filters | Columns | Evidence | Notes |
@@ -121,12 +121,12 @@ Slugs = `featureKey` من `client/src/config/erp-navigation.ts` (مصدر الح
 ## Wave 6 — profits + close credits-ages gap
 | Easy slug | Mega path | Filters | Columns | Evidence | Notes |
 |-----------|-----------|---------|---------|----------|-------|
-| `accountingreports-itemsprofits` | `/AccountingReports/ItemsProfits.aspx` | todo | todo | - | |
-| `accountingreports-customersprofits` | `/AccountingReports/CustomersProfits.aspx` | todo | todo | - | |
-| `accountingreports-invoiceprofits` | `/AccountingReports/InvoiceProfits.aspx` | todo | todo | - | |
-| `accountingreports-creditsages` | `/AccountingReports/CreditsAges.aspx` | partial | todo | - | Wave 2 gap |
-| `accountingreports-creditsagesbyyear` | `/AccountingReports/CreditsAgesByYear.aspx` | partial | todo | - | |
-| `accountingreports-creditsagesbyhalfyear` | `/AccountingReports/CreditsAgesByHalfYear.aspx` | partial | todo | - | |
+| `accountingreports-itemsprofits` | `/AccountingReports/ItemsProfits.aspx` | done | done | `mega-wave6-profits/` | |
+| `accountingreports-customersprofits` | `/AccountingReports/CustomersProfits.aspx` | done | done | `mega-wave6-profits/` | |
+| `accountingreports-invoiceprofits` | `/AccountingReports/InvoiceProfits.aspx` | done | done | `mega-wave6-profits/` | invoice-row; detail deferred |
+| `accountingreports-creditsages` | `/AccountingReports/CreditsAges.aspx` | partial | partial | blocked | mirrored DebitsAges; Mega PDF denied |
+| `accountingreports-creditsagesbyyear` | `/AccountingReports/CreditsAgesByYear.aspx` | partial | partial | blocked | mirrored DebitsAges |
+| `accountingreports-creditsagesbyhalfyear` | `/AccountingReports/CreditsAgesByHalfYear.aspx` | partial | partial | blocked | mirrored DebitsAges |
 
 ## Wave 7 — reps
 | Easy slug | Mega path | Filters | Columns | Evidence | Notes |

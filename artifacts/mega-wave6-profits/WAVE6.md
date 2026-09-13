@@ -1,25 +1,16 @@
-# Wave-6 — profits + vendor credits aging
+# Wave-6 — profits + credits ages
 
-Date range: short period (`1/1/2022`–`3/1/2022`) after عرض.
-Capture script: `scripts/capture-mega-wave6-profits-pdfs.mjs`
-Credentials: same as wave5 (`KM-01_01_2022` / `test` / wave5 password).
-
-## Mapped Easy slugs
-
-| Mega PDF key | Easy slug | Mega path | Status |
-|---|---|---|---|
-| itemsprofits | accountingreports-itemsprofits | `/AccountingReports/ItemsProfits.aspx` | **done** — PDF + columns |
-| customersprofits | accountingreports-customersprofits | `/AccountingReports/CustomersProfits.aspx` | **done** — PDF + columns |
-| invoiceprofits | accountingreports-invoiceprofits | `/AccountingReports/InvoiceProfits.aspx` | **done** — PDF + columns |
-| creditsages | accountingreports-creditsages | `/AccountingReports/CreditsAges.aspx` | **failed** — authorization denied |
-| creditsagesbyyear | accountingreports-creditsagesbyyear | `/AccountingReports/CreditsAgesByYear.aspx` | **failed** — redirect StartScreen |
-| creditsagesbyhalfyear | accountingreports-creditsagesbyhalfyear | `/AccountingReports/CreditsAgesByHalfYear.aspx` | **failed** — redirect StartScreen |
+## Captured
+| Mega | Easy slug | Status |
+|---|---|---|
+| ItemsProfits | accountingreports-itemsprofits | done (PDF columns) |
+| CustomersProfits | accountingreports-customersprofits | done (PDF columns) |
+| InvoiceProfits | accountingreports-invoiceprofits | done (invoice-row columns; line-detail deferred) |
+| CreditsAges* | accountingreports-creditsages* | **blocked** on test login (`الوصول مرفوض`) |
 
 ## Honesty
+- Invoice profits: Easy shows invoice-level Mega columns. Per-invoice item detail grid from Mega PDF is not expanded in the hub table yet.
+- Credits ages: no Mega PDF on `test` @ KM company. Column set mirrored from DebitsAges Mega evidence (wave2) with party column = `المورد` / `supplierName`. Marked partial/blocked until a permitted Mega login captures CreditsAges PDF.
+- Profit ratios use Easy cost basis (item purchasePrice); Mega inventory costing layers may differ.
 
-- Profit report columns are copied exactly from Mega PDFs (`COLUMNS.md`). Spellings differ across reports (`صافى` vs `صافي`, `الارباح` vs `الربح`, `نسبة الربحية` vs `نسبة الربح`) — keep Mega forms.
-- Invoice profits is a nested invoice + line-detail layout; Easy may flatten — match labels where a column exists.
-- **CreditsAges\***: test user cannot open vendor credit-aging pages (matches earlier menu scan). No invented aging bucket headers. Need a permitted Mega login before column parity.
-- Filters for the three profit reports are rich (branch/dates/customer/item/rep/order-by/…). CreditsAges\* filters unavailable on this account.
-
-Evidence: `COLUMNS.md` + `pdf/` (`wave6-pdf-capture.json`, `*.pdf`, `*-blocked.png`).
+Evidence: `COLUMNS.md` + `pdf/`.

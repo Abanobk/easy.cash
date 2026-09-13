@@ -457,6 +457,20 @@ export default function ReportHub({ title, section, icon, reports, procedure }: 
     "documentNumber", "customerName", "current", "days30", "days60", "days90", "over90", "total",
   ] as const;
 
+  const ITEMS_PROFITS_COLUMN_ORDER = [
+    "itemName", "salesQty", "salesValue", "returnQty", "returnValue", "netSalesQty", "netSalesValue",
+    "discounts", "salesCost", "returnCost", "netSalesCost", "profit", "profitRatio",
+  ] as const;
+  const CUSTOMERS_PROFITS_COLUMN_ORDER = [
+    "serial", "areaName", "customerName", "netSales", "profit", "profitRatio",
+  ] as const;
+  const INVOICE_PROFITS_COLUMN_ORDER = [
+    "serial", "date", "customerName", "gross", "discount", "tax", "additions", "net", "expenses", "profit", "profitRatio",
+  ] as const;
+  const CREDITS_AGES_COLUMN_ORDER = [
+    "documentNumber", "supplierName", "current", "days30", "days60", "days90", "over90", "total",
+  ] as const;
+
   const GROSS_PURCHASES_BY_ITEMS_COLUMN_ORDER = [
     "itemName",
     "purchaseQty",
@@ -523,6 +537,10 @@ export default function ReportHub({ title, section, icon, reports, procedure }: 
   const isSalesOrders = slug === "accountingreports-salesorders";
   const isPurchaseOrders = slug === "accountingreports-purchaseorders";
   const isDebitsAges = slug === "accountingreports-debitsages" || slug === "accountingreports-debitsagesbyyear" || slug === "accountingreports-debitsagesbyhalfyear";
+  const isItemsProfits = slug === "accountingreports-itemsprofits";
+  const isCustomersProfits = slug === "accountingreports-customersprofits";
+  const isInvoiceProfits = slug === "accountingreports-invoiceprofits";
+  const isCreditsAges = slug === "accountingreports-creditsages" || slug === "accountingreports-creditsagesbyyear" || slug === "accountingreports-creditsagesbyhalfyear";
   const isChecks = slug === "accountingreports-checks-checkin" || slug === "accountingreports-checks-checkout";
   const isCustomersInstallments = slug === "accountingreports-customersinstallments";
   const isPayments = slug === "accountingreports-payments";
@@ -592,8 +610,16 @@ export default function ReportHub({ title, section, icon, reports, procedure }: 
                                             : isPurchaseOrders
                                               ? PURCHASE_ORDERS_COLUMN_ORDER
                                               : isDebitsAges
-                                                ? DEBITS_AGES_COLUMN_ORDER
-                                                : isChecks
+                                                  ? DEBITS_AGES_COLUMN_ORDER
+                                                  : isItemsProfits
+                                                    ? ITEMS_PROFITS_COLUMN_ORDER
+                                                    : isCustomersProfits
+                                                      ? CUSTOMERS_PROFITS_COLUMN_ORDER
+                                                      : isInvoiceProfits
+                                                        ? INVOICE_PROFITS_COLUMN_ORDER
+                                                        : isCreditsAges
+                                                          ? CREDITS_AGES_COLUMN_ORDER
+                                                          : isChecks
                                                   ? CHECKS_COLUMN_ORDER
                                                   : isCustomersInstallments
                                                     ? CUSTOMERS_INSTALLMENTS_COLUMN_ORDER
@@ -619,11 +645,11 @@ export default function ReportHub({ title, section, icon, reports, procedure }: 
     if (!order) return keys;
     const preferred = order.filter((k) => keys.includes(k));
     // لتقارير ميجا ذات ترتيب ثابت: لا نعرض أعمدة إضافية (مثل profit/itemCode) خارج ترتيب ميجا
-    const megaStrict = isCustomersSales || isVendorsPurchases || isGrossSalesByItems || isGrossPurchasesByItems || isSales || isPurchases || isCustomerStatement || isVendorStatement || isCustomersList || isVendorsList || isCustomersSummary || isAreasSummary || isVendorsSummary || isLastPrices || isMatureInvoices || isMatureReceipts || isMonthlySalesByItems || isSalesOrders || isPurchaseOrders || isDebitsAges || isChecks || isCustomersInstallments || isPayments || isDues || isCashStatement || isCostCenterStatement || isDashboard || isBranchesSummary || isMonthlyExpenses || isFinalStatement || isSubledger;
+    const megaStrict = isCustomersSales || isVendorsPurchases || isGrossSalesByItems || isGrossPurchasesByItems || isSales || isPurchases || isCustomerStatement || isVendorStatement || isCustomersList || isVendorsList || isCustomersSummary || isAreasSummary || isVendorsSummary || isLastPrices || isMatureInvoices || isMatureReceipts || isMonthlySalesByItems || isSalesOrders || isPurchaseOrders || isDebitsAges || isChecks || isCustomersInstallments || isPayments || isDues || isCashStatement || isCostCenterStatement || isDashboard || isBranchesSummary || isMonthlyExpenses || isFinalStatement || isSubledger || isItemsProfits || isCustomersProfits || isInvoiceProfits || isCreditsAges;
     if (megaStrict) return preferred.length ? preferred : keys;
     const rest = keys.filter((k) => !(order as readonly string[]).includes(k));
     return [...preferred, ...rest];
-  }, [rows, isAccountStatement, isCustomerItemStatement, isSales, isPurchases, isCustomersSales, isVendorsPurchases, isGrossSalesByItems, isGrossPurchasesByItems, isCustomerStatement, isVendorStatement, isCustomersList, isVendorsList, isCustomersSummary, isAreasSummary, isVendorsSummary, isLastPrices, isMatureInvoices, isMatureReceipts, isMonthlySalesByItems, isSalesOrders, isPurchaseOrders, isDebitsAges, isChecks, isCustomersInstallments, isPayments, isDues, isCashStatement, isCostCenterStatement, isDashboard, isBranchesSummary, isMonthlyExpenses, isFinalStatement, isSubledger]);
+  }, [rows, isAccountStatement, isCustomerItemStatement, isSales, isPurchases, isCustomersSales, isVendorsPurchases, isGrossSalesByItems, isGrossPurchasesByItems, isCustomerStatement, isVendorStatement, isCustomersList, isVendorsList, isCustomersSummary, isAreasSummary, isVendorsSummary, isLastPrices, isMatureInvoices, isMatureReceipts, isMonthlySalesByItems, isSalesOrders, isPurchaseOrders, isDebitsAges, isItemsProfits, isCustomersProfits, isInvoiceProfits, isCreditsAges, isChecks, isCustomersInstallments, isPayments, isDues, isCashStatement, isCostCenterStatement, isDashboard, isBranchesSummary, isMonthlyExpenses, isFinalStatement, isSubledger]);
 
   const totals = useMemo(() => {
     // ميجا: الإجمالي صف داخل البيانات («اجمالي حركات الفترة») — لا نضاعفه في تذييل الجدول

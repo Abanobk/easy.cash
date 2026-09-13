@@ -2608,28 +2608,143 @@ export async function monthlyExpensesReport(db: Db, filters: ReportFilters) {
 }
 
 export async function itemsProfitsReport(db: Db, filters: ReportFilters) {
-  const rows = await salesByItemsReport(db, filters, false);
-  return rows.map((r) => ({
-    itemCode: r.itemCode,
-    itemName: r.itemName,
-    quantity: r.quantity,
-    salesTotal: r.total,
-    costTotal: num(r.total) - num(r.profit),
-    profit: r.profit,
-    profitPercent: r.total ? ((num(r.profit) / num(r.total)) * 100).toFixed(2) : "0",
-  }));
+  // موجة 6 — شكل ميجا ItemsProfits (artifacts/mega-wave6-profits/COLUMNS.md)
+  const dateParts = dateConds(salesInvoices, filters.dateFrom, filters.dateTo);
+  const salesRows = await db.select({
+    itemId: salesInvoiceItems.itemId,
+    itemName: items.name,
+    quantity: salesInvoiceItems.quantity,
+    price: salesInvoiceItems.price,
+    purchasePrice: items.purchasePrice,
+    discountPct: salesInvoiceItems.discount,
+    total: salesInvoiceItems.total,
+  }).from(salesInvoiceItems)
+    .innerJoin(salesInvoices, eq(salesInvoiceItems.invoiceId, salesInvoices.id))
+    .innerJoin(customers, eq(salesInvoices.customerId, customers.id))
+    .leftJoin(items, eq(salesInvoiceItems.itemId, items.id))
+    .where(tenantWhere(salesInvoiceItems, filters.tenantId,
+      and(salesPostedFilter(), ...(dateParts.length ? [and(...dateParts)] : []),
+        filters.itemId ? eq(salesInvoiceItems.itemId, filters.itemId) : undefined,
+        filters.categoryId ? eq(items.categoryId, filters.categoryId) : undefined,
+        filters.customerId ? eq(salesInvoices.customerId, filters.customerId) : undefined,
+        reportBranchCond(salesInvoices.branchId, filters),
+        reportWarehouseCond(salesInvoices.warehouseId, filters),
+        filters.repId
+          ? sql`(${salesInvoices.salesRepId} = ${filters.repId} OR ${customers.salesRepId} = ${filters.repId})`
+          : undefined)));
+
+  type Acc = {
+    itemName: string;
+    salesQty: number;
+    salesValue: number;
+    returnQty: number;
+    returnValue: number;
+    discounts: number;
+    salesCost: number;
+    returnCost: number;
+  };
+  const map = new Map<string, Acc>();
+  for (const r of salesRows) {
+    const key = String(r.itemId ?? r.itemName ?? "");
+    const qty = num(r.quantity);
+    const price = num(r.price);
+    const cost = num(r.purchasePrice) * qty;
+    const lineTotal = num(r.total);
+    const discountAmt = qty * price * (num(r.discountPct) / 100);
+    const cur = map.get(key) || {
+      itemName: r.itemName || "",
+      salesQty: 0,
+      salesValue: 0,
+      returnQty: 0,
+      returnValue: 0,
+      discounts: 0,
+      salesCost: 0,
+      returnCost: 0,
+    };
+    cur.salesQty += qty;
+    cur.salesValue += lineTotal;
+    cur.discounts += discountAmt;
+    cur.salesCost += cost;
+    map.set(key, cur);
+  }
+
+  const returnDateParts = dateConds(salesReturns, filters.dateFrom, filters.dateTo);
+  const returnRows = await db.select({
+    itemId: salesReturnItems.itemId,
+    itemName: items.name,
+    quantity: salesReturnItems.quantity,
+    price: salesReturnItems.price,
+    total: salesReturnItems.total,
+    purchasePrice: items.purchasePrice,
+  }).from(salesReturnItems)
+    .innerJoin(salesReturns, eq(salesReturnItems.returnId, salesReturns.id))
+    .leftJoin(items, eq(salesReturnItems.itemId, items.id))
+    .where(tenantWhere(salesReturnItems, filters.tenantId,
+      and(
+        eq(salesReturns.status, "confirmed"),
+        ...(returnDateParts.length ? [and(...returnDateParts)] : []),
+        filters.itemId ? eq(salesReturnItems.itemId, filters.itemId) : undefined,
+        filters.categoryId ? eq(items.categoryId, filters.categoryId) : undefined,
+        filters.customerId ? eq(salesReturns.customerId, filters.customerId) : undefined,
+      )));
+
+  for (const r of returnRows) {
+    const key = String(r.itemId ?? r.itemName ?? "");
+    const qty = num(r.quantity);
+    const cur = map.get(key) || {
+      itemName: r.itemName || "",
+      salesQty: 0,
+      salesValue: 0,
+      returnQty: 0,
+      returnValue: 0,
+      discounts: 0,
+      salesCost: 0,
+      returnCost: 0,
+    };
+    cur.returnQty += qty;
+    cur.returnValue += num(r.total);
+    cur.returnCost += num(r.purchasePrice) * qty;
+    map.set(key, cur);
+  }
+
+  return Array.from(map.values()).map((r) => {
+    const netSalesQty = r.salesQty - r.returnQty;
+    const netSalesValue = r.salesValue - r.returnValue;
+    const netSalesCost = r.salesCost - r.returnCost;
+    const profit = netSalesValue - r.discounts - netSalesCost;
+    return {
+      itemName: r.itemName,
+      salesQty: r.salesQty,
+      salesValue: r.salesValue,
+      returnQty: r.returnQty,
+      returnValue: r.returnValue,
+      netSalesQty,
+      netSalesValue,
+      discounts: r.discounts,
+      salesCost: r.salesCost,
+      returnCost: r.returnCost,
+      netSalesCost,
+      profit,
+      profitRatio: netSalesValue ? Number(((profit / netSalesValue) * 100).toFixed(2)) : 0,
+    };
+  });
 }
 
 export async function invoiceProfitsReport(db: Db, filters: ReportFilters) {
+  // موجة 6 — شكل ميجا InvoiceProfits (صف الفاتورة)
   const dateParts = dateConds(salesInvoices, filters.dateFrom, filters.dateTo);
   const rows = await db.select({
+    id: salesInvoices.id,
     invoiceNumber: salesInvoices.number,
     date: salesInvoices.date,
     customerName: customers.name,
-    itemTotal: salesInvoiceItems.total,
+    subtotal: salesInvoices.subtotal,
+    discount: salesInvoices.discount,
+    tax: salesInvoices.tax,
+    additions: salesInvoices.additions,
+    total: salesInvoices.total,
     purchasePrice: items.purchasePrice,
     quantity: salesInvoiceItems.quantity,
-    invoiceTotal: salesInvoices.total,
   }).from(salesInvoiceItems)
     .innerJoin(salesInvoices, eq(salesInvoiceItems.invoiceId, salesInvoices.id))
     .leftJoin(items, eq(salesInvoiceItems.itemId, items.id))
@@ -2641,24 +2756,56 @@ export async function invoiceProfitsReport(db: Db, filters: ReportFilters) {
           ? sql`(${salesInvoices.number} LIKE ${`%${filters.search}%`} OR ${customers.name} LIKE ${`%${filters.search}%`})`
           : undefined)));
 
-  const map = new Map<string, { invoiceNumber: string; date: string; customerName: string; salesTotal: number; costTotal: number }>();
+  const map = new Map<number, {
+    serial: string;
+    date: string;
+    customerName: string;
+    gross: number;
+    discount: number;
+    tax: number;
+    additions: number;
+    net: number;
+    costTotal: number;
+  }>();
   for (const r of rows) {
-    const key = String(r.invoiceNumber);
-    const cur = map.get(key) || {
-      invoiceNumber: r.invoiceNumber,
+    const cur = map.get(r.id) || {
+      serial: r.invoiceNumber,
       date: dateOnly(r.date),
       customerName: r.customerName || "",
-      salesTotal: num(r.invoiceTotal),
+      gross: num(r.subtotal),
+      discount: num(r.discount),
+      tax: num(r.tax),
+      additions: num(r.additions),
+      net: num(r.total),
       costTotal: 0,
     };
     cur.costTotal += num(r.purchasePrice) * num(r.quantity);
-    map.set(key, cur);
+    map.set(r.id, cur);
   }
-  return Array.from(map.values()).map((v) => ({
-    ...v,
-    profit: v.salesTotal - v.costTotal,
-    profitPercent: v.salesTotal ? ((v.salesTotal - v.costTotal) / v.salesTotal * 100).toFixed(2) : "0",
-  }));
+  const expenseByInvoice = await sumExpensesByInvoice(
+    db,
+    filters.tenantId,
+    salesInvoiceExpenses,
+    Array.from(map.keys()),
+  );
+  return Array.from(map.entries()).map(([id, v], idx) => {
+    const expenses = expenseByInvoice.get(id) || 0;
+    const profit = v.net - v.costTotal - expenses;
+    return {
+      serial: idx + 1,
+      date: v.date,
+      customerName: v.customerName,
+      gross: v.gross,
+      discount: v.discount,
+      tax: v.tax,
+      additions: v.additions,
+      net: v.net,
+      expenses,
+      profit,
+      profitRatio: v.net ? Number(((profit / v.net) * 100).toFixed(2)) : 0,
+      _invoiceNumber: v.serial,
+    };
+  });
 }
 
 export async function lastPricesReport(db: Db, filters: ReportFilters) {
@@ -2730,9 +2877,12 @@ export async function lastPricesReport(db: Db, filters: ReportFilters) {
 }
 
 export async function customersProfitsReport(db: Db, filters: ReportFilters) {
+  // موجة 6 — شكل ميجا CustomersProfits
   const dateParts = dateConds(salesInvoices, filters.dateFrom, filters.dateTo);
   const rows = await db.select({
+    customerId: customers.id,
     customerName: customers.name,
+    areaName: salesAreas.name,
     itemTotal: salesInvoiceItems.total,
     purchasePrice: items.purchasePrice,
     quantity: salesInvoiceItems.quantity,
@@ -2740,22 +2890,60 @@ export async function customersProfitsReport(db: Db, filters: ReportFilters) {
     .innerJoin(salesInvoices, eq(salesInvoiceItems.invoiceId, salesInvoices.id))
     .leftJoin(items, eq(salesInvoiceItems.itemId, items.id))
     .leftJoin(customers, eq(salesInvoices.customerId, customers.id))
+    .leftJoin(salesAreas, eq(customers.areaId, salesAreas.id))
     .where(tenantWhere(salesInvoiceItems, filters.tenantId,
       and(salesPostedFilter(), ...(dateParts.length ? [and(...dateParts)] : []),
         ...salesInvoiceExtraFilters(filters))));
 
-  const map = new Map<string, { customerName: string; salesTotal: number; costTotal: number; profit: number }>();
+  const map = new Map<number, { customerName: string; areaName: string; netSales: number; costTotal: number }>();
   for (const r of rows) {
-    const name = r.customerName || "غير محدد";
-    const cur = map.get(name) || { customerName: name, salesTotal: 0, costTotal: 0, profit: 0 };
-    const sales = num(r.itemTotal);
-    const cost = num(r.purchasePrice) * num(r.quantity);
-    cur.salesTotal += sales;
-    cur.costTotal += cost;
-    cur.profit += sales - cost;
-    map.set(name, cur);
+    const id = r.customerId ?? 0;
+    const cur = map.get(id) || {
+      customerName: r.customerName || "غير محدد",
+      areaName: r.areaName || "",
+      netSales: 0,
+      costTotal: 0,
+    };
+    cur.netSales += num(r.itemTotal);
+    cur.costTotal += num(r.purchasePrice) * num(r.quantity);
+    map.set(id, cur);
   }
-  return Array.from(map.values());
+
+  // خصم مردودات العملاء من صافي المبيعات
+  const returnDateParts = dateConds(salesReturns, filters.dateFrom, filters.dateTo);
+  const returnRows = await db.select({
+    customerId: salesReturns.customerId,
+    total: salesReturnItems.total,
+    purchasePrice: items.purchasePrice,
+    quantity: salesReturnItems.quantity,
+  }).from(salesReturnItems)
+    .innerJoin(salesReturns, eq(salesReturnItems.returnId, salesReturns.id))
+    .leftJoin(items, eq(salesReturnItems.itemId, items.id))
+    .where(tenantWhere(salesReturnItems, filters.tenantId,
+      and(
+        eq(salesReturns.status, "confirmed"),
+        ...(returnDateParts.length ? [and(...returnDateParts)] : []),
+        filters.customerId ? eq(salesReturns.customerId, filters.customerId) : undefined,
+      )));
+  for (const r of returnRows) {
+    const id = r.customerId ?? 0;
+    const cur = map.get(id);
+    if (!cur) continue;
+    cur.netSales -= num(r.total);
+    cur.costTotal -= num(r.purchasePrice) * num(r.quantity);
+  }
+
+  return Array.from(map.values()).map((v, idx) => {
+    const profit = v.netSales - v.costTotal;
+    return {
+      serial: idx + 1,
+      areaName: v.areaName,
+      customerName: v.customerName,
+      netSales: v.netSales,
+      profit,
+      profitRatio: v.netSales ? Number(((profit / v.netSales) * 100).toFixed(2)) : 0,
+    };
+  });
 }
 
 export async function matureInvoicesReport(db: Db, filters: ReportFilters) {

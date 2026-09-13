@@ -211,8 +211,8 @@ export async function supplierDebtAgingReport(
     const allYears = new Set<string>();
     for (const v of map.values()) Object.keys(v.years).forEach((y) => allYears.add(y));
     const sortedYears = Array.from(allYears).sort();
-    return Array.from(map.values()).map((v) => {
-      const row: Record<string, unknown> = { supplierName: v.supplierName };
+    return Array.from(map.values()).map((v, idx) => {
+      const row: Record<string, unknown> = { documentNumber: idx + 1, supplierName: v.supplierName };
       let total = 0;
       for (const y of sortedYears) {
         const amt = v.years[y] || 0;
@@ -256,7 +256,8 @@ export async function supplierDebtAgingReport(
     map.set(s.supplierId, entry);
   }
 
-  return Array.from(map.values()).map((v) => ({
+  return Array.from(map.values()).map((v, idx) => ({
+    documentNumber: idx + 1,
     supplierName: v.supplierName,
     current: v.current,
     days30: v.days30,
@@ -264,7 +265,7 @@ export async function supplierDebtAgingReport(
     days90: v.days90,
     over90: v.over90,
     total: v.total,
-    ...(bucket === "half" ? { firstHalf: v.current, secondHalf: v.days30 } : {}),
+    ...(bucket === "half" ? { firstHalf: v.current, secondHalf: v.days30, over: v.days30 } : {}),
   }));
 }
 
