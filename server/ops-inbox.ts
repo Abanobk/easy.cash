@@ -2,7 +2,7 @@
  * وارد العمليات: واتساب (نص + صور شيكات/إيداعات) + رفع شغل المصنع اليومي.
  * الاستخراج يقترح مسودة — التأكيد يدوياً من المحاسب.
  */
-import { and, count, desc, eq, gte, like, lte } from "drizzle-orm";
+import { and, count, desc, eq, gte, inArray, like, lte } from "drizzle-orm";
 import type { Db } from "./db";
 import {
   bankAccounts,
@@ -11,6 +11,7 @@ import {
   checkRoutings,
   checks,
   customers,
+  factoryDailyUploadItems,
   factoryDailyUploads,
   items,
   opsInboxItems,
@@ -758,12 +759,17 @@ export async function uploadFactoryDaily(
     quantity?: string;
     amount?: string;
     materialsUsed?: string;
+    items?: Array<{ itemDescription: string; quantity?: string; amount?: string }>;
   },
 ) {
   const hasFile = !!input.contentBase64;
   const contentBase64 = hasFile ? stripDataUrl(input.contentBase64!) : "";
   if (contentBase64.length > MAX_BASE64) throw new Error("حجم الملف كبير — الحد ~5 ميجابايت");
   const fileName = input.fileName?.trim() || "بدون ملف مرفق";
+  const lineItems = (input.items || []).filter((i) => i.itemDescription.trim());
+  const totalAmount = lineItems.length
+    ? lineItems.reduce((s, i) => s + (Number(i.amount) || 0), 0)
+    : null;
 
   const [insertResult] = await db.insert(factoryDailyUploads).values({
     tenantId,
@@ -776,13 +782,27 @@ export async function uploadFactoryDaily(
     status: "uploaded",
     type: input.type || "general",
     partyName: input.partyName || null,
-    itemDescription: input.itemDescription || null,
-    quantity: input.quantity || null,
-    amount: input.amount || null,
+    // بيان بأكتر من صنف: الهيدر بيحمل الإجمالي بس، والبنود التفصيلية في factory_daily_upload_items
+    itemDescription: lineItems.length ? null : input.itemDescription || null,
+    quantity: lineItems.length ? null : input.quantity || null,
+    amount: lineItems.length ? (totalAmount != null ? String(totalAmount) : null) : input.amount || null,
     materialsUsed: input.materialsUsed || null,
     createdBy: input.createdBy || null,
   });
   const id = Number((insertResult as { insertId?: number }).insertId ?? 0);
+
+  if (lineItems.length) {
+    await db.insert(factoryDailyUploadItems).values(
+      lineItems.map((item, i) => ({
+        tenantId,
+        uploadId: id,
+        itemDescription: item.itemDescription.trim().slice(0, 255),
+        quantity: item.quantity || null,
+        amount: item.amount || null,
+        sortOrder: i,
+      })),
+    );
+  }
 
   let linkedInboxItemId: number | null = null;
   if (hasFile && input.alsoToInbox !== false) {
@@ -874,6 +894,30 @@ export async function listFactoryDaily(
     .orderBy(desc(factoryDailyUploads.workDate), desc(factoryDailyUploads.id))
     .limit(opts.limit ?? 200);
 
+  const ids = rows.map((r) => r.id);
+  const itemRows = ids.length
+    ? await db
+        .select({
+          uploadId: factoryDailyUploadItems.uploadId,
+          itemDescription: factoryDailyUploadItems.itemDescription,
+          quantity: factoryDailyUploadItems.quantity,
+          amount: factoryDailyUploadItems.amount,
+        })
+        .from(factoryDailyUploadItems)
+        .where(and(eq(factoryDailyUploadItems.tenantId, tenantId), inArray(factoryDailyUploadItems.uploadId, ids)))
+        .orderBy(factoryDailyUploadItems.sortOrder, factoryDailyUploadItems.id)
+    : [];
+  const itemsByUpload = new Map<number, Array<{ itemDescription: string; quantity: number | null; amount: number | null }>>();
+  for (const it of itemRows) {
+    const list = itemsByUpload.get(it.uploadId) || [];
+    list.push({
+      itemDescription: it.itemDescription,
+      quantity: it.quantity != null ? Number(it.quantity) : null,
+      amount: it.amount != null ? Number(it.amount) : null,
+    });
+    itemsByUpload.set(it.uploadId, list);
+  }
+
   return rows.map((r) => ({
     id: r.id,
     workDate: toDateStr(r.workDate),
@@ -890,6 +934,7 @@ export async function listFactoryDaily(
     quantity: r.quantity != null ? Number(r.quantity) : null,
     amount: r.amount != null ? Number(r.amount) : null,
     materialsUsed: r.materialsUsed,
+    items: itemsByUpload.get(r.id) || [],
     createdAt: r.createdAt,
     hasFile: !!r.hasFile,
     postedEntityType: r.postedEntityType,
@@ -986,6 +1031,8 @@ export type FactoryConvertPreview = {
   party: { input: string; candidates: MatchCandidate[] } | null;
   item: { input: string; candidates: MatchCandidate[] } | null;
   materials: Array<{ input: string; quantity: number | null; candidates: MatchCandidate[] }>;
+  /** بنود بيان الشراء/المبيعات لو البيان اتسجّل بأكتر من صنف (factory_daily_upload_items) */
+  items: Array<{ input: string; quantity: number | null; amount: number | null; candidates: MatchCandidate[] }>;
 };
 
 export async function getFactoryConvertPreview(
@@ -1018,7 +1065,27 @@ export async function getFactoryConvertPreview(
 
   let item: FactoryConvertPreview["item"] = null;
   const materials: FactoryConvertPreview["materials"] = [];
-  if (row.type === "purchase" || row.type === "sales" || row.type === "mixing") {
+  const lineItems: FactoryConvertPreview["items"] = [];
+  if (row.type === "purchase" || row.type === "sales") {
+    const childItems = await db
+      .select({
+        itemDescription: factoryDailyUploadItems.itemDescription,
+        quantity: factoryDailyUploadItems.quantity,
+        amount: factoryDailyUploadItems.amount,
+      })
+      .from(factoryDailyUploadItems)
+      .where(and(eq(factoryDailyUploadItems.tenantId, tenantId), eq(factoryDailyUploadItems.uploadId, id)))
+      .orderBy(factoryDailyUploadItems.sortOrder, factoryDailyUploadItems.id);
+    for (const it of childItems) {
+      lineItems.push({
+        input: it.itemDescription,
+        quantity: it.quantity != null ? Number(it.quantity) : null,
+        amount: it.amount != null ? Number(it.amount) : null,
+        candidates: rankCandidates(itemRows, it.itemDescription),
+      });
+    }
+  }
+  if ((row.type === "purchase" || row.type === "sales" || row.type === "mixing") && !lineItems.length) {
     item = { input: row.itemDescription || "", candidates: rankCandidates(itemRows, row.itemDescription || "") };
   }
   if (row.type === "mixing" && row.materialsUsed) {
@@ -1044,6 +1111,7 @@ export async function getFactoryConvertPreview(
     party,
     item,
     materials,
+    items: lineItems,
   };
 }
 

@@ -39,15 +39,32 @@ export default function FactoryConvertDialog({ row, onClose, onPosted }: {
   const [warehouseId, setWarehouseId] = useState("");
   const [paymentType, setPaymentType] = useState<"cash" | "credit">("cash");
   const [materialRows, setMaterialRows] = useState<Array<{ input: string; quantity: string; itemId: string }>>([]);
+  /** بنود بيان شراء/مبيعات بأكتر من صنف (factory_daily_upload_items) — فاضية لو البيان صنف واحد قديم */
+  const [lineRows, setLineRows] = useState<Array<{ input: string; itemId: string; quantity: string; amount: string }>>([]);
 
   useEffect(() => {
     if (!previewQ.data) return;
     const p = previewQ.data;
     setPartyId(p.party?.candidates[0]?.id ? String(p.party.candidates[0].id) : "");
-    setItemId(p.item?.candidates[0]?.id ? String(p.item.candidates[0].id) : "");
-    setQuantity(p.quantity != null ? String(p.quantity) : "1");
-    const qty = p.quantity || 1;
-    setUnitPrice(p.amount != null ? String(Number((p.amount / qty).toFixed(2))) : "");
+    if (p.items?.length) {
+      setLineRows(
+        p.items.map((it) => ({
+          input: it.input,
+          itemId: it.candidates[0]?.id ? String(it.candidates[0].id) : "",
+          quantity: it.quantity != null ? String(it.quantity) : "",
+          amount: it.amount != null ? String(it.amount) : "",
+        })),
+      );
+      setItemId("");
+      setQuantity("");
+      setUnitPrice("");
+    } else {
+      setLineRows([]);
+      setItemId(p.item?.candidates[0]?.id ? String(p.item.candidates[0].id) : "");
+      setQuantity(p.quantity != null ? String(p.quantity) : "1");
+      const qty = p.quantity || 1;
+      setUnitPrice(p.amount != null ? String(Number((p.amount / qty).toFixed(2))) : "");
+    }
     setWarehouseId("");
     setPaymentType("cash");
     setMaterialRows(
@@ -68,10 +85,21 @@ export default function FactoryConvertDialog({ row, onClose, onPosted }: {
   const busy = purchaseCreate.isPending || salesCreate.isPending || productionCreate.isPending || markPosted.isPending;
 
   const total = useMemo(() => {
+    if (lineRows.length) {
+      return lineRows.reduce((s, r) => s + (Number(r.amount) || 0), 0).toFixed(2);
+    }
     const q = Number(quantity) || 0;
     const p = Number(unitPrice) || 0;
     return (q * p).toFixed(2);
-  }, [quantity, unitPrice]);
+  }, [quantity, unitPrice, lineRows]);
+
+  /** بيبني بنود الفاتورة من lineRows: السعر = القيمة ÷ الكمية لكل صنف */
+  const buildLineItems = () => lineRows.map((r) => {
+    const q = Number(r.quantity) || 0;
+    const amt = Number(r.amount) || 0;
+    const price = q > 0 ? amt / q : amt;
+    return { itemId: Number(r.itemId), quantity: String(q), price: String(price.toFixed(2)), total: String(amt.toFixed(2)) };
+  });
 
   const finish = async (entityType: "purchase_invoice" | "sales_invoice" | "production_order", entityId: number, ref: string) => {
     if (!row) return;
@@ -84,8 +112,29 @@ export default function FactoryConvertDialog({ row, onClose, onPosted }: {
   const submitPurchase = async () => {
     if (!row) return;
     if (!partyId) return toast.error("اختر المورد");
-    if (!itemId) return toast.error("اختر الصنف");
     if (!warehouseId) return toast.error("اختر المخزن");
+    if (lineRows.length) {
+      const unresolved = lineRows.find((r) => !r.itemId);
+      if (unresolved) return toast.error(`حدّد الصنف المطابق لـ: ${unresolved.input}`);
+      const items = buildLineItems();
+      if (items.some((it) => Number(it.quantity) <= 0)) return toast.error("الكمية لازم تكون أكبر من صفر لكل صنف");
+      try {
+        const res = await purchaseCreate.mutateAsync({
+          supplierId: Number(partyId),
+          date: row.workDate,
+          warehouseId: Number(warehouseId),
+          paymentType,
+          subtotal: total,
+          total,
+          items,
+        });
+        await finish("purchase_invoice", res.id, res.number);
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : "فشل إنشاء فاتورة الشراء");
+      }
+      return;
+    }
+    if (!itemId) return toast.error("اختر الصنف");
     const q = Number(quantity) || 0;
     const p = Number(unitPrice) || 0;
     if (q <= 0 || p <= 0) return toast.error("الكمية والسعر لازم يكونوا أكبر من صفر");
@@ -108,8 +157,29 @@ export default function FactoryConvertDialog({ row, onClose, onPosted }: {
   const submitSales = async () => {
     if (!row) return;
     if (!partyId) return toast.error("اختر العميل");
-    if (!itemId) return toast.error("اختر الصنف");
     if (!warehouseId) return toast.error("اختر المخزن");
+    if (lineRows.length) {
+      const unresolved = lineRows.find((r) => !r.itemId);
+      if (unresolved) return toast.error(`حدّد الصنف المطابق لـ: ${unresolved.input}`);
+      const items = buildLineItems();
+      if (items.some((it) => Number(it.quantity) <= 0)) return toast.error("الكمية لازم تكون أكبر من صفر لكل صنف");
+      try {
+        const res = await salesCreate.mutateAsync({
+          customerId: Number(partyId),
+          date: row.workDate,
+          warehouseId: Number(warehouseId),
+          paymentType,
+          subtotal: total,
+          total,
+          items,
+        });
+        await finish("sales_invoice", res.id, res.number);
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : "فشل إنشاء فاتورة البيع");
+      }
+      return;
+    }
+    if (!itemId) return toast.error("اختر الصنف");
     const q = Number(quantity) || 0;
     const p = Number(unitPrice) || 0;
     if (q <= 0 || p <= 0) return toast.error("الكمية والسعر لازم يكونوا أكبر من صفر");
@@ -192,7 +262,37 @@ export default function FactoryConvertDialog({ row, onClose, onPosted }: {
               </div>
             )}
 
-            {row?.type !== "mixing" ? (
+            {row?.type !== "mixing" && lineRows.length ? (
+              <div className="space-y-2">
+                <Label className="text-xs">الأصناف ({lineRows.length})</Label>
+                {lineRows.map((r, i) => (
+                  <div key={i} className="grid grid-cols-[1fr_5rem_6rem] items-center gap-2 rounded-md border border-slate-200 p-2">
+                    <Select value={r.itemId} onValueChange={(v) => setLineRows((rs) => rs.map((row, j) => j === i ? { ...row, itemId: v } : row))}>
+                      <SelectTrigger className="h-8 text-xs"><SelectValue placeholder={`صنف: ${r.input}`} /></SelectTrigger>
+                      <SelectContent>
+                        {(p.items[i]?.candidates || []).map((c) => (
+                          <SelectItem key={c.id} value={String(c.id)}>{c.name} {c.score >= 100 ? "✓" : ""}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Input
+                      className="h-8 text-xs"
+                      type="number"
+                      placeholder="الكمية"
+                      value={r.quantity}
+                      onChange={(e) => setLineRows((rs) => rs.map((row, j) => j === i ? { ...row, quantity: e.target.value } : row))}
+                    />
+                    <Input
+                      className="h-8 text-xs"
+                      type="number"
+                      placeholder="القيمة"
+                      value={r.amount}
+                      onChange={(e) => setLineRows((rs) => rs.map((row, j) => j === i ? { ...row, amount: e.target.value } : row))}
+                    />
+                  </div>
+                ))}
+              </div>
+            ) : row?.type !== "mixing" ? (
               <div>
                 <Label className="text-xs">
                   الصنف — المكتوب في البيان: <span className="font-medium">{p.itemDescription || "—"}</span>
@@ -224,11 +324,13 @@ export default function FactoryConvertDialog({ row, onClose, onPosted }: {
             )}
 
             <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label className="text-xs">{row?.type === "mixing" ? "الكمية المنتجة" : "الكمية"}</Label>
-                <Input className="mt-1 h-9" type="number" value={quantity} onChange={(e) => setQuantity(e.target.value)} />
-              </div>
-              {row?.type !== "mixing" ? (
+              {!lineRows.length ? (
+                <div>
+                  <Label className="text-xs">{row?.type === "mixing" ? "الكمية المنتجة" : "الكمية"}</Label>
+                  <Input className="mt-1 h-9" type="number" value={quantity} onChange={(e) => setQuantity(e.target.value)} />
+                </div>
+              ) : null}
+              {row?.type !== "mixing" && !lineRows.length ? (
                 <div>
                   <Label className="text-xs">سعر الوحدة</Label>
                   <Input className="mt-1 h-9" type="number" value={unitPrice} onChange={(e) => setUnitPrice(e.target.value)} />

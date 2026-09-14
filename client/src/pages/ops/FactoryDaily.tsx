@@ -10,11 +10,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { trpc } from "@/lib/trpc";
 import { tenantPath, useTenantSlug } from "@/lib/tenant";
 import { toast } from "sonner";
-import { Factory, Loader2, Upload, ShoppingCart, TrendingUp, Beaker, FileText, ArrowLeftRight } from "lucide-react";
+import { Factory, Loader2, Upload, ShoppingCart, TrendingUp, Beaker, FileText, ArrowLeftRight, Plus, X } from "lucide-react";
 import FactoryConvertDialog from "@/components/ops/FactoryConvertDialog";
 import { toDateStr } from "@/lib/date";
 
 type EntryType = "general" | "purchase" | "sales" | "mixing";
+type ItemRow = { description: string; quantity: string; amount: string };
+const emptyItemRow = (): ItemRow => ({ description: "", quantity: "", amount: "" });
 
 const TYPE_TABS: Array<{ value: EntryType; label: string; icon: typeof Factory }> = [
   { value: "general", label: "عام", icon: FileText },
@@ -66,8 +68,8 @@ export default function FactoryDailyPage() {
   const [partyName, setPartyName] = useState("");
   const [itemDescription, setItemDescription] = useState("");
   const [quantity, setQuantity] = useState("");
-  const [amount, setAmount] = useState("");
   const [materialsUsed, setMaterialsUsed] = useState("");
+  const [itemRows, setItemRows] = useState<ItemRow[]>([emptyItemRow()]);
   const [month, setMonth] = useState(today.slice(0, 7));
   const [dateFrom, setDateFrom] = useState(monthRange(today.slice(0, 7)).from);
   const [dateTo, setDateTo] = useState(monthRange(today.slice(0, 7)).to);
@@ -97,8 +99,8 @@ export default function FactoryDailyPage() {
     setPartyName("");
     setItemDescription("");
     setQuantity("");
-    setAmount("");
     setMaterialsUsed("");
+    setItemRows([emptyItemRow()]);
     setPendingFile(null);
   };
 
@@ -159,10 +161,16 @@ export default function FactoryDailyPage() {
       toast.error("اكتب اسم المنتج/الخلطة");
       return;
     }
+    const filledItemRows = itemRows.filter((r) => r.description.trim());
+    if ((entryType === "purchase" || entryType === "sales") && !filledItemRows.length) {
+      toast.error("اكتب صنف واحد على الأقل");
+      return;
+    }
     const workDate = getWorkDate();
+    const firstItemDesc = filledItemRows[0]?.description;
     const autoTitle =
-      entryType === "purchase" ? `شراء — ${partyName || itemDescription || workDate}`
-      : entryType === "sales" ? `بيع — ${partyName || itemDescription || workDate}`
+      entryType === "purchase" ? `شراء — ${partyName || firstItemDesc || workDate}`
+      : entryType === "sales" ? `بيع — ${partyName || firstItemDesc || workDate}`
       : entryType === "mixing" ? `خلطة — ${itemDescription || workDate}`
       : pendingFile?.fileName || workDate;
     uploadMut.mutate({
@@ -175,10 +183,16 @@ export default function FactoryDailyPage() {
       alsoToInbox: true,
       type: entryType,
       partyName: partyName.trim() || undefined,
-      itemDescription: itemDescription.trim() || undefined,
-      quantity: quantity.trim() || undefined,
-      amount: amount.trim() || undefined,
+      itemDescription: entryType === "mixing" ? itemDescription.trim() || undefined : undefined,
+      quantity: entryType === "mixing" ? quantity.trim() || undefined : undefined,
       materialsUsed: materialsUsed.trim() || undefined,
+      items: (entryType === "purchase" || entryType === "sales")
+        ? filledItemRows.map((r) => ({
+            itemDescription: r.description.trim(),
+            quantity: r.quantity.trim() || undefined,
+            amount: r.amount.trim() || undefined,
+          }))
+        : undefined,
     });
   };
 
@@ -256,21 +270,55 @@ export default function FactoryDailyPage() {
 
               {(entryType === "purchase" || entryType === "sales") && (
                 <>
-                  <div>
+                  <div className="md:col-span-2">
                     <Label className="text-xs">{entryType === "purchase" ? "المورد" : "العميل"}</Label>
                     <Input className="mt-1 h-9" value={partyName} onChange={(e) => setPartyName(e.target.value)} placeholder={entryType === "purchase" ? "اسم المورد" : "اسم العميل"} />
                   </div>
-                  <div>
-                    <Label className="text-xs">البيان / الصنف</Label>
-                    <Input className="mt-1 h-9" value={itemDescription} onChange={(e) => setItemDescription(e.target.value)} placeholder="وصف الصنف أو الخامة" />
-                  </div>
-                  <div>
-                    <Label className="text-xs">الكمية</Label>
-                    <Input className="mt-1 h-9" type="number" value={quantity} onChange={(e) => setQuantity(e.target.value)} />
-                  </div>
-                  <div>
-                    <Label className="text-xs">القيمة</Label>
-                    <Input className="mt-1 h-9" type="number" value={amount} onChange={(e) => setAmount(e.target.value)} />
+                  <div className="md:col-span-2 space-y-2">
+                    <Label className="text-xs">الأصناف {itemRows.length > 1 && <span className="text-slate-400 font-normal">({itemRows.length})</span>}</Label>
+                    {itemRows.map((row, i) => (
+                      <div key={i} className="grid grid-cols-[1fr_6rem_6rem_auto] gap-2 items-center">
+                        <Input
+                          className="h-9"
+                          value={row.description}
+                          onChange={(e) => setItemRows((rs) => rs.map((r, j) => j === i ? { ...r, description: e.target.value } : r))}
+                          placeholder="وصف الصنف أو الخامة"
+                        />
+                        <Input
+                          className="h-9"
+                          type="number"
+                          value={row.quantity}
+                          onChange={(e) => setItemRows((rs) => rs.map((r, j) => j === i ? { ...r, quantity: e.target.value } : r))}
+                          placeholder="الكمية"
+                        />
+                        <Input
+                          className="h-9"
+                          type="number"
+                          value={row.amount}
+                          onChange={(e) => setItemRows((rs) => rs.map((r, j) => j === i ? { ...r, amount: e.target.value } : r))}
+                          placeholder="القيمة"
+                        />
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-9 w-9 p-0 text-slate-400 hover:text-red-600 disabled:opacity-30"
+                          disabled={itemRows.length === 1}
+                          onClick={() => setItemRows((rs) => rs.filter((_, j) => j !== i))}
+                        >
+                          <X size={14} />
+                        </Button>
+                      </div>
+                    ))}
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-8 text-xs gap-1"
+                      onClick={() => setItemRows((rs) => [...rs, emptyItemRow()])}
+                    >
+                      <Plus size={12} /> إضافة صنف
+                    </Button>
                   </div>
                 </>
               )}
@@ -369,11 +417,22 @@ export default function FactoryDailyPage() {
                     {(row.partyName || row.itemDescription || row.quantity != null || row.amount != null) && (
                       <p className="text-xs text-slate-600 mt-1">
                         {row.partyName ? `${row.type === "purchase" ? "المورد" : "العميل"}: ${row.partyName} · ` : ""}
-                        {row.itemDescription ? `${row.itemDescription} · ` : ""}
-                        {row.quantity != null ? `الكمية: ${row.quantity.toLocaleString("en-US")} · ` : ""}
-                        {row.amount != null ? `القيمة: ${row.amount.toLocaleString("en-US")}` : ""}
+                        {!row.items?.length && row.itemDescription ? `${row.itemDescription} · ` : ""}
+                        {!row.items?.length && row.quantity != null ? `الكمية: ${row.quantity.toLocaleString("en-US")} · ` : ""}
+                        {row.amount != null ? `${row.items?.length > 1 ? "الإجمالي" : "القيمة"}: ${row.amount.toLocaleString("en-US")}` : ""}
                       </p>
                     )}
+                    {row.items?.length ? (
+                      <ul className="text-xs text-slate-600 mt-1 space-y-0.5">
+                        {row.items.map((it: { itemDescription: string; quantity: number | null; amount: number | null }, i: number) => (
+                          <li key={i}>
+                            {it.itemDescription}
+                            {it.quantity != null ? ` · الكمية: ${it.quantity.toLocaleString("en-US")}` : ""}
+                            {it.amount != null ? ` · القيمة: ${it.amount.toLocaleString("en-US")}` : ""}
+                          </li>
+                        ))}
+                      </ul>
+                    ) : null}
                     {row.materialsUsed ? <p className="text-xs text-slate-600 mt-1">الخامات: {row.materialsUsed}</p> : null}
                     {row.notes ? <p className="text-xs text-slate-600 mt-1">{row.notes}</p> : null}
                   </div>

@@ -1744,6 +1744,21 @@ export const factoryDailyUploads = mysqlTable("factory_daily_uploads", {
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
 
+/**
+ * بنود بيان شراء/مبيعات لو فيه أكتر من صنف في نفس البيان — الهيدر (factory_daily_uploads) بيفضل
+ * يمثّل المورد/العميل والتاريخ والملف؛ لو البيان قديم (قبل الميزة دي) بيفضل صنف واحد على الهيدر نفسه.
+ */
+export const factoryDailyUploadItems = mysqlTable("factory_daily_upload_items", {
+  id: int("id").autoincrement().primaryKey(),
+  tenantId: int("tenantId").notNull().default(1),
+  uploadId: int("uploadId").notNull(),
+  itemDescription: varchar("itemDescription", { length: 255 }).notNull(),
+  quantity: decimal("quantity", { precision: 15, scale: 3 }),
+  amount: decimal("amount", { precision: 15, scale: 2 }),
+  sortOrder: int("sortOrder").notNull().default(0),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
 // Type exports
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;

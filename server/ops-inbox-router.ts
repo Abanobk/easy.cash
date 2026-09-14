@@ -225,6 +225,11 @@ export const opsInboxRouter = router({
         quantity: z.string().optional(),
         amount: z.string().optional(),
         materialsUsed: z.string().max(5000).optional(),
+        items: z.array(z.object({
+          itemDescription: z.string().min(1).max(255),
+          quantity: z.string().optional(),
+          amount: z.string().optional(),
+        })).max(50).optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
