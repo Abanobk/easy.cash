@@ -196,6 +196,12 @@ export const items = mysqlTable("items", {
   minStock: decimal("minStock", { precision: 15, scale: 3 }).default("0"),
   currentStock: decimal("currentStock", { precision: 15, scale: 3 }).default("0"),
   taxRate: decimal("taxRate", { precision: 5, scale: 2 }).default("0"),
+  /** ضريبة (2) / (3) — مطابقة بطاقة الصنف في المصدر */
+  taxRate2: decimal("taxRate2", { precision: 5, scale: 2 }).default("0"),
+  taxRate3: decimal("taxRate3", { precision: 5, scale: 2 }).default("0"),
+  taxId: int("taxId"),
+  tax2Id: int("tax2Id"),
+  tax3Id: int("tax3Id"),
   trackSerial: boolean("trackSerial").default(false),
   description: text("description"),
   isActive: boolean("isActive").default(true),
@@ -235,6 +241,9 @@ export const itemWarehouseStock = mysqlTable("item_warehouse_stock", {
   quantity: decimal("quantity", { precision: 15, scale: 3 }).default("0"),
   /** متوسط تكلفة مرجّح خاص بهذا المخزن فقط — منفصل عن items.averageCost (المتوسط العام للصنف) */
   unitCost: decimal("unitCost", { precision: 15, scale: 4 }).default("0"),
+  /** أقل كمية / المكان بالمخزن — تبويب المخازن في بطاقة الصنف */
+  minQuantity: decimal("minQuantity", { precision: 15, scale: 3 }).default("0"),
+  location: varchar("location", { length: 255 }),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
 

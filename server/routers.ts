@@ -950,6 +950,11 @@ const itemsRouter = router({
       minStock: items.minStock,
       currentStock: items.currentStock,
       taxRate: items.taxRate,
+      taxRate2: items.taxRate2,
+      taxRate3: items.taxRate3,
+      taxId: items.taxId,
+      tax2Id: items.tax2Id,
+      tax3Id: items.tax3Id,
       trackSerial: items.trackSerial,
       description: items.description,
       isActive: items.isActive,
@@ -996,6 +1001,11 @@ const itemsRouter = router({
         minStock: items.minStock,
         currentStock: items.currentStock,
         taxRate: items.taxRate,
+        taxRate2: items.taxRate2,
+        taxRate3: items.taxRate3,
+        taxId: items.taxId,
+        tax2Id: items.tax2Id,
+        tax3Id: items.tax3Id,
         trackSerial: items.trackSerial,
         description: items.description,
         isActive: items.isActive,
@@ -1040,6 +1050,11 @@ const itemsRouter = router({
     cashDiscount: z.string().optional(),
     minStock: z.string().optional(),
     taxRate: z.string().optional(),
+    taxRate2: z.string().optional(),
+    taxRate3: z.string().optional(),
+    taxId: z.number().optional().nullable(),
+    tax2Id: z.number().optional().nullable(),
+    tax3Id: z.number().optional().nullable(),
     trackSerial: z.boolean().optional(),
     description: z.string().optional(),
   })).mutation(async ({ ctx, input }) => {
@@ -1099,6 +1114,11 @@ const itemsRouter = router({
     cashDiscount: z.string().optional(),
     minStock: z.string().optional(),
     taxRate: z.string().optional(),
+    taxRate2: z.string().optional(),
+    taxRate3: z.string().optional(),
+    taxId: z.number().optional().nullable(),
+    tax2Id: z.number().optional().nullable(),
+    tax3Id: z.number().optional().nullable(),
     trackSerial: z.boolean().optional(),
     description: z.string().optional(),
     isActive: z.boolean().optional(),
@@ -1136,6 +1156,10 @@ const itemsRouter = router({
         patch.altCategoryId = null;
       } else if (typeof input.altCategoryId === "number") {
         patch.altCategoryId = input.altCategoryId;
+      }
+      for (const k of ["taxId", "tax2Id", "tax3Id"] as const) {
+        if ((input as any)[k] === null) patch[k] = null;
+        else if (typeof (input as any)[k] === "number") patch[k] = (input as any)[k];
       }
       await db.update(items).set(patch as any).where(tenantWhere(items, ctx.tenantId, eq(items.id, id)));
     } catch (e: unknown) {
@@ -1262,6 +1286,69 @@ const itemsRouter = router({
           factorToBase: row.factorToBase || "1",
           priceFactor: row.priceFactor || "1",
         }) as any);
+      }
+      return { success: true };
+    }),
+  }),
+  /** أقل كمية / المكان لكل مخزن — تبويب المخازن في بطاقة الصنف */
+  warehouseMins: router({
+    list: protectedProcedure.input(z.object({ itemId: z.number() })).query(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      return db.select({
+        id: itemWarehouseStock.id,
+        warehouseId: itemWarehouseStock.warehouseId,
+        quantity: itemWarehouseStock.quantity,
+        minQuantity: itemWarehouseStock.minQuantity,
+        location: itemWarehouseStock.location,
+        warehouseName: warehouses.name,
+      }).from(itemWarehouseStock)
+        .leftJoin(warehouses, eq(itemWarehouseStock.warehouseId, warehouses.id))
+        .where(tenantWhere(itemWarehouseStock, ctx.tenantId, eq(itemWarehouseStock.itemId, input.itemId)))
+        .orderBy(warehouses.name, itemWarehouseStock.id);
+    }),
+    set: protectedProcedure.input(z.object({
+      itemId: z.number(),
+      rows: z.array(z.object({
+        warehouseId: z.number(),
+        minQuantity: z.string().optional(),
+        location: z.string().optional().nullable(),
+      })),
+    })).mutation(async ({ ctx, input }) => {
+      try {
+        await assertEntityAction(ctx, "inventory", "item", "edit");
+      } catch {
+        await assertEntityAction(ctx, "inventory", "item", "add");
+      }
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const [item] = await db.select({ id: items.id }).from(items)
+        .where(tenantWhere(items, ctx.tenantId, eq(items.id, input.itemId)));
+      if (!item) throw new TRPCError({ code: "NOT_FOUND", message: "الصنف غير موجود" });
+      for (const row of input.rows) {
+        const [existing] = await db.select({ id: itemWarehouseStock.id })
+          .from(itemWarehouseStock)
+          .where(tenantWhere(itemWarehouseStock, ctx.tenantId, and(
+            eq(itemWarehouseStock.itemId, input.itemId),
+            eq(itemWarehouseStock.warehouseId, row.warehouseId),
+          )))
+          .limit(1);
+        const patch = {
+          minQuantity: row.minQuantity || "0",
+          location: (row.location || "").trim() || null,
+        };
+        if (existing) {
+          await db.update(itemWarehouseStock).set(patch as any)
+            .where(tenantWhere(itemWarehouseStock, ctx.tenantId, eq(itemWarehouseStock.id, existing.id)));
+        } else {
+          await db.insert(itemWarehouseStock).values(withTenantId(ctx.tenantId, {
+            itemId: input.itemId,
+            warehouseId: row.warehouseId,
+            quantity: "0",
+            unitCost: "0",
+            ...patch,
+          }) as any);
+        }
       }
       return { success: true };
     }),

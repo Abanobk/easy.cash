@@ -49,6 +49,11 @@ const emptyForm = {
   cashDiscount: "",
   minStock: "",
   taxRate: "",
+  taxRate2: "",
+  taxRate3: "",
+  taxId: undefined as number | undefined,
+  tax2Id: undefined as number | undefined,
+  tax3Id: undefined as number | undefined,
   description: "",
   trackSerial: false,
 };
@@ -97,6 +102,14 @@ type ExtraUnitRow = {
   unit: string;
   factorToBase: string;
   priceFactor: string;
+};
+type WarehouseMinRow = {
+  key: string;
+  warehouseId: number;
+  warehouseName: string;
+  minQuantity: string;
+  location: string;
+  quantity: string;
 };
 
 const emptyComp = { barcode: "", itemId: "", quantity: "1", unit: "" };
@@ -217,6 +230,7 @@ export default function ItemDetail() {
   const [editingCompKey, setEditingCompKey] = useState<string | null>(null);
   const [extraPrices, setExtraPrices] = useState<ExtraPriceRow[]>([]);
   const [extraUnits, setExtraUnits] = useState<ExtraUnitRow[]>([]);
+  const [warehouseMins, setWarehouseMins] = useState<WarehouseMinRow[]>([]);
 
   const itemQ = trpc.items.byId.useQuery(editId!, { enabled: !!editId && !Number.isNaN(editId) });
   const { data: categories } = trpc.items.categories.useQuery();
@@ -234,6 +248,12 @@ export default function ItemDetail() {
     { itemId: editId! },
     { enabled: !!editId && !Number.isNaN(editId) },
   );
+  const warehouseMinsQ = trpc.items.warehouseMins.list.useQuery(
+    { itemId: editId! },
+    { enabled: !!editId && !Number.isNaN(editId) },
+  );
+  const { data: taxesList } = trpc.accounts.taxes.list.useQuery();
+  const { data: warehousesList } = trpc.warehouses.list.useQuery();
 
   const unitOptions = (measureUnits || []).map((u) => u.name);
   const defaultUnit = unitOptions.includes("قطعة") ? "قطعة" : (unitOptions[0] || "قطعة");
@@ -256,6 +276,7 @@ export default function ItemDetail() {
         setCompLines([]);
         setExtraPrices([]);
         setExtraUnits([]);
+        setWarehouseMins([]);
       }
       return;
     }
@@ -280,6 +301,11 @@ export default function ItemDetail() {
       cashDiscount: (row as any).cashDiscount || "",
       minStock: row.minStock || "",
       taxRate: row.taxRate || "",
+      taxRate2: (row as any).taxRate2 || "",
+      taxRate3: (row as any).taxRate3 || "",
+      taxId: (row as any).taxId ?? undefined,
+      tax2Id: (row as any).tax2Id ?? undefined,
+      tax3Id: (row as any).tax3Id ?? undefined,
       description: row.description || "",
       trackSerial: Boolean(row.trackSerial),
     });
@@ -305,6 +331,35 @@ export default function ItemDetail() {
       priceFactor: String(r.priceFactor ?? "1"),
     })));
   }, [extraPricesQ.data, extraUnitsQ.data, isNew, editId]);
+
+  useEffect(() => {
+    if (isNew) {
+      const whs = warehousesList || [];
+      setWarehouseMins(whs.map((w: any) => ({
+        key: `w-${w.id}`,
+        warehouseId: w.id,
+        warehouseName: w.name || `#${w.id}`,
+        minQuantity: "0",
+        location: "",
+        quantity: "0",
+      })));
+      return;
+    }
+    const whs = warehousesList || [];
+    if (!whs.length) return;
+    const saved = new Map((warehouseMinsQ.data || []).map((r: any) => [r.warehouseId, r]));
+    setWarehouseMins(whs.map((w: any) => {
+      const s = saved.get(w.id);
+      return {
+        key: `w-${w.id}`,
+        warehouseId: w.id,
+        warehouseName: w.name || `#${w.id}`,
+        minQuantity: s ? String(s.minQuantity ?? "0") : "0",
+        location: s?.location || "",
+        quantity: s ? String(s.quantity ?? "0") : "0",
+      };
+    }));
+  }, [warehousesList, warehouseMinsQ.data, isNew, editId]);
 
   useEffect(() => {
     if (!bomQ.data) return;
@@ -366,6 +421,7 @@ export default function ItemDetail() {
       void itemQ.refetch();
       void extraPricesQ.refetch();
       void extraUnitsQ.refetch();
+      void warehouseMinsQ.refetch();
     },
     onError: (err) => toast.error(err.message || "فشل تحديث الصنف"),
   });
@@ -373,6 +429,9 @@ export default function ItemDetail() {
     onError: (e) => toast.error(e.message),
   });
   const setExtraUnitsMut = trpc.items.extraUnits.set.useMutation({
+    onError: (e) => toast.error(e.message),
+  });
+  const setWarehouseMinsMut = trpc.items.warehouseMins.set.useMutation({
     onError: (e) => toast.error(e.message),
   });
 
@@ -400,7 +459,21 @@ export default function ItemDetail() {
           priceFactor: r.priceFactor || "1",
         })),
     });
-  }, [extraPrices, extraUnits, setExtraPricesMut, setExtraUnitsMut]);
+    const whRows = warehouseMins.filter((r) => {
+      const min = parseFloat(r.minQuantity || "0");
+      return (Number.isFinite(min) && min > 0) || !!r.location.trim();
+    });
+    if (whRows.length) {
+      await setWarehouseMinsMut.mutateAsync({
+        itemId,
+        rows: whRows.map((r) => ({
+          warehouseId: r.warehouseId,
+          minQuantity: r.minQuantity || "0",
+          location: r.location || null,
+        })),
+      });
+    }
+  }, [extraPrices, extraUnits, warehouseMins, setExtraPricesMut, setExtraUnitsMut, setWarehouseMinsMut]);
 
   const applyComponentItem = (item: ItemOpt | null) => {
     if (!item) {
@@ -552,6 +625,11 @@ export default function ItemDetail() {
       cashDiscount: form.cashDiscount.trim() || undefined,
       minStock: form.minStock.trim() || undefined,
       taxRate: form.taxRate.trim() || undefined,
+      taxRate2: form.taxRate2.trim() || undefined,
+      taxRate3: form.taxRate3.trim() || undefined,
+      taxId: form.taxId ?? null,
+      tax2Id: form.tax2Id ?? null,
+      tax3Id: form.tax3Id ?? null,
       description: form.description.trim() || undefined,
       trackSerial: form.trackSerial,
     };
@@ -774,10 +852,47 @@ export default function ItemDetail() {
                 <FieldLabel>خصم نقدي</FieldLabel>
                 <Input value={form.cashDiscount} onChange={f("cashDiscount")} type="number" placeholder="0.00" className={entryControlClass} />
               </div>
-              <div>
-                <FieldLabel>نسبة الضريبة %</FieldLabel>
-                <Input value={form.taxRate} onChange={f("taxRate")} type="number" placeholder="0" className={entryControlClass} />
-              </div>
+              {(
+                [
+                  { label: "الضريبة", idKey: "taxId" as const, rateKey: "taxRate" as const },
+                  { label: "الضريبة (2)", idKey: "tax2Id" as const, rateKey: "taxRate2" as const },
+                  { label: "الضريبة (3)", idKey: "tax3Id" as const, rateKey: "taxRate3" as const },
+                ] as const
+              ).map((slot) => (
+                <div key={slot.label}>
+                  <FieldLabel>{slot.label}</FieldLabel>
+                  <Select
+                    value={form[slot.idKey] != null ? String(form[slot.idKey]) : "__none__"}
+                    onValueChange={(v) => {
+                      if (v === "__none__") {
+                        setForm((prev) => ({ ...prev, [slot.idKey]: undefined, [slot.rateKey]: "" }));
+                        return;
+                      }
+                      const tax = (taxesList || []).find((x: any) => String(x.id) === v);
+                      setForm((prev) => ({
+                        ...prev,
+                        [slot.idKey]: Number(v),
+                        [slot.rateKey]: tax?.rate != null ? String(tax.rate) : prev[slot.rateKey],
+                      }));
+                    }}
+                  >
+                    <SelectTrigger className={entrySelectTriggerClass}><SelectValue placeholder="اختر ضريبة" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none__">— بدون —</SelectItem>
+                      {(taxesList || []).map((tx: any) => (
+                        <SelectItem key={tx.id} value={String(tx.id)}>{tx.name} ({tx.rate}%)</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Input
+                    value={form[slot.rateKey]}
+                    onChange={f(slot.rateKey)}
+                    type="number"
+                    placeholder="نسبة %"
+                    className={`${entryControlClass} mt-1`}
+                  />
+                </div>
+              ))}
             </FormSection>
           </div>
         )}
@@ -951,15 +1066,59 @@ export default function ItemDetail() {
         )}
 
         {tab === "minmax" && (
-          <FormSection title="الحد الأدنى / المكان" accent="slate">
-            <div>
-              <FieldLabel>الحد الأدنى للمخزون</FieldLabel>
-              <Input value={form.minStock} onChange={f("minStock")} type="number" placeholder="0" className={entryControlClass} />
+          <div className="space-y-4">
+            <FormSection title="أقل كمية عامة" accent="slate">
+              <div>
+                <FieldLabel>اقل كمية</FieldLabel>
+                <Input value={form.minStock} onChange={f("minStock")} type="number" placeholder="0" className={entryControlClass} />
+              </div>
+              <div className="sm:col-span-2">
+                <p className="text-sm text-slate-500">الحد الأدنى العام للصنف — يظهر تنبيه عند انخفاض الرصيد.</p>
+              </div>
+            </FormSection>
+            <div className="space-y-3">
+              <p className="text-sm text-slate-600">أقل كمية والمكان لكل مخزن.</p>
+              <div className="border rounded-lg overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead className="bg-slate-50">
+                    <tr>
+                      <th className="px-2 py-2 text-right text-xs">المخزن</th>
+                      <th className="px-2 py-2 text-right text-xs">الرصيد</th>
+                      <th className="px-2 py-2 text-right text-xs">اقل كمية</th>
+                      <th className="px-2 py-2 text-right text-xs">المكان بالمخزن</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {warehouseMins.length === 0 && (
+                      <tr><td colSpan={4} className="px-3 py-6 text-center text-slate-400 text-xs">لا توجد مخازن</td></tr>
+                    )}
+                    {warehouseMins.map((row, idx) => (
+                      <tr key={row.key} className="border-t">
+                        <td className="px-2 py-2 font-semibold text-slate-800">{row.warehouseName}</td>
+                        <td className="px-2 py-2 text-slate-600" dir="ltr">{row.quantity}</td>
+                        <td className="p-1">
+                          <Input
+                            type="number"
+                            className="h-8 text-xs w-28"
+                            value={row.minQuantity}
+                            onChange={(e) => setWarehouseMins((rows) => rows.map((r, i) => i === idx ? { ...r, minQuantity: e.target.value } : r))}
+                          />
+                        </td>
+                        <td className="p-1">
+                          <Input
+                            className="h-8 text-xs"
+                            value={row.location}
+                            onChange={(e) => setWarehouseMins((rows) => rows.map((r, i) => i === idx ? { ...r, location: e.target.value } : r))}
+                            placeholder="المكان بالمخزن"
+                          />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
-            <div className="sm:col-span-2">
-              <p className="text-sm text-slate-500">يظهر تنبيه في القائمة والتقارير عند انخفاض الرصيد عن الحد الأدنى.</p>
-            </div>
-          </FormSection>
+          </div>
         )}
 
         {tab === "components" && (

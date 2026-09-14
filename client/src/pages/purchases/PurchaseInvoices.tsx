@@ -302,6 +302,8 @@ export default function PurchaseInvoices() {
         if (item) {
           updated[idx].price = item.purchasePrice?.toString() || "0";
           updated[idx].tax = item.taxRate?.toString() || "0";
+          updated[idx].tax2 = (item as any).taxRate2 != null ? String((item as any).taxRate2) : "0";
+          updated[idx].tax3 = (item as any).taxRate3 != null ? String((item as any).taxRate3) : "0";
         }
         void applyItemHint(idx, Number(value));
       }

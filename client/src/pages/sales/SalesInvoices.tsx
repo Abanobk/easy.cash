@@ -386,6 +386,8 @@ export default function SalesInvoices() {
           updated[idx].itemUnit = item.unit || "";
           updated[idx].price = item.salePrice?.toString() || "0";
           updated[idx].tax = item.taxRate?.toString() || "0";
+          updated[idx].tax2 = (item as any).taxRate2 != null ? String((item as any).taxRate2) : "0";
+          updated[idx].tax3 = (item as any).taxRate3 != null ? String((item as any).taxRate3) : "0";
           const offerPct = bestOfferDiscount(Number(value), item.categoryId, activeOffers as ActiveOffer[] | undefined);
           if (offerPct > 0) updated[idx].discount = String(offerPct);
         }
