@@ -1761,15 +1761,17 @@ const purchasesRouter = router({
       const [countResult] = await db.select({ count: count() }).from(purchaseInvoices).where(tenantWhere(purchaseInvoices, ctx.tenantId));
       const number = `PI-${String(countResult.count + 1).padStart(5, "0")}`;
       const isCash = input.paymentType === "cash";
+      // ميجا: حفظ = مسودة بدون أثر مخزني/محاسبي · اعتماد = إدخال مخزن + قيد
+      const postNow = !!input.approveNow;
+      if (postNow) {
+        await assertEntityAction(ctx, "purchases", "purchaseInvoice", "approve");
+      }
       const { companyRequiresApproval, userBypassesApproval, queueDocumentApproval } = await import("./document-approval");
-      let needsApproval =
+      const queueApproval =
+        !postNow &&
         !isCash &&
         (await companyRequiresApproval(db, ctx.tenantId)) &&
         !userBypassesApproval(ctx.saasUser?.role ?? "user");
-      if (needsApproval && input.approveNow) {
-        await assertEntityAction(ctx, "purchases", "purchaseInvoice", "approve");
-        needsApproval = false;
-      }
       const settledCash = input.cashAmount ?? (isCash ? input.total : "0");
       const settledBank = input.bankAmount ?? "0";
       const paidTotal = Math.min(Number(input.total), Number(settledCash) + Number(settledBank));
@@ -1799,15 +1801,23 @@ const purchasesRouter = router({
         foreignTotal: input.foreignTotal,
         notes: input.notes,
         createdBy: ctx.user.id,
-        status: needsApproval ? "draft" : (isCash ? "paid" : (paidTotal > 0 ? "partial" : "confirmed")),
+        status: !postNow ? "draft" : (isCash ? "paid" : (paidTotal > 0 ? "partial" : "confirmed")),
       }) as any);
       const invId = (result as any).insertId;
+      const { loadInvoiceItemStockMeta, requireInvoiceLineWarehouse } = await import("./invoice-stock");
+      const itemStockMeta = postNow
+        ? await loadInvoiceItemStockMeta(db, ctx.tenantId, input.items.map((i) => i.itemId))
+        : null;
       for (const item of input.items) {
         const { batches, ...itemRow } = item;
         const [itemResult] = await db.insert(purchaseInvoiceItems).values(withTenantId(ctx.tenantId, { invoiceId: invId, ...itemRow }) as any);
         const invoiceItemId = (itemResult as any).insertId;
-        const lineWarehouseId = item.warehouseId ?? input.warehouseId;
-        if (!needsApproval) {
+        const meta = itemStockMeta?.get(item.itemId);
+        if (postNow && !meta) throw new Error(`الصنف #${item.itemId} غير موجود`);
+        const lineWarehouseId = (postNow && meta?.affectsStock)
+          ? requireInvoiceLineWarehouse(item.warehouseId, input.warehouseId, meta.name)
+          : (item.warehouseId ?? input.warehouseId);
+        if (postNow && meta!.affectsStock) {
           const { applyStockMovement } = await import("./inventory-stock");
           const { updateAverageCostAfterPurchase } = await import("./inventory-cost");
           if (batches?.length) {
@@ -1827,6 +1837,7 @@ const purchasesRouter = router({
                 batchId: b.batchId,
                 batchNumber: b.batchNumber,
                 expiryDate: b.expiryDate,
+                requireWarehouse: true,
               });
             }
           } else {
@@ -1838,6 +1849,7 @@ const purchasesRouter = router({
               batchId: item.batchId,
               batchNumber: item.batchNumber,
               expiryDate: item.expiryDate,
+              requireWarehouse: true,
             });
           }
           await updateAverageCostAfterPurchase(
@@ -1879,14 +1891,17 @@ const purchasesRouter = router({
           invoiceId: invId, currencyCode: e.currencyCode, exchangeRate: e.exchangeRate, amount: e.amount, creditAccountId: e.creditAccountId, notes: e.notes,
         }) as any);
       }
-      if (needsApproval) {
-        await queueDocumentApproval(db, ctx.tenantId, {
-          type: "purchase_invoice",
-          id: invId,
-          number,
-          requestedBy: ctx.user?.id,
-        });
-        return { success: true, id: invId, number, pendingApproval: true };
+      if (!postNow) {
+        if (queueApproval) {
+          await queueDocumentApproval(db, ctx.tenantId, {
+            type: "purchase_invoice",
+            id: invId,
+            number,
+            requestedBy: ctx.user?.id,
+          });
+          return { success: true, id: invId, number, pendingApproval: true };
+        }
+        return { success: true, id: invId, number, pendingApproval: false };
       }
       const [supplier] = await db.select({ name: suppliers.name }).from(suppliers)
         .where(tenantWhere(suppliers, ctx.tenantId, eq(suppliers.id, input.supplierId)));
@@ -2041,12 +2056,20 @@ const purchasesRouter = router({
         status: !postNow ? "draft" : (isCash ? "paid" : (paidTotal > 0 ? "partial" : "confirmed")),
       } as any).where(tenantWhere(purchaseInvoices, ctx.tenantId, eq(purchaseInvoices.id, invId)));
 
+      const { loadInvoiceItemStockMeta, requireInvoiceLineWarehouse } = await import("./invoice-stock");
+      const itemStockMeta = postNow
+        ? await loadInvoiceItemStockMeta(db, ctx.tenantId, input.items.map((i) => i.itemId))
+        : null;
       for (const item of input.items) {
         const { batches, ...itemRow } = item;
         const [itemResult] = await db.insert(purchaseInvoiceItems).values(withTenantId(ctx.tenantId, { invoiceId: invId, ...itemRow }) as any);
         const invoiceItemId = (itemResult as any).insertId;
-        const lineWarehouseId = item.warehouseId ?? input.warehouseId;
-        if (postNow) {
+        const meta = itemStockMeta?.get(item.itemId);
+        if (postNow && !meta) throw new Error(`الصنف #${item.itemId} غير موجود`);
+        const lineWarehouseId = (postNow && meta?.affectsStock)
+          ? requireInvoiceLineWarehouse(item.warehouseId, input.warehouseId, meta.name)
+          : (item.warehouseId ?? input.warehouseId);
+        if (postNow && meta!.affectsStock) {
           const { applyStockMovement } = await import("./inventory-stock");
           const { updateAverageCostAfterPurchase } = await import("./inventory-cost");
           if (batches?.length) {
@@ -2057,12 +2080,14 @@ const purchasesRouter = router({
               await applyStockMovement(db, ctx.tenantId, {
                 itemId: item.itemId, quantity: b.quantity, direction: "in", warehouseId: lineWarehouseId,
                 batchId: b.batchId, batchNumber: b.batchNumber, expiryDate: b.expiryDate,
+                requireWarehouse: true,
               });
             }
           } else {
             await applyStockMovement(db, ctx.tenantId, {
               itemId: item.itemId, quantity: item.quantity, direction: "in", warehouseId: lineWarehouseId,
               batchId: item.batchId, batchNumber: item.batchNumber, expiryDate: item.expiryDate,
+              requireWarehouse: true,
             });
           }
           await updateAverageCostAfterPurchase(db, ctx.tenantId, item.itemId, Number(item.quantity), Number(item.price), lineWarehouseId);
@@ -2671,19 +2696,21 @@ const salesRouter = router({
       const resolvedBranchId = input.branchId ?? customer?.branchId ?? undefined;
       assertBranchAccess(scope, resolvedBranchId);
       assertWarehouseAccess(scope, input.warehouseId);
-      const isCash = input.paymentType === "cash";
+            const isCash = input.paymentType === "cash";
       if (!isCash) {
         await assertCustomerCreditLimit(db, ctx.tenantId, input.customerId, input.total);
       }
+      // ميجا: حفظ = مسودة بدون سحب مخزن/قيد · اعتماد = سحب مخزن + قيد + أثر العميل/الخزينة
+      const postNow = !!input.approveNow;
+      if (postNow) {
+        await assertEntityAction(ctx, "sales", isCash ? "cashSaleInvoice" : "saleInvoice", "approve");
+      }
       const { companyRequiresApproval, userBypassesApproval, queueDocumentApproval } = await import("./document-approval");
-      let needsApproval =
+      const queueApproval =
+        !postNow &&
         !isCash &&
         (await companyRequiresApproval(db, ctx.tenantId)) &&
         !userBypassesApproval(ctx.saasUser?.role ?? "user");
-      if (needsApproval && input.approveNow) {
-        await assertEntityAction(ctx, "sales", "saleInvoice", "approve");
-        needsApproval = false;
-      }
       const settledCash = input.cashAmount ?? (isCash ? input.total : "0");
       const settledBank = input.bankAmount ?? "0";
       const paidTotal = Math.min(Number(input.total), Number(settledCash) + Number(settledBank));
@@ -2713,15 +2740,23 @@ const salesRouter = router({
         foreignTotal: input.foreignTotal,
         notes: input.notes,
         createdBy: ctx.user.id,
-        status: needsApproval ? "draft" : (isCash ? "paid" : (paidTotal > 0 ? "partial" : "confirmed")),
+        status: !postNow ? "draft" : (isCash ? "paid" : (paidTotal > 0 ? "partial" : "confirmed")),
       }) as any);
       const invId = (result as any).insertId;
+      const { loadInvoiceItemStockMeta, requireInvoiceLineWarehouse } = await import("./invoice-stock");
+      const itemStockMeta = postNow
+        ? await loadInvoiceItemStockMeta(db, ctx.tenantId, input.items.map((i) => i.itemId))
+        : null;
       for (const item of input.items) {
         const { batches, ...itemRow } = item;
         const [itemResult] = await db.insert(salesInvoiceItems).values(withTenantId(ctx.tenantId, { invoiceId: invId, ...itemRow }) as any);
         const invoiceItemId = (itemResult as any).insertId;
-        const lineWarehouseId = item.warehouseId ?? input.warehouseId;
-        if (!needsApproval) {
+        const meta = itemStockMeta?.get(item.itemId);
+        if (postNow && !meta) throw new Error(`الصنف #${item.itemId} غير موجود`);
+        const lineWarehouseId = (postNow && meta?.affectsStock)
+          ? requireInvoiceLineWarehouse(item.warehouseId, input.warehouseId, meta.name)
+          : (item.warehouseId ?? input.warehouseId);
+        if (postNow && meta!.affectsStock) {
           const { applyStockMovement } = await import("./inventory-stock");
           if (batches?.length) {
             for (const b of batches) {
@@ -2738,6 +2773,7 @@ const salesRouter = router({
                 direction: "out",
                 warehouseId: lineWarehouseId,
                 batchId: b.batchId,
+                requireWarehouse: true,
               });
             }
           } else {
@@ -2747,6 +2783,7 @@ const salesRouter = router({
               direction: "out",
               warehouseId: lineWarehouseId,
               batchId: item.batchId,
+              requireWarehouse: true,
             });
           }
           if (item.serialNumbers) {
@@ -2780,14 +2817,17 @@ const salesRouter = router({
           invoiceId: invId, currencyCode: e.currencyCode, exchangeRate: e.exchangeRate, amount: e.amount, creditAccountId: e.creditAccountId, notes: e.notes,
         }) as any);
       }
-      if (needsApproval) {
-        await queueDocumentApproval(db, ctx.tenantId, {
-          type: "sales_invoice",
-          id: invId,
-          number,
-          requestedBy: ctx.user?.id,
-        });
-        return { success: true, id: invId, number, pendingApproval: true };
+      if (!postNow) {
+        if (queueApproval) {
+          await queueDocumentApproval(db, ctx.tenantId, {
+            type: "sales_invoice",
+            id: invId,
+            number,
+            requestedBy: ctx.user?.id,
+          });
+          return { success: true, id: invId, number, pendingApproval: true };
+        }
+        return { success: true, id: invId, number, pendingApproval: false };
       }
       await postSalesInvoiceJournal(db, ctx.tenantId, ctx.user.id, {
         number,
@@ -2950,22 +2990,30 @@ const salesRouter = router({
         status: !postNow ? "draft" : (isCash ? "paid" : (paidTotal > 0 ? "partial" : "confirmed")),
       } as any).where(tenantWhere(salesInvoices, ctx.tenantId, eq(salesInvoices.id, invId)));
 
+      const { loadInvoiceItemStockMeta, requireInvoiceLineWarehouse } = await import("./invoice-stock");
+      const itemStockMeta = postNow
+        ? await loadInvoiceItemStockMeta(db, ctx.tenantId, input.items.map((i) => i.itemId))
+        : null;
       for (const item of input.items) {
         const { batches, ...itemRow } = item;
         const [itemResult] = await db.insert(salesInvoiceItems).values(withTenantId(ctx.tenantId, { invoiceId: invId, ...itemRow }) as any);
         const invoiceItemId = (itemResult as any).insertId;
-        const lineWarehouseId = item.warehouseId ?? input.warehouseId;
-        if (postNow) {
+        const meta = itemStockMeta?.get(item.itemId);
+        if (postNow && !meta) throw new Error(`الصنف #${item.itemId} غير موجود`);
+        const lineWarehouseId = (postNow && meta?.affectsStock)
+          ? requireInvoiceLineWarehouse(item.warehouseId, input.warehouseId, meta.name)
+          : (item.warehouseId ?? input.warehouseId);
+        if (postNow && meta!.affectsStock) {
           const { applyStockMovement } = await import("./inventory-stock");
           if (batches?.length) {
             for (const b of batches) {
               await db.insert(salesInvoiceItemBatches).values(withTenantId(ctx.tenantId, {
                 invoiceItemId, batchId: b.batchId, batchNumber: b.batchNumber, expiryDate: b.expiryDate as any, quantity: b.quantity,
               }) as any);
-              await applyStockMovement(db, ctx.tenantId, { itemId: item.itemId, quantity: b.quantity, direction: "out", warehouseId: lineWarehouseId, batchId: b.batchId });
+              await applyStockMovement(db, ctx.tenantId, { itemId: item.itemId, quantity: b.quantity, direction: "out", warehouseId: lineWarehouseId, batchId: b.batchId, requireWarehouse: true });
             }
           } else {
-            await applyStockMovement(db, ctx.tenantId, { itemId: item.itemId, quantity: item.quantity, direction: "out", warehouseId: lineWarehouseId, batchId: item.batchId });
+            await applyStockMovement(db, ctx.tenantId, { itemId: item.itemId, quantity: item.quantity, direction: "out", warehouseId: lineWarehouseId, batchId: item.batchId, requireWarehouse: true });
           }
           if (item.serialNumbers) {
             const { assignSalesSerials } = await import("./inventory-serials");

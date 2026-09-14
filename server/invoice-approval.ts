@@ -25,6 +25,7 @@ import {
 import { cancelPostedJournalByReference, postPurchaseInvoiceJournal, postSalesCogsJournal, postSalesInvoiceJournal } from "./auto-journal";
 import { recalculateCustomerBalance, recalculateSupplierBalance } from "./contact-balances";
 import { applyStockMovement, resolveWarehouseId } from "./inventory-stock";
+import { loadInvoiceItemStockMeta, requireInvoiceLineWarehouse, itemAffectsWarehouseStock } from "./invoice-stock";
 import { updateAverageCostAfterPurchase, recalculateItemAverageCost } from "./inventory-cost";
 import { assertDateNotInClosedPeriod } from "./fiscal-period-guard";
 import { downstreamMessage, findDownstreamStockConsumers } from "./reversal-guards";
@@ -94,8 +95,11 @@ export async function finalizeSalesInvoice(
     .from(salesInvoiceItems)
     .where(tenantWhere(salesInvoiceItems, tenantId, eq(salesInvoiceItems.invoiceId, invoiceId)));
 
+  const itemMeta = await loadInvoiceItemStockMeta(db, tenantId, lineItems.map((l) => l.itemId));
   for (const line of lineItems) {
-    const lineWarehouseId = line.warehouseId ?? inv.warehouseId;
+    const meta = itemMeta.get(line.itemId);
+    if (meta && !meta.affectsStock) continue;
+    const lineWarehouseId = requireInvoiceLineWarehouse(line.warehouseId, inv.warehouseId, meta?.name);
     const splits = await db
       .select()
       .from(salesInvoiceItemBatches)
@@ -108,6 +112,7 @@ export async function finalizeSalesInvoice(
           direction: "out",
           warehouseId: lineWarehouseId,
           batchId: s.batchId,
+          requireWarehouse: true,
         });
       }
     } else {
@@ -117,6 +122,7 @@ export async function finalizeSalesInvoice(
         direction: "out",
         warehouseId: lineWarehouseId,
         batchId: line.batchId,
+        requireWarehouse: true,
       });
     }
   }
@@ -195,8 +201,11 @@ export async function finalizePurchaseInvoice(
     .from(purchaseInvoiceItems)
     .where(tenantWhere(purchaseInvoiceItems, tenantId, eq(purchaseInvoiceItems.invoiceId, invoiceId)));
 
+  const itemMeta = await loadInvoiceItemStockMeta(db, tenantId, lineItems.map((l) => l.itemId));
   for (const line of lineItems) {
-    const lineWarehouseId = line.warehouseId ?? inv.warehouseId;
+    const meta = itemMeta.get(line.itemId);
+    if (meta && !meta.affectsStock) continue;
+    const lineWarehouseId = requireInvoiceLineWarehouse(line.warehouseId, inv.warehouseId, meta?.name);
     const splits = await db
       .select()
       .from(purchaseInvoiceItemBatches)
@@ -211,6 +220,7 @@ export async function finalizePurchaseInvoice(
           batchId: s.batchId,
           batchNumber: s.batchNumber,
           expiryDate: s.expiryDate as any,
+          requireWarehouse: true,
         });
       }
     } else {
@@ -220,6 +230,7 @@ export async function finalizePurchaseInvoice(
         direction: "in",
         warehouseId: lineWarehouseId,
         batchId: line.batchId,
+        requireWarehouse: true,
       });
     }
     await updateAverageCostAfterPurchase(
@@ -352,8 +363,9 @@ export async function unapprovePurchaseInvoice(db: Db, tenantId: number, invoice
     .where(tenantWhere(purchaseInvoiceItems, tenantId, eq(purchaseInvoiceItems.invoiceId, invoiceId)));
   const lines: ReversalLine[] = [];
   for (const l of rawLines) {
-    const [item] = await db.select({ name: items.name }).from(items).where(tenantWhere(items, tenantId, eq(items.id, l.itemId)));
-    const warehouseId = await resolveWarehouseId(db, tenantId, l.warehouseId ?? inv.warehouseId);
+    const [item] = await db.select({ name: items.name, itemType: items.itemType }).from(items).where(tenantWhere(items, tenantId, eq(items.id, l.itemId)));
+    if (!itemAffectsWarehouseStock(item?.itemType)) continue;
+    const warehouseId = requireInvoiceLineWarehouse(l.warehouseId, inv.warehouseId, item?.name);
     const splitRows = await db.select().from(purchaseInvoiceItemBatches)
       .where(tenantWhere(purchaseInvoiceItemBatches, tenantId, eq(purchaseInvoiceItemBatches.invoiceItemId, l.id)));
     lines.push({
@@ -414,8 +426,9 @@ export async function unapproveSalesInvoice(db: Db, tenantId: number, invoiceId:
     .where(tenantWhere(salesInvoiceItems, tenantId, eq(salesInvoiceItems.invoiceId, invoiceId)));
   const lines: ReversalLine[] = [];
   for (const l of rawLines) {
-    const [item] = await db.select({ name: items.name }).from(items).where(tenantWhere(items, tenantId, eq(items.id, l.itemId)));
-    const warehouseId = await resolveWarehouseId(db, tenantId, l.warehouseId ?? inv.warehouseId);
+    const [item] = await db.select({ name: items.name, itemType: items.itemType }).from(items).where(tenantWhere(items, tenantId, eq(items.id, l.itemId)));
+    if (!itemAffectsWarehouseStock(item?.itemType)) continue;
+    const warehouseId = requireInvoiceLineWarehouse(l.warehouseId, inv.warehouseId, item?.name);
     const splitRows = await db.select().from(salesInvoiceItemBatches)
       .where(tenantWhere(salesInvoiceItemBatches, tenantId, eq(salesInvoiceItemBatches.invoiceItemId, l.id)));
     lines.push({

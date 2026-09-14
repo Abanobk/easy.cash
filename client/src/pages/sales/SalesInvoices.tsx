@@ -170,7 +170,7 @@ export default function SalesInvoices() {
   const { data: exchangeRates } = trpc.parity.settings.exchangeRates.list.useQuery(undefined, { enabled: showForm });
   const createMut = trpc.sales.invoices.create.useMutation({
     onSuccess: (res) => {
-      toast.success(res.pendingApproval ? `تم الحفظ ${res.number} — بانتظار الاعتماد` : `تم إنشاء الفاتورة ${res.number}`);
+      toast.success(res.pendingApproval ? `تم الحفظ ${res.number} — بانتظار الاعتماد` : (lastApproveNow ? `تم اعتماد الفاتورة ${res.number}` : `تم حفظ المسودة ${res.number} بدون أثر مخزني`));
       const shouldPrint = !res.pendingApproval && (lastApproveNow ? printAfterApprove : printAfterSave);
       if (shouldPrint) firePrint(res.number);
       if (printNote && !res.pendingApproval) fireWarehouseNote(res.number);
@@ -181,7 +181,7 @@ export default function SalesInvoices() {
   });
   const updateMut = trpc.sales.invoices.update.useMutation({
     onSuccess: (res) => {
-      toast.success(lastApproveNow ? `تم حفظ واعتماد الفاتورة ${res.number}` : "تم حفظ التعديلات");
+      toast.success(lastApproveNow ? `تم اعتماد الفاتورة ${res.number}` : "تم حفظ التعديلات");
       refetch();
       closeForm();
     },
@@ -450,6 +450,17 @@ export default function SalesInvoices() {
     if (!form.customerId) { toast.error("يجب اختيار العميل"); return; }
     if (invoiceItems.length === 0) { toast.error("يجب إضافة صنف واحد على الأقل"); return; }
     if (invoiceItems.some((i) => !i.itemId)) { toast.error("يجب اختيار الصنف لجميع الأسطر"); return; }
+    // ميجا: الاعتماد يسحب/يدخل المخزن — لازم مخزن لكل صنف مخزني (الخدمي لا يؤثر)
+    if (approveNow) {
+      const missingWh = invoiceItems.some((row) => {
+        const it = allItems?.find((a) => a.id === row.itemId) as { itemType?: string } | undefined;
+        const t = String(it?.itemType || "");
+        const service = t === "وحدة خدمية" || t.includes("خدم");
+        if (service) return false;
+        return !(row.warehouseId ?? form.warehouseId);
+      });
+      if (missingWh) { toast.error("يجب تحديد المخزن قبل الاعتماد (للأصناف المخزنية)"); return; }
+    }
     const rate = Number(form.exchangeRate) || 1;
     const payload = {
       customerId: form.customerId!,
@@ -802,7 +813,7 @@ export default function SalesInvoices() {
                 {(createMut.isPending || updateMut.isPending) ? "جاري الحفظ..." : "حفظ"}
               </Button>
               <Button onClick={() => handleSubmit(true)} disabled={createMut.isPending || updateMut.isPending} className="bg-blue-600 hover:bg-blue-700 text-white px-8 gap-1">
-                <CheckCircle2 size={15} />{(createMut.isPending || updateMut.isPending) ? "جاري الحفظ..." : "حفظ واعتماد"}
+                <CheckCircle2 size={15} />{(createMut.isPending || updateMut.isPending) ? "جاري الحفظ..." : "اعتماد"}
               </Button>
             </EntityPermissionGate>
           </div>

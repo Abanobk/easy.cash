@@ -230,11 +230,16 @@ export async function applyStockMovement(
     expiryDate?: string | null;
     allowNegative?: boolean;
     useFefo?: boolean;
+    /** فواتير ميجا: ممنوع اختيار أول مخزن تلقائياً */
+    requireWarehouse?: boolean;
   },
 ) {
   const qty = Math.abs(num(opts.quantity));
   if (qty <= 0) return;
 
+  if (opts.requireWarehouse && (opts.warehouseId == null || !Number(opts.warehouseId))) {
+    throw new Error("يجب تحديد المخزن قبل حركة المخزون");
+  }
   const warehouseId = await resolveWarehouseId(db, tenantId, opts.warehouseId);
   const delta = opts.direction === "in" ? qty : -qty;
 
