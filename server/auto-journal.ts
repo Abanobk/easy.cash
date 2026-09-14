@@ -1713,6 +1713,62 @@ export async function postHrIncentiveJournal(
 }
 
 /**
+ * قيد مصروفات تحويل مخزني — مطابقة ميجا InventoryTransfer:
+ * مدين: حساب الأرباح/الخسائر إن وُجد، وإلا المخزون (رسملة)
+ * دائن: الحساب الدائن لكل مصروف (بعد تحويل العملة لسعر الصرف)
+ */
+export async function postStockTransferExpensesJournal(
+  db: Db,
+  tenantId: number,
+  createdBy: number | undefined,
+  opts: {
+    id: number;
+    number: string;
+    date: string;
+    plAccountId?: number | null;
+    expenses: Array<{
+      amount: string | number;
+      exchangeRate?: string | number | null;
+      creditAccountId: number;
+      notes?: string | null;
+    }>;
+  },
+) {
+  if (!opts.expenses?.length) return { skipped: true as const };
+
+  const map = await resolveAccountMap(db, tenantId);
+  const debitAccountId = opts.plAccountId || map.inventory;
+  const lines: JournalLineInput[] = [];
+
+  for (const exp of opts.expenses) {
+    const rate = exp.exchangeRate != null ? num(exp.exchangeRate) : 1;
+    const amtEgp = num(exp.amount) * (rate || 1);
+    if (amtEgp <= 0) continue;
+    lines.push({
+      accountId: debitAccountId,
+      debit: money(amtEgp),
+      credit: "0.00",
+      description: exp.notes || `مصروفات تحويل ${opts.number}`,
+    });
+    lines.push({
+      accountId: exp.creditAccountId,
+      debit: "0.00",
+      credit: money(amtEgp),
+      description: exp.notes || `دائن مصروف تحويل ${opts.number}`,
+    });
+  }
+
+  if (lines.length < 2) return { skipped: true as const };
+
+  return createPostedJournal(db, tenantId, createdBy, {
+    date: opts.date,
+    description: `مصروفات تحويل مخزني ${opts.number}`,
+    reference: `INV-XFER-EXP-${opts.id}`,
+    lines,
+  });
+}
+
+/**
  * قيد تسوية مخزنية — مطابقة ميجا InventoryCorrection عند وجود الحساب المقابل:
  * زيادة مخزون: مدين مخزون / دائن الحساب المقابل
  * نقص مخزون: مدين الحساب المقابل / دائن مخزون

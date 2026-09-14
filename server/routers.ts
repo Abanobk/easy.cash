@@ -15,7 +15,7 @@ import {
   purchaseOrderItems, salesOrderItems, purchaseReturns, salesReturns,
   purchaseReturnItems, salesReturnItems, attendance, payroll, salaryAdvances,
   fixedAssets, costCenters, loans, installments, notifications,
-  inventoryAdjustments, inventoryAdjustmentItems, stockTransfers, stockTransferItems,
+  inventoryAdjustments, inventoryAdjustmentItems, stockTransfers, stockTransferItems, stockTransferExpenses,
   productionOrders, productionOrderMaterials, itemBomLines, itemWarehouseStock,
   taxes, salesReps, branches, companySettings, users,
   appUsers, subscriptions, subscriptionPlans,
@@ -6118,10 +6118,23 @@ const inventoryRouter = router({
       date: z.string(),
       notes: z.string().optional(),
       referenceNumber: z.string().optional(),
+      plAccountId: z.number().optional().nullable(),
       transferType: z.enum(["direct", "two_stage"]).default("direct"),
       /** حفظ=مسودة بدون حركة · اعتماد=ترحيل مخزون */
       confirm: z.boolean().default(true),
-      items: z.array(z.object({ itemId: z.number(), quantity: z.string(), batchId: z.number().optional() })),
+      items: z.array(z.object({
+        itemId: z.number(),
+        quantity: z.string(),
+        batchId: z.number().optional(),
+        expensePercent: z.string().optional(),
+      })),
+      expenses: z.array(z.object({
+        currencyCode: z.string().optional(),
+        exchangeRate: z.string().optional(),
+        amount: z.string(),
+        creditAccountId: z.number(),
+        notes: z.string().optional(),
+      })).optional(),
     })).mutation(async ({ ctx, input }) => {
       await assertEntityAction(ctx, "inventory", "stockTransfer", "add");
       const db = await getDb();
@@ -6149,20 +6162,37 @@ const inventoryRouter = router({
         notes: input.notes,
         transferType: input.transferType,
         referenceNumber: input.referenceNumber || null,
+        plAccountId: input.plAccountId ?? null,
         status,
         createdBy: ctx.saasUser?.id,
       }) as any);
       const transferId = (result as any).insertId;
 
       for (const item of input.items) {
-        await db.insert(stockTransferItems).values(withTenantId(ctx.tenantId, { transferId, ...item }) as any);
+        await db.insert(stockTransferItems).values(withTenantId(ctx.tenantId, {
+          transferId,
+          itemId: item.itemId,
+          quantity: item.quantity,
+          batchId: item.batchId,
+          expensePercent: item.expensePercent || "0",
+        }) as any);
+      }
+      for (const exp of input.expenses || []) {
+        if (!exp.amount || Number(exp.amount) <= 0 || !exp.creditAccountId) continue;
+        await db.insert(stockTransferExpenses).values(withTenantId(ctx.tenantId, {
+          transferId,
+          currencyCode: exp.currencyCode || "EGP",
+          exchangeRate: exp.exchangeRate || "1",
+          amount: exp.amount,
+          creditAccountId: exp.creditAccountId,
+          notes: exp.notes,
+        }) as any);
       }
 
       if (input.confirm) {
         const { transferStockBetweenWarehouses, applyStockMovement } = await import("./inventory-stock");
         for (const item of input.items) {
           if (input.transferType === "two_stage") {
-            // مرحلة 1: خروج من المصدر فقط — الكمية «في الطريق»
             await applyStockMovement(db, ctx.tenantId, {
               itemId: item.itemId,
               quantity: item.quantity,
@@ -6180,8 +6210,74 @@ const inventoryRouter = router({
             });
           }
         }
+        const expenseRows = await db.select().from(stockTransferExpenses)
+          .where(tenantWhere(stockTransferExpenses, ctx.tenantId, eq(stockTransferExpenses.transferId, transferId)));
+        if (expenseRows.length) {
+          const { postStockTransferExpensesJournal } = await import("./auto-journal");
+          await postStockTransferExpensesJournal(db, ctx.tenantId, ctx.saasUser?.id, {
+            id: transferId,
+            number,
+            date: input.date,
+            plAccountId: input.plAccountId,
+            expenses: expenseRows,
+          });
+        }
       }
       return { success: true, id: transferId, number, status };
+    }),
+    /** اعتماد تحويل معلّق (مسودة) */
+    confirm: protectedProcedure.input(z.object({ id: z.number() })).mutation(async ({ ctx, input }) => {
+      await assertEntityAction(ctx, "inventory", "stockTransfer", "edit");
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const [row] = await db.select().from(stockTransfers).where(tenantWhere(stockTransfers, ctx.tenantId, eq(stockTransfers.id, input.id)));
+      if (!row) throw new TRPCError({ code: "NOT_FOUND" });
+      if (row.status !== "draft") throw new TRPCError({ code: "BAD_REQUEST", message: "التحويل ليس معلقاً" });
+      const date = toDateStr(row.date);
+      await assertDateNotInClosedPeriod(db, ctx.tenantId, date);
+      const scope = await loadUserScopeFromCtx(db, ctx.saasUser);
+      assertWarehouseAccess(scope, row.fromWarehouseId);
+      assertWarehouseAccess(scope, row.toWarehouseId);
+
+      const lines = await db.select().from(stockTransferItems)
+        .where(tenantWhere(stockTransferItems, ctx.tenantId, eq(stockTransferItems.transferId, row.id)));
+      const { transferStockBetweenWarehouses, applyStockMovement } = await import("./inventory-stock");
+      const nextStatus = row.transferType === "two_stage" ? "in_transit" : "confirmed";
+      for (const line of lines) {
+        if (row.transferType === "two_stage") {
+          await applyStockMovement(db, ctx.tenantId, {
+            itemId: line.itemId,
+            quantity: line.quantity || "0",
+            direction: "out",
+            warehouseId: row.fromWarehouseId,
+            batchId: line.batchId,
+          });
+        } else {
+          await transferStockBetweenWarehouses(db, ctx.tenantId, {
+            itemId: line.itemId,
+            quantity: line.quantity || "0",
+            fromWarehouseId: row.fromWarehouseId,
+            toWarehouseId: row.toWarehouseId,
+            batchId: line.batchId,
+          });
+        }
+      }
+      await db.update(stockTransfers).set({ status: nextStatus })
+        .where(tenantWhere(stockTransfers, ctx.tenantId, eq(stockTransfers.id, row.id)));
+
+      const expenseRows = await db.select().from(stockTransferExpenses)
+        .where(tenantWhere(stockTransferExpenses, ctx.tenantId, eq(stockTransferExpenses.transferId, row.id)));
+      if (expenseRows.length) {
+        const { postStockTransferExpensesJournal } = await import("./auto-journal");
+        await postStockTransferExpensesJournal(db, ctx.tenantId, ctx.saasUser?.id, {
+          id: row.id,
+          number: row.number,
+          date,
+          plAccountId: row.plAccountId,
+          expenses: expenseRows,
+        });
+      }
+      return { success: true, status: nextStatus };
     }),
     /** استلام تحويل بمرحلتين — يدخل للمخزن المستقبل */
     receive: protectedProcedure.input(z.object({

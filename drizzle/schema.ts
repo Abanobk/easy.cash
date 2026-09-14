@@ -899,6 +899,8 @@ export const stockTransfers = mysqlTable("stock_transfers", {
   /** تحويل مباشر | تحويل بمرحلتين — مطابقة ميجا InventoryTransfer */
   transferType: varchar("transferType", { length: 20 }).default("direct"),
   referenceNumber: varchar("referenceNumber", { length: 100 }),
+  /** حساب الأرباح / الخسائر — مدين مصروفات التحويل إن وُجد، وإلا يُرسمل على المخزون */
+  plAccountId: int("plAccountId"),
   /** draft=معلق · in_transit=شُحن بمرحلتين · confirmed=معتمد · cancelled=ملغي */
   status: mysqlEnum("status", ["draft", "in_transit", "confirmed", "cancelled"]).default("draft"),
   receivedAt: date("receivedAt"),
@@ -914,6 +916,19 @@ export const stockTransferItems = mysqlTable("stock_transfer_items", {
   itemId: int("itemId").notNull(),
   quantity: decimal("quantity", { precision: 15, scale: 3 }).notNull(),
   batchId: int("batchId"),
+  /** نسبة المصروفات على السطر — مطابقة ميجا */
+  expensePercent: decimal("expensePercent", { precision: 8, scale: 3 }).default("0"),
+});
+
+export const stockTransferExpenses = mysqlTable("stock_transfer_expenses", {
+  id: int("id").autoincrement().primaryKey(),
+  tenantId: int("tenantId").notNull().default(1),
+  transferId: int("transferId").notNull(),
+  currencyCode: varchar("currencyCode", { length: 10 }).default("EGP"),
+  exchangeRate: decimal("exchangeRate", { precision: 15, scale: 6 }).default("1"),
+  amount: decimal("amount", { precision: 15, scale: 2 }).notNull(),
+  creditAccountId: int("creditAccountId").notNull(),
+  notes: text("notes"),
 });
 
 // ===================== SALES REPS =====================

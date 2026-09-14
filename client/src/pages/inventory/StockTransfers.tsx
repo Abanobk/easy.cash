@@ -17,10 +17,12 @@ import { AddActionButton } from "@/components/AddActionButton";
 import { ItemSearchSelect } from "@/components/ItemSearchSelect";
 import { findItemByScan } from "@/lib/barcode";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
+import { InvoiceExpenseList, type InvoiceExpenseLine } from "@/components/invoices/InvoiceExpenseList";
+import { AccountSearchSelect } from "@/components/AccountSearchSelect";
 
 /**
  * تحويل مخزني — مطابقة ميجا InventoryTransfer:
- * نوع التحويل: مباشر | بمرحلتين · حفظ معلق / اعتماد · استلام للمرحلتين
+ * نوع · مباشر/بمرحلتين · حساب أرباح/خسائر · مصروفات · حفظ/اعتماد/استلام
  */
 export default function StockTransfers() {
   const { isNewRoute, goToList, goToCreate } = useMegaCreateRoute("/inventory/transfers");
@@ -32,10 +34,12 @@ export default function StockTransfers() {
     notes: "",
     transferType: "direct" as "direct" | "two_stage",
     referenceNumber: "",
+    plAccountId: "",
   });
-  const [items, setItems] = useState<{ itemId: string; quantity: string; available?: number; expectedCost?: number }[]>([
-    { itemId: "", quantity: "1" },
+  const [items, setItems] = useState<{ itemId: string; quantity: string; expensePercent: string; available?: number; expectedCost?: number }[]>([
+    { itemId: "", quantity: "1", expensePercent: "0" },
   ]);
+  const [expenses, setExpenses] = useState<InvoiceExpenseLine[]>([]);
   const [barcode, setBarcode] = useState("");
 
   const [dateFrom, setDateFrom] = useState("");
@@ -64,6 +68,8 @@ export default function StockTransfers() {
   });
   const { data: warehouses } = trpc.warehouses.list.useQuery();
   const { data: itemsList } = trpc.items.list.useQuery({ page: 1, limit: 500 });
+  const { data: accountsChart } = trpc.accounts.chart.useQuery();
+  const leafAccounts = (accountsChart || []).filter((a: any) => !a.isParent);
   const utils = trpc.useUtils();
 
   const createMut = trpc.inventory.transfers.create.useMutation({
@@ -71,6 +77,13 @@ export default function StockTransfers() {
       toast.success(r.status === "draft" ? "تم حفظ التحويل معلقاً" : r.status === "in_transit" ? "تم اعتماد الشحن — بانتظار الاستلام" : "تم اعتماد التحويل");
       refetch();
       closeDialog();
+    },
+    onError: (e) => toast.error(e.message),
+  });
+  const confirmMut = trpc.inventory.transfers.confirm.useMutation({
+    onSuccess: (r) => {
+      toast.success(r.status === "in_transit" ? "تم اعتماد الشحن — بانتظار الاستلام" : "تم اعتماد التحويل");
+      refetch();
     },
     onError: (e) => toast.error(e.message),
   });
@@ -87,8 +100,10 @@ export default function StockTransfers() {
       notes: "",
       transferType: "direct",
       referenceNumber: "",
+      plAccountId: "",
     });
-    setItems([{ itemId: "", quantity: "1" }]);
+    setItems([{ itemId: "", quantity: "1", expensePercent: "0" }]);
+    setExpenses([]);
     setBarcode("");
   };
 
@@ -124,7 +139,7 @@ export default function StockTransfers() {
     }
   };
 
-  const addItem = () => setItems((prev) => [...prev, { itemId: "", quantity: "1" }]);
+  const addItem = () => setItems((prev) => [...prev, { itemId: "", quantity: "1", expensePercent: "0" }]);
   const removeItem = (i: number) => setItems((prev) => prev.filter((_, idx) => idx !== i));
   const updateItem = async (i: number, field: string, val: string) => {
     setItems((prev) => prev.map((item, idx) => (idx === i ? { ...item, [field]: val } : item)));
@@ -146,7 +161,7 @@ export default function StockTransfers() {
     if (emptyIdx >= 0) {
       await updateItem(emptyIdx, "itemId", String(hit.id));
     } else {
-      setItems((prev) => [...prev, { itemId: String(hit.id), quantity: "1" }]);
+      setItems((prev) => [...prev, { itemId: String(hit.id), quantity: "1", expensePercent: "0" }]);
       await refreshLineMeta(items.length, String(hit.id), form.fromWarehouseId);
     }
     setBarcode("");
@@ -170,8 +185,22 @@ export default function StockTransfers() {
       notes: form.notes,
       transferType: form.transferType,
       referenceNumber: form.referenceNumber || undefined,
+      plAccountId: form.plAccountId ? Number(form.plAccountId) : null,
       confirm,
-      items: items.map((it) => ({ itemId: Number(it.itemId), quantity: it.quantity })),
+      items: items.map((it) => ({
+        itemId: Number(it.itemId),
+        quantity: it.quantity,
+        expensePercent: it.expensePercent || "0",
+      })),
+      expenses: expenses
+        .filter((e) => Number(e.amount) > 0 && e.creditAccountId != null)
+        .map((e) => ({
+          currencyCode: e.currencyCode || "EGP",
+          exchangeRate: e.exchangeRate || "1",
+          amount: e.amount,
+          creditAccountId: e.creditAccountId!,
+          notes: e.notes,
+        })),
     });
   };
 
@@ -310,6 +339,18 @@ export default function StockTransfers() {
                       <Badge variant={statusColor(row.status)} className="text-xs">{statusLabel(row.status)}</Badge>
                     </TableCell>
                     <TableCell>
+                      {row.status === "draft" && (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          className="h-7 text-xs"
+                          disabled={confirmMut.isPending}
+                          onClick={() => confirmMut.mutate({ id: row.id })}
+                        >
+                          اعتماد
+                        </Button>
+                      )}
                       {row.status === "in_transit" && (
                         <Button
                           type="button"
@@ -353,6 +394,15 @@ export default function StockTransfers() {
               <div className="space-y-1">
                 <Label className="text-xs">رقم المرجع</Label>
                 <Input value={form.referenceNumber} onChange={(e) => setForm((f) => ({ ...f, referenceNumber: e.target.value }))} className="h-9 text-sm" />
+              </div>
+              <div className="space-y-1 md:col-span-2">
+                <Label className="text-xs">حساب الارباح / الخسائر</Label>
+                <AccountSearchSelect
+                  accounts={leafAccounts}
+                  value={form.plAccountId}
+                  onChange={(v) => setForm((f) => ({ ...f, plAccountId: v }))}
+                  placeholder="اختياري — مدين مصروفات التحويل"
+                />
               </div>
               <div className="space-y-1">
                 <Label className="text-xs">المخزن *</Label>
@@ -411,6 +461,7 @@ export default function StockTransfers() {
                       <TableHead className="text-right text-xs">الكمية المتاحة</TableHead>
                       <TableHead className="text-right text-xs">التكلفة المتوقعة</TableHead>
                       <TableHead className="text-right text-xs">الكمية</TableHead>
+                      <TableHead className="text-right text-xs">نسبة المصروفات</TableHead>
                       <TableHead />
                     </TableRow>
                   </TableHeader>
@@ -435,6 +486,9 @@ export default function StockTransfers() {
                           <Input type="number" value={it.quantity} onChange={(e) => void updateItem(i, "quantity", e.target.value)} className="h-8 text-xs w-24" />
                         </TableCell>
                         <TableCell className="p-1">
+                          <Input type="number" value={it.expensePercent} onChange={(e) => void updateItem(i, "expensePercent", e.target.value)} className="h-8 text-xs w-20" />
+                        </TableCell>
+                        <TableCell className="p-1">
                           {items.length > 1 && (
                             <Button type="button" variant="ghost" size="sm" className="h-7 w-7 p-0 text-red-500" onClick={() => removeItem(i)}>
                               <Trash2 size={12} />
@@ -447,6 +501,13 @@ export default function StockTransfers() {
                 </Table>
               </div>
             </div>
+
+            <InvoiceExpenseList value={expenses} onChange={setExpenses} />
+            {expenses.some((e) => Number(e.amount) > 0) && (
+              <p className="text-[11px] text-purple-800 bg-purple-50 border border-purple-100 rounded px-2 py-1.5">
+                عند الاعتماد يُنشأ قيد: مدين {form.plAccountId ? "حساب الأرباح/الخسائر" : "المخزون"} ↔ الحساب الدائن لكل مصروف.
+              </p>
+            )}
 
             <div className="space-y-1">
               <Label className="text-xs">ملاحظات</Label>

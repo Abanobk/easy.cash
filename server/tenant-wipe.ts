@@ -32,6 +32,7 @@ export const TENANT_WIPE_TABLES_CHILD_FIRST: string[] = [
   "cash_transactions",
   "inventory_adjustment_items",
   "inventory_adjustments",
+  "stock_transfer_expenses",
   "stock_transfer_items",
   "stock_transfers",
   "production_order_materials",
