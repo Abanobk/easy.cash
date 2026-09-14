@@ -11,6 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Plus, ArrowLeftRight, Trash2, Search, PackageCheck } from "lucide-react";
 import { toast } from "sonner";
 import { AddActionButton } from "@/components/AddActionButton";
@@ -19,6 +20,7 @@ import { findItemByScan } from "@/lib/barcode";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { InvoiceExpenseList, type InvoiceExpenseLine } from "@/components/invoices/InvoiceExpenseList";
 import { AccountSearchSelect } from "@/components/AccountSearchSelect";
+import { printInvoiceQuick, printWarehouseNote } from "@/lib/print-invoice-quick";
 
 /**
  * تحويل مخزني — مطابقة ميجا InventoryTransfer:
@@ -41,11 +43,17 @@ export default function StockTransfers() {
   ]);
   const [expenses, setExpenses] = useState<InvoiceExpenseLine[]>([]);
   const [barcode, setBarcode] = useState("");
+  const [printAfterSave, setPrintAfterSave] = useState(false);
+  const [printAfterApprove, setPrintAfterApprove] = useState(false);
+  const [printWithoutCosts, setPrintWithoutCosts] = useState(true);
 
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [fromWh, setFromWh] = useState("");
   const [toWh, setToWh] = useState("");
+  const [fromBranchId, setFromBranchId] = useState("");
+  const [toBranchId, setToBranchId] = useState("");
+  const [eitherBranchId, setEitherBranchId] = useState("");
   const [filterType, setFilterType] = useState<"" | "direct" | "two_stage">("");
   const [filterStatus, setFilterStatus] = useState<"" | "draft" | "in_transit" | "confirmed" | "cancelled">("");
   const [search, setSearch] = useState("");
@@ -62,19 +70,60 @@ export default function StockTransfers() {
     dateTo: dateTo || undefined,
     fromWarehouseId: fromWh ? Number(fromWh) : undefined,
     toWarehouseId: toWh ? Number(toWh) : undefined,
+    fromBranchId: fromBranchId ? Number(fromBranchId) : undefined,
+    toBranchId: toBranchId ? Number(toBranchId) : undefined,
+    eitherBranchId: eitherBranchId ? Number(eitherBranchId) : undefined,
     transferType: filterType || undefined,
     status: filterStatus || undefined,
     search: debouncedSearch || undefined,
   });
   const { data: warehouses } = trpc.warehouses.list.useQuery();
+  const { data: branches } = trpc.settings.branches.list.useQuery();
   const { data: itemsList } = trpc.items.list.useQuery({ page: 1, limit: 500 });
   const { data: accountsChart } = trpc.accounts.chart.useQuery();
   const leafAccounts = (accountsChart || []).filter((a: any) => !a.isParent);
   const utils = trpc.useUtils();
 
+  const firePrint = (number: string) => {
+    const fromName = (warehouses as any[] || []).find((w: any) => String(w.id) === form.fromWarehouseId)?.name || "—";
+    const toName = (warehouses as any[] || []).find((w: any) => String(w.id) === form.toWarehouseId)?.name || "—";
+    const lines = items
+      .filter((it) => it.itemId)
+      .map((it) => {
+        const row = (itemsList?.rows || []).find((x: any) => String(x.id) === it.itemId);
+        return {
+          name: row ? (row.code ? `${row.code} — ${row.name}` : row.name) : it.itemId,
+          quantity: Number(it.quantity || 0),
+          unit: row?.unit || "",
+          warehouseName: `${fromName} ← ${toName}`,
+          price: printWithoutCosts ? undefined : Number(it.expectedCost || row?.averageCost || row?.purchasePrice || 0),
+          total: printWithoutCosts ? undefined : Number(it.quantity || 0) * Number(it.expectedCost || row?.averageCost || row?.purchasePrice || 0),
+        };
+      });
+    if (printWithoutCosts) {
+      printWarehouseNote({
+        title: "تحويل مخزني",
+        number,
+        date: form.date,
+        partyLabel: "من / الى",
+        partyName: `${fromName} → ${toName}`,
+        lines,
+      });
+    } else {
+      printInvoiceQuick({
+        title: "تحويل مخزني",
+        number,
+        date: form.date,
+        partyLabel: "من / الى",
+        partyName: `${fromName} → ${toName}`,
+        lines,
+        total: lines.reduce((s, l) => s + Number(l.total || 0), 0),
+      });
+    }
+  };
+
   const createMut = trpc.inventory.transfers.create.useMutation({
-    onSuccess: (r) => {
-      toast.success(r.status === "draft" ? "تم حفظ التحويل معلقاً" : r.status === "in_transit" ? "تم اعتماد الشحن — بانتظار الاستلام" : "تم اعتماد التحويل");
+    onSuccess: () => {
       refetch();
       closeDialog();
     },
@@ -219,6 +268,11 @@ export default function StockTransfers() {
           creditAccountId: e.creditAccountId!,
           notes: e.notes,
         })),
+    }, {
+      onSuccess: (r) => {
+        toast.success(r.status === "draft" ? "تم حفظ التحويل معلقاً" : r.status === "in_transit" ? "تم اعتماد الشحن — بانتظار الاستلام" : "تم اعتماد التحويل");
+        if (confirm ? printAfterApprove : printAfterSave) firePrint(r.number);
+      },
     });
   };
 
@@ -232,6 +286,9 @@ export default function StockTransfers() {
     setDateTo("");
     setFromWh("");
     setToWh("");
+    setFromBranchId("");
+    setToBranchId("");
+    setEitherBranchId("");
     setFilterType("");
     setFilterStatus("");
     setSearch("");
@@ -267,6 +324,36 @@ export default function StockTransfers() {
               <div className="space-y-1">
                 <Label className="text-xs">الى تاريخ</Label>
                 <Input type="date" className="h-9 w-36" value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">من / الى فرع</Label>
+                <Select value={eitherBranchId || "all"} onValueChange={(v) => setEitherBranchId(v === "all" ? "" : v)}>
+                  <SelectTrigger className="h-9 w-40 text-sm"><SelectValue placeholder="الكل" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">الكل</SelectItem>
+                    {(branches || []).map((b: any) => <SelectItem key={b.id} value={String(b.id)}>{b.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">الفرع</Label>
+                <Select value={fromBranchId || "all"} onValueChange={(v) => setFromBranchId(v === "all" ? "" : v)}>
+                  <SelectTrigger className="h-9 w-40 text-sm"><SelectValue placeholder="الكل" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">الكل</SelectItem>
+                    {(branches || []).map((b: any) => <SelectItem key={b.id} value={String(b.id)}>{b.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">الى فرع</Label>
+                <Select value={toBranchId || "all"} onValueChange={(v) => setToBranchId(v === "all" ? "" : v)}>
+                  <SelectTrigger className="h-9 w-40 text-sm"><SelectValue placeholder="الكل" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">الكل</SelectItem>
+                    {(branches || []).map((b: any) => <SelectItem key={b.id} value={String(b.id)}>{b.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
               </div>
               <div className="space-y-1">
                 <Label className="text-xs">المخزن</Label>
@@ -535,6 +622,11 @@ export default function StockTransfers() {
             <div className="space-y-1">
               <Label className="text-xs">ملاحظات</Label>
               <Textarea value={form.notes} onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))} className="text-sm min-h-[60px]" />
+            </div>
+            <div className="flex flex-wrap gap-4 text-xs text-slate-600">
+              <label className="flex items-center gap-2"><Checkbox checked={printAfterSave} onCheckedChange={(v) => setPrintAfterSave(!!v)} />طباعة بعد الحفظ</label>
+              <label className="flex items-center gap-2"><Checkbox checked={printAfterApprove} onCheckedChange={(v) => setPrintAfterApprove(!!v)} />طباعة بعد الاعتماد</label>
+              <label className="flex items-center gap-2"><Checkbox checked={printWithoutCosts} onCheckedChange={(v) => setPrintWithoutCosts(!!v)} />طباعة بدون تكاليف</label>
             </div>
           </div>
           <DialogFooter className="gap-2">

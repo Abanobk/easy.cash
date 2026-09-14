@@ -434,6 +434,10 @@ export default function ItemDetail() {
   const setWarehouseMinsMut = trpc.items.warehouseMins.set.useMutation({
     onError: (e) => toast.error(e.message),
   });
+  const applyTaxesAllMut = trpc.items.applyTaxesToAll.useMutation({
+    onSuccess: (r) => toast.success(`تم تطبيق الضرائب على ${r.updated} صنف`),
+    onError: (e) => toast.error(e.message),
+  });
 
   const persistExtras = useCallback(async (itemId: number) => {
     await setExtraPricesMut.mutateAsync({
@@ -893,6 +897,28 @@ export default function ItemDetail() {
                   />
                 </div>
               ))}
+              <div className="sm:col-span-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-9 text-xs font-bold"
+                  disabled={applyTaxesAllMut.isPending || isNew}
+                  onClick={() => {
+                    if (!confirm("تطبيق الضرائب الحالية على كل الأصناف؟")) return;
+                    applyTaxesAllMut.mutate({
+                      taxId: form.taxId ?? null,
+                      tax2Id: form.tax2Id ?? null,
+                      tax3Id: form.tax3Id ?? null,
+                      taxRate: form.taxRate || "0",
+                      taxRate2: form.taxRate2 || "0",
+                      taxRate3: form.taxRate3 || "0",
+                    });
+                  }}
+                >
+                  {applyTaxesAllMut.isPending ? "جاري التطبيق..." : "تطبيق الضرائب لكل الاصناف"}
+                </Button>
+              </div>
             </FormSection>
           </div>
         )}

@@ -16,6 +16,7 @@ import { tenantPath, useTenantSlug } from "@/lib/tenant";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { Plus, Trash2, Upload } from "lucide-react";
 import { toDateStr } from "@/lib/date";
+import { printTableReport } from "@/lib/print-report";
 
 export function ItemCategoriesPage() {
   const q = trpc.parity.inventory.categories.list.useQuery();
@@ -559,6 +560,9 @@ const MEGA_ITEM_TYPES = [
   "صنف وكالة",
 ] as const;
 
+type PriceEditField = "sale" | "purchase" | "min" | "max" | "percent_discount" | "cash_discount";
+type PriceEditFrom = PriceEditField | "avg";
+
 export function PriceChangerPage() {
   const items = trpc.items.list.useQuery({ page: 1, limit: 500 });
   const categories = trpc.items.categories.useQuery();
@@ -567,7 +571,8 @@ export function PriceChangerPage() {
     onSuccess: (r) => { toast.success(`تم تحديث ${r.updated} صنف`); list.refetch(); items.refetch(); setDraft({}); },
     onError: (e) => toast.error(e.message),
   });
-  const [priceType, setPriceType] = useState<"sale" | "purchase" | "min" | "max">("sale");
+  const [priceType, setPriceType] = useState<PriceEditField>("sale");
+  const [editFrom, setEditFrom] = useState<PriceEditFrom>("sale");
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
   const [search, setSearch] = useState("");
   const [categoryId, setCategoryId] = useState("");
@@ -575,10 +580,17 @@ export function PriceChangerPage() {
   const [itemType, setItemType] = useState("");
   const [priceStatus, setPriceStatus] = useState<"" | "lt_avg" | "eq_avg" | "gt_avg">("");
   const [withStockOnly, setWithStockOnly] = useState(false);
+  const [percentOnly, setPercentOnly] = useState(false);
   const [bulkValue, setBulkValue] = useState("");
   const [percentValue, setPercentValue] = useState("");
   const [decimals, setDecimals] = useState("2");
   const [draft, setDraft] = useState<Record<number, string>>({});
+
+  const catName = (id: unknown) => {
+    if (id == null || id === "") return "—";
+    const c = (categories.data || []).find((r: any) => r.id === Number(id));
+    return c?.name || String(id);
+  };
 
   const rows = useMemo(() => {
     const all = items.data?.rows || [];
@@ -612,7 +624,22 @@ export function PriceChangerPage() {
     if (priceType === "purchase") return i.purchasePrice;
     if (priceType === "min") return i.minPrice;
     if (priceType === "max") return i.maxPrice;
+    if (priceType === "percent_discount") return i.percentDiscount;
+    if (priceType === "cash_discount") return i.cashDiscount;
     return i.salePrice;
+  };
+
+  const clearFilters = () => {
+    setSearch("");
+    setCategoryId("");
+    setAltCategoryId("");
+    setItemType("");
+    setPriceStatus("");
+    setWithStockOnly(false);
+    setBulkValue("");
+    setPercentValue("");
+    setPercentOnly(false);
+    setDraft({});
   };
 
   const runBulk = (mode: "absolute" | "percent") => {
@@ -621,9 +648,11 @@ export function PriceChangerPage() {
     applyBulk.mutate({
       date,
       priceType,
+      editFrom: mode === "percent" ? editFrom : undefined,
       mode,
       value,
       decimals: Number(decimals) || 2,
+      percentOnly: mode === "percent" ? percentOnly : undefined,
       filter: {
         categoryId: categoryId ? Number(categoryId) : undefined,
         altCategoryId: altCategoryId ? Number(altCategoryId) : undefined,
@@ -690,13 +719,30 @@ export function PriceChangerPage() {
               </div>
               <div className="space-y-1">
                 <Label className="text-xs font-bold">تعديل في</Label>
-                <Select value={priceType} onValueChange={(v) => setPriceType(v as any)}>
-                  <SelectTrigger className="h-10 w-44 font-bold"><SelectValue /></SelectTrigger>
+                <Select value={priceType} onValueChange={(v) => setPriceType(v as PriceEditField)}>
+                  <SelectTrigger className="h-10 w-48 font-bold"><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="sale">السعر (بيع)</SelectItem>
+                    <SelectItem value="sale">السعر</SelectItem>
                     <SelectItem value="purchase">تكلفة الشراء الافتراضية</SelectItem>
                     <SelectItem value="min">السعر الادنى</SelectItem>
                     <SelectItem value="max">السعر الاعلى</SelectItem>
+                    <SelectItem value="cash_discount">خصم نقدي</SelectItem>
+                    <SelectItem value="percent_discount">خصم نسبة</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs font-bold">من</Label>
+                <Select value={editFrom} onValueChange={(v) => setEditFrom(v as PriceEditFrom)}>
+                  <SelectTrigger className="h-10 w-48"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="sale">السعر</SelectItem>
+                    <SelectItem value="purchase">تكلفة الشراء الافتراضية</SelectItem>
+                    <SelectItem value="avg">متوسط التكلفة</SelectItem>
+                    <SelectItem value="min">السعر الادنى</SelectItem>
+                    <SelectItem value="max">السعر الاعلى</SelectItem>
+                    <SelectItem value="cash_discount">خصم نقدي</SelectItem>
+                    <SelectItem value="percent_discount">خصم نسبة</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -704,11 +750,16 @@ export function PriceChangerPage() {
                 <Label className="text-xs font-bold">التاريخ</Label>
                 <Input type="date" className="h-10" value={date} onChange={(e) => setDate(e.target.value)} />
               </div>
+              <Button type="button" variant="outline" className="h-10" onClick={clearFilters}>تفريغ</Button>
             </div>
             <div className="flex flex-wrap gap-3 items-end">
               <label className="flex items-center gap-2 text-sm font-semibold h-10 px-1">
                 <input type="checkbox" checked={withStockOnly} onChange={(e) => setWithStockOnly(e.target.checked)} />
                 عرض الاصناف التى لها رصيد فقط
+              </label>
+              <label className="flex items-center gap-2 text-sm font-semibold h-10 px-1">
+                <input type="checkbox" checked={percentOnly} onChange={(e) => setPercentOnly(e.target.checked)} />
+                تطبيق النسبة فقط
               </label>
               <div className="space-y-1">
                 <Label className="text-xs font-bold">القيمة</Label>
@@ -719,7 +770,7 @@ export function PriceChangerPage() {
                 <Input className="h-10 w-24" value={percentValue} onChange={(e) => setPercentValue(e.target.value)} placeholder="10" />
               </div>
               <div className="space-y-1">
-                <Label className="text-xs font-bold">التقريب (أرقام عشرية)</Label>
+                <Label className="text-xs font-bold">التقريب الى كم رقم عشري؟</Label>
                 <Input className="h-10 w-20" value={decimals} onChange={(e) => setDecimals(e.target.value)} />
               </div>
               <EntityPermissionGate moduleKey="inventory" entityKey="priceChange" action="edit">
@@ -742,45 +793,60 @@ export function PriceChangerPage() {
         </Card>
 
         <div className="grid lg:grid-cols-2 gap-4">
-          <Card className="erp-data-card border-0 overflow-hidden">
+          <Card className="erp-data-card border-0 overflow-hidden lg:col-span-2">
             <CardHeader className="py-3 border-b bg-slate-50"><CardTitle className="text-sm font-extrabold">الأصناف ({rows.length})</CardTitle></CardHeader>
             <CardContent className="p-0 max-h-[60vh] overflow-auto">
               <table className="w-full text-sm">
                 <thead className="sticky top-0 bg-slate-800 text-white">
                   <tr>
-                    <th className="px-2 py-2 text-right text-xs">الصنف</th>
-                    <th className="px-2 py-2 text-right text-xs">النوع</th>
-                    <th className="px-2 py-2 text-right text-xs">الحالي</th>
+                    <th className="px-2 py-2 text-right text-xs">الفئة</th>
+                    <th className="px-2 py-2 text-right text-xs">الاسم</th>
+                    <th className="px-2 py-2 text-right text-xs">الباركود</th>
+                    <th className="px-2 py-2 text-right text-xs">نوع الصنف</th>
+                    <th className="px-2 py-2 text-right text-xs">وحدة القياس</th>
+                    <th className="px-2 py-2 text-right text-xs">تكلفة الشراء</th>
+                    <th className="px-2 py-2 text-right text-xs">متوسط التكلفة</th>
+                    <th className="px-2 py-2 text-right text-xs">السعر</th>
+                    <th className="px-2 py-2 text-right text-xs">خصم %</th>
+                    <th className="px-2 py-2 text-right text-xs">خصم نقدي</th>
+                    <th className="px-2 py-2 text-right text-xs">الادنى</th>
+                    <th className="px-2 py-2 text-right text-xs">الاعلى</th>
                     <th className="px-2 py-2 text-right text-xs">الجديد</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {rows.map((i: any) => {
-                    const current = currentOf(i);
-                    return (
-                      <tr key={i.id} className="border-b hover:bg-sky-50/50">
-                        <td className="px-2 py-1.5 font-semibold">{i.code ? `${i.code} — ` : ""}{i.name}</td>
-                        <td className="px-2 py-1.5 text-xs text-slate-500">{i.itemType || "—"}</td>
-                        <td className="px-2 py-1.5">{Number(current || 0).toLocaleString("en-US")}</td>
-                        <td className="px-2 py-1">
-                          <Input
-                            className="h-8 text-sm"
-                            placeholder="—"
-                            value={draft[i.id] ?? ""}
-                            onChange={(e) => setDraft((d) => ({ ...d, [i.id]: e.target.value }))}
-                          />
-                        </td>
-                      </tr>
-                    );
-                  })}
+                  {rows.map((i: any) => (
+                    <tr key={i.id} className="border-b hover:bg-sky-50/50">
+                      <td className="px-2 py-1.5 text-xs">{catName(i.categoryId)}</td>
+                      <td className="px-2 py-1.5 font-semibold">{i.code ? `${i.code} — ` : ""}{i.name}</td>
+                      <td className="px-2 py-1.5 text-xs">{i.barcode || "—"}</td>
+                      <td className="px-2 py-1.5 text-xs text-slate-500">{i.itemType || "—"}</td>
+                      <td className="px-2 py-1.5 text-xs">{i.unit || "—"}</td>
+                      <td className="px-2 py-1.5">{Number(i.purchasePrice || 0).toLocaleString("en-US")}</td>
+                      <td className="px-2 py-1.5">{Number(i.averageCost || 0).toLocaleString("en-US")}</td>
+                      <td className="px-2 py-1.5">{Number(i.salePrice || 0).toLocaleString("en-US")}</td>
+                      <td className="px-2 py-1.5">{Number(i.percentDiscount || 0).toLocaleString("en-US")}</td>
+                      <td className="px-2 py-1.5">{Number(i.cashDiscount || 0).toLocaleString("en-US")}</td>
+                      <td className="px-2 py-1.5">{Number(i.minPrice || 0).toLocaleString("en-US")}</td>
+                      <td className="px-2 py-1.5">{Number(i.maxPrice || 0).toLocaleString("en-US")}</td>
+                      <td className="px-2 py-1">
+                        <Input
+                          className="h-8 text-sm w-24"
+                          placeholder={String(Number(currentOf(i) || 0))}
+                          value={draft[i.id] ?? ""}
+                          onChange={(e) => setDraft((d) => ({ ...d, [i.id]: e.target.value }))}
+                        />
+                      </td>
+                    </tr>
+                  ))}
                 </tbody>
               </table>
             </CardContent>
           </Card>
 
-          <Card className="erp-data-card border-0 overflow-hidden">
+          <Card className="erp-data-card border-0 overflow-hidden lg:col-span-2">
             <CardHeader className="py-3 border-b bg-slate-50"><CardTitle className="text-sm font-extrabold">سجل التغييرات</CardTitle></CardHeader>
-            <CardContent className="p-0 max-h-[60vh] overflow-auto">
+            <CardContent className="p-0 max-h-[40vh] overflow-auto">
               <table className="w-full text-sm">
                 <thead className="sticky top-0 bg-slate-800 text-white">
                   <tr>
@@ -828,19 +894,62 @@ export function BeginningInventoryPage() {
   const items = useItemOptions();
   const tenantSlug = useTenantSlug();
   const [, navigate] = useLocation();
+  const [itemSearch, setItemSearch] = useState("");
+
+  const filtered = useMemo(() => {
+    const qBar = itemSearch.trim().toLowerCase();
+    if (!qBar) return q.data || [];
+    return (q.data || []).filter((r: any) => {
+      const hay = `${r.itemName || ""} ${r.itemCode || ""} ${r.itemBarcode || ""} ${r.warehouseName || ""} ${r.categoryName || ""}`.toLowerCase();
+      return hay.includes(qBar);
+    });
+  }, [q.data, itemSearch]);
+
+  const printRows = () => {
+    printTableReport({
+      title: "مخزون أول المدة",
+      columns: [
+        { key: "warehouseName", label: "المخزن" },
+        { key: "categoryName", label: "الفئة" },
+        { key: "itemBarcode", label: "الباركود" },
+        { key: "itemName", label: "الصنف" },
+        { key: "quantity", label: "الكمية" },
+        { key: "itemUnit", label: "الوحدة" },
+        { key: "unitCost", label: "التكلفة" },
+        { key: "lineTotal", label: "الإجمالي" },
+      ],
+      rows: filtered.map((r: any) => ({
+        warehouseName: r.warehouseName || "—",
+        categoryName: r.categoryName || "—",
+        itemBarcode: r.itemBarcode || "—",
+        itemName: r.itemCode ? `${r.itemCode} — ${r.itemName}` : (r.itemName || "—"),
+        quantity: Number(r.quantity || 0).toLocaleString("en-US"),
+        itemUnit: r.itemUnit || "—",
+        unitCost: Number(r.unitCost || 0).toLocaleString("en-US"),
+        lineTotal: Number(r.lineTotal ?? (Number(r.quantity || 0) * Number(r.unitCost || 0))).toLocaleString("en-US"),
+      })),
+    });
+  };
 
   return (
     <SimpleEntityPage
       title="مخزون أول المدة"
       tableTitle="سجلات مخزون أول المدة"
-      data={q.data as any}
+      data={filtered as any}
       isLoading={q.isLoading}
       onRefresh={() => q.refetch()}
       entity={{ moduleKey: "inventory", entityKey: "beginningInventory" }}
       canEdit={false}
       extraActions={
-        <EntityPermissionGate moduleKey="inventory" entityKey="beginningInventory" action="add">
-          <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-2 items-end">
+          <div className="space-y-1">
+            <Label className="text-xs">بحث بالصنف</Label>
+            <Input className="h-9 w-48" value={itemSearch} onChange={(e) => setItemSearch(e.target.value)} placeholder="اسم / كود / باركود" />
+          </div>
+          <Button type="button" size="sm" variant="outline" className="h-9 font-extrabold" onClick={printRows}>
+            طباعة
+          </Button>
+          <EntityPermissionGate moduleKey="inventory" entityKey="beginningInventory" action="add">
             <Button
               size="sm"
               variant="outline"
@@ -871,16 +980,16 @@ export function BeginningInventoryPage() {
             >
               {clearAll.isPending ? "جاري المسح..." : "مسح كل مخزون أول المدة"}
             </Button>
-          </div>
-        </EntityPermissionGate>
+          </EntityPermissionGate>
+        </div>
       }
       columns={[
         { key: "warehouseName", label: "المخزن" },
         { key: "categoryName", label: "الفئة", render: (r) => (r.categoryName ? String(r.categoryName) : "—") },
+        { key: "itemBarcode", label: "الباركود", render: (r) => (r.itemBarcode ? String(r.itemBarcode) : "—") },
         { key: "itemName", label: "الصنف", render: (r) => (
           <span className="font-bold">
             {r.itemCode ? `${String(r.itemCode)} — ` : ""}{String(r.itemName || "—")}
-            {r.itemBarcode ? <span className="block text-[11px] text-slate-500 font-semibold">باركود: {String(r.itemBarcode)}</span> : null}
           </span>
         ) },
         { key: "itemUnit", label: "الوحدة", render: (r) => (r.itemUnit ? String(r.itemUnit) : "—") },

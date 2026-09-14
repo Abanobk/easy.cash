@@ -1092,11 +1092,15 @@ export const inventoryExtendedRouter = router({
     }),
     applyBulk: protectedProcedure.input(z.object({
       date: z.string(),
-      priceType: z.enum(["sale", "purchase", "min", "max"]).default("sale"),
+      priceType: z.enum(["sale", "purchase", "min", "max", "percent_discount", "cash_discount"]).default("sale"),
+      /** أساس حساب النسبة — قائمة «من» في ميجا */
+      editFrom: z.enum(["sale", "purchase", "avg", "min", "max", "percent_discount", "cash_discount"]).optional(),
       mode: z.enum(["absolute", "percent"]).default("absolute"),
       /** قيمة ثابتة أو نسبة — عند percent تُطبَّق على كل صفوف الفلتر إن لم تُمرَّر rows */
       value: z.string().optional(),
       decimals: z.number().min(0).max(6).optional(),
+      /** تطبيق النسبة فقط: new = base × (pct/100) بدل base × (1 + pct/100) */
+      percentOnly: z.boolean().optional(),
       filter: z.object({
         categoryId: z.number().optional(),
         altCategoryId: z.number().optional(),
@@ -1111,16 +1115,21 @@ export const inventoryExtendedRouter = router({
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 
-      const fieldOf = (it: typeof items.$inferSelect) => {
-        if (input.priceType === "purchase") return it.purchasePrice;
-        if (input.priceType === "min") return it.minPrice;
-        if (input.priceType === "max") return it.maxPrice;
+      const fieldOf = (it: typeof items.$inferSelect, kind: string) => {
+        if (kind === "purchase") return it.purchasePrice;
+        if (kind === "avg") return it.averageCost || it.purchasePrice;
+        if (kind === "min") return it.minPrice;
+        if (kind === "max") return it.maxPrice;
+        if (kind === "percent_discount") return it.percentDiscount;
+        if (kind === "cash_discount") return it.cashDiscount;
         return it.salePrice;
       };
       const setField = (price: string) => {
         if (input.priceType === "purchase") return { purchasePrice: price };
         if (input.priceType === "min") return { minPrice: price };
         if (input.priceType === "max") return { maxPrice: price };
+        if (input.priceType === "percent_discount") return { percentDiscount: price };
+        if (input.priceType === "cash_discount") return { cashDiscount: price };
         return { salePrice: price };
       };
       const roundTo = (n: number) => {
@@ -1168,20 +1177,21 @@ export const inventoryExtendedRouter = router({
           if (input.mode === "percent") {
             const pct = Number(input.value);
             if (!Number.isFinite(pct)) continue;
-            const base = Number(fieldOf(item) || 0);
-            newPrice = roundTo(base * (1 + pct / 100));
+            const baseKind = input.editFrom || input.priceType;
+            const base = Number(fieldOf(item, baseKind) || 0);
+            newPrice = input.percentOnly
+              ? roundTo(base * (pct / 100))
+              : roundTo(base * (1 + pct / 100));
           } else if (input.value != null && input.value.trim() !== "") {
             newPrice = roundTo(Number(input.value));
           } else {
             continue;
           }
-        } else if (input.mode === "percent" && !rowOverride?.newPrice) {
-          // already handled
         } else if (input.decimals != null) {
           newPrice = roundTo(Number(newPrice));
         }
         if (!newPrice) continue;
-        const oldPrice = fieldOf(item) || "0";
+        const oldPrice = fieldOf(item, input.priceType) || "0";
         const logType = input.priceType === "purchase" ? "purchase" : "sale";
         await db.insert(itemPriceChanges).values(withTenantId(ctx.tenantId, {
           itemId: item.id,

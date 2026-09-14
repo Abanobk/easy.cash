@@ -4,7 +4,7 @@ import ERPLayout from "@/components/ERPLayout";
 import { DataTable, statusBadge } from "@/components/DataTable";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
-import { AlertTriangle, CheckSquare, Trash2 } from "lucide-react";
+import { AlertTriangle, CheckSquare, Copy, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -62,6 +62,15 @@ export default function Items() {
       refetch();
     },
     onError: (err) => toast.error(err.message || "فشل حذف الصنف"),
+  });
+
+  const duplicateMut = trpc.items.duplicate.useMutation({
+    onSuccess: (r) => {
+      toast.success(`تم نسخ الصنف (${r.code || r.id})`);
+      void refetch();
+      if (r.id) navigate(tenantPath(tenantSlug, `/items/${r.id}`));
+    },
+    onError: (e) => toast.error(e.message),
   });
 
   const bulkPurgeMut = trpc.items.bulkPurge.useMutation({
@@ -224,6 +233,23 @@ export default function Items() {
         }}
         onDelete={(row) => deleteMut.mutate(row.id!)}
         deleteConfirm="حذف الصنف؟"
+        extraRowActions={(row) => (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-7 gap-1 text-xs"
+            title="نسخ"
+            disabled={duplicateMut.isPending}
+            onClick={(e) => {
+              e.stopPropagation();
+              if (!confirm(`نسخ الصنف «${row.name}»؟`)) return;
+              duplicateMut.mutate({ id: Number(row.id) });
+            }}
+          >
+            <Copy size={12} /> نسخ
+          </Button>
+        )}
         columns={[
           {
             key: "_sel",

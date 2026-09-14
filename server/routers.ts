@@ -949,6 +949,8 @@ const itemsRouter = router({
       salePrice: items.salePrice,
       minPrice: items.minPrice,
       maxPrice: items.maxPrice,
+      percentDiscount: items.percentDiscount,
+      cashDiscount: items.cashDiscount,
       minStock: items.minStock,
       currentStock: items.currentStock,
       taxRate: items.taxRate,
@@ -1000,6 +1002,8 @@ const itemsRouter = router({
         salePrice: items.salePrice,
         minPrice: items.minPrice,
         maxPrice: items.maxPrice,
+        percentDiscount: items.percentDiscount,
+        cashDiscount: items.cashDiscount,
         minStock: items.minStock,
         currentStock: items.currentStock,
         taxRate: items.taxRate,
@@ -1191,6 +1195,100 @@ const itemsRouter = router({
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     await db.delete(items).where(tenantWhere(items, ctx.tenantId, eq(items.id, input)));
     return { success: true };
+  }),
+  /** نسخ صنف — مطابقة عمود «نسخ» في قائمة أصناف ميجا (بدون رصيد/تشغيلات) */
+  duplicate: protectedProcedure.input(z.object({ id: z.number() })).mutation(async ({ ctx, input }) => {
+    await assertEntityAction(ctx, "inventory", "item", "add");
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    const [src] = await db.select().from(items).where(tenantWhere(items, ctx.tenantId, eq(items.id, input.id)));
+    if (!src) throw new TRPCError({ code: "NOT_FOUND", message: "الصنف غير موجود" });
+    let code: string;
+    try {
+      code = await resolveTypedEntityCode(db, items, ctx.tenantId!, "item", undefined);
+    } catch (e: unknown) {
+      throw new TRPCError({ code: "CONFLICT", message: dbErrorMessage(e, "تعذر توليد كود للنسخة") });
+    }
+    const [inserted] = await db.insert(items).values(withTenantId(ctx.tenantId, {
+      code,
+      barcode: null,
+      name: `${src.name} (نسخة)`,
+      categoryId: src.categoryId,
+      altCategoryId: src.altCategoryId,
+      itemType: src.itemType,
+      unit: src.unit,
+      purchasePrice: src.purchasePrice,
+      averageCost: "0",
+      salePrice: src.salePrice,
+      minPrice: src.minPrice,
+      maxPrice: src.maxPrice,
+      percentDiscount: src.percentDiscount,
+      cashDiscount: src.cashDiscount,
+      minStock: src.minStock,
+      currentStock: "0",
+      taxRate: src.taxRate,
+      taxRate2: src.taxRate2,
+      taxRate3: src.taxRate3,
+      taxId: src.taxId,
+      tax2Id: src.tax2Id,
+      tax3Id: src.tax3Id,
+      trackSerial: src.trackSerial,
+      description: src.description,
+      isActive: true,
+    }) as any);
+    const newId = Number((inserted as { insertId?: number }).insertId ?? 0);
+    if (newId) {
+      const extras = await db.select().from(itemExtraPrices)
+        .where(tenantWhere(itemExtraPrices, ctx.tenantId, eq(itemExtraPrices.itemId, src.id)));
+      for (const row of extras) {
+        await db.insert(itemExtraPrices).values(withTenantId(ctx.tenantId, {
+          itemId: newId,
+          priceName: row.priceName,
+          currencyCode: row.currencyCode,
+          unit: row.unit,
+          price: row.price,
+          percentDiscount: row.percentDiscount,
+          cashDiscount: row.cashDiscount,
+        }) as any);
+      }
+      const units = await db.select().from(itemExtraUnits)
+        .where(tenantWhere(itemExtraUnits, ctx.tenantId, eq(itemExtraUnits.itemId, src.id)));
+      for (const row of units) {
+        await db.insert(itemExtraUnits).values(withTenantId(ctx.tenantId, {
+          itemId: newId,
+          unit: row.unit,
+          factorToBase: row.factorToBase,
+          priceFactor: row.priceFactor,
+        }) as any);
+      }
+    }
+    return { success: true, id: newId, code };
+  }),
+  /** تطبيق الضرائب لكل الأصناف — زر ميجا على بطاقة الصنف */
+  applyTaxesToAll: protectedProcedure.input(z.object({
+    taxId: z.number().optional().nullable(),
+    tax2Id: z.number().optional().nullable(),
+    tax3Id: z.number().optional().nullable(),
+    taxRate: z.string().optional(),
+    taxRate2: z.string().optional(),
+    taxRate3: z.string().optional(),
+  })).mutation(async ({ ctx, input }) => {
+    await assertEntityAction(ctx, "inventory", "item", "edit");
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    const patch: Record<string, unknown> = {};
+    if (input.taxId !== undefined) patch.taxId = input.taxId;
+    if (input.tax2Id !== undefined) patch.tax2Id = input.tax2Id;
+    if (input.tax3Id !== undefined) patch.tax3Id = input.tax3Id;
+    if (input.taxRate !== undefined) patch.taxRate = input.taxRate || "0";
+    if (input.taxRate2 !== undefined) patch.taxRate2 = input.taxRate2 || "0";
+    if (input.taxRate3 !== undefined) patch.taxRate3 = input.taxRate3 || "0";
+    if (!Object.keys(patch).length) {
+      throw new TRPCError({ code: "BAD_REQUEST", message: "لا توجد قيم ضريبة للتطبيق" });
+    }
+    await db.update(items).set(patch as any).where(tenantWhere(items, ctx.tenantId));
+    const [cnt] = await db.select({ count: count() }).from(items).where(tenantWhere(items, ctx.tenantId));
+    return { success: true, updated: cnt.count };
   }),
   /** حذف جماعي مع تصفير رصيد أول المدة والمخازن — لتقارير قيمة الأصناف قبل استيراد نظيف */
   bulkPurge: protectedProcedure.input(z.object({
@@ -6272,6 +6370,9 @@ const inventoryRouter = router({
       dateTo: z.string().optional(),
       fromWarehouseId: z.number().optional(),
       toWarehouseId: z.number().optional(),
+      fromBranchId: z.number().optional(),
+      toBranchId: z.number().optional(),
+      eitherBranchId: z.number().optional(),
       transferType: z.enum(["direct", "two_stage"]).optional(),
       status: z.enum(["draft", "in_transit", "confirmed", "cancelled"]).optional(),
       search: z.string().optional(),
@@ -6288,6 +6389,11 @@ const inventoryRouter = router({
         input.dateTo ? lte(stockTransfers.date, input.dateTo as any) : undefined,
         input.fromWarehouseId ? eq(stockTransfers.fromWarehouseId, input.fromWarehouseId) : undefined,
         input.toWarehouseId ? eq(stockTransfers.toWarehouseId, input.toWarehouseId) : undefined,
+        input.fromBranchId ? sql`fw.branchId = ${input.fromBranchId}` : undefined,
+        input.toBranchId ? sql`tw.branchId = ${input.toBranchId}` : undefined,
+        input.eitherBranchId
+          ? or(sql`fw.branchId = ${input.eitherBranchId}`, sql`tw.branchId = ${input.eitherBranchId}`)
+          : undefined,
         input.transferType ? eq(stockTransfers.transferType, input.transferType) : undefined,
         input.status ? eq(stockTransfers.status, input.status) : undefined,
         input.search
@@ -6316,7 +6422,10 @@ const inventoryRouter = router({
         .leftJoin(sql`warehouses fw`, sql`fw.id = ${stockTransfers.fromWarehouseId}`)
         .leftJoin(sql`warehouses tw`, sql`tw.id = ${stockTransfers.toWarehouseId}`)
         .orderBy(desc(stockTransfers.createdAt)).limit(input.limit).offset(offset);
-      const [total] = await db.select({ count: count() }).from(stockTransfers).where(whereClause);
+      const [total] = await db.select({ count: count() }).from(stockTransfers)
+        .leftJoin(sql`warehouses fw`, sql`fw.id = ${stockTransfers.fromWarehouseId}`)
+        .leftJoin(sql`warehouses tw`, sql`tw.id = ${stockTransfers.toWarehouseId}`)
+        .where(whereClause);
       return { rows, total: total.count };
     }),
     create: protectedProcedure.input(z.object({

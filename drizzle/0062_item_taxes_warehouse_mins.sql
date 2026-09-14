@@ -1,4 +1,4 @@
--- ضرائببة 2/3 + أقل كمية/مكان لكل مخزن على بطاقة الصنف
+-- ضريبة 2/3 + أقل كمية/مكان لكل مخزن على بطاقة الصنف
 ALTER TABLE `items` ADD COLUMN `taxRate2` decimal(5,2) DEFAULT '0';
 --> statement-breakpoint
 ALTER TABLE `items` ADD COLUMN `taxRate3` decimal(5,2) DEFAULT '0';

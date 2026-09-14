@@ -11,12 +11,14 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Plus, ClipboardList, Trash2, Search } from "lucide-react";
 import { toast } from "sonner";
 import { AddActionButton } from "@/components/AddActionButton";
 import { ItemSearchSelect } from "@/components/ItemSearchSelect";
 import { findItemByScan } from "@/lib/barcode";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
+import { printWarehouseNote } from "@/lib/print-invoice-quick";
 
 /**
  * تسوية مخزنية — مطابقة ميجا:
@@ -41,6 +43,8 @@ export default function InventoryAdjustments() {
     { itemId: "", quantity: "1", reason: "" },
   ]);
   const [barcode, setBarcode] = useState("");
+  const [printAfterSave, setPrintAfterSave] = useState(false);
+  const [printAfterApprove, setPrintAfterApprove] = useState(false);
 
   // Mega list filters
   const [dateFrom, setDateFrom] = useState("");
@@ -75,9 +79,31 @@ export default function InventoryAdjustments() {
   const { data: customersList } = trpc.customers.list.useQuery({ page: 1, limit: 300 });
   const utils = trpc.useUtils();
 
+  const firePrint = (number: string) => {
+    const whName = (warehouses as any[] || []).find((w: any) => String(w.id) === form.warehouseId)?.name || "—";
+    const lines = items
+      .filter((it) => it.itemId)
+      .map((it) => {
+        const row = (itemsList?.rows || []).find((x: any) => String(x.id) === it.itemId);
+        return {
+          name: row ? (row.code ? `${row.code} — ${row.name}` : row.name) : it.itemId,
+          quantity: Number(it.quantity || 0),
+          unit: row?.unit || "",
+          warehouseName: whName,
+        };
+      });
+    printWarehouseNote({
+      title: "تسوية مخزنية",
+      number,
+      date: form.date,
+      partyLabel: "المخزن",
+      partyName: whName,
+      lines,
+    });
+  };
+
   const createMut = trpc.inventory.adjustments.create.useMutation({
-    onSuccess: (r) => {
-      toast.success(r.status === "draft" ? "تم حفظ التسوية معلّقة" : "تم اعتماد تسوية المخزون");
+    onSuccess: () => {
       refetch();
       closeDialog();
     },
@@ -175,6 +201,11 @@ export default function InventoryAdjustments() {
       referenceNumber: form.referenceNumber || undefined,
       confirm,
       items: items.map((it) => ({ itemId: Number(it.itemId), quantity: it.quantity, reason: it.reason })),
+    }, {
+      onSuccess: (r) => {
+        toast.success(r.status === "draft" ? "تم حفظ التسوية معلّقة" : "تم اعتماد تسوية المخزون");
+        if (confirm ? printAfterApprove : printAfterSave) firePrint(r.number);
+      },
     });
   };
 
@@ -476,6 +507,10 @@ export default function InventoryAdjustments() {
             <div className="space-y-1">
               <Label className="text-xs">ملاحظات</Label>
               <Textarea value={form.notes} onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))} className="text-sm min-h-[60px]" />
+            </div>
+            <div className="flex flex-wrap gap-4 text-xs text-slate-600">
+              <label className="flex items-center gap-2"><Checkbox checked={printAfterSave} onCheckedChange={(v) => setPrintAfterSave(!!v)} />طباعة بعد الحفظ</label>
+              <label className="flex items-center gap-2"><Checkbox checked={printAfterApprove} onCheckedChange={(v) => setPrintAfterApprove(!!v)} />طباعة بعد الاعتماد</label>
             </div>
             {form.oppositeAccountId && (
               <p className="text-[11px] text-teal-800 bg-teal-50 border border-teal-100 rounded px-2 py-1.5">
