@@ -581,10 +581,14 @@ export function PriceChangerPage() {
   const [priceStatus, setPriceStatus] = useState<"" | "lt_avg" | "eq_avg" | "gt_avg">("");
   const [withStockOnly, setWithStockOnly] = useState(false);
   const [percentOnly, setPercentOnly] = useState(false);
+  const [avgFromBranchId, setAvgFromBranchId] = useState("");
+  const [avgFromWarehouseId, setAvgFromWarehouseId] = useState("");
   const [bulkValue, setBulkValue] = useState("");
   const [percentValue, setPercentValue] = useState("");
   const [decimals, setDecimals] = useState("2");
   const [draft, setDraft] = useState<Record<number, string>>({});
+  const branchesQ = trpc.settings.branches.list.useQuery();
+  const warehousesQ = trpc.warehouses.list.useQuery();
 
   const catName = (id: unknown) => {
     if (id == null || id === "") return "—";
@@ -636,6 +640,8 @@ export function PriceChangerPage() {
     setItemType("");
     setPriceStatus("");
     setWithStockOnly(false);
+    setAvgFromBranchId("");
+    setAvgFromWarehouseId("");
     setBulkValue("");
     setPercentValue("");
     setPercentOnly(false);
@@ -653,6 +659,8 @@ export function PriceChangerPage() {
       value,
       decimals: Number(decimals) || 2,
       percentOnly: mode === "percent" ? percentOnly : undefined,
+      avgFromBranchId: avgFromBranchId ? Number(avgFromBranchId) : undefined,
+      avgFromWarehouseId: avgFromWarehouseId ? Number(avgFromWarehouseId) : undefined,
       filter: {
         categoryId: categoryId ? Number(categoryId) : undefined,
         altCategoryId: altCategoryId ? Number(altCategoryId) : undefined,
@@ -743,6 +751,28 @@ export function PriceChangerPage() {
                     <SelectItem value="max">السعر الاعلى</SelectItem>
                     <SelectItem value="cash_discount">خصم نقدي</SelectItem>
                     <SelectItem value="percent_discount">خصم نسبة</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs font-bold">متوسط التكلفة من الفرع</Label>
+                <Select value={avgFromBranchId || "all"} onValueChange={(v) => setAvgFromBranchId(v === "all" ? "" : v)}>
+                  <SelectTrigger className="h-10 w-44"><SelectValue placeholder="كل الفروع" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">كل الفروع</SelectItem>
+                    {(branchesQ.data || []).map((b: any) => <SelectItem key={b.id} value={String(b.id)}>{b.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs font-bold">متوسط التكلفة من المخزن</Label>
+                <Select value={avgFromWarehouseId || "all"} onValueChange={(v) => setAvgFromWarehouseId(v === "all" ? "" : v)}>
+                  <SelectTrigger className="h-10 w-44"><SelectValue placeholder="كل المخازن" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">كل المخازن</SelectItem>
+                    {(warehousesQ.data || [])
+                      .filter((w: any) => !avgFromBranchId || String(w.branchId || "") === avgFromBranchId)
+                      .map((w: any) => <SelectItem key={w.id} value={String(w.id)}>{w.name}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
@@ -882,6 +912,14 @@ export function BeginningInventoryPage() {
   const q = trpc.parity.inventory.beginningInventory.list.useQuery();
   const c = trpc.parity.inventory.beginningInventory.create.useMutation();
   const d = trpc.parity.inventory.beginningInventory.delete.useMutation();
+  const confirmMut = trpc.parity.inventory.beginningInventory.confirm.useMutation({
+    onSuccess: (r) => { toast.success(`تم اعتماد ${r.confirmed} سطر`); q.refetch(); },
+    onError: (e) => toast.error(e.message),
+  });
+  const unconfirmMut = trpc.parity.inventory.beginningInventory.unconfirm.useMutation({
+    onSuccess: (r) => { toast.success(`تم فك اعتماد ${r.unconfirmed} سطر`); q.refetch(); },
+    onError: (e) => toast.error(e.message),
+  });
   const clearAll = trpc.parity.inventory.beginningInventory.clearAll.useMutation({
     onSuccess: (res) => {
       toast.success(`تم مسح ${res.cleared} سجل مخزون أول المدة وعكس الكميات`);
@@ -892,18 +930,31 @@ export function BeginningInventoryPage() {
   });
   const warehouses = useWarehouseOptions();
   const items = useItemOptions();
+  const branchesQ = trpc.settings.branches.list.useQuery();
   const tenantSlug = useTenantSlug();
   const [, navigate] = useLocation();
   const [itemSearch, setItemSearch] = useState("");
+  const [headerBranchId, setHeaderBranchId] = useState("");
+  const [headerRef, setHeaderRef] = useState("");
+  const [headerNotes, setHeaderNotes] = useState("");
+  const [saveAsDraft, setSaveAsDraft] = useState(true);
+
+  const branchOptions = useMemo(() => [
+    { value: "", label: "— بدون فرع —" },
+    ...((branchesQ.data || []).map((b: any) => ({ value: String(b.id), label: b.name }))),
+  ], [branchesQ.data]);
 
   const filtered = useMemo(() => {
     const qBar = itemSearch.trim().toLowerCase();
     if (!qBar) return q.data || [];
     return (q.data || []).filter((r: any) => {
-      const hay = `${r.itemName || ""} ${r.itemCode || ""} ${r.itemBarcode || ""} ${r.warehouseName || ""} ${r.categoryName || ""}`.toLowerCase();
+      const hay = `${r.itemName || ""} ${r.itemCode || ""} ${r.itemBarcode || ""} ${r.warehouseName || ""} ${r.branchName || ""} ${r.categoryName || ""} ${r.referenceNumber || ""} ${r.batchNumber || ""}`.toLowerCase();
       return hay.includes(qBar);
     });
   }, [q.data, itemSearch]);
+
+  const draftIds = useMemo(() => filtered.filter((r: any) => r.status === "draft").map((r: any) => r.id), [filtered]);
+  const confirmedIds = useMemo(() => filtered.filter((r: any) => r.status === "confirmed").map((r: any) => r.id), [filtered]);
 
   const printRows = () => {
     printTableReport({
@@ -915,8 +966,10 @@ export function BeginningInventoryPage() {
         { key: "itemName", label: "الصنف" },
         { key: "quantity", label: "الكمية" },
         { key: "itemUnit", label: "الوحدة" },
+        { key: "batchNumber", label: "رقم التشغيلة" },
         { key: "unitCost", label: "التكلفة" },
         { key: "lineTotal", label: "الإجمالي" },
+        { key: "status", label: "الحالة" },
       ],
       rows: filtered.map((r: any) => ({
         warehouseName: r.warehouseName || "—",
@@ -925,8 +978,10 @@ export function BeginningInventoryPage() {
         itemName: r.itemCode ? `${r.itemCode} — ${r.itemName}` : (r.itemName || "—"),
         quantity: Number(r.quantity || 0).toLocaleString("en-US"),
         itemUnit: r.itemUnit || "—",
+        batchNumber: r.batchNumber || "—",
         unitCost: Number(r.unitCost || 0).toLocaleString("en-US"),
         lineTotal: Number(r.lineTotal ?? (Number(r.quantity || 0) * Number(r.unitCost || 0))).toLocaleString("en-US"),
+        status: r.status === "draft" ? "معلق" : "معتمد",
       })),
     });
   };
@@ -943,26 +998,62 @@ export function BeginningInventoryPage() {
       extraActions={
         <div className="flex flex-wrap gap-2 items-end">
           <div className="space-y-1">
-            <Label className="text-xs">بحث بالصنف</Label>
-            <Input className="h-9 w-48" value={itemSearch} onChange={(e) => setItemSearch(e.target.value)} placeholder="اسم / كود / باركود" />
+            <Label className="text-xs">الفرع (رأس المستند)</Label>
+            <Select value={headerBranchId || "none"} onValueChange={(v) => setHeaderBranchId(v === "none" ? "" : v)}>
+              <SelectTrigger className="h-9 w-40"><SelectValue placeholder="فرع" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">— بدون —</SelectItem>
+                {(branchesQ.data || []).map((b: any) => <SelectItem key={b.id} value={String(b.id)}>{b.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
           </div>
-          <Button type="button" size="sm" variant="outline" className="h-9 font-extrabold" onClick={printRows}>
-            طباعة
-          </Button>
-          <EntityPermissionGate moduleKey="inventory" entityKey="beginningInventory" action="add">
+          <div className="space-y-1">
+            <Label className="text-xs">رقم المرجع</Label>
+            <Input className="h-9 w-36" value={headerRef} onChange={(e) => setHeaderRef(e.target.value)} />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">ملاحظات</Label>
+            <Input className="h-9 w-40" value={headerNotes} onChange={(e) => setHeaderNotes(e.target.value)} />
+          </div>
+          <label className="flex items-center gap-2 text-xs font-semibold h-9 px-1">
+            <input type="checkbox" checked={saveAsDraft} onChange={(e) => setSaveAsDraft(e.target.checked)} />
+            حفظ معلق (بدون حركة)
+          </label>
+          <div className="space-y-1">
+            <Label className="text-xs">بحث بالصنف</Label>
+            <Input className="h-9 w-44" value={itemSearch} onChange={(e) => setItemSearch(e.target.value)} placeholder="اسم / كود / باركود" />
+          </div>
+          <Button type="button" size="sm" variant="outline" className="h-9 font-extrabold" onClick={printRows}>طباعة</Button>
+          <EntityPermissionGate moduleKey="inventory" entityKey="beginningInventory" action="edit">
             <Button
               size="sm"
-              variant="outline"
-              className="font-extrabold gap-1"
-              onClick={() => navigate(tenantPath(tenantSlug, "/inventory/mega-report-import"))}
+              className="h-9 font-extrabold bg-teal-600 hover:bg-teal-700"
+              disabled={!draftIds.length || confirmMut.isPending}
+              onClick={() => {
+                if (!confirm(`اعتماد ${draftIds.length} سطر معلق وترحيل المخزون؟`)) return;
+                confirmMut.mutate({ ids: draftIds });
+              }}
             >
-              <Upload size={14} /> استيراد تقارير Excel
+              اعتماد ({draftIds.length})
             </Button>
             <Button
               size="sm"
-              className="bg-emerald-600 hover:bg-emerald-700 font-extrabold gap-1"
-              onClick={() => navigate(tenantPath(tenantSlug, "/inventory/beginning-inventory/smart-import"))}
+              variant="secondary"
+              className="h-9 font-extrabold"
+              disabled={!confirmedIds.length || unconfirmMut.isPending}
+              onClick={() => {
+                if (!confirm(`فك اعتماد ${confirmedIds.length} سطر وعكس الكميات؟`)) return;
+                unconfirmMut.mutate({ ids: confirmedIds });
+              }}
             >
+              فك اعتماد ({confirmedIds.length})
+            </Button>
+          </EntityPermissionGate>
+          <EntityPermissionGate moduleKey="inventory" entityKey="beginningInventory" action="add">
+            <Button size="sm" variant="outline" className="font-extrabold gap-1" onClick={() => navigate(tenantPath(tenantSlug, "/inventory/mega-report-import"))}>
+              <Upload size={14} /> استيراد تقارير Excel
+            </Button>
+            <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 font-extrabold gap-1" onClick={() => navigate(tenantPath(tenantSlug, "/inventory/beginning-inventory/smart-import"))}>
               <Upload size={14} /> استيراد ذكي (Excel)
             </Button>
             <Button
@@ -973,7 +1064,7 @@ export function BeginningInventoryPage() {
               onClick={() => {
                 const n = q.data?.length || 0;
                 if (!n) return;
-                if (!confirm(`مسح كل سجلات مخزون أول المدة (${n}) وعكس كمياتها من المخازن؟\n\nبعدها ارفع الإكسل واعمل اعتماد مرة واحدة فقط.`)) return;
+                if (!confirm(`مسح كل سجلات مخزون أول المدة (${n}) وعكس كمياتها من المخازن؟`)) return;
                 if (!confirm("تأكيد أخير: المسح لا يمكن التراجع عنه من هنا.")) return;
                 clearAll.mutate({ confirm: "CLEAR_BEGINNING_INVENTORY" });
               }}
@@ -984,7 +1075,9 @@ export function BeginningInventoryPage() {
         </div>
       }
       columns={[
+        { key: "branchName", label: "الفرع", render: (r) => (r.branchName ? String(r.branchName) : "—") },
         { key: "warehouseName", label: "المخزن" },
+        { key: "referenceNumber", label: "المرجع", render: (r) => (r.referenceNumber ? String(r.referenceNumber) : "—") },
         { key: "categoryName", label: "الفئة", render: (r) => (r.categoryName ? String(r.categoryName) : "—") },
         { key: "itemBarcode", label: "الباركود", render: (r) => (r.itemBarcode ? String(r.itemBarcode) : "—") },
         { key: "itemName", label: "الصنف", render: (r) => (
@@ -993,9 +1086,11 @@ export function BeginningInventoryPage() {
           </span>
         ) },
         { key: "itemUnit", label: "الوحدة", render: (r) => (r.itemUnit ? String(r.itemUnit) : "—") },
+        { key: "batchNumber", label: "رقم التشغيلة", render: (r) => (r.batchNumber ? String(r.batchNumber) : "—") },
         { key: "quantity", label: "الكمية", render: (r) => Number(r.quantity || 0).toLocaleString("en-US") },
         { key: "unitCost", label: "التكلفة", render: (r) => Number(r.unitCost || 0).toLocaleString("en-US") },
         { key: "lineTotal", label: "الإجمالي", render: (r) => Number(r.lineTotal ?? (Number(r.quantity || 0) * Number(r.unitCost || 0))).toLocaleString("en-US") },
+        { key: "status", label: "الحالة", render: (r) => (r.status === "draft" ? "معلق" : "معتمد") },
         { key: "date", label: "التاريخ", render: (r) => toDateStr(r.date) },
       ]}
       fields={[
@@ -1003,9 +1098,19 @@ export function BeginningInventoryPage() {
         { key: "itemId", label: "الصنف", type: "select", required: true, options: items },
         { key: "quantity", label: "الكمية", required: true },
         { key: "unitCost", label: "تكلفة الوحدة" },
+        { key: "batchNumber", label: "رقم التشغيلة" },
         { key: "date", label: "التاريخ", type: "date", required: true },
       ]}
-      onCreate={(v) => c.mutateAsync({ ...v, warehouseId: Number(v.warehouseId), itemId: Number(v.itemId) } as any)}
+      onCreate={(v) => c.mutateAsync({
+        ...v,
+        warehouseId: Number(v.warehouseId),
+        itemId: Number(v.itemId),
+        batchNumber: v.batchNumber || null,
+        branchId: headerBranchId ? Number(headerBranchId) : null,
+        referenceNumber: headerRef || null,
+        notes: headerNotes || null,
+        confirm: !saveAsDraft,
+      } as any)}
       onUpdate={() => {}}
       onDelete={(id) => d.mutateAsync(id)}
     />

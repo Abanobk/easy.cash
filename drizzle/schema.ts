@@ -921,6 +921,11 @@ export const inventoryAdjustmentItems = mysqlTable("inventory_adjustment_items",
   newQty: decimal("newQty", { precision: 15, scale: 3 }).notNull(),
   difference: decimal("difference", { precision: 15, scale: 3 }).default("0"),
   batchId: int("batchId"),
+  /** تكلفة السطر — مطابقة ميجا InventoryCorrection */
+  unitCost: decimal("unitCost", { precision: 15, scale: 4 }).default("0"),
+  batchNumber: varchar("batchNumber", { length: 100 }),
+  productionDate: date("productionDate"),
+  expiryDate: date("expiryDate"),
 });
 
 // ===================== STOCK TRANSFERS =====================
@@ -951,6 +956,9 @@ export const stockTransferItems = mysqlTable("stock_transfer_items", {
   itemId: int("itemId").notNull(),
   quantity: decimal("quantity", { precision: 15, scale: 3 }).notNull(),
   batchId: int("batchId"),
+  /** تكلفة السطر / رقم التشغيلة — مطابقة ميجا InventoryTransfer */
+  unitCost: decimal("unitCost", { precision: 15, scale: 4 }).default("0"),
+  batchNumber: varchar("batchNumber", { length: 100 }),
   /** نسبة المصروفات على السطر — مطابقة ميجا */
   expensePercent: decimal("expensePercent", { precision: 8, scale: 3 }).default("0"),
 });
@@ -1350,6 +1358,13 @@ export const beginningInventory = mysqlTable("beginning_inventory", {
   quantity: decimal("quantity", { precision: 15, scale: 3 }).notNull(),
   unitCost: decimal("unitCost", { precision: 15, scale: 2 }).default("0"),
   date: date("date").notNull(),
+  /** حقول رأس مستند ميجا BeginingInventory */
+  branchId: int("branchId"),
+  referenceNumber: varchar("referenceNumber", { length: 100 }),
+  notes: text("notes"),
+  batchNumber: varchar("batchNumber", { length: 100 }),
+  /** draft=معلق بدون حركة · confirmed=معتمد مرحّل للمخزن */
+  status: mysqlEnum("status", ["draft", "confirmed"]).default("confirmed").notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
 

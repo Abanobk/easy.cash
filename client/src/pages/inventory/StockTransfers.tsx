@@ -32,14 +32,24 @@ export default function StockTransfers() {
   const [form, setForm] = useState({
     fromWarehouseId: "",
     toWarehouseId: "",
+    fromBranchId: "",
+    toBranchId: "",
     date: new Date().toISOString().split("T")[0],
     notes: "",
     transferType: "direct" as "direct" | "two_stage",
     referenceNumber: "",
     plAccountId: "",
   });
-  const [items, setItems] = useState<{ itemId: string; quantity: string; expensePercent: string; available?: number; expectedCost?: number }[]>([
-    { itemId: "", quantity: "1", expensePercent: "0" },
+  const [items, setItems] = useState<{
+    itemId: string;
+    quantity: string;
+    expensePercent: string;
+    unitCost: string;
+    batchNumber: string;
+    available?: number;
+    expectedCost?: number;
+  }[]>([
+    { itemId: "", quantity: "1", expensePercent: "0", unitCost: "", batchNumber: "" },
   ]);
   const [expenses, setExpenses] = useState<InvoiceExpenseLine[]>([]);
   const [barcode, setBarcode] = useState("");
@@ -145,13 +155,15 @@ export default function StockTransfers() {
     setForm({
       fromWarehouseId: "",
       toWarehouseId: "",
+      fromBranchId: "",
+      toBranchId: "",
       date: new Date().toISOString().split("T")[0],
       notes: "",
       transferType: "direct",
       referenceNumber: "",
       plAccountId: "",
     });
-    setItems([{ itemId: "", quantity: "1", expensePercent: "0" }]);
+    setItems([{ itemId: "", quantity: "1", expensePercent: "0", unitCost: "", batchNumber: "" }]);
     setExpenses([]);
     setBarcode("");
   };
@@ -181,14 +193,19 @@ export default function StockTransfers() {
       const catalogItem = (itemsList?.rows || []).find((r: any) => String(r.id) === itemId);
       const expectedCost = Number(catalogItem?.averageCost ?? catalogItem?.purchasePrice ?? 0);
       setItems((prev) =>
-        prev.map((it, i) => (i === rowIdx ? { ...it, available: res.quantity, expectedCost } : it)),
+        prev.map((it, i) => (i === rowIdx ? {
+          ...it,
+          available: res.quantity,
+          expectedCost,
+          unitCost: it.unitCost || (expectedCost ? String(expectedCost) : ""),
+        } : it)),
       );
     } catch {
       /* ignore */
     }
   };
 
-  const addItem = () => setItems((prev) => [...prev, { itemId: "", quantity: "1", expensePercent: "0" }]);
+  const addItem = () => setItems((prev) => [...prev, { itemId: "", quantity: "1", expensePercent: "0", unitCost: "", batchNumber: "" }]);
   const addAllFromWarehouse = async () => {
     if (!form.fromWarehouseId) return toast.error("اختر المخزن المصدر أولاً");
     try {
@@ -198,8 +215,10 @@ export default function StockTransfers() {
         itemId: String(r.itemId),
         quantity: String(r.quantity),
         expensePercent: "0",
+        unitCost: String(r.unitCost || r.averageCost || ""),
+        batchNumber: "",
         available: Number(r.quantity),
-        expectedCost: Number(r.unitCost || 0),
+        expectedCost: Number(r.unitCost || r.averageCost || 0),
       }));
       setItems(mapped);
       toast.success(`تمت إضافة ${mapped.length} صنف من المخزن`);
@@ -228,7 +247,7 @@ export default function StockTransfers() {
     if (emptyIdx >= 0) {
       await updateItem(emptyIdx, "itemId", String(hit.id));
     } else {
-      setItems((prev) => [...prev, { itemId: String(hit.id), quantity: "1", expensePercent: "0" }]);
+      setItems((prev) => [...prev, { itemId: String(hit.id), quantity: "1", expensePercent: "0", unitCost: "", batchNumber: "" }]);
       await refreshLineMeta(items.length, String(hit.id), form.fromWarehouseId);
     }
     setBarcode("");
@@ -258,6 +277,8 @@ export default function StockTransfers() {
         itemId: Number(it.itemId),
         quantity: it.quantity,
         expensePercent: it.expensePercent || "0",
+        unitCost: it.unitCost || (it.expectedCost != null ? String(it.expectedCost) : undefined),
+        batchNumber: it.batchNumber || undefined,
       })),
       expenses: expenses
         .filter((e) => Number(e.amount) > 0 && e.creditAccountId != null)
@@ -478,7 +499,7 @@ export default function StockTransfers() {
       </Card>
 
       <Dialog open={open} onOpenChange={(v) => { if (!v) closeDialog(); else setOpen(true); }}>
-        <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto" dir="rtl">
+        <DialogContent className="max-w-5xl max-h-[85vh] overflow-y-auto" dir="rtl">
           <DialogHeader><DialogTitle>تحويل مخزني</DialogTitle></DialogHeader>
           <div className="grid gap-4 py-2">
             <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
@@ -510,11 +531,43 @@ export default function StockTransfers() {
                 />
               </div>
               <div className="space-y-1">
+                <Label className="text-xs">من فرع</Label>
+                <Select
+                  value={form.fromBranchId || "all"}
+                  onValueChange={(v) => setForm((f) => ({ ...f, fromBranchId: v === "all" ? "" : v, fromWarehouseId: "" }))}
+                >
+                  <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="الكل" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">الكل</SelectItem>
+                    {(branches || []).map((b: any) => (
+                      <SelectItem key={b.id} value={String(b.id)}>{b.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">الى فرع</Label>
+                <Select
+                  value={form.toBranchId || "all"}
+                  onValueChange={(v) => setForm((f) => ({ ...f, toBranchId: v === "all" ? "" : v, toWarehouseId: "" }))}
+                >
+                  <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="الكل" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">الكل</SelectItem>
+                    {(branches || []).map((b: any) => (
+                      <SelectItem key={b.id} value={String(b.id)}>{b.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
                 <Label className="text-xs">المخزن *</Label>
                 <Select value={form.fromWarehouseId} onValueChange={(v) => setForm((f) => ({ ...f, fromWarehouseId: v }))}>
                   <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="المخزن المصدر" /></SelectTrigger>
                   <SelectContent>
-                    {(warehouses as any[] || []).map((w: any) => (
+                    {(warehouses as any[] || [])
+                      .filter((w: any) => !form.fromBranchId || String(w.branchId || "") === form.fromBranchId)
+                      .map((w: any) => (
                       <SelectItem key={w.id} value={String(w.id)}>{w.name}</SelectItem>
                     ))}
                   </SelectContent>
@@ -525,7 +578,9 @@ export default function StockTransfers() {
                 <Select value={form.toWarehouseId} onValueChange={(v) => setForm((f) => ({ ...f, toWarehouseId: v }))}>
                   <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="المخزن المستقبل" /></SelectTrigger>
                   <SelectContent>
-                    {(warehouses as any[] || []).map((w: any) => (
+                    {(warehouses as any[] || [])
+                      .filter((w: any) => !form.toBranchId || String(w.branchId || "") === form.toBranchId)
+                      .map((w: any) => (
                       <SelectItem key={w.id} value={String(w.id)}>{w.name}</SelectItem>
                     ))}
                   </SelectContent>
@@ -568,8 +623,9 @@ export default function StockTransfers() {
                   <TableHeader>
                     <TableRow className="bg-slate-50">
                       <TableHead className="text-right text-xs">الصنف</TableHead>
-                      <TableHead className="text-right text-xs">الكمية المتاحة</TableHead>
-                      <TableHead className="text-right text-xs">التكلفة المتوقعة</TableHead>
+                      <TableHead className="text-right text-xs">المتاحة</TableHead>
+                      <TableHead className="text-right text-xs">التكلفة</TableHead>
+                      <TableHead className="text-right text-xs">التشغيلة</TableHead>
                       <TableHead className="text-right text-xs">الكمية</TableHead>
                       <TableHead className="text-right text-xs">نسبة المصروفات</TableHead>
                       <TableHead />
@@ -589,8 +645,11 @@ export default function StockTransfers() {
                         <TableCell className="p-1 text-xs font-semibold text-slate-600 w-24">
                           {it.available != null ? Number(it.available).toLocaleString("en-US") : "—"}
                         </TableCell>
-                        <TableCell className="p-1 text-xs text-slate-600 w-28">
-                          {it.expectedCost != null ? Number(it.expectedCost).toLocaleString("en-US") : "—"}
+                        <TableCell className="p-1">
+                          <Input type="number" value={it.unitCost} onChange={(e) => void updateItem(i, "unitCost", e.target.value)} className="h-8 text-xs w-24" placeholder={it.expectedCost != null ? String(it.expectedCost) : ""} />
+                        </TableCell>
+                        <TableCell className="p-1">
+                          <Input value={it.batchNumber} onChange={(e) => void updateItem(i, "batchNumber", e.target.value)} className="h-8 text-xs w-24" />
                         </TableCell>
                         <TableCell className="p-1">
                           <Input type="number" value={it.quantity} onChange={(e) => void updateItem(i, "quantity", e.target.value)} className="h-8 text-xs w-24" />

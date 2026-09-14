@@ -6443,6 +6443,8 @@ const inventoryRouter = router({
         quantity: z.string(),
         batchId: z.number().optional(),
         expensePercent: z.string().optional(),
+        unitCost: z.string().optional(),
+        batchNumber: z.string().optional(),
       })),
       expenses: z.array(z.object({
         currencyCode: z.string().optional(),
@@ -6491,6 +6493,8 @@ const inventoryRouter = router({
           quantity: item.quantity,
           batchId: item.batchId,
           expensePercent: item.expensePercent || "0",
+          unitCost: item.unitCost || "0",
+          batchNumber: item.batchNumber || null,
         }) as any);
       }
       for (const exp of input.expenses || []) {
@@ -6699,7 +6703,18 @@ const inventoryRouter = router({
       referenceNumber: z.string().optional(),
       /** حفظ معلق بدون حركة · اعتماد يرحّل المخزون والقيد */
       confirm: z.boolean().default(true),
-      items: z.array(z.object({ itemId: z.number(), quantity: z.string(), reason: z.string().optional() })),
+      items: z.array(z.object({
+        itemId: z.number(),
+        /** فرق وارد/صادر (متوافق قديم) */
+        quantity: z.string().optional(),
+        /** الكمية الفعلية بعد الجرد — ميجا: يحسب الفرق من المتاح */
+        actualQty: z.string().optional(),
+        unitCost: z.string().optional(),
+        batchNumber: z.string().optional(),
+        productionDate: z.string().optional(),
+        expiryDate: z.string().optional(),
+        reason: z.string().optional(),
+      })),
     })).mutation(async ({ ctx, input }) => {
       await assertEntityAction(ctx, "inventory", "stockAdjustment", "add");
       const db = await getDb();
@@ -6723,16 +6738,30 @@ const inventoryRouter = router({
       const { applyStockMovement, getWarehouseItemQty } = await import("./inventory-stock");
       let netInventoryValue = 0;
       for (const item of input.items) {
-        const qty = Number(item.quantity);
         const currentQty = await getWarehouseItemQty(db, ctx.tenantId, item.itemId, input.warehouseId);
-        const newQty = input.adjustmentType === "addition" ? currentQty + qty : Math.max(0, currentQty - qty);
+        let newQty: number;
+        if (item.actualQty != null && String(item.actualQty).trim() !== "") {
+          newQty = Number(item.actualQty);
+        } else {
+          const qty = Number(item.quantity || 0);
+          newQty = input.adjustmentType === "addition" ? currentQty + qty : Math.max(0, currentQty - qty);
+        }
         const difference = newQty - currentQty;
+        const [itemRow] = await db.select({
+          averageCost: items.averageCost,
+          purchasePrice: items.purchasePrice,
+        }).from(items).where(tenantWhere(items, ctx.tenantId, eq(items.id, item.itemId)));
+        const unitCost = Number(item.unitCost || itemRow?.averageCost || itemRow?.purchasePrice || 0);
         await db.insert(inventoryAdjustmentItems).values(withTenantId(ctx.tenantId, {
           adjustmentId: adjId,
           itemId: item.itemId,
           currentQty: String(currentQty),
           newQty: String(newQty),
           difference: String(difference),
+          unitCost: String(unitCost),
+          batchNumber: item.batchNumber || null,
+          productionDate: item.productionDate || null,
+          expiryDate: item.expiryDate || null,
         }) as any);
         if (input.confirm && difference !== 0) {
           await applyStockMovement(db, ctx.tenantId, {
@@ -6741,11 +6770,6 @@ const inventoryRouter = router({
             direction: difference >= 0 ? "in" : "out",
             warehouseId: input.warehouseId,
           });
-          const [itemRow] = await db.select({
-            averageCost: items.averageCost,
-            purchasePrice: items.purchasePrice,
-          }).from(items).where(tenantWhere(items, ctx.tenantId, eq(items.id, item.itemId)));
-          const unitCost = Number(itemRow?.averageCost || itemRow?.purchasePrice || 0);
           netInventoryValue += difference * unitCost;
         }
       }

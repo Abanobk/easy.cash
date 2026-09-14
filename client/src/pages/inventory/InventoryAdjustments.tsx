@@ -39,8 +39,18 @@ export default function InventoryAdjustments() {
     customerId: "",
     referenceNumber: "",
   });
-  const [items, setItems] = useState<{ itemId: string; quantity: string; reason: string; available?: number }[]>([
-    { itemId: "", quantity: "1", reason: "" },
+  const [items, setItems] = useState<{
+    itemId: string;
+    quantity: string;
+    actualQty: string;
+    unitCost: string;
+    batchNumber: string;
+    productionDate: string;
+    expiryDate: string;
+    reason: string;
+    available?: number;
+  }[]>([
+    { itemId: "", quantity: "1", actualQty: "", unitCost: "", batchNumber: "", productionDate: "", expiryDate: "", reason: "" },
   ]);
   const [barcode, setBarcode] = useState("");
   const [printAfterSave, setPrintAfterSave] = useState(false);
@@ -125,7 +135,7 @@ export default function InventoryAdjustments() {
       customerId: "",
       referenceNumber: "",
     });
-    setItems([{ itemId: "", quantity: "1", reason: "" }]);
+    setItems([{ itemId: "", quantity: "1", actualQty: "", unitCost: "", batchNumber: "", productionDate: "", expiryDate: "", reason: "" }]);
     setBarcode("");
   };
 
@@ -157,10 +167,20 @@ export default function InventoryAdjustments() {
     }
   };
 
-  const addItem = () => setItems((prev) => [...prev, { itemId: "", quantity: "1", reason: "" }]);
+  const addItem = () => setItems((prev) => [...prev, { itemId: "", quantity: "1", actualQty: "", unitCost: "", batchNumber: "", productionDate: "", expiryDate: "", reason: "" }]);
   const removeItem = (i: number) => setItems((prev) => prev.filter((_, idx) => idx !== i));
   const updateItem = async (i: number, field: string, val: string) => {
-    setItems((prev) => prev.map((item, idx) => (idx === i ? { ...item, [field]: val } : item)));
+    setItems((prev) => prev.map((item, idx) => {
+      if (idx !== i) return item;
+      const next = { ...item, [field]: val };
+      if (field === "itemId") {
+        const row = (itemsList?.rows || []).find((x: any) => String(x.id) === val);
+        if (row && !item.unitCost) {
+          next.unitCost = String(row.averageCost ?? row.purchasePrice ?? "");
+        }
+      }
+      return next;
+    }));
     if (field === "itemId") {
       await refreshAvailable(i, val, form.warehouseId);
     }
@@ -181,7 +201,8 @@ export default function InventoryAdjustments() {
     if (emptyIdx >= 0) {
       await updateItem(emptyIdx, "itemId", String(hit.id));
     } else {
-      setItems((prev) => [...prev, { itemId: String(hit.id), quantity: "1", reason: "" }]);
+      const cost = String((hit as any).averageCost ?? (hit as any).purchasePrice ?? "");
+      setItems((prev) => [...prev, { itemId: String(hit.id), quantity: "1", actualQty: "", unitCost: cost, batchNumber: "", productionDate: "", expiryDate: "", reason: "" }]);
       await refreshAvailable(items.length, String(hit.id), form.warehouseId);
     }
     setBarcode("");
@@ -200,7 +221,16 @@ export default function InventoryAdjustments() {
       customerId: form.customerId ? Number(form.customerId) : null,
       referenceNumber: form.referenceNumber || undefined,
       confirm,
-      items: items.map((it) => ({ itemId: Number(it.itemId), quantity: it.quantity, reason: it.reason })),
+      items: items.map((it) => ({
+        itemId: Number(it.itemId),
+        quantity: it.quantity,
+        actualQty: it.actualQty || undefined,
+        unitCost: it.unitCost || undefined,
+        batchNumber: it.batchNumber || undefined,
+        productionDate: it.productionDate || undefined,
+        expiryDate: it.expiryDate || undefined,
+        reason: it.reason,
+      })),
     }, {
       onSuccess: (r) => {
         toast.success(r.status === "draft" ? "تم حفظ التسوية معلّقة" : "تم اعتماد تسوية المخزون");
@@ -368,7 +398,7 @@ export default function InventoryAdjustments() {
       </Card>
 
       <Dialog open={open} onOpenChange={(v) => { if (!v) closeDialog(); else setOpen(true); }}>
-        <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto" dir="rtl">
+        <DialogContent className="max-w-6xl max-h-[85vh] overflow-y-auto" dir="rtl">
           <DialogHeader><DialogTitle>تسوية مخزنية</DialogTitle></DialogHeader>
           <div className="grid gap-4 py-2">
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -464,8 +494,13 @@ export default function InventoryAdjustments() {
                   <TableHeader>
                     <TableRow className="bg-slate-50">
                       <TableHead className="text-right text-xs">الصنف</TableHead>
-                      <TableHead className="text-right text-xs">الكمية المتاحة</TableHead>
+                      <TableHead className="text-right text-xs">المتاحة</TableHead>
                       <TableHead className="text-right text-xs">الكمية</TableHead>
+                      <TableHead className="text-right text-xs">الفعلية</TableHead>
+                      <TableHead className="text-right text-xs">التكلفة</TableHead>
+                      <TableHead className="text-right text-xs">التشغيلة</TableHead>
+                      <TableHead className="text-right text-xs">إنتاج</TableHead>
+                      <TableHead className="text-right text-xs">انتهاء</TableHead>
                       <TableHead className="text-right text-xs">ملاحظات</TableHead>
                       <TableHead />
                     </TableRow>
@@ -485,10 +520,25 @@ export default function InventoryAdjustments() {
                           {it.available != null ? Number(it.available).toLocaleString("en-US") : "—"}
                         </TableCell>
                         <TableCell className="p-1">
-                          <Input type="number" value={it.quantity} onChange={(e) => void updateItem(i, "quantity", e.target.value)} className="h-8 text-xs w-24" />
+                          <Input type="number" value={it.quantity} onChange={(e) => void updateItem(i, "quantity", e.target.value)} className="h-8 text-xs w-20" />
                         </TableCell>
                         <TableCell className="p-1">
-                          <Input value={it.reason} onChange={(e) => void updateItem(i, "reason", e.target.value)} className="h-8 text-xs" placeholder="ملاحظات..." />
+                          <Input type="number" value={it.actualQty} onChange={(e) => void updateItem(i, "actualQty", e.target.value)} className="h-8 text-xs w-20" placeholder="جرد" title="الكمية الفعلية بعد الجرد" />
+                        </TableCell>
+                        <TableCell className="p-1">
+                          <Input type="number" value={it.unitCost} onChange={(e) => void updateItem(i, "unitCost", e.target.value)} className="h-8 text-xs w-20" />
+                        </TableCell>
+                        <TableCell className="p-1">
+                          <Input value={it.batchNumber} onChange={(e) => void updateItem(i, "batchNumber", e.target.value)} className="h-8 text-xs w-24" />
+                        </TableCell>
+                        <TableCell className="p-1">
+                          <Input type="date" value={it.productionDate} onChange={(e) => void updateItem(i, "productionDate", e.target.value)} className="h-8 text-xs w-32" />
+                        </TableCell>
+                        <TableCell className="p-1">
+                          <Input type="date" value={it.expiryDate} onChange={(e) => void updateItem(i, "expiryDate", e.target.value)} className="h-8 text-xs w-32" />
+                        </TableCell>
+                        <TableCell className="p-1">
+                          <Input value={it.reason} onChange={(e) => void updateItem(i, "reason", e.target.value)} className="h-8 text-xs w-28" placeholder="ملاحظات..." />
                         </TableCell>
                         <TableCell className="p-1">
                           {items.length > 1 && (

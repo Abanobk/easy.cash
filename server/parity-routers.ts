@@ -13,7 +13,7 @@ import {
   assetCategories, assetCapitalMaintenance, assetSales, salesAreas,
   items, customers, employees, attendance, itemCategories, fixedAssets,
   employeeVacationRecords, departments, warehouses, suppliers, branches,
-  salesInvoices, purchaseInvoices,
+  salesInvoices, purchaseInvoices, itemWarehouseStock,
 } from "../drizzle/schema";
 import { isInsideGeofence, syncMachineFromTcp, syncMachinePunches, testMachineTcpConnection, upsertDailyAttendance } from "./hr-attendance";
 import { postAssetSaleJournal, cancelPostedJournalByReference, postHrIncentiveJournal } from "./auto-journal";
@@ -1101,6 +1101,9 @@ export const inventoryExtendedRouter = router({
       decimals: z.number().min(0).max(6).optional(),
       /** تطبيق النسبة فقط: new = base × (pct/100) بدل base × (1 + pct/100) */
       percentOnly: z.boolean().optional(),
+      /** متوسط التكلفة من فرع / مخزن — مطابقة ميجا PriceChanger */
+      avgFromBranchId: z.number().optional(),
+      avgFromWarehouseId: z.number().optional(),
       filter: z.object({
         categoryId: z.number().optional(),
         altCategoryId: z.number().optional(),
@@ -1115,9 +1118,45 @@ export const inventoryExtendedRouter = router({
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 
+      /** متوسط تكلفة مرجّح من مخزن أو فروع المخازن — fallback للمتوسط العام */
+      const avgCostMap = new Map<number, number>();
+      if (input.avgFromWarehouseId || input.avgFromBranchId) {
+        const stockRows = await db.select({
+          itemId: itemWarehouseStock.itemId,
+          quantity: itemWarehouseStock.quantity,
+          unitCost: itemWarehouseStock.unitCost,
+          warehouseId: itemWarehouseStock.warehouseId,
+          branchId: warehouses.branchId,
+        }).from(itemWarehouseStock)
+          .leftJoin(warehouses, eq(itemWarehouseStock.warehouseId, warehouses.id))
+          .where(tenantWhere(itemWarehouseStock, ctx.tenantId, and(
+            ...[
+              input.avgFromWarehouseId ? eq(itemWarehouseStock.warehouseId, input.avgFromWarehouseId) : undefined,
+              input.avgFromBranchId ? eq(warehouses.branchId, input.avgFromBranchId) : undefined,
+            ].filter(Boolean) as any[],
+          )));
+        const agg = new Map<number, { qty: number; value: number }>();
+        for (const r of stockRows) {
+          const qty = Number(r.quantity || 0);
+          const cost = Number(r.unitCost || 0);
+          if (qty <= 0) continue;
+          const cur = agg.get(r.itemId) || { qty: 0, value: 0 };
+          cur.qty += qty;
+          cur.value += qty * cost;
+          agg.set(r.itemId, cur);
+        }
+        for (const [itemId, a] of agg) {
+          if (a.qty > 0) avgCostMap.set(itemId, a.value / a.qty);
+        }
+      }
+
       const fieldOf = (it: typeof items.$inferSelect, kind: string) => {
         if (kind === "purchase") return it.purchasePrice;
-        if (kind === "avg") return it.averageCost || it.purchasePrice;
+        if (kind === "avg") {
+          const scoped = avgCostMap.get(it.id);
+          if (scoped != null) return String(scoped);
+          return it.averageCost || it.purchasePrice;
+        }
         if (kind === "min") return it.minPrice;
         if (kind === "max") return it.maxPrice;
         if (kind === "percent_discount") return it.percentDiscount;
@@ -1161,7 +1200,7 @@ export const inventoryExtendedRouter = router({
         if (input.filter?.priceStatus) {
           targetItems = targetItems.filter((it) => {
             const price = Number(it.salePrice || 0);
-            const avg = Number(it.averageCost || it.purchasePrice || 0);
+            const avg = Number(fieldOf(it, "avg") || 0);
             if (input.filter!.priceStatus === "lt_avg") return price < avg;
             if (input.filter!.priceStatus === "eq_avg") return Math.abs(price - avg) < 0.0001;
             return price > avg;
@@ -1301,6 +1340,8 @@ export const inventoryExtendedRouter = router({
         id: beginningInventory.id,
         warehouseId: beginningInventory.warehouseId,
         warehouseName: warehouses.name,
+        branchId: beginningInventory.branchId,
+        branchName: branches.name,
         itemId: beginningInventory.itemId,
         itemName: items.name,
         itemCode: items.code,
@@ -1311,11 +1352,16 @@ export const inventoryExtendedRouter = router({
         unitCost: beginningInventory.unitCost,
         lineTotal: sql<string>`CAST(${beginningInventory.quantity} AS DECIMAL(15,3)) * CAST(COALESCE(${beginningInventory.unitCost}, 0) AS DECIMAL(15,4))`,
         date: beginningInventory.date,
+        referenceNumber: beginningInventory.referenceNumber,
+        notes: beginningInventory.notes,
+        batchNumber: beginningInventory.batchNumber,
+        status: beginningInventory.status,
       }).from(beginningInventory)
         .where(tenantWhere(beginningInventory, ctx.tenantId))
         .leftJoin(items, eq(beginningInventory.itemId, items.id))
         .leftJoin(itemCategories, eq(items.categoryId, itemCategories.id))
         .leftJoin(warehouses, eq(beginningInventory.warehouseId, warehouses.id))
+        .leftJoin(branches, eq(beginningInventory.branchId, branches.id))
         .orderBy(desc(beginningInventory.date));
     }),
     create: protectedProcedure.input(z.object({
@@ -1324,23 +1370,95 @@ export const inventoryExtendedRouter = router({
       quantity: z.string(),
       unitCost: z.string().optional(),
       date: z.string(),
+      branchId: z.number().optional().nullable(),
+      referenceNumber: z.string().optional().nullable(),
+      notes: z.string().optional().nullable(),
+      batchNumber: z.string().optional().nullable(),
+      /** false = حفظ معلق بدون حركة مخزون (ميجا: حفظ ثم اعتماد) */
+      confirm: z.boolean().default(true),
     })).mutation(async ({ ctx, input }) => {
       await assertEntityAction(ctx, "inventory", "beginningInventory", "add");
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      await db.insert(beginningInventory).values(withTenantId(ctx.tenantId, input) as any);
-      const { applyStockMovement } = await import("./inventory-stock");
-      await applyStockMovement(db, ctx.tenantId, {
-        itemId: input.itemId,
-        quantity: input.quantity,
-        direction: "in",
-        warehouseId: input.warehouseId,
-      });
-      if (input.unitCost) {
-        const { updateAverageCostAfterPurchase } = await import("./inventory-cost");
-        await updateAverageCostAfterPurchase(db, ctx.tenantId, input.itemId, Number(input.quantity), Number(input.unitCost), input.warehouseId);
+      const status = input.confirm ? "confirmed" : "draft";
+      const { confirm: _c, ...rest } = input;
+      await db.insert(beginningInventory).values(withTenantId(ctx.tenantId, {
+        ...rest,
+        status,
+        branchId: input.branchId ?? null,
+        referenceNumber: input.referenceNumber || null,
+        notes: input.notes || null,
+        batchNumber: input.batchNumber || null,
+      }) as any);
+      if (input.confirm) {
+        const { applyStockMovement } = await import("./inventory-stock");
+        await applyStockMovement(db, ctx.tenantId, {
+          itemId: input.itemId,
+          quantity: input.quantity,
+          direction: "in",
+          warehouseId: input.warehouseId,
+        });
+        if (input.unitCost) {
+          const { updateAverageCostAfterPurchase } = await import("./inventory-cost");
+          await updateAverageCostAfterPurchase(db, ctx.tenantId, input.itemId, Number(input.quantity), Number(input.unitCost), input.warehouseId);
+        }
       }
-      return { success: true };
+      return { success: true, status };
+    }),
+    /** اعتماد سطور معلقة — يرحّل المخزون مثل زر اعتماد ميجا */
+    confirm: protectedProcedure.input(z.object({
+      ids: z.array(z.number()).min(1).max(5000),
+    })).mutation(async ({ ctx, input }) => {
+      await assertEntityAction(ctx, "inventory", "beginningInventory", "edit");
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const { applyStockMovement } = await import("./inventory-stock");
+      const { updateAverageCostAfterPurchase } = await import("./inventory-cost");
+      let confirmed = 0;
+      for (const id of input.ids) {
+        const [row] = await db.select().from(beginningInventory)
+          .where(tenantWhere(beginningInventory, ctx.tenantId, eq(beginningInventory.id, id)));
+        if (!row || row.status === "confirmed") continue;
+        await applyStockMovement(db, ctx.tenantId, {
+          itemId: row.itemId,
+          quantity: row.quantity,
+          direction: "in",
+          warehouseId: row.warehouseId,
+        });
+        if (row.unitCost && Number(row.unitCost) > 0) {
+          await updateAverageCostAfterPurchase(db, ctx.tenantId, row.itemId, Number(row.quantity), Number(row.unitCost), row.warehouseId);
+        }
+        await db.update(beginningInventory).set({ status: "confirmed" })
+          .where(tenantWhere(beginningInventory, ctx.tenantId, eq(beginningInventory.id, id)));
+        confirmed += 1;
+      }
+      return { success: true, confirmed };
+    }),
+    /** فك اعتماد — يعكس المخزون ويعيد السطر لمعلق (ميجا: فك اعتماد) */
+    unconfirm: protectedProcedure.input(z.object({
+      ids: z.array(z.number()).min(1).max(5000),
+    })).mutation(async ({ ctx, input }) => {
+      await assertEntityAction(ctx, "inventory", "beginningInventory", "edit");
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const { applyStockMovement } = await import("./inventory-stock");
+      let unconfirmed = 0;
+      for (const id of input.ids) {
+        const [row] = await db.select().from(beginningInventory)
+          .where(tenantWhere(beginningInventory, ctx.tenantId, eq(beginningInventory.id, id)));
+        if (!row || row.status !== "confirmed") continue;
+        await applyStockMovement(db, ctx.tenantId, {
+          itemId: row.itemId,
+          quantity: row.quantity,
+          direction: "out",
+          warehouseId: row.warehouseId,
+          allowNegative: true,
+        });
+        await db.update(beginningInventory).set({ status: "draft" })
+          .where(tenantWhere(beginningInventory, ctx.tenantId, eq(beginningInventory.id, id)));
+        unconfirmed += 1;
+      }
+      return { success: true, unconfirmed };
     }),
     /** معاينة استيراد ذكي من Excel: مطابقة باركود/كود/اسم + مخزن */
     smartImportPreview: protectedProcedure.input(z.object({
@@ -1821,13 +1939,15 @@ export const inventoryExtendedRouter = router({
 
       for (const row of rows) {
         try {
-          await applyStockMovement(db, ctx.tenantId, {
-            itemId: row.itemId,
-            quantity: row.quantity,
-            direction: "out",
-            warehouseId: row.warehouseId,
-            allowNegative: true,
-          });
+          if (row.status === "confirmed") {
+            await applyStockMovement(db, ctx.tenantId, {
+              itemId: row.itemId,
+              quantity: row.quantity,
+              direction: "out",
+              warehouseId: row.warehouseId,
+              allowNegative: true,
+            });
+          }
           await db.delete(beginningInventory)
             .where(tenantWhere(beginningInventory, ctx.tenantId, eq(beginningInventory.id, row.id)));
           touchedItems.add(row.itemId);
@@ -1887,7 +2007,7 @@ export const inventoryExtendedRouter = router({
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       const [row] = await db.select().from(beginningInventory)
         .where(tenantWhere(beginningInventory, ctx.tenantId, eq(beginningInventory.id, input)));
-      if (row) {
+      if (row && row.status === "confirmed") {
         const { applyStockMovement } = await import("./inventory-stock");
         await applyStockMovement(db, ctx.tenantId, {
           itemId: row.itemId,
