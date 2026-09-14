@@ -32,10 +32,10 @@ export function useItemOptions() {
 }
 
 export function useCustomerOptions() {
-  const q = trpc.customers.list.useQuery({ page: 1, limit: 500 });
+  const q = trpc.customers.all.useQuery();
   return useMemo(
     () =>
-      (q.data?.rows || []).map((c: { id: number; name: string; code?: string | null }) => ({
+      (q.data || []).map((c: { id: number; name: string; code?: string | null }) => ({
         value: String(c.id),
         label: c.code ? `${c.code} — ${c.name}` : c.name,
       })),
@@ -44,10 +44,10 @@ export function useCustomerOptions() {
 }
 
 export function useSupplierOptions() {
-  const q = trpc.suppliers.list.useQuery({ page: 1, limit: 500 });
+  const q = trpc.suppliers.all.useQuery();
   return useMemo(
     () =>
-      (q.data?.rows || []).map((s: { id: number; name: string; code?: string | null }) => ({
+      (q.data || []).map((s: { id: number; name: string; code?: string | null }) => ({
         value: String(s.id),
         label: s.code ? `${s.code} — ${s.name}` : s.name,
       })),

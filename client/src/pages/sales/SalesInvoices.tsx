@@ -166,7 +166,7 @@ export default function SalesInvoices() {
     search: debouncedSearch || undefined,
     paymentType: isCashMode ? "cash" : undefined,
   });
-  const { data: customers } = trpc.customers.list.useQuery({ page: 1, limit: 200 });
+  const { data: customers } = trpc.customers.all.useQuery();
   const { data: allItems } = trpc.items.all.useQuery();
   const { data: warehouses } = trpc.warehouses.list.useQuery();
   const { data: branchList } = trpc.settings.branches.list.useQuery();
@@ -278,7 +278,7 @@ export default function SalesInvoices() {
   const firePrint = (number: string) => {
     printInvoiceQuick({
       title: "فاتورة مبيعات", number, date: form.date, partyLabel: "العميل",
-      partyName: customers?.rows.find((c) => c.id === form.customerId)?.name || "",
+      partyName: customers?.find((c) => c.id === form.customerId)?.name || "",
       lines: invoiceItems.map((i) => ({ name: i.itemName, quantity: Number(i.quantity), unit: i.itemUnit, price: Number(i.price), total: Number(i.total) })),
       subtotal, discount: 0, tax: taxTotal, total, paymentType: form.paymentType,
     });
@@ -287,7 +287,7 @@ export default function SalesInvoices() {
   const fireWarehouseNote = (number: string) => {
     printWarehouseNote({
       title: "إذن صرف مخزن", number, date: form.date, partyLabel: "العميل",
-      partyName: customers?.rows.find((c) => c.id === form.customerId)?.name || "",
+      partyName: customers?.find((c) => c.id === form.customerId)?.name || "",
       lines: invoiceItems.map((i) => ({
         name: i.itemName, quantity: Number(i.quantity), unit: i.itemUnit,
         warehouseName: warehouses?.find((w) => w.id === (i.warehouseId ?? form.warehouseId))?.name,
@@ -429,7 +429,7 @@ export default function SalesInvoices() {
   const amountLabel = foreign ? form.currencyCode : "ج.م";
   const baseTotal = toBaseAmount(total, form.currencyCode, form.exchangeRate);
   const itemTracksSerial = (itemId: number) => Boolean(allItems?.find((i) => i.id === itemId)?.trackSerial);
-  const selectedCustomerBalance = customers?.rows.find((c) => c.id === form.customerId)?.balance;
+  const selectedCustomerBalance = customers?.find((c) => c.id === form.customerId)?.balance;
 
   const applyScopedOffer = (offer: ActiveOffer) => {
     const pct = Number(offer.discountPercent) || 0;
@@ -540,7 +540,7 @@ export default function SalesInvoices() {
                   <div className="flex gap-1">
                     <div className="flex-1 min-w-[9rem]">
                       <PartySearchSelect
-                        parties={customers?.rows || []}
+                        parties={customers || []}
                         value={form.customerId?.toString() || ""}
                         onChange={(v) => setForm((p) => ({ ...p, customerId: Number(v) }))}
                         placeholder="اختر العميل"

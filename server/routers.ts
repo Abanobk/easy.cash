@@ -406,6 +406,25 @@ const customersRouter = router({
       total: total.count,
     };
   }),
+  all: protectedProcedure.input(z.object({
+    branchId: z.number().optional(),
+  }).optional()).query(async ({ ctx, input }) => {
+    // نفس ملحوظة list: مصدر بيانات مشترك لاختيار عميل في شاشات تانية كتير —
+    // نسخة بدون تقسيم صفحات علشان مش يختفي عملاء بعد أول 200 صف.
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    const scope = await loadUserScopeFromCtx(db, ctx.saasUser);
+    const where = and(
+      eq(customers.isActive, true),
+      input?.branchId != null ? eq(customers.branchId, input.branchId) : scopeBranchFilter(customers, scope),
+    );
+    return db.select().from(customers).where(tenantWhere(customers, ctx.tenantId, where)).orderBy(
+      sql`(CASE WHEN ${customers.code} IS NULL OR TRIM(${customers.code}) = '' THEN 1 ELSE 0 END)`,
+      customers.code,
+      customers.name,
+      customers.id,
+    );
+  }),
   byId: protectedProcedure.input(z.number()).query(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
@@ -665,6 +684,25 @@ const suppliersRouter = router({
     const rows = await db.select().from(suppliers).where(tenantWhere(suppliers, ctx.tenantId, where)).orderBy(desc(suppliers.createdAt)).limit(input.limit).offset(offset);
     const [total] = await db.select({ count: count() }).from(suppliers).where(tenantWhere(suppliers, ctx.tenantId, where));
     return { rows, total: total.count };
+  }),
+  all: protectedProcedure.input(z.object({
+    branchId: z.number().optional(),
+  }).optional()).query(async ({ ctx, input }) => {
+    // نفس ملحوظة list: مصدر بيانات مشترك لاختيار مورد في شاشات تانية كتير —
+    // نسخة بدون تقسيم صفحات علشان مش يختفي موردين بعد أول 200 صف.
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    const scope = await loadUserScopeFromCtx(db, ctx.saasUser);
+    const where = and(
+      eq(suppliers.isActive, true),
+      input?.branchId != null ? eq(suppliers.branchId, input.branchId) : scopeBranchFilter(suppliers, scope),
+    );
+    return db.select().from(suppliers).where(tenantWhere(suppliers, ctx.tenantId, where)).orderBy(
+      sql`(CASE WHEN ${suppliers.code} IS NULL OR TRIM(${suppliers.code}) = '' THEN 1 ELSE 0 END)`,
+      suppliers.code,
+      suppliers.name,
+      suppliers.id,
+    );
   }),
   byId: protectedProcedure.input(z.number()).query(async ({ ctx, input }) => {
     const db = await getDb();

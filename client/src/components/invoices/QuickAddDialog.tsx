@@ -47,9 +47,9 @@ export function QuickAddDialog({
   });
   const supplierMut = trpc.suppliers.create.useMutation({
     onSuccess: async () => {
-      await utils.suppliers.list.invalidate();
-      const rows = await utils.suppliers.list.fetch({ page: 1, limit: 200 });
-      const created = rows?.rows.find((r) => r.name === name);
+      await utils.suppliers.all.invalidate();
+      const rows = await utils.suppliers.all.fetch();
+      const created = rows?.find((r) => r.name === name);
       toast.success("تم إضافة المورد");
       if (created) onCreated({ id: created.id, name: created.name });
       close();
@@ -58,9 +58,9 @@ export function QuickAddDialog({
   });
   const customerMut = trpc.customers.create.useMutation({
     onSuccess: async () => {
-      await utils.customers.list.invalidate();
-      const rows = await utils.customers.list.fetch({ page: 1, limit: 200 });
-      const created = rows?.rows.find((r) => r.name === name);
+      await utils.customers.all.invalidate();
+      const rows = await utils.customers.all.fetch();
+      const created = rows?.find((r) => r.name === name);
       toast.success("تم إضافة العميل");
       if (created) onCreated({ id: created.id, name: created.name });
       close();

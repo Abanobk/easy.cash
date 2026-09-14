@@ -48,8 +48,8 @@ export default function ContactStatement() {
     }
   }, [initialId, initialType]);
 
-  const { data: customers } = trpc.customers.list.useQuery({ limit: 200 });
-  const { data: suppliers } = trpc.suppliers.list.useQuery({ limit: 200 });
+  const { data: customers } = trpc.customers.all.useQuery();
+  const { data: suppliers } = trpc.suppliers.all.useQuery();
 
   const { data: customerStatement, isLoading: loadingCustomer } = trpc.statement.customer.useQuery(
     { customerId: contactId!, dateFrom: dateFrom || undefined, dateTo: dateTo || undefined },
@@ -65,8 +65,8 @@ export default function ContactStatement() {
   const isLoading = contactType === "customer" ? loadingCustomer : loadingSupplier;
 
   const contactList = contactType === "customer"
-    ? (customers?.rows || [])
-    : (suppliers?.rows || []);
+    ? (customers || [])
+    : (suppliers || []);
 
   const handleSearch = () => {
     if (!contactId) return;

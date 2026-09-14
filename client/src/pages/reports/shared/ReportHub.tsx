@@ -198,12 +198,12 @@ export default function ReportHub({ title, section, icon, reports, procedure }: 
   const needs = (f: ReportEntityFilter) => entityFilters.includes(f);
   const selectedBranchId = branchId ? Number(branchId) : undefined;
 
-  const { data: customersList } = trpc.customers.list.useQuery(
-    { limit: 200, branchId: selectedBranchId },
+  const { data: customersList } = trpc.customers.all.useQuery(
+    { branchId: selectedBranchId },
     { enabled: needs("customer") },
   );
-  const { data: suppliersList } = trpc.suppliers.list.useQuery(
-    { limit: 200, branchId: selectedBranchId },
+  const { data: suppliersList } = trpc.suppliers.all.useQuery(
+    { branchId: selectedBranchId },
     { enabled: needs("supplier") },
   );
   const { data: accountsList } = trpc.accounts.chart.useQuery(undefined, { enabled: needs("account") });
@@ -222,9 +222,9 @@ export default function ReportHub({ title, section, icon, reports, procedure }: 
   // عند تغيير الفرع أعد ضبط العميل/المورد/المخزن إن لم يعودوا ضمن الفرع
   useEffect(() => {
     if (!selectedBranchId) return;
-    const custOk = (customersList?.rows || []).some((c: { id: number }) => String(c.id) === customerId);
+    const custOk = (customersList || []).some((c: { id: number }) => String(c.id) === customerId);
     if (customerId && customersList && !custOk) setCustomerId("");
-    const supOk = (suppliersList?.rows || []).some((s: { id: number }) => String(s.id) === supplierId);
+    const supOk = (suppliersList || []).some((s: { id: number }) => String(s.id) === supplierId);
     if (supplierId && suppliersList && !supOk) setSupplierId("");
     const whOk = (warehousesList || []).some((w: { id: number }) => String(w.id) === warehouseId);
     if (warehouseId && warehousesList && !whOk) setWarehouseId("");
@@ -420,13 +420,13 @@ export default function ReportHub({ title, section, icon, reports, procedure }: 
                   "العميل",
                   customerId,
                   setCustomerId,
-                  (customersList?.rows || []).map((c: { id: number; name: string }) => ({ id: c.id, label: c.name })),
+                  (customersList || []).map((c: { id: number; name: string }) => ({ id: c.id, label: c.name })),
                 )}
                 {needs("supplier") && entitySelect(
                   "المورد",
                   supplierId,
                   setSupplierId,
-                  (suppliersList?.rows || []).map((s: { id: number; name: string }) => ({ id: s.id, label: s.name })),
+                  (suppliersList || []).map((s: { id: number; name: string }) => ({ id: s.id, label: s.name })),
                 )}
                 {needs("account") && entitySelect(
                   "الحساب",

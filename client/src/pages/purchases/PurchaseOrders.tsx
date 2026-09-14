@@ -34,7 +34,7 @@ export default function PurchaseOrders() {
 
   const utils = trpc.useUtils();
   const { data, refetch } = trpc.purchases.orders.list.useQuery({ page: 1, limit: 50 });
-  const { data: suppliers } = trpc.suppliers.list.useQuery({ page: 1, limit: 200 });
+  const { data: suppliers } = trpc.suppliers.all.useQuery();
   const { data: itemsList } = trpc.items.all.useQuery();
   const warehouses = useWarehouseOptions();
   const createMut = trpc.purchases.orders.create.useMutation({ onSuccess: () => { toast.success("تم إنشاء طلب الشراء"); refetch(); setOpen(false); resetForm(); } });
@@ -173,7 +173,7 @@ export default function PurchaseOrders() {
               <div className="space-y-1">
                 <Label className="text-xs">المورد *</Label>
                 <PartySearchSelect
-                  parties={suppliers?.rows || []}
+                  parties={suppliers || []}
                   value={form.supplierId}
                   onChange={(v) => setForm(f => ({ ...f, supplierId: v }))}
                   placeholder="اختر المورد"

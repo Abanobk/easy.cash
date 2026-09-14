@@ -90,8 +90,8 @@ export default function AccountingAuditorPage() {
   const policyQuery = trpc.accountingAuditor.getPolicy.useQuery();
   const banksQuery = trpc.accountingAuditor.bankAccounts.useQuery();
   const uploadsQuery = trpc.accountingAuditor.listUploads.useQuery();
-  const customersQuery = trpc.customers.list.useQuery({ limit: 200 });
-  const suppliersQuery = trpc.suppliers.list.useQuery({ limit: 200 });
+  const customersQuery = trpc.customers.all.useQuery();
+  const suppliersQuery = trpc.suppliers.all.useQuery();
   const detailQuery = trpc.accountingAuditor.bankStatementDetail.useQuery(
     { importId: detailImportId || 0 },
     { enabled: !!detailImportId },
@@ -349,7 +349,7 @@ export default function AccountingAuditorPage() {
                     <div>
                       <Label className="text-xs">{stmtKind === "customer" ? "العميل" : "المورد"}</Label>
                       <PartySearchSelect
-                        parties={(stmtKind === "customer" ? customersQuery.data?.rows : suppliersQuery.data?.rows) || []}
+                        parties={(stmtKind === "customer" ? customersQuery.data : suppliersQuery.data) || []}
                         value={stmtPartyId}
                         onChange={setStmtPartyId}
                         placeholder={stmtKind === "customer" ? "اختر عميل" : "اختر مورد"}

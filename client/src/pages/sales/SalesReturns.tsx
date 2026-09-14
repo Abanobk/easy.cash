@@ -27,7 +27,7 @@ export default function SalesReturns() {
   ]);
 
   const { data, refetch } = trpc.sales.returns.list.useQuery({ page: 1, limit: 50 });
-  const { data: customers } = trpc.customers.list.useQuery({ page: 1, limit: 200 });
+  const { data: customers } = trpc.customers.all.useQuery();
   const { data: itemsList } = trpc.items.all.useQuery();
   const createMut = trpc.sales.returns.create.useMutation({ onSuccess: () => { toast.success("تم تسجيل مردود البيع"); refetch(); setOpen(false); resetForm(); } });
 
@@ -107,7 +107,7 @@ export default function SalesReturns() {
               <div className="space-y-1">
                 <Label className="text-xs">العميل *</Label>
                 <PartySearchSelect
-                  parties={customers?.rows || []}
+                  parties={customers || []}
                   value={form.customerId}
                   onChange={(v) => setForm(f => ({ ...f, customerId: v }))}
                   placeholder="اختر العميل"
