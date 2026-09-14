@@ -1,0 +1,388 @@
+{
+  "title": "",
+  "labels": [
+    "التاريخ",
+    "الفرع",
+    "الحساب المقابل",
+    "رقم المرجع",
+    "العميل",
+    "مركز التكلفة",
+    "المخزن",
+    "الباركود",
+    "الفئة",
+    "الصنف",
+    "الكمية الواردة / الصادرة",
+    "الكمية المتاحة:",
+    "الكمية الفعلية",
+    "الوحدة",
+    "التكلفة",
+    "رقم التشغيلة",
+    "ملاحظات",
+    "طباعة بعد الحفظ",
+    "طباعة بعد الاعتماد",
+    "الاسم",
+    "الفئة الرئيسية",
+    "تكلفة الشراء الافتراضية",
+    "سعر البيع الافتراضي",
+    "وحدة القياس الاساسية",
+    "فئة بديلة",
+    "خصم نسبة",
+    "خصم نقدي",
+    "الضريبة",
+    "تاريخ الانتاج",
+    "تاريخ الانتهاء"
+  ],
+  "headers": [],
+  "buttons": [
+    "اضافة تعليق",
+    "اضافة",
+    "تفريغ",
+    "بحث",
+    "حفظ",
+    "اعتماد"
+  ],
+  "selects": [],
+  "inputs": [
+    {
+      "id": "txtHidden",
+      "name": "ctl00$txtHidden",
+      "type": "text",
+      "placeholder": "",
+      "nearby": ""
+    },
+    {
+      "id": "txtComment",
+      "name": "ctl00$txtComment",
+      "type": "textarea",
+      "placeholder": "",
+      "nearby": ""
+    },
+    {
+      "id": "cph_txtSerial",
+      "name": "ctl00$cph$txtSerial",
+      "type": "text",
+      "placeholder": "",
+      "nearby": ""
+    },
+    {
+      "id": "cph_txtOperationDate",
+      "name": "ctl00$cph$txtOperationDate",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "التاريخ"
+    },
+    {
+      "id": "cph_acBranch_txtAutoCompleteText",
+      "name": "ctl00$cph$acBranch$txtAutoCompleteText",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "الفرع"
+    },
+    {
+      "id": "cph_acBranch_hfAutocomplete",
+      "name": "ctl00$cph$acBranch$hfAutocomplete",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "الفرع"
+    },
+    {
+      "id": "cph_acOppositeAccount_txtAutoCompleteText",
+      "name": "ctl00$cph$acOppositeAccount$txtAutoCompleteText",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "الحساب المقابل"
+    },
+    {
+      "id": "cph_acOppositeAccount_hfAutocomplete",
+      "name": "ctl00$cph$acOppositeAccount$hfAutocomplete",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "الحساب المقابل"
+    },
+    {
+      "id": "cph_txtUserRefNo",
+      "name": "ctl00$cph$txtUserRefNo",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "رقم المرجع"
+    },
+    {
+      "id": "cph_acCustomer_txtAutoCompleteText",
+      "name": "ctl00$cph$acCustomer$txtAutoCompleteText",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "العميل"
+    },
+    {
+      "id": "cph_acCustomer_hfAutocomplete",
+      "name": "ctl00$cph$acCustomer$hfAutocomplete",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "العميل"
+    },
+    {
+      "id": "cph_acCostCenter_txtAutoCompleteText",
+      "name": "ctl00$cph$acCostCenter$txtAutoCompleteText",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "مركز التكلفة"
+    },
+    {
+      "id": "cph_acCostCenter_hfAutocomplete",
+      "name": "ctl00$cph$acCostCenter$hfAutocomplete",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "مركز التكلفة"
+    },
+    {
+      "id": "cph_acStore_txtAutoCompleteText",
+      "name": "ctl00$cph$acStore$txtAutoCompleteText",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "المخزن"
+    },
+    {
+      "id": "cph_acStore_hfAutocomplete",
+      "name": "ctl00$cph$acStore$hfAutocomplete",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "المخزن"
+    },
+    {
+      "id": "cph_txtBarcode",
+      "name": "ctl00$cph$txtBarcode",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "الباركود"
+    },
+    {
+      "id": "cph_acCategory_txtAutoCompleteText",
+      "name": "ctl00$cph$acCategory$txtAutoCompleteText",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "الفئة"
+    },
+    {
+      "id": "cph_acCategory_hfAutocomplete",
+      "name": "ctl00$cph$acCategory$hfAutocomplete",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "الفئة"
+    },
+    {
+      "id": "cph_acItem_txtAutoCompleteText",
+      "name": "ctl00$cph$acItem$txtAutoCompleteText",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "الصنف"
+    },
+    {
+      "id": "cph_acItem_hfAutocomplete",
+      "name": "ctl00$cph$acItem$hfAutocomplete",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "الصنف"
+    },
+    {
+      "id": "cph_txtQty",
+      "name": "ctl00$cph$txtQty",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "الكمية الواردة / الصادرة"
+    },
+    {
+      "id": "cph_txtActualQty",
+      "name": "ctl00$cph$txtActualQty",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "الكمية الفعلية"
+    },
+    {
+      "id": "cph_acUnit_txtAutoCompleteText",
+      "name": "ctl00$cph$acUnit$txtAutoCompleteText",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "الوحدة"
+    },
+    {
+      "id": "cph_acUnit_hfAutocomplete",
+      "name": "ctl00$cph$acUnit$hfAutocomplete",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "الوحدة"
+    },
+    {
+      "id": "cph_txtCost",
+      "name": "ctl00$cph$txtCost",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "التكلفة"
+    },
+    {
+      "id": "cph_acBatchID_txtAutoCompleteText",
+      "name": "ctl00$cph$acBatchID$txtAutoCompleteText",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "رقم التشغيلة"
+    },
+    {
+      "id": "cph_acBatchID_hfAutocomplete",
+      "name": "ctl00$cph$acBatchID$hfAutocomplete",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "رقم التشغيلة"
+    },
+    {
+      "id": "cph_txtItemNotes",
+      "name": "ctl00$cph$txtItemNotes",
+      "type": "textarea",
+      "placeholder": "",
+      "nearby": "ملاحظات"
+    },
+    {
+      "id": "cph_txtItemNameSrch",
+      "name": "ctl00$cph$txtItemNameSrch",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "الصنف"
+    },
+    {
+      "id": "cph_txtNotes",
+      "name": "ctl00$cph$txtNotes",
+      "type": "textarea",
+      "placeholder": "",
+      "nearby": "ملاحظات"
+    },
+    {
+      "id": "cph_ucNewItem_txtName",
+      "name": "ctl00$cph$ucNewItem$txtName",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "الاسم"
+    },
+    {
+      "id": "cph_ucNewItem_acCategory_txtAutoCompleteText",
+      "name": "ctl00$cph$ucNewItem$acCategory$txtAutoCompleteText",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "الفئة الرئيسية"
+    },
+    {
+      "id": "cph_ucNewItem_acCategory_hfAutocomplete",
+      "name": "ctl00$cph$ucNewItem$acCategory$hfAutocomplete",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "الفئة الرئيسية"
+    },
+    {
+      "id": "cph_ucNewItem_txtCost",
+      "name": "ctl00$cph$ucNewItem$txtCost",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "تكلفة الشراء الافتراضية"
+    },
+    {
+      "id": "cph_ucNewItem_txtDefaultPrice",
+      "name": "ctl00$cph$ucNewItem$txtDefaultPrice",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "سعر البيع الافتراضي"
+    },
+    {
+      "id": "cph_ucNewItem_acMainUnit_txtAutoCompleteText",
+      "name": "ctl00$cph$ucNewItem$acMainUnit$txtAutoCompleteText",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "وحدة القياس الاساسية"
+    },
+    {
+      "id": "cph_ucNewItem_acMainUnit_hfAutocomplete",
+      "name": "ctl00$cph$ucNewItem$acMainUnit$hfAutocomplete",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "وحدة القياس الاساسية"
+    },
+    {
+      "id": "cph_ucNewItem_txtBarcode",
+      "name": "ctl00$cph$ucNewItem$txtBarcode",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "الباركود"
+    },
+    {
+      "id": "cph_ucNewItem_acAltCategory_txtAutoCompleteText",
+      "name": "ctl00$cph$ucNewItem$acAltCategory$txtAutoCompleteText",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "فئة بديلة"
+    },
+    {
+      "id": "cph_ucNewItem_acAltCategory_hfAutocomplete",
+      "name": "ctl00$cph$ucNewItem$acAltCategory$hfAutocomplete",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "فئة بديلة"
+    },
+    {
+      "id": "cph_ucNewItem_txtPercentageDiscount",
+      "name": "ctl00$cph$ucNewItem$txtPercentageDiscount",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "خصم نسبة"
+    },
+    {
+      "id": "cph_ucNewItem_txtCashDiscount",
+      "name": "ctl00$cph$ucNewItem$txtCashDiscount",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "خصم نقدي"
+    },
+    {
+      "id": "cph_ucNewItem_acTax_txtAutoCompleteText",
+      "name": "ctl00$cph$ucNewItem$acTax$txtAutoCompleteText",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "الضريبة"
+    },
+    {
+      "id": "cph_ucNewItem_acTax_hfAutocomplete",
+      "name": "ctl00$cph$ucNewItem$acTax$hfAutocomplete",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "الضريبة"
+    },
+    {
+      "id": "cph_ucNewBatchID_txtBatchID",
+      "name": "ctl00$cph$ucNewBatchID$txtBatchID",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "رقم التشغيلة"
+    },
+    {
+      "id": "cph_ucNewBatchID_txtProductionDate",
+      "name": "ctl00$cph$ucNewBatchID$txtProductionDate",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "تاريخ الانتاج"
+    },
+    {
+      "id": "cph_ucNewBatchID_txtExpirationDate",
+      "name": "ctl00$cph$ucNewBatchID$txtExpirationDate",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "تاريخ الانتهاء"
+    },
+    {
+      "id": "cph_ucNewBatchID_txtItemID",
+      "name": "ctl00$cph$ucNewBatchID$txtItemID",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "الصنف"
+    }
+  ],
+  "bodyStart": " تسوية مخزنية\n     \nانشأ بواسطة: ام فارس\nاعتمد بواسطة:\nالتاريخ\nالفرع\nالحساب المقابل\nرقم المرجع\nالعميل\nمركز التكلفة\n\nالاصناف\n\nالمخزن\nالباركود\nالفئة\nالصنف\nالكمية الواردة / الصادرة\nالكمية المتاحة:\nالكمية الفعلية\nالوحدة\nالتكلفة\nرقم التشغيلة\nملاحظات\n\n\n \nبحث حذف\nالصنف\n \nلا توجد بيانات للعرض\nملاحظات\nطباعة بعد الحفظ\nطباعة بعد الاعتماد\nاجمالي الوارد:\t0\nاجمالي الصادر:\t0\nالاجمالي:\t0\nالكمية:\t0\n \n\n",
+  "url": "https://km.mega-cash.net/Inv/InventoryCorrection.aspx",
+  "key": "inventory-correction",
+  "megaLabel": "تسوية مخزنية",
+  "path": "/Inv/InventoryCorrection.aspx"
+}

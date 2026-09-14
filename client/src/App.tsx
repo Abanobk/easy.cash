@@ -144,8 +144,10 @@ function Router() {
       <Route path={T("/items/new")} component={wrap(ItemDetail)} />
       <Route path={T("/items/:id")} component={wrap(ItemDetail)} />
       <Route path={T("/items")} component={wrap(Items)} />
+      <Route path={T("/inventory/adjustments/new")} component={wrap(InventoryAdjustments)} />
       <Route path={T("/inventory/adjustments")} component={wrap(InventoryAdjustments)} />
       <Route path={T("/inventory/warehouses")} component={wrap(Warehouses)} />
+      <Route path={T("/inventory/transfers/new")} component={wrap(StockTransfers)} />
       <Route path={T("/inventory/transfers")} component={wrap(StockTransfers)} />
       <Route path={T("/inventory/categories")} component={wrap(ItemCategoriesPage)} />
       <Route path={T("/inventory/batches")} component={wrap(ItemBatchesPage)} />

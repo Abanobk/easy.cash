@@ -1,0 +1,84 @@
+{
+  "title": "",
+  "labels": [
+    "الاسم",
+    "الفئة الرئيسية"
+  ],
+  "headers": [
+    "الاسم",
+    "الفئة الرئيسية",
+    "عرض فى فواتير البيع",
+    "تعديل",
+    "حذف"
+  ],
+  "buttons": [
+    "اضافة تعليق",
+    "بحث",
+    "تفريغ",
+    "حفظ"
+  ],
+  "selects": [],
+  "inputs": [
+    {
+      "id": "txtHidden",
+      "name": "ctl00$txtHidden",
+      "type": "text",
+      "placeholder": "",
+      "nearby": ""
+    },
+    {
+      "id": "txtComment",
+      "name": "ctl00$txtComment",
+      "type": "textarea",
+      "placeholder": "",
+      "nearby": ""
+    },
+    {
+      "id": "cph_txtNameSrch",
+      "name": "ctl00$cph$txtNameSrch",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "الاسم"
+    },
+    {
+      "id": "cph_acParentCategorySrch_txtAutoCompleteText",
+      "name": "ctl00$cph$acParentCategorySrch$txtAutoCompleteText",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "الفئة الرئيسية"
+    },
+    {
+      "id": "cph_acParentCategorySrch_hfAutocomplete",
+      "name": "ctl00$cph$acParentCategorySrch$hfAutocomplete",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "الفئة الرئيسية"
+    },
+    {
+      "id": "cph_txtName",
+      "name": "ctl00$cph$txtName",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "الاسم"
+    },
+    {
+      "id": "cph_acParentCategory_txtAutoCompleteText",
+      "name": "ctl00$cph$acParentCategory$txtAutoCompleteText",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "الفئة الرئيسية"
+    },
+    {
+      "id": "cph_acParentCategory_hfAutocomplete",
+      "name": "ctl00$cph$acParentCategory$hfAutocomplete",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "الفئة الرئيسية"
+    }
+  ],
+  "bodyStart": " فئات الاصناف\n    \nبحث اضافة جديد\nبحث\nالاسم\nالفئة الرئيسية\n \nالاسم\tالفئة الرئيسية\tعرض فى فواتير البيع\tتعديل\tحذف\nC R\t \t\n\t\t\nCH\t \t\n\t\t\nH1\t \t\n\t\t\nPVC\t \t\n\t\t\nPW\t \t\n\t\t\nPW-H1\t \t\n\t\t\nS G\t \t\n\t\t\nT B U\t \t\n\t\t\nاصناف تالفة\t \t\n\t\t\nاصناف ملغية\t \t\n\t\t\nتعبئة وتغلييف صفيح\t \t\n\t\t\nخامات\t \t\n\t\t\nخامات صلبة\t \t\n\t\t\nخدمات\t \t\n\t\t\nرش - PW\t \t\n\t\t\nصفيح خام\t \t\n\t\t\nضرائب ورسوم وجمارك\t \t\n\t\t\nفرخ صفيح\t \t\n\t\t\nكله سايبة\t \t\n\t\t\nمذيبات\t \t\n\t\t\nعدد الصفحات: 2 / اجمالي عدد الصفوف: 21\n\n1\t2\n\n",
+  "url": "https://km.mega-cash.net/Inv/Categories.aspx",
+  "key": "categories",
+  "megaLabel": "فئات الاصناف",
+  "path": "/Inv/Categories.aspx"
+}

@@ -1,0 +1,92 @@
+{
+  "title": "",
+  "labels": [
+    "الفرع",
+    "الاسم",
+    "ملاحظات"
+  ],
+  "headers": [
+    "الاسم",
+    "الموظف",
+    "الفرع",
+    "تعديل",
+    "حذف"
+  ],
+  "buttons": [
+    "اضافة تعليق",
+    "بحث",
+    "تفريغ",
+    "حفظ"
+  ],
+  "selects": [],
+  "inputs": [
+    {
+      "id": "txtHidden",
+      "name": "ctl00$txtHidden",
+      "type": "text",
+      "placeholder": "",
+      "nearby": ""
+    },
+    {
+      "id": "txtComment",
+      "name": "ctl00$txtComment",
+      "type": "textarea",
+      "placeholder": "",
+      "nearby": ""
+    },
+    {
+      "id": "cph_acBranchSrch_txtAutoCompleteText",
+      "name": "ctl00$cph$acBranchSrch$txtAutoCompleteText",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "الفرع"
+    },
+    {
+      "id": "cph_acBranchSrch_hfAutocomplete",
+      "name": "ctl00$cph$acBranchSrch$hfAutocomplete",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "الفرع"
+    },
+    {
+      "id": "cph_txtNameSrch",
+      "name": "ctl00$cph$txtNameSrch",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "الاسم"
+    },
+    {
+      "id": "cph_txtName",
+      "name": "ctl00$cph$txtName",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "الاسم"
+    },
+    {
+      "id": "cph_acBranch_txtAutoCompleteText",
+      "name": "ctl00$cph$acBranch$txtAutoCompleteText",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "الفرع"
+    },
+    {
+      "id": "cph_acBranch_hfAutocomplete",
+      "name": "ctl00$cph$acBranch$hfAutocomplete",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "الفرع"
+    },
+    {
+      "id": "cph_txtNotes",
+      "name": "ctl00$cph$txtNotes",
+      "type": "textarea",
+      "placeholder": "",
+      "nearby": "ملاحظات"
+    }
+  ],
+  "bodyStart": " المخازن\n    \nبحث اضافة جديد\nبحث\nالفرع\nالاسم\n \nالاسم\tالموظف\tالفرع\tتعديل\tحذف\nمخزن KAM - الخامات\t \tمصنع KAM للمواد اللاصقة\t\t\nمخزن KAM - انتاج تام\t \tمصنع KAM للمواد اللاصقة\t\t\nمخزن KAM - انتاج تام تحت التسوية\t \tمصنع KAM للمواد اللاصقة\t\t\nمخزن KAM - انتاج نصف تام\t \tمصنع KAM للمواد اللاصقة\t\t\nمخزن KAM - انتاج نصف تام تحت التسوية\t \tمصنع KAM للمواد اللاصقة\t\t\nمخزن KAM - توالف\t \tمصنع KAM للمواد اللاصقة\t\t\nمخزن KAM - مواد تعبئة وتغلييف\t \tمصنع KAM للمواد اللاصقة\t\t\nمخزن امانات العملاء\t \tمصنع KAM للمواد اللاصقة\t\t\nمخزن امانات انتاج تام شركة الامل\t \tمصنع KAM للمواد اللاصقة\t\t\nمخزن امانات انتاج نصف تام شركة الامل\t \tمصنع KAM للمواد اللاصقة\t\t\nمخزن امانات خامات شركة الامل\t \tمصنع KAM للمواد اللاصقة\t\t\nمخزن امانات مواد تعبئة شركة الامل\t \tمصنع KAM للمواد اللاصقة\t\t\nمخزن ايفا - الخامات\t \tمصنع KAM للمواد اللاصقة\t\t\nمخزن ايفا - انتاج تام\t \tمصنع KAM للمواد اللاصقة\t\t\nمخزن ايفا - انتاج تام تحت التسوية\t \tمصنع KAM للمواد اللاصقة\t\t\nمخزن ايفا - انتاج نصف تام\t \tمصنع KAM للمواد اللاصقة\t\t\nمخزن ايفا - انتاج نصف تام تحت التسوية\t \tمصنع KAM للمواد اللاصقة\t\t\nمخزن ايفا - تعبئة وتغلييف\t \tمصنع KAM للمواد اللاصقة\t\t\nمخزن ايفا - توالف\t \tمصنع KAM للمواد اللاصقة\t\t\nمخزن تسويات مجنبة\t \tمصنع KAM للمواد اللاصقة\t\t\nعدد الصفحات: 2 / اجمالي عدد الصفوف: 26\n\n1\t2\n\n",
+  "url": "https://km.mega-cash.net/Inv/Stores.aspx",
+  "key": "stores",
+  "megaLabel": "المخازن",
+  "path": "/Inv/Stores.aspx"
+}

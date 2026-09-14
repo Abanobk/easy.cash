@@ -5940,20 +5940,55 @@ const productionRouter = router({
 
 // ===================== INVENTORY =====================
 const inventoryRouter = router({
+  /** كمية متاحة لصنف في مخزن — أتمتة زي ميجا (الكمية المتاحة) */
+  qtyAtWarehouse: protectedProcedure.input(z.object({
+    itemId: z.number(),
+    warehouseId: z.number(),
+  })).query(async ({ ctx, input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    const { getWarehouseItemQty } = await import("./inventory-stock");
+    const qty = await getWarehouseItemQty(db, ctx.tenantId, input.itemId, input.warehouseId);
+    return { quantity: qty };
+  }),
   transfers: router({
-    list: protectedProcedure.input(z.object({ page: z.number().default(1), limit: z.number().default(20) })).query(async ({ ctx, input }) => {
+    list: protectedProcedure.input(z.object({
+      page: z.number().default(1),
+      limit: z.number().default(20),
+      dateFrom: z.string().optional(),
+      dateTo: z.string().optional(),
+      fromWarehouseId: z.number().optional(),
+      toWarehouseId: z.number().optional(),
+      status: z.enum(["draft", "confirmed", "cancelled"]).optional(),
+      search: z.string().optional(),
+    })).query(async ({ ctx, input }) => {
       await assertEntityAction(ctx, "inventory", "stockTransfer", "viewDocList");
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       const scope = await loadUserScopeFromCtx(db, ctx.saasUser);
       const offset = (input.page - 1) * input.limit;
       const scopeFilter = scopeEitherWarehouseFilter(stockTransfers.fromWarehouseId, stockTransfers.toWarehouseId, scope);
-      const whereClause = tenantWhere(stockTransfers, ctx.tenantId, scopeFilter);
+      const filters = [
+        scopeFilter,
+        input.dateFrom ? gte(stockTransfers.date, input.dateFrom as any) : undefined,
+        input.dateTo ? lte(stockTransfers.date, input.dateTo as any) : undefined,
+        input.fromWarehouseId ? eq(stockTransfers.fromWarehouseId, input.fromWarehouseId) : undefined,
+        input.toWarehouseId ? eq(stockTransfers.toWarehouseId, input.toWarehouseId) : undefined,
+        input.status ? eq(stockTransfers.status, input.status) : undefined,
+        input.search
+          ? or(
+              like(stockTransfers.number, `%${input.search}%`),
+              like(stockTransfers.notes, `%${input.search}%`),
+            )
+          : undefined,
+      ].filter(Boolean);
+      const whereClause = tenantWhere(stockTransfers, ctx.tenantId, and(...(filters as any[])));
       const rows = await db.select({
         id: stockTransfers.id,
         number: stockTransfers.number,
         date: stockTransfers.date,
         status: stockTransfers.status,
+        notes: stockTransfers.notes,
         fromWarehouseName: sql<string>`fw.name`,
         toWarehouseName: sql<string>`tw.name`,
       }).from(stockTransfers)
@@ -6000,13 +6035,34 @@ const inventoryRouter = router({
     }),
   }),
   adjustments: router({
-    list: protectedProcedure.input(z.object({ page: z.number().default(1), limit: z.number().default(20) })).query(async ({ ctx, input }) => {
+    list: protectedProcedure.input(z.object({
+      page: z.number().default(1),
+      limit: z.number().default(20),
+      dateFrom: z.string().optional(),
+      dateTo: z.string().optional(),
+      warehouseId: z.number().optional(),
+      status: z.enum(["draft", "confirmed", "cancelled"]).optional(),
+      search: z.string().optional(),
+    })).query(async ({ ctx, input }) => {
       await assertEntityAction(ctx, "inventory", "stockAdjustment", "viewDocList");
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       const scope = await loadUserScopeFromCtx(db, ctx.saasUser);
       const offset = (input.page - 1) * input.limit;
-      const whereClause = tenantWhere(inventoryAdjustments, ctx.tenantId, scopeWarehouseFilter(inventoryAdjustments, scope));
+      const filters = [
+        scopeWarehouseFilter(inventoryAdjustments, scope),
+        input.dateFrom ? gte(inventoryAdjustments.date, input.dateFrom as any) : undefined,
+        input.dateTo ? lte(inventoryAdjustments.date, input.dateTo as any) : undefined,
+        input.warehouseId ? eq(inventoryAdjustments.warehouseId, input.warehouseId) : undefined,
+        input.status ? eq(inventoryAdjustments.status, input.status) : undefined,
+        input.search
+          ? or(
+              like(inventoryAdjustments.number, `%${input.search}%`),
+              like(inventoryAdjustments.reason, `%${input.search}%`),
+            )
+          : undefined,
+      ].filter(Boolean);
+      const whereClause = tenantWhere(inventoryAdjustments, ctx.tenantId, and(...(filters as any[])));
       const rows = await db.select({
         id: inventoryAdjustments.id,
         number: inventoryAdjustments.number,

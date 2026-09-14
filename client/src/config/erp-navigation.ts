@@ -348,7 +348,7 @@ export const ERP_NAVIGATION: NavItemConfig[] = [
       {
         "label": "تسوية مخزنية",
         "icon": "file-text",
-        "path": "/inventory/adjustments",
+        "path": "/inventory/adjustments/new",
         "status": "done",
         "featureKey": "inv-inventorycorrection"
       },
@@ -362,7 +362,7 @@ export const ERP_NAVIGATION: NavItemConfig[] = [
       {
         "label": "تحويل مخزني",
         "icon": "file-text",
-        "path": "/inventory/transfers",
+        "path": "/inventory/transfers/new",
         "status": "done",
         "featureKey": "inv-inventorytransfer"
       },
@@ -1822,7 +1822,7 @@ export const FEATURE_REGISTRY: Record<string, { label: string; module: string; m
     "module": "المخازن",
     "megaUrl": "/Inv/InventoryCorrection.aspx",
     "status": "done",
-    "path": "/inventory/adjustments"
+    "path": "/inventory/adjustments/new"
   },
   "inv-inventorydocumentslist-invcorr": {
     "label": "قائمة التسويات المخزنية",
@@ -1836,7 +1836,7 @@ export const FEATURE_REGISTRY: Record<string, { label: string; module: string; m
     "module": "المخازن",
     "megaUrl": "/Inv/InventoryTransfer.aspx",
     "status": "done",
-    "path": "/inventory/transfers"
+    "path": "/inventory/transfers/new"
   },
   "inv-inventorydocumentslist-invtrans": {
     "label": "قائمة التحويلات المخزنية",

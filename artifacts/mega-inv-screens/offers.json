@@ -1,0 +1,282 @@
+{
+  "title": "",
+  "labels": [
+    "من تاريخ",
+    "الى تاريخ",
+    "نوع السعر",
+    "الفرع",
+    "المنطقة",
+    "فئة العميل / المورد",
+    "العميل",
+    "الفئة",
+    "الباركود",
+    "الصنف"
+  ],
+  "headers": [],
+  "buttons": [
+    "اضافة تعليق",
+    "بحث",
+    "تفريغ",
+    "حفظ"
+  ],
+  "selects": [],
+  "inputs": [
+    {
+      "id": "txtHidden",
+      "name": "ctl00$txtHidden",
+      "type": "text",
+      "placeholder": "",
+      "nearby": ""
+    },
+    {
+      "id": "txtComment",
+      "name": "ctl00$txtComment",
+      "type": "textarea",
+      "placeholder": "",
+      "nearby": ""
+    },
+    {
+      "id": "cph_txtnDateFromSrch",
+      "name": "ctl00$cph$txtnDateFromSrch",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "من تاريخ"
+    },
+    {
+      "id": "cph_txtDateToSrch",
+      "name": "ctl00$cph$txtDateToSrch",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "الى تاريخ"
+    },
+    {
+      "id": "cph_acPriceNameSrch_txtAutoCompleteText",
+      "name": "ctl00$cph$acPriceNameSrch$txtAutoCompleteText",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "نوع السعر"
+    },
+    {
+      "id": "cph_acPriceNameSrch_hfAutocomplete",
+      "name": "ctl00$cph$acPriceNameSrch$hfAutocomplete",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "نوع السعر"
+    },
+    {
+      "id": "cph_acBranchSrch_txtAutoCompleteText",
+      "name": "ctl00$cph$acBranchSrch$txtAutoCompleteText",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "الفرع"
+    },
+    {
+      "id": "cph_acBranchSrch_hfAutocomplete",
+      "name": "ctl00$cph$acBranchSrch$hfAutocomplete",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "الفرع"
+    },
+    {
+      "id": "cph_acAreaSrch_txtAutoCompleteText",
+      "name": "ctl00$cph$acAreaSrch$txtAutoCompleteText",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "المنطقة"
+    },
+    {
+      "id": "cph_acAreaSrch_hfAutocomplete",
+      "name": "ctl00$cph$acAreaSrch$hfAutocomplete",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "المنطقة"
+    },
+    {
+      "id": "cph_acContactCategorySrch_txtAutoCompleteText",
+      "name": "ctl00$cph$acContactCategorySrch$txtAutoCompleteText",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "فئة العميل / المورد"
+    },
+    {
+      "id": "cph_acContactCategorySrch_hfAutocomplete",
+      "name": "ctl00$cph$acContactCategorySrch$hfAutocomplete",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "فئة العميل / المورد"
+    },
+    {
+      "id": "cph_acCustomerSrch_txtAutoCompleteText",
+      "name": "ctl00$cph$acCustomerSrch$txtAutoCompleteText",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "العميل"
+    },
+    {
+      "id": "cph_acCustomerSrch_hfAutocomplete",
+      "name": "ctl00$cph$acCustomerSrch$hfAutocomplete",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "العميل"
+    },
+    {
+      "id": "cph_acCategorySrch_txtAutoCompleteText",
+      "name": "ctl00$cph$acCategorySrch$txtAutoCompleteText",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "الفئة"
+    },
+    {
+      "id": "cph_acCategorySrch_hfAutocomplete",
+      "name": "ctl00$cph$acCategorySrch$hfAutocomplete",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "الفئة"
+    },
+    {
+      "id": "cph_txtBarcodeSrch",
+      "name": "ctl00$cph$txtBarcodeSrch",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "الباركود"
+    },
+    {
+      "id": "cph_acItemSrch_txtAutoCompleteText",
+      "name": "ctl00$cph$acItemSrch$txtAutoCompleteText",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "الصنف"
+    },
+    {
+      "id": "cph_acItemSrch_hfAutocomplete",
+      "name": "ctl00$cph$acItemSrch$hfAutocomplete",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "الصنف"
+    },
+    {
+      "id": "cph_txtDateFrom",
+      "name": "ctl00$cph$txtDateFrom",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "من تاريخ"
+    },
+    {
+      "id": "cph_txtDateTo",
+      "name": "ctl00$cph$txtDateTo",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "الى تاريخ"
+    },
+    {
+      "id": "cph_acPriceName_txtAutoCompleteText",
+      "name": "ctl00$cph$acPriceName$txtAutoCompleteText",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "نوع السعر"
+    },
+    {
+      "id": "cph_acPriceName_hfAutocomplete",
+      "name": "ctl00$cph$acPriceName$hfAutocomplete",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "نوع السعر"
+    },
+    {
+      "id": "cph_acBranch_txtAutoCompleteText",
+      "name": "ctl00$cph$acBranch$txtAutoCompleteText",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "الفرع"
+    },
+    {
+      "id": "cph_acBranch_hfAutocomplete",
+      "name": "ctl00$cph$acBranch$hfAutocomplete",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "الفرع"
+    },
+    {
+      "id": "cph_acArea_txtAutoCompleteText",
+      "name": "ctl00$cph$acArea$txtAutoCompleteText",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "المنطقة"
+    },
+    {
+      "id": "cph_acArea_hfAutocomplete",
+      "name": "ctl00$cph$acArea$hfAutocomplete",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "المنطقة"
+    },
+    {
+      "id": "cph_acContactCategory_txtAutoCompleteText",
+      "name": "ctl00$cph$acContactCategory$txtAutoCompleteText",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "فئة العميل / المورد"
+    },
+    {
+      "id": "cph_acContactCategory_hfAutocomplete",
+      "name": "ctl00$cph$acContactCategory$hfAutocomplete",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "فئة العميل / المورد"
+    },
+    {
+      "id": "cph_acCustomer_txtAutoCompleteText",
+      "name": "ctl00$cph$acCustomer$txtAutoCompleteText",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "العميل"
+    },
+    {
+      "id": "cph_acCustomer_hfAutocomplete",
+      "name": "ctl00$cph$acCustomer$hfAutocomplete",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "العميل"
+    },
+    {
+      "id": "cph_acCategory_txtAutoCompleteText",
+      "name": "ctl00$cph$acCategory$txtAutoCompleteText",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "الفئة"
+    },
+    {
+      "id": "cph_acCategory_hfAutocomplete",
+      "name": "ctl00$cph$acCategory$hfAutocomplete",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "الفئة"
+    },
+    {
+      "id": "cph_txtBarcode",
+      "name": "ctl00$cph$txtBarcode",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "الباركود"
+    },
+    {
+      "id": "cph_acItem_txtAutoCompleteText",
+      "name": "ctl00$cph$acItem$txtAutoCompleteText",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "الصنف"
+    },
+    {
+      "id": "cph_acItem_hfAutocomplete",
+      "name": "ctl00$cph$acItem$hfAutocomplete",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "الصنف"
+    }
+  ],
+  "bodyStart": " العروض\n    \nبحث اضافة جديد\nبحث\nمن تاريخ\nالى تاريخ\nنوع السعر\nالفرع\nالمنطقة\nفئة العميل / المورد\nالعميل\nالفئة\nالباركود\nالصنف\n \nلا توجد بيانات للعرض\n\n",
+  "url": "https://km.mega-cash.net/Inv/Offers.aspx",
+  "key": "offers",
+  "megaLabel": "العروض",
+  "path": "/Inv/Offers.aspx"
+}

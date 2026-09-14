@@ -16,9 +16,17 @@ export default function Warehouses() {
   const [open, setOpen] = useState(false);
   const [editId, setEditId] = useState<number | null>(null);
   const [form, setForm] = useState(emptyForm);
+  const [branchFilter, setBranchFilter] = useState("");
+  const [nameSearch, setNameSearch] = useState("");
 
-  const { data, isLoading, refetch } = trpc.warehouses.list.useQuery();
+  const { data, isLoading, refetch } = trpc.warehouses.list.useQuery(
+    branchFilter ? { branchId: Number(branchFilter) } : undefined,
+  );
   const { data: branchList } = trpc.settings.branches.list.useQuery();
+  const filtered = (data || []).filter((w: any) => {
+    if (!nameSearch.trim()) return true;
+    return String(w.name || "").toLowerCase().includes(nameSearch.trim().toLowerCase());
+  });
   const createMut = trpc.warehouses.create.useMutation({
     onSuccess: () => { toast.success("تم إضافة المخزن"); refetch(); setOpen(false); setForm(emptyForm); },
     onError: (e) => toast.error(e.message || "فشل إضافة المخزن"),
@@ -48,14 +56,32 @@ export default function Warehouses() {
 
   return (
     <ERPLayout title="المخازن">
-      <div className="mb-3 flex justify-end">
+      <div className="mb-3 flex flex-wrap gap-3 items-end justify-between">
+        <div className="flex flex-wrap gap-3 items-end rounded-lg border bg-slate-50 p-3">
+          <div className="space-y-1">
+            <FieldLabel>الفرع</FieldLabel>
+            <Select value={branchFilter || "all"} onValueChange={(v) => setBranchFilter(v === "all" ? "" : v)}>
+              <SelectTrigger className="h-10 w-48 text-sm"><SelectValue placeholder="كل الفروع" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">كل الفروع</SelectItem>
+                {(branchList || []).map((b: { id: number; name: string }) => (
+                  <SelectItem key={b.id} value={String(b.id)}>{b.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1">
+            <FieldLabel>الاسم</FieldLabel>
+            <Input className="h-10 w-48" placeholder="بحث بالاسم..." value={nameSearch} onChange={(e) => setNameSearch(e.target.value)} />
+          </div>
+        </div>
         <Button variant="outline" size="sm" className="text-sm h-10" disabled={backfillMut.isPending} onClick={() => backfillMut.mutate()}>
           ترحيل أرصدة الأصناف للمخزن الافتراضي
         </Button>
       </div>
       <DataTable
         title="قائمة المخازن"
-        data={data}
+        data={filtered}
         isLoading={isLoading}
         onAdd={() => { setEditId(null); setForm(emptyForm); setOpen(true); }}
         addLabel="مخزن جديد"
@@ -72,9 +98,9 @@ export default function Warehouses() {
         }}
         onDelete={(row: any) => deleteMut.mutate(row.id)}
         columns={[
-          { key: "name", label: "اسم المخزن" },
+          { key: "name", label: "الاسم" },
           { key: "branchName", label: "الفرع", render: (r: any) => r.branchName || "—" },
-          { key: "address", label: "العنوان" },
+          { key: "address", label: "ملاحظات / العنوان" },
           { key: "isActive", label: "الحالة", render: (r: any) => r.isActive ? "نشط" : "موقوف" },
         ]}
       />

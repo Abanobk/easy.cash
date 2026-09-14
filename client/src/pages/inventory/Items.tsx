@@ -7,6 +7,8 @@ import { toast } from "sonner";
 import { AlertTriangle, CheckSquare, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useEntityAllowed } from "@/hooks/useEntityPermission";
 import { tenantPath, useTenantSlug } from "@/lib/tenant";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
@@ -16,6 +18,7 @@ export default function Items() {
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
   const debouncedSearch = useDebouncedValue(search);
+  const [categoryId, setCategoryId] = useState("");
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const canEdit = useEntityAllowed("inventory", "item", "edit");
   const canDelete = useEntityAllowed("inventory", "item", "deleteCancel");
@@ -23,9 +26,20 @@ export default function Items() {
   const [, navigate] = useLocation();
   const utils = trpc.useUtils();
 
-  useEffect(() => setPage(1), [debouncedSearch]);
-  const { data, isLoading, refetch } = trpc.items.list.useQuery({ page, limit: 20, search: debouncedSearch });
+  useEffect(() => setPage(1), [debouncedSearch, categoryId]);
+  const { data, isLoading, refetch } = trpc.items.list.useQuery({
+    page,
+    limit: 20,
+    search: debouncedSearch,
+    categoryId: categoryId ? Number(categoryId) : undefined,
+  });
+  const { data: categories } = trpc.items.categories.useQuery();
   const rows = data?.rows || [];
+  const categoryName = (id: unknown) => {
+    if (id == null || id === "") return "—";
+    const c = (categories || []).find((r: any) => r.id === Number(id));
+    return c?.name || String(id);
+  };
 
   const deleteMut = trpc.items.delete.useMutation({
     onSuccess: () => {
@@ -98,7 +112,7 @@ export default function Items() {
   };
 
   return (
-    <ERPLayout title="قائمة الأصناف">
+    <ERPLayout title="قائمة الاصناف">
       <div className="flex flex-wrap items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 mb-4">
         <p className="text-sm text-amber-900 flex-1 min-w-[12rem]">
           مسح مجمع: حدّد أصنافاً من الجدول أو استخدم تحديد الكل، ثم حذف المحدد.
@@ -120,6 +134,22 @@ export default function Items() {
           <Trash2 size={14} />
           {bulkPurgeMut.isPending ? "جاري الحذف..." : `حذف المحدد (${selectedIds.size})`}
         </Button>
+      </div>
+
+      {/* Mega ItemsList filters: باركود/صنف (بحث) · الفئة */}
+      <div className="mb-3 flex flex-wrap gap-3 items-end rounded-lg border bg-slate-50 p-3">
+        <div className="space-y-1">
+          <Label className="text-xs font-bold">الفئة</Label>
+          <Select value={categoryId || "all"} onValueChange={(v) => setCategoryId(v === "all" ? "" : v)}>
+            <SelectTrigger className="h-9 w-48 text-sm"><SelectValue placeholder="كل الفئات" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">كل الفئات</SelectItem>
+              {(categories || []).map((c: any) => (
+                <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
       </div>
 
       <DataTable
@@ -162,15 +192,20 @@ export default function Items() {
               />
             ),
           },
-          { key: "code", label: "الكود", className: "w-28" },
+          { key: "name", label: "الاسم" },
           {
             key: "barcode",
-            label: "السيريل نمبر",
+            label: "الباركود",
             className: "w-32",
             render: (row) => row.barcode || <span className="text-slate-400">—</span>,
           },
-          { key: "name", label: "اسم الصنف" },
-          { key: "unit", label: "الوحدة", className: "w-20" },
+          {
+            key: "categoryId",
+            label: "الفئة",
+            render: (row) => categoryName(row.categoryId),
+          },
+          { key: "code", label: "الكود", className: "w-28" },
+          { key: "unit", label: "وحدة القياس الاساسية", className: "w-28" },
           {
             key: "purchasePrice",
             label: "سعر الشراء",

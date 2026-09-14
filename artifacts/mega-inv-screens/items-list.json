@@ -1,0 +1,113 @@
+{
+  "title": "",
+  "labels": [
+    "الباركود",
+    "نوع الصنف",
+    "الفئة",
+    "فئة بديلة",
+    "الصنف"
+  ],
+  "headers": [
+    "الاسم",
+    "الباركود",
+    "الفئة",
+    "نوع الصنف",
+    "وحدة القياس الاساسية",
+    "تعديل",
+    "حذف",
+    "نسخ"
+  ],
+  "buttons": [
+    "اضافة تعليق",
+    "بحث",
+    "تفريغ"
+  ],
+  "selects": [
+    {
+      "id": "cph_ddlItemType",
+      "name": "ctl00$cph$ddlItemType",
+      "options": [
+        "اختر",
+        "وحدة مخزنية",
+        "وحدة خدمية",
+        "مادة خام",
+        "منتج وسيط",
+        "منتج تام",
+        "مجموعة / طقم",
+        "صنف مركب",
+        "صنف وكالة"
+      ],
+      "nearby": "نوع الصنف"
+    }
+  ],
+  "inputs": [
+    {
+      "id": "txtHidden",
+      "name": "ctl00$txtHidden",
+      "type": "text",
+      "placeholder": "",
+      "nearby": ""
+    },
+    {
+      "id": "txtComment",
+      "name": "ctl00$txtComment",
+      "type": "textarea",
+      "placeholder": "",
+      "nearby": ""
+    },
+    {
+      "id": "cph_txtBarcodeSrch",
+      "name": "ctl00$cph$txtBarcodeSrch",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "الباركود"
+    },
+    {
+      "id": "cph_acCategory_txtAutoCompleteText",
+      "name": "ctl00$cph$acCategory$txtAutoCompleteText",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "الفئة"
+    },
+    {
+      "id": "cph_acCategory_hfAutocomplete",
+      "name": "ctl00$cph$acCategory$hfAutocomplete",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "الفئة"
+    },
+    {
+      "id": "cph_acAltCategory_txtAutoCompleteText",
+      "name": "ctl00$cph$acAltCategory$txtAutoCompleteText",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "فئة بديلة"
+    },
+    {
+      "id": "cph_acAltCategory_hfAutocomplete",
+      "name": "ctl00$cph$acAltCategory$hfAutocomplete",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "فئة بديلة"
+    },
+    {
+      "id": "cph_acNameSrch_txtAutoCompleteText",
+      "name": "ctl00$cph$acNameSrch$txtAutoCompleteText",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "الصنف"
+    },
+    {
+      "id": "cph_acNameSrch_hfAutocomplete",
+      "name": "ctl00$cph$acNameSrch$hfAutocomplete",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "الصنف"
+    }
+  ],
+  "bodyStart": " قائمة الاصناف\n    \nبحث اضافة جديد حذف\nبحث\nالباركود\nنوع الصنف\nاختر\nوحدة مخزنية\nوحدة خدمية\nمادة خام\nمنتج وسيط\nمنتج تام\nمجموعة / طقم\nصنف مركب\nصنف وكالة\nالفئة\nفئة بديلة\nالصنف\n \n\tالاسم\tالباركود\tالفئة\tنوع الصنف\tوحدة القياس الاساسية\tتعديل\tحذف\tنسخ\n\n\t(فينولك رزين) F.R\t301088\tخامات\tمادة خام\tكيلو\t\t\t\n\n\t320/2\t301033\tخامات\tمادة خام\tكيلو\t\t\t\n\n\t42\t301017\tخامات\tمادة خام\tكيلو\t\t\t\n\n\t42/2\t301018\tخامات\tمادة خام\tكيلو\t\t\t\n\n\t42/3000\t301059\tخامات\tمادة خام\tكيلو\t\t\t\n\n\t540\t301015\tخامات\tمادة خام\tكيلو\t\t\t\n\n\t560\t301021\tخامات\tمادة خام\tكيلو\t\t\t\n\n\t560/2\t301024\tخامات\tمادة خام\tكيلو\t\t\t\n\n\t560/3000\t301023\tخامات\tمادة خام\tكيلو\t\t\t\n\n\t6 K P S\t301019\tخامات\tمادة خام\tكيلو\t\t\t\n\n\t621\t301016\tخامات\tمادة خام\tكيلو\t\t\t\n\n\t621 (m)\t301086\tخامات\tمادة خام\tكيلو\t\t\t\n\n\ta 90\t301026\tخامات\tمادة خام\tكيلو\t\t\t\n\n\tA R C\t301069\tخامات\tمادة خام\tكيلو\t\t\t\n\n\tA.K.T\t301047\tخامات\tمادة خام\tكيلو\t\t\t\n\n\tAH-1\t301038\tخامات\tمادة خام\tكيلو\t\t\t\n\n\tAH-1 (m)\t301085\tخامات\tمادة خام\tكيلو\t\t\t\n\n\tAH-2\t301039\tخامات\tمادة خام\tكيلو\t\t\t\n\n\tB 350\t301011\tخامات\tمادة خام\tكيلو\t\t\t\n\n\tB S\t301004\tخامات\tمادة خام\tكيلو\t\t\t\n\n\tB T\t301022\tخامات\tمادة خام\tكيلو\t\t\t\n\n\tB253\t301010\tخامات\tمادة خام\tكيلو\t\t\t\n\n\tC 2372/1\t301051\tخامات\tمادة خام\tكيلو\t\t\t\n\n\tC 84\t301050\tخامات\tمادة خام\tكيلو\t\t\t\n\n\tC.H\t301072\tخامات\tمادة خام\tكيلو\t\t\t\n\n\tC-Eagle\t301079\tخامات\tمادة خام\tكيلو\t\t\t\n\n\tCup\t301075\tخامات\tمادة خام\tكيلو\t\t\t\n\n\tF H\t301007\tخامات\tمادة خام\tكيلو\t\t\t\n\n\tF F\t301006\tخامات\tمادة خام\tكيلو\t\t\t\n\n\tF T\t301005\tخامات\tمادة خام\tكيلو\t\t\t\n\n\tFast\t301064\tخامات\tمادة خام\tكيلو\t\t\t\n\n\tFiber Glass\t301058\tخامات\tمادة خام\tكيلو\t\t\t\n\n\tH\t301009\tخامات\tمادة خام\tكيلو\t\t\t\n\n\tH 130\t301066\tخامات\tمادة خام\tكيلو\t\t\t\n\n\tH 5\t301014\tخامات\tمادة خام\tكيلو\t\t\t\n\n\tH E اندونيسى\t301099\tخامات\tوحدة مخزنية\tقطعة\t\t\t\n\n\tH أسود\t000584\tخامات\tمادة خام\tكيلو\t\t\t\n\n\tH. j\t301087\tخامات\tمادة خام\tكيلو\t\t\t\n\n\tH.B\t301062\tخامات\tمادة خام\tكيلو\t\t\t\n\n\tH.C\t301074\tخامات\tمادة خام\tكيلو\t\t\t\n\n\tH.C2( ايهاب)\t301090\tخامات\tمادة خام\tقطعة\t\t\t\n\n\tH.E - برازيلى\t301078\tخامات\tمادة خام\tكيلو\t\t\t\n\n\tH.E - صينى\t301111\tخامات\tمادة خام\tكيلو\t\t\t\n\n\tH.M\t301065\tخامات\tمادة خام\tكيلو\t\t\t\n\n\tH101\t301091\tخامات\tوحدة مخزنية\tقطعة\t\t\t\n\n\tK.P.S 5\t301036\tخامات\tم",
+  "url": "https://km.mega-cash.net/Inv/ItemsList.aspx",
+  "key": "items-list",
+  "megaLabel": "قائمة الاصناف",
+  "path": "/Inv/ItemsList.aspx"
+}

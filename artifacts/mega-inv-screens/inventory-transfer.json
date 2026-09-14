@@ -1,0 +1,323 @@
+{
+  "title": "",
+  "labels": [
+    "التاريخ",
+    "الفرع",
+    "الى فرع",
+    "حساب الارباح / الخسائر",
+    "رقم المرجع",
+    "نوع التحويل",
+    "المخزن",
+    "الى مخزن",
+    "الباركود",
+    "الفئة",
+    "الصنف",
+    "الكمية المتاحة:",
+    "التكلفة المتوقعة:",
+    "الكمية",
+    "الوحدة",
+    "التكلفة",
+    "رقم التشغيلة",
+    "نسبة المصروفات",
+    "ملاحظات",
+    "العملة",
+    "الحساب الدائن",
+    "سعر صرف العملة",
+    "المبلغ",
+    "طباعة بعد الحفظ",
+    "طباعة بعد الاعتماد",
+    "طباعة بدون تكاليف"
+  ],
+  "headers": [],
+  "buttons": [
+    "اضافة تعليق",
+    "اضافة",
+    "اضافة كل المخزن",
+    "تفريغ",
+    "بحث",
+    "حفظ",
+    "اعتماد"
+  ],
+  "selects": [
+    {
+      "id": "cph_ddlTransferType",
+      "name": "ctl00$cph$ddlTransferType",
+      "options": [
+        "تحويل مباشر",
+        "تحويل بمرحلتين"
+      ],
+      "nearby": "نوع التحويل"
+    },
+    {
+      "id": "cph_ddlExpenseCurrency",
+      "name": "ctl00$cph$ddlExpenseCurrency",
+      "options": [
+        "جنيه مصري",
+        "جنيه استرليني",
+        "جنيه سوداني",
+        "درهم اماراتي",
+        "درهم مغربي",
+        "دولار امريكي",
+        "دينار اردني",
+        "دينار عراقي",
+        "دينار كويتي",
+        "دينار ليبي",
+        "روبل روسي",
+        "روبية هندي"
+      ],
+      "nearby": "العملة"
+    }
+  ],
+  "inputs": [
+    {
+      "id": "txtHidden",
+      "name": "ctl00$txtHidden",
+      "type": "text",
+      "placeholder": "",
+      "nearby": ""
+    },
+    {
+      "id": "txtComment",
+      "name": "ctl00$txtComment",
+      "type": "textarea",
+      "placeholder": "",
+      "nearby": ""
+    },
+    {
+      "id": "cph_txtSerial",
+      "name": "ctl00$cph$txtSerial",
+      "type": "text",
+      "placeholder": "",
+      "nearby": ""
+    },
+    {
+      "id": "cph_txtOperationDate",
+      "name": "ctl00$cph$txtOperationDate",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "التاريخ"
+    },
+    {
+      "id": "cph_acBranch_txtAutoCompleteText",
+      "name": "ctl00$cph$acBranch$txtAutoCompleteText",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "الفرع"
+    },
+    {
+      "id": "cph_acBranch_hfAutocomplete",
+      "name": "ctl00$cph$acBranch$hfAutocomplete",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "الفرع"
+    },
+    {
+      "id": "cph_acToBranch_txtAutoCompleteText",
+      "name": "ctl00$cph$acToBranch$txtAutoCompleteText",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "الى فرع"
+    },
+    {
+      "id": "cph_acToBranch_hfAutocomplete",
+      "name": "ctl00$cph$acToBranch$hfAutocomplete",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "الى فرع"
+    },
+    {
+      "id": "cph_acInvTransProfitAccount_txtAutoCompleteText",
+      "name": "ctl00$cph$acInvTransProfitAccount$txtAutoCompleteText",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "حساب الارباح / الخسائر"
+    },
+    {
+      "id": "cph_acInvTransProfitAccount_hfAutocomplete",
+      "name": "ctl00$cph$acInvTransProfitAccount$hfAutocomplete",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "حساب الارباح / الخسائر"
+    },
+    {
+      "id": "cph_txtUserRefNo",
+      "name": "ctl00$cph$txtUserRefNo",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "رقم المرجع"
+    },
+    {
+      "id": "cph_acStore_txtAutoCompleteText",
+      "name": "ctl00$cph$acStore$txtAutoCompleteText",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "المخزن"
+    },
+    {
+      "id": "cph_acStore_hfAutocomplete",
+      "name": "ctl00$cph$acStore$hfAutocomplete",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "المخزن"
+    },
+    {
+      "id": "cph_acToStore_txtAutoCompleteText",
+      "name": "ctl00$cph$acToStore$txtAutoCompleteText",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "الى مخزن"
+    },
+    {
+      "id": "cph_acToStore_hfAutocomplete",
+      "name": "ctl00$cph$acToStore$hfAutocomplete",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "الى مخزن"
+    },
+    {
+      "id": "cph_txtBarcode",
+      "name": "ctl00$cph$txtBarcode",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "الباركود"
+    },
+    {
+      "id": "cph_acCategory_txtAutoCompleteText",
+      "name": "ctl00$cph$acCategory$txtAutoCompleteText",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "الفئة"
+    },
+    {
+      "id": "cph_acCategory_hfAutocomplete",
+      "name": "ctl00$cph$acCategory$hfAutocomplete",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "الفئة"
+    },
+    {
+      "id": "cph_acItem_txtAutoCompleteText",
+      "name": "ctl00$cph$acItem$txtAutoCompleteText",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "الصنف"
+    },
+    {
+      "id": "cph_acItem_hfAutocomplete",
+      "name": "ctl00$cph$acItem$hfAutocomplete",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "الصنف"
+    },
+    {
+      "id": "cph_txtQty",
+      "name": "ctl00$cph$txtQty",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "الكمية"
+    },
+    {
+      "id": "cph_acUnit_txtAutoCompleteText",
+      "name": "ctl00$cph$acUnit$txtAutoCompleteText",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "الوحدة"
+    },
+    {
+      "id": "cph_acUnit_hfAutocomplete",
+      "name": "ctl00$cph$acUnit$hfAutocomplete",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "الوحدة"
+    },
+    {
+      "id": "cph_txtCost",
+      "name": "ctl00$cph$txtCost",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "التكلفة"
+    },
+    {
+      "id": "cph_acBatchID_txtAutoCompleteText",
+      "name": "ctl00$cph$acBatchID$txtAutoCompleteText",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "رقم التشغيلة"
+    },
+    {
+      "id": "cph_acBatchID_hfAutocomplete",
+      "name": "ctl00$cph$acBatchID$hfAutocomplete",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "رقم التشغيلة"
+    },
+    {
+      "id": "cph_txtExpensesPercentage",
+      "name": "ctl00$cph$txtExpensesPercentage",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "نسبة المصروفات"
+    },
+    {
+      "id": "cph_txtItemNotes",
+      "name": "ctl00$cph$txtItemNotes",
+      "type": "textarea",
+      "placeholder": "",
+      "nearby": "ملاحظات"
+    },
+    {
+      "id": "cph_txtItemNameSrch",
+      "name": "ctl00$cph$txtItemNameSrch",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "الصنف"
+    },
+    {
+      "id": "cph_acExpensesCreditAccount_txtAutoCompleteText",
+      "name": "ctl00$cph$acExpensesCreditAccount$txtAutoCompleteText",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "الحساب الدائن"
+    },
+    {
+      "id": "cph_acExpensesCreditAccount_hfAutocomplete",
+      "name": "ctl00$cph$acExpensesCreditAccount$hfAutocomplete",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "الحساب الدائن"
+    },
+    {
+      "id": "cph_txtEpenseRatio",
+      "name": "ctl00$cph$txtEpenseRatio",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "سعر صرف العملة"
+    },
+    {
+      "id": "cph_txtExpenseAmount",
+      "name": "ctl00$cph$txtExpenseAmount",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "المبلغ"
+    },
+    {
+      "id": "cph_txtExpensesNotes",
+      "name": "ctl00$cph$txtExpensesNotes",
+      "type": "textarea",
+      "placeholder": "",
+      "nearby": "ملاحظات"
+    },
+    {
+      "id": "cph_txtNotes",
+      "name": "ctl00$cph$txtNotes",
+      "type": "textarea",
+      "placeholder": "",
+      "nearby": "ملاحظات"
+    }
+  ],
+  "bodyStart": " تحويل مخزني\n     \nانشأ بواسطة: ام فارس\nاعتمد بواسطة:\nالتاريخ\nالفرع\nالى فرع\nحساب الارباح / الخسائر\nرقم المرجع\nنوع التحويل\nتحويل مباشر\nتحويل بمرحلتين\n\nالاصناف\n\nالمخزن\nالى مخزن\nالباركود\nالفئة\nالصنف\nالكمية المتاحة:\nالكمية المتاحة:\nالتكلفة المتوقعة:\nالكمية\nالوحدة\nالتكلفة\nرقم التشغيلة\nنسبة المصروفات\nملاحظات\n\n\n  \nبحث حذف\nالصنف\n \nلا توجد بيانات للعرض\n\nالمصروفات\n\nالعملة\nجنيه مصري\nجنيه استرليني\nجنيه سوداني\nدرهم اماراتي\nدرهم مغربي\nدولار امريكي\nدينار اردني\nدينار عراقي\nدينار كويتي\nدينار ليبي\nروبل روسي\nروبية هندي\nريال ايراني\nريال سعودي\nريال عماني\nريال قطري\nريال يمني\nين ياباني\nيوان صيني\nيورو\nالحساب الدائن\nسعر صرف العملة\nالمبلغ\nملاحظات\n\n\nلا توجد بيانات للعرض\nملاحظات\nطباعة بعد الحفظ\nطباعة بعد الاعتماد\nطباعة بدون تكاليف\nالاجمالي:\t0\nالمصروفات (ج م):\t0\nالكمية:\t0\n \n\n",
+  "url": "https://km.mega-cash.net/Inv/InventoryTransfer.aspx",
+  "key": "inventory-transfer",
+  "megaLabel": "تحويل مخزني",
+  "path": "/Inv/InventoryTransfer.aspx"
+}

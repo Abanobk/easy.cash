@@ -1,0 +1,527 @@
+{
+  "title": "",
+  "labels": [
+    "الاسم",
+    "الفئة الرئيسية",
+    "تكلفة الشراء الافتراضية",
+    "سعر البيع الافتراضي",
+    "وحدة القياس الاساسية",
+    "نوع الصنف",
+    "السعر الادنى",
+    "السعر الاعلى",
+    "الباركود",
+    "فئة بديلة",
+    "اقل كمية",
+    "خصم نسبة",
+    "خصم نقدي",
+    "الضريبة",
+    "الضريبة (2)",
+    "الضريبة (3)",
+    "تطبيق الضرائب لكل الاصناف",
+    "ملاحظات",
+    "نوع السعر",
+    "العملة",
+    "وحدة القياس",
+    "السعر",
+    "وحدة القياس الاضافية",
+    "النسبة الى وحدة القياس الاساسية",
+    "نسبة السعر",
+    "الصنف",
+    "الكمية",
+    "المخزن",
+    "المكان بالمخزن",
+    "النوع الفرعي",
+    "الكود"
+  ],
+  "headers": [],
+  "buttons": [
+    "اضافة تعليق",
+    "بحث",
+    "تفريغ",
+    "اضافة",
+    "حفظ",
+    "تراجع"
+  ],
+  "selects": [
+    {
+      "id": "cph_TabContainer1_TabPanel2_ddlItemType",
+      "name": "ctl00$cph$TabContainer1$TabPanel2$ddlItemType",
+      "options": [
+        "وحدة مخزنية",
+        "وحدة خدمية",
+        "مادة خام",
+        "منتج وسيط",
+        "منتج تام",
+        "مجموعة / طقم",
+        "صنف مركب",
+        "صنف وكالة"
+      ],
+      "nearby": "نوع الصنف"
+    },
+    {
+      "id": "cph_TabContainer1_TabPanel1_ddlCurrencySrch",
+      "name": "ctl00$cph$TabContainer1$TabPanel1$ddlCurrencySrch",
+      "options": [
+        "اختر",
+        "جنيه مصري",
+        "جنيه استرليني",
+        "جنيه سوداني",
+        "درهم اماراتي",
+        "درهم مغربي",
+        "دولار امريكي",
+        "دينار اردني",
+        "دينار عراقي",
+        "دينار كويتي",
+        "دينار ليبي",
+        "روبل روسي"
+      ],
+      "nearby": "العملة"
+    },
+    {
+      "id": "cph_TabContainer1_TabPanel1_ddlCurrency",
+      "name": "ctl00$cph$TabContainer1$TabPanel1$ddlCurrency",
+      "options": [
+        "جنيه مصري",
+        "جنيه استرليني",
+        "جنيه سوداني",
+        "درهم اماراتي",
+        "درهم مغربي",
+        "دولار امريكي",
+        "دينار اردني",
+        "دينار عراقي",
+        "دينار كويتي",
+        "دينار ليبي",
+        "روبل روسي",
+        "روبية هندي"
+      ],
+      "nearby": "العملة"
+    }
+  ],
+  "inputs": [
+    {
+      "id": "txtHidden",
+      "name": "ctl00$txtHidden",
+      "type": "text",
+      "placeholder": "",
+      "nearby": ""
+    },
+    {
+      "id": "txtComment",
+      "name": "ctl00$txtComment",
+      "type": "textarea",
+      "placeholder": "",
+      "nearby": ""
+    },
+    {
+      "id": "cph_TabContainer1_TabPanel2_txtName",
+      "name": "ctl00$cph$TabContainer1$TabPanel2$txtName",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "الاسم"
+    },
+    {
+      "id": "cph_TabContainer1_TabPanel2_acCategory_txtAutoCompleteText",
+      "name": "ctl00$cph$TabContainer1$TabPanel2$acCategory$txtAutoCompleteText",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "الفئة الرئيسية"
+    },
+    {
+      "id": "cph_TabContainer1_TabPanel2_acCategory_hfAutocomplete",
+      "name": "ctl00$cph$TabContainer1$TabPanel2$acCategory$hfAutocomplete",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "الفئة الرئيسية"
+    },
+    {
+      "id": "cph_TabContainer1_TabPanel2_txtCost",
+      "name": "ctl00$cph$TabContainer1$TabPanel2$txtCost",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "تكلفة الشراء الافتراضية"
+    },
+    {
+      "id": "cph_TabContainer1_TabPanel2_txtDefaultPrice",
+      "name": "ctl00$cph$TabContainer1$TabPanel2$txtDefaultPrice",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "سعر البيع الافتراضي"
+    },
+    {
+      "id": "cph_TabContainer1_TabPanel2_acMainUnit_txtAutoCompleteText",
+      "name": "ctl00$cph$TabContainer1$TabPanel2$acMainUnit$txtAutoCompleteText",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "وحدة القياس الاساسية"
+    },
+    {
+      "id": "cph_TabContainer1_TabPanel2_acMainUnit_hfAutocomplete",
+      "name": "ctl00$cph$TabContainer1$TabPanel2$acMainUnit$hfAutocomplete",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "وحدة القياس الاساسية"
+    },
+    {
+      "id": "cph_TabContainer1_TabPanel2_txtMinPrice",
+      "name": "ctl00$cph$TabContainer1$TabPanel2$txtMinPrice",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "السعر الادنى"
+    },
+    {
+      "id": "cph_TabContainer1_TabPanel2_txtMaxPrice",
+      "name": "ctl00$cph$TabContainer1$TabPanel2$txtMaxPrice",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "السعر الاعلى"
+    },
+    {
+      "id": "cph_TabContainer1_TabPanel2_txtBarcode",
+      "name": "ctl00$cph$TabContainer1$TabPanel2$txtBarcode",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "الباركود"
+    },
+    {
+      "id": "cph_TabContainer1_TabPanel2_acAltCategory_txtAutoCompleteText",
+      "name": "ctl00$cph$TabContainer1$TabPanel2$acAltCategory$txtAutoCompleteText",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "فئة بديلة"
+    },
+    {
+      "id": "cph_TabContainer1_TabPanel2_acAltCategory_hfAutocomplete",
+      "name": "ctl00$cph$TabContainer1$TabPanel2$acAltCategory$hfAutocomplete",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "فئة بديلة"
+    },
+    {
+      "id": "cph_TabContainer1_TabPanel2_txtMinQty",
+      "name": "ctl00$cph$TabContainer1$TabPanel2$txtMinQty",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "اقل كمية"
+    },
+    {
+      "id": "cph_TabContainer1_TabPanel2_txtPercentageDiscount",
+      "name": "ctl00$cph$TabContainer1$TabPanel2$txtPercentageDiscount",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "خصم نسبة"
+    },
+    {
+      "id": "cph_TabContainer1_TabPanel2_txtCashDiscount",
+      "name": "ctl00$cph$TabContainer1$TabPanel2$txtCashDiscount",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "خصم نقدي"
+    },
+    {
+      "id": "cph_TabContainer1_TabPanel2_acTax_txtAutoCompleteText",
+      "name": "ctl00$cph$TabContainer1$TabPanel2$acTax$txtAutoCompleteText",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "الضريبة"
+    },
+    {
+      "id": "cph_TabContainer1_TabPanel2_acTax_hfAutocomplete",
+      "name": "ctl00$cph$TabContainer1$TabPanel2$acTax$hfAutocomplete",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "الضريبة"
+    },
+    {
+      "id": "cph_TabContainer1_TabPanel2_acTax2_txtAutoCompleteText",
+      "name": "ctl00$cph$TabContainer1$TabPanel2$acTax2$txtAutoCompleteText",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "الضريبة (2)"
+    },
+    {
+      "id": "cph_TabContainer1_TabPanel2_acTax2_hfAutocomplete",
+      "name": "ctl00$cph$TabContainer1$TabPanel2$acTax2$hfAutocomplete",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "الضريبة (2)"
+    },
+    {
+      "id": "cph_TabContainer1_TabPanel2_acTax3_txtAutoCompleteText",
+      "name": "ctl00$cph$TabContainer1$TabPanel2$acTax3$txtAutoCompleteText",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "الضريبة (3)"
+    },
+    {
+      "id": "cph_TabContainer1_TabPanel2_acTax3_hfAutocomplete",
+      "name": "ctl00$cph$TabContainer1$TabPanel2$acTax3$hfAutocomplete",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "الضريبة (3)"
+    },
+    {
+      "id": "cph_TabContainer1_TabPanel2_txtNotes",
+      "name": "ctl00$cph$TabContainer1$TabPanel2$txtNotes",
+      "type": "textarea",
+      "placeholder": "",
+      "nearby": "ملاحظات"
+    },
+    {
+      "id": "cph_TabContainer1_TabPanel1_acPriceNameSrch_txtAutoCompleteText",
+      "name": "ctl00$cph$TabContainer1$TabPanel1$acPriceNameSrch$txtAutoCompleteText",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "نوع السعر"
+    },
+    {
+      "id": "cph_TabContainer1_TabPanel1_acPriceNameSrch_hfAutocomplete",
+      "name": "ctl00$cph$TabContainer1$TabPanel1$acPriceNameSrch$hfAutocomplete",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "نوع السعر"
+    },
+    {
+      "id": "cph_TabContainer1_TabPanel1_acUnitForPriceSrch_txtAutoCompleteText",
+      "name": "ctl00$cph$TabContainer1$TabPanel1$acUnitForPriceSrch$txtAutoCompleteText",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "وحدة القياس"
+    },
+    {
+      "id": "cph_TabContainer1_TabPanel1_acUnitForPriceSrch_hfAutocomplete",
+      "name": "ctl00$cph$TabContainer1$TabPanel1$acUnitForPriceSrch$hfAutocomplete",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "وحدة القياس"
+    },
+    {
+      "id": "cph_TabContainer1_TabPanel1_acPriceName_txtAutoCompleteText",
+      "name": "ctl00$cph$TabContainer1$TabPanel1$acPriceName$txtAutoCompleteText",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "نوع السعر"
+    },
+    {
+      "id": "cph_TabContainer1_TabPanel1_acPriceName_hfAutocomplete",
+      "name": "ctl00$cph$TabContainer1$TabPanel1$acPriceName$hfAutocomplete",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "نوع السعر"
+    },
+    {
+      "id": "cph_TabContainer1_TabPanel1_txtPrice",
+      "name": "ctl00$cph$TabContainer1$TabPanel1$txtPrice",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "السعر"
+    },
+    {
+      "id": "cph_TabContainer1_TabPanel1_txtPricePercentageDiscount",
+      "name": "ctl00$cph$TabContainer1$TabPanel1$txtPricePercentageDiscount",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "خصم نسبة"
+    },
+    {
+      "id": "cph_TabContainer1_TabPanel1_txtPriceCashDiscount",
+      "name": "ctl00$cph$TabContainer1$TabPanel1$txtPriceCashDiscount",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "خصم نقدي"
+    },
+    {
+      "id": "cph_TabContainer1_TabPanel1_acUnitForPrice_txtAutoCompleteText",
+      "name": "ctl00$cph$TabContainer1$TabPanel1$acUnitForPrice$txtAutoCompleteText",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "وحدة القياس"
+    },
+    {
+      "id": "cph_TabContainer1_TabPanel1_acUnitForPrice_hfAutocomplete",
+      "name": "ctl00$cph$TabContainer1$TabPanel1$acUnitForPrice$hfAutocomplete",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "وحدة القياس"
+    },
+    {
+      "id": "cph_TabContainer1_TabPanel3_acExtraUnit_txtAutoCompleteText",
+      "name": "ctl00$cph$TabContainer1$TabPanel3$acExtraUnit$txtAutoCompleteText",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "وحدة القياس الاضافية"
+    },
+    {
+      "id": "cph_TabContainer1_TabPanel3_acExtraUnit_hfAutocomplete",
+      "name": "ctl00$cph$TabContainer1$TabPanel3$acExtraUnit$hfAutocomplete",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "وحدة القياس الاضافية"
+    },
+    {
+      "id": "cph_TabContainer1_TabPanel3_txtUnitRatio",
+      "name": "ctl00$cph$TabContainer1$TabPanel3$txtUnitRatio",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "النسبة الى وحدة القياس الاساسية"
+    },
+    {
+      "id": "cph_TabContainer1_TabPanel3_txtUnitBarcode",
+      "name": "ctl00$cph$TabContainer1$TabPanel3$txtUnitBarcode",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "الباركود"
+    },
+    {
+      "id": "cph_TabContainer1_TabPanel3_txtPriceRatio",
+      "name": "ctl00$cph$TabContainer1$TabPanel3$txtPriceRatio",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "نسبة السعر"
+    },
+    {
+      "id": "cph_TabContainer1_TabPanel3_txtUnitPrice",
+      "name": "ctl00$cph$TabContainer1$TabPanel3$txtUnitPrice",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "السعر"
+    },
+    {
+      "id": "cph_TabContainer1_TabPanel4_txtRawMatBarcode",
+      "name": "ctl00$cph$TabContainer1$TabPanel4$txtRawMatBarcode",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "الباركود"
+    },
+    {
+      "id": "cph_TabContainer1_TabPanel4_acRawMat_txtAutoCompleteText",
+      "name": "ctl00$cph$TabContainer1$TabPanel4$acRawMat$txtAutoCompleteText",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "الصنف"
+    },
+    {
+      "id": "cph_TabContainer1_TabPanel4_acRawMat_hfAutocomplete",
+      "name": "ctl00$cph$TabContainer1$TabPanel4$acRawMat$hfAutocomplete",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "الصنف"
+    },
+    {
+      "id": "cph_TabContainer1_TabPanel4_txtRawMatQuantity",
+      "name": "ctl00$cph$TabContainer1$TabPanel4$txtRawMatQuantity",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "الكمية"
+    },
+    {
+      "id": "cph_TabContainer1_TabPanel4_acRawMatUOM_txtAutoCompleteText",
+      "name": "ctl00$cph$TabContainer1$TabPanel4$acRawMatUOM$txtAutoCompleteText",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "وحدة القياس"
+    },
+    {
+      "id": "cph_TabContainer1_TabPanel4_acRawMatUOM_hfAutocomplete",
+      "name": "ctl00$cph$TabContainer1$TabPanel4$acRawMatUOM$hfAutocomplete",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "وحدة القياس"
+    },
+    {
+      "id": "cph_TabContainer1_TabPanel5_acStore_txtAutoCompleteText",
+      "name": "ctl00$cph$TabContainer1$TabPanel5$acStore$txtAutoCompleteText",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "المخزن"
+    },
+    {
+      "id": "cph_TabContainer1_TabPanel5_acStore_hfAutocomplete",
+      "name": "ctl00$cph$TabContainer1$TabPanel5$acStore$hfAutocomplete",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "المخزن"
+    },
+    {
+      "id": "cph_TabContainer1_TabPanel5_txtMinQty_Multi",
+      "name": "ctl00$cph$TabContainer1$TabPanel5$txtMinQty_Multi",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "اقل كمية"
+    },
+    {
+      "id": "cph_TabContainer1_TabPanel5_txtInStoreLocation",
+      "name": "ctl00$cph$TabContainer1$TabPanel5$txtInStoreLocation",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "المكان بالمخزن"
+    },
+    {
+      "id": "cph_ucNewPrice_txtName",
+      "name": "ctl00$cph$ucNewPrice$txtName",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "الاسم"
+    },
+    {
+      "id": "cph_ucNewPrice_acSubType_txtAutoCompleteText",
+      "name": "ctl00$cph$ucNewPrice$acSubType$txtAutoCompleteText",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "النوع الفرعي"
+    },
+    {
+      "id": "cph_ucNewPrice_acSubType_hfAutocomplete",
+      "name": "ctl00$cph$ucNewPrice$acSubType$hfAutocomplete",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "النوع الفرعي"
+    },
+    {
+      "id": "cph_ucNewPrice_txtCode",
+      "name": "ctl00$cph$ucNewPrice$txtCode",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "الكود"
+    },
+    {
+      "id": "cph_ucNewUnit_txtName",
+      "name": "ctl00$cph$ucNewUnit$txtName",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "الاسم"
+    },
+    {
+      "id": "cph_ucNewUnit_acSubType_txtAutoCompleteText",
+      "name": "ctl00$cph$ucNewUnit$acSubType$txtAutoCompleteText",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "النوع الفرعي"
+    },
+    {
+      "id": "cph_ucNewUnit_acSubType_hfAutocomplete",
+      "name": "ctl00$cph$ucNewUnit$acSubType$hfAutocomplete",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "النوع الفرعي"
+    },
+    {
+      "id": "cph_ucNewUnit_txtCode",
+      "name": "ctl00$cph$ucNewUnit$txtCode",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "الكود"
+    },
+    {
+      "id": "cph_ucNewExtraUnit_txtName",
+      "name": "ctl00$cph$ucNewExtraUnit$txtName",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "الاسم"
+    }
+  ],
+  "bodyStart": " صنف\n    \nالبيانات الاساسية\nالاسعار الاضافية\nوحدات القياس الاضافية\nالمكونات\nاقل كمية / المكان\nالاسم\nالفئة الرئيسية\nتكلفة الشراء الافتراضية\nسعر البيع الافتراضي\nوحدة القياس الاساسية\nنوع الصنف\nوحدة مخزنية\nوحدة خدمية\nمادة خام\nمنتج وسيط\nمنتج تام\nمجموعة / طقم\nصنف مركب\nصنف وكالة\nالسعر الادنى\nالسعر الاعلى\nالباركود\nفئة بديلة\nاقل كمية\nخصم نسبة\nخصم نقدي\nالضريبة\nالضريبة (2)\nالضريبة (3)\nتطبيق الضرائب لكل الاصناف\nملاحظات\n\n\n \n\n",
+  "url": "https://km.mega-cash.net/Inv/Items.aspx",
+  "key": "item",
+  "megaLabel": "صنف",
+  "path": "/Inv/Items.aspx"
+}

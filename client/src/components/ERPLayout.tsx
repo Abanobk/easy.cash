@@ -101,6 +101,8 @@ const LIST_BASES_WITH_CREATE = new Set([
   "/purchases/orders",
   "/purchases/invoices",
   "/purchases/returns",
+  "/inventory/adjustments",
+  "/inventory/transfers",
 ]);
 
 function pathMatches(location: string, search: string, tenantSlug: string, path: string): boolean {

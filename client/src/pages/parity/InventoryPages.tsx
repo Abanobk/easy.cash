@@ -31,16 +31,16 @@ export function ItemCategoriesPage() {
     return p?.name || String(id);
   };
   return (
-    <SimpleEntityPage title="فئات الأصناف" tableTitle="الفئات" data={q.data as any} isLoading={q.isLoading} onRefresh={() => q.refetch()}
+    <SimpleEntityPage title="فئات الاصناف" tableTitle="الفئات" data={q.data as any} isLoading={q.isLoading} onRefresh={() => q.refetch()}
       entity={{ moduleKey: "inventory", entityKey: "itemCategories" }}
       canEdit={false}
       columns={[
-        { key: "name", label: "اسم الفئة" },
-        { key: "parentId", label: "الفئة الأب", render: (r) => parentName(r.parentId) },
+        { key: "name", label: "الاسم" },
+        { key: "parentId", label: "الفئة الرئيسية", render: (r) => parentName(r.parentId) },
       ]}
       fields={[
-        { key: "name", label: "اسم الفئة", required: true },
-        { key: "parentId", label: "الفئة الأب", type: "select", options: parentOptions },
+        { key: "name", label: "الاسم", required: true },
+        { key: "parentId", label: "الفئة الرئيسية", type: "select", options: parentOptions },
       ]}
       onCreate={(v) => c.mutateAsync({
         name: v.name,
@@ -56,14 +56,41 @@ export function ItemBatchesPage() {
   const items = useItemOptions();
   const c = trpc.parity.inventory.batches.create.useMutation();
   const d = trpc.parity.inventory.batches.delete.useMutation();
+  const [itemFilter, setItemFilter] = useState("");
+  const [batchSearch, setBatchSearch] = useState("");
+  const filtered = useMemo(() => {
+    return (q.data || []).filter((r: any) => {
+      if (itemFilter && String(r.itemId) !== itemFilter) return false;
+      if (batchSearch.trim() && !String(r.batchNumber || "").toLowerCase().includes(batchSearch.trim().toLowerCase())) return false;
+      return true;
+    });
+  }, [q.data, itemFilter, batchSearch]);
   return (
-    <SimpleEntityPage title="أرقام التشغيلة" tableTitle="التشغيلات" data={q.data as any} isLoading={q.isLoading} onRefresh={() => q.refetch()}
+    <SimpleEntityPage title="ارقام التشغيلة" tableTitle="التشغيلات" data={filtered as any} isLoading={q.isLoading} onRefresh={() => q.refetch()}
       entity={{ moduleKey: "inventory", entityKey: "batchNumbers" }}
       canEdit={false}
+      extraActions={
+        <div className="flex flex-wrap gap-2 items-end">
+          <div className="space-y-1">
+            <Label className="text-xs">الصنف</Label>
+            <Select value={itemFilter || "all"} onValueChange={(v) => setItemFilter(v === "all" ? "" : v)}>
+              <SelectTrigger className="h-9 w-44 text-sm"><SelectValue placeholder="كل الأصناف" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">كل الأصناف</SelectItem>
+                {items.map((i) => <SelectItem key={i.value} value={i.value}>{i.label}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">رقم التشغيلة</Label>
+            <Input className="h-9 w-40" value={batchSearch} onChange={(e) => setBatchSearch(e.target.value)} placeholder="بحث..." />
+          </div>
+        </div>
+      }
       columns={[
         { key: "itemName", label: "الصنف" },
         { key: "batchNumber", label: "رقم التشغيلة" },
-        { key: "expiryDate", label: "الانتهاء", render: (r) => r.expiryDate ? toDateStr(r.expiryDate) : "—" },
+        { key: "expiryDate", label: "تاريخ الانتهاء", render: (r) => r.expiryDate ? toDateStr(r.expiryDate) : "—" },
         { key: "quantity", label: "الكمية", render: (r) => Number(r.quantity || 0).toLocaleString("en-US") },
       ]}
       fields={[

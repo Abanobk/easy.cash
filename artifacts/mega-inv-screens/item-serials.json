@@ -1,0 +1,30 @@
+{
+  "title": "",
+  "labels": [],
+  "headers": [],
+  "buttons": [
+    "اضافة تعليق"
+  ],
+  "selects": [],
+  "inputs": [
+    {
+      "id": "txtHidden",
+      "name": "ctl00$txtHidden",
+      "type": "text",
+      "placeholder": "",
+      "nearby": ""
+    },
+    {
+      "id": "txtComment",
+      "name": "ctl00$txtComment",
+      "type": "textarea",
+      "placeholder": "",
+      "nearby": ""
+    }
+  ],
+  "bodyStart": " مرحبا\n  \n\nموعد تجديد الاشتراك الخاص بكم فى 15/6/2027 (200 دولار امريكي)\n\n\n",
+  "url": "https://km.mega-cash.net/Main/StartScreen.aspx",
+  "key": "item-serials",
+  "megaLabel": "الأرقام التسلسلية",
+  "path": "/Inv/ItemSerials.aspx"
+}

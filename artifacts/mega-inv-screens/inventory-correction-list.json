@@ -1,0 +1,124 @@
+{
+  "title": "",
+  "labels": [
+    "الفرع",
+    "من تاريخ",
+    "الى تاريخ",
+    "العميل",
+    "المخزن",
+    "المسلسل",
+    "رقم المرجع",
+    "الحالة"
+  ],
+  "headers": [],
+  "buttons": [
+    "اضافة تعليق",
+    "بحث",
+    "تفريغ"
+  ],
+  "selects": [
+    {
+      "id": "cph_ddlStatus",
+      "name": "ctl00$cph$ddlStatus",
+      "options": [
+        "اختر",
+        "معلق",
+        "معتمد",
+        "ملغي",
+        "معتمد جزئيا او معلق"
+      ],
+      "nearby": "الحالة"
+    }
+  ],
+  "inputs": [
+    {
+      "id": "txtHidden",
+      "name": "ctl00$txtHidden",
+      "type": "text",
+      "placeholder": "",
+      "nearby": ""
+    },
+    {
+      "id": "txtComment",
+      "name": "ctl00$txtComment",
+      "type": "textarea",
+      "placeholder": "",
+      "nearby": ""
+    },
+    {
+      "id": "cph_acBranch_txtAutoCompleteText",
+      "name": "ctl00$cph$acBranch$txtAutoCompleteText",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "الفرع"
+    },
+    {
+      "id": "cph_acBranch_hfAutocomplete",
+      "name": "ctl00$cph$acBranch$hfAutocomplete",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "الفرع"
+    },
+    {
+      "id": "cph_txtDateFromSrch",
+      "name": "ctl00$cph$txtDateFromSrch",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "من تاريخ"
+    },
+    {
+      "id": "cph_txtDateToSrch",
+      "name": "ctl00$cph$txtDateToSrch",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "الى تاريخ"
+    },
+    {
+      "id": "cph_acCustomer_txtAutoCompleteText",
+      "name": "ctl00$cph$acCustomer$txtAutoCompleteText",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "العميل"
+    },
+    {
+      "id": "cph_acCustomer_hfAutocomplete",
+      "name": "ctl00$cph$acCustomer$hfAutocomplete",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "العميل"
+    },
+    {
+      "id": "cph_acStore_txtAutoCompleteText",
+      "name": "ctl00$cph$acStore$txtAutoCompleteText",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "المخزن"
+    },
+    {
+      "id": "cph_acStore_hfAutocomplete",
+      "name": "ctl00$cph$acStore$hfAutocomplete",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "المخزن"
+    },
+    {
+      "id": "cph_txtSerialsrch",
+      "name": "ctl00$cph$txtSerialsrch",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "المسلسل"
+    },
+    {
+      "id": "cph_txtUserRefNo",
+      "name": "ctl00$cph$txtUserRefNo",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "رقم المرجع"
+    }
+  ],
+  "bodyStart": " قائمة التسويات المخزنية\n    \nبحث اضافة جديد\nبحث\nالفرع\nمن تاريخ\nالى تاريخ\nالعميل\nالمخزن\nالمسلسل\nرقم المرجع\nالحالة\nاختر\nمعلق\nمعتمد\nملغي\nمعتمد جزئيا او معلق\n \nلا توجد بيانات للعرض\n\n",
+  "url": "https://km.mega-cash.net/Inv/InventoryDocumentsList.aspx/InvCorr",
+  "key": "inventory-correction-list",
+  "megaLabel": "قائمة التسويات المخزنية",
+  "path": "/Inv/InventoryDocumentsList.aspx/InvCorr"
+}

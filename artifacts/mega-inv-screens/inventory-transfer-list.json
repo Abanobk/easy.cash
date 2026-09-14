@@ -1,0 +1,165 @@
+{
+  "title": "",
+  "labels": [
+    "من / الى فرع",
+    "الفرع",
+    "الى فرع",
+    "من تاريخ",
+    "الى تاريخ",
+    "نوع التحويل",
+    "المخزن",
+    "الى مخزن",
+    "المسلسل",
+    "رقم المرجع",
+    "الحالة"
+  ],
+  "headers": [],
+  "buttons": [
+    "اضافة تعليق",
+    "بحث",
+    "تفريغ"
+  ],
+  "selects": [
+    {
+      "id": "cph_ddlTransferType",
+      "name": "ctl00$cph$ddlTransferType",
+      "options": [
+        "اختر",
+        "تحويل مباشر",
+        "تحويل بمرحلتين"
+      ],
+      "nearby": "نوع التحويل"
+    },
+    {
+      "id": "cph_ddlStatus",
+      "name": "ctl00$cph$ddlStatus",
+      "options": [
+        "اختر",
+        "معلق",
+        "معتمد",
+        "ملغي",
+        "معتمد جزئيا او معلق"
+      ],
+      "nearby": "الحالة"
+    }
+  ],
+  "inputs": [
+    {
+      "id": "txtHidden",
+      "name": "ctl00$txtHidden",
+      "type": "text",
+      "placeholder": "",
+      "nearby": ""
+    },
+    {
+      "id": "txtComment",
+      "name": "ctl00$txtComment",
+      "type": "textarea",
+      "placeholder": "",
+      "nearby": ""
+    },
+    {
+      "id": "cph_acFromToBranch_txtAutoCompleteText",
+      "name": "ctl00$cph$acFromToBranch$txtAutoCompleteText",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "من / الى فرع"
+    },
+    {
+      "id": "cph_acFromToBranch_hfAutocomplete",
+      "name": "ctl00$cph$acFromToBranch$hfAutocomplete",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "من / الى فرع"
+    },
+    {
+      "id": "cph_acBranch_txtAutoCompleteText",
+      "name": "ctl00$cph$acBranch$txtAutoCompleteText",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "الفرع"
+    },
+    {
+      "id": "cph_acBranch_hfAutocomplete",
+      "name": "ctl00$cph$acBranch$hfAutocomplete",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "الفرع"
+    },
+    {
+      "id": "cph_acToBranch_txtAutoCompleteText",
+      "name": "ctl00$cph$acToBranch$txtAutoCompleteText",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "الى فرع"
+    },
+    {
+      "id": "cph_acToBranch_hfAutocomplete",
+      "name": "ctl00$cph$acToBranch$hfAutocomplete",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "الى فرع"
+    },
+    {
+      "id": "cph_txtDateFromSrch",
+      "name": "ctl00$cph$txtDateFromSrch",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "من تاريخ"
+    },
+    {
+      "id": "cph_txtDateToSrch",
+      "name": "ctl00$cph$txtDateToSrch",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "الى تاريخ"
+    },
+    {
+      "id": "cph_acStore_txtAutoCompleteText",
+      "name": "ctl00$cph$acStore$txtAutoCompleteText",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "المخزن"
+    },
+    {
+      "id": "cph_acStore_hfAutocomplete",
+      "name": "ctl00$cph$acStore$hfAutocomplete",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "المخزن"
+    },
+    {
+      "id": "cph_acToStore_txtAutoCompleteText",
+      "name": "ctl00$cph$acToStore$txtAutoCompleteText",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "الى مخزن"
+    },
+    {
+      "id": "cph_acToStore_hfAutocomplete",
+      "name": "ctl00$cph$acToStore$hfAutocomplete",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "الى مخزن"
+    },
+    {
+      "id": "cph_txtSerialsrch",
+      "name": "ctl00$cph$txtSerialsrch",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "المسلسل"
+    },
+    {
+      "id": "cph_txtUserRefNo",
+      "name": "ctl00$cph$txtUserRefNo",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "رقم المرجع"
+    }
+  ],
+  "bodyStart": " قائمة التحويلات المخزنية\n    \nبحث اضافة جديد\nبحث\nمن / الى فرع\nالفرع\nالى فرع\nمن تاريخ\nالى تاريخ\nنوع التحويل\nاختر\nتحويل مباشر\nتحويل بمرحلتين\nالمخزن\nالى مخزن\nالمسلسل\nرقم المرجع\nالحالة\nاختر\nمعلق\nمعتمد\nملغي\nمعتمد جزئيا او معلق\n \nلا توجد بيانات للعرض\n\n",
+  "url": "https://km.mega-cash.net/Inv/InventoryDocumentsList.aspx/InvTrans",
+  "key": "inventory-transfer-list",
+  "megaLabel": "قائمة التحويلات المخزنية",
+  "path": "/Inv/InventoryDocumentsList.aspx/InvTrans"
+}

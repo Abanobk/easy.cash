@@ -1,0 +1,239 @@
+{
+  "title": "",
+  "labels": [
+    "التاريخ",
+    "الفرع",
+    "رقم المرجع",
+    "الصنف",
+    "ملاحظات",
+    "الاسم",
+    "الفئة الرئيسية",
+    "تكلفة الشراء الافتراضية",
+    "سعر البيع الافتراضي",
+    "وحدة القياس الاساسية",
+    "الباركود",
+    "فئة بديلة",
+    "خصم نسبة",
+    "خصم نقدي",
+    "الضريبة",
+    "رقم التشغيلة",
+    "تاريخ الانتاج",
+    "تاريخ الانتهاء"
+  ],
+  "headers": [
+    "المخزن",
+    "الفئة",
+    "الباركود",
+    "الصنف",
+    "الكمية",
+    "الوحدة",
+    "رقم التشغيلة",
+    "التكلفة",
+    "الاجمالي"
+  ],
+  "buttons": [
+    "اضافة تعليق",
+    "بحث",
+    "طباعة",
+    "فك اعتماد",
+    "حفظ",
+    "تفريغ"
+  ],
+  "selects": [],
+  "inputs": [
+    {
+      "id": "txtHidden",
+      "name": "ctl00$txtHidden",
+      "type": "text",
+      "placeholder": "",
+      "nearby": ""
+    },
+    {
+      "id": "txtComment",
+      "name": "ctl00$txtComment",
+      "type": "textarea",
+      "placeholder": "",
+      "nearby": ""
+    },
+    {
+      "id": "cph_txtSerial",
+      "name": "ctl00$cph$txtSerial",
+      "type": "text",
+      "placeholder": "",
+      "nearby": ""
+    },
+    {
+      "id": "cph_txtOperationDate",
+      "name": "ctl00$cph$txtOperationDate",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "التاريخ"
+    },
+    {
+      "id": "cph_acBranch_txtAutoCompleteText",
+      "name": "ctl00$cph$acBranch$txtAutoCompleteText",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "الفرع"
+    },
+    {
+      "id": "cph_acBranch_hfAutocomplete",
+      "name": "ctl00$cph$acBranch$hfAutocomplete",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "الفرع"
+    },
+    {
+      "id": "cph_txtUserRefNo",
+      "name": "ctl00$cph$txtUserRefNo",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "رقم المرجع"
+    },
+    {
+      "id": "cph_txtItemNameSrch",
+      "name": "ctl00$cph$txtItemNameSrch",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "الصنف"
+    },
+    {
+      "id": "cph_txtNotes",
+      "name": "ctl00$cph$txtNotes",
+      "type": "textarea",
+      "placeholder": "",
+      "nearby": "ملاحظات"
+    },
+    {
+      "id": "cph_ucNewItem_txtName",
+      "name": "ctl00$cph$ucNewItem$txtName",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "الاسم"
+    },
+    {
+      "id": "cph_ucNewItem_acCategory_txtAutoCompleteText",
+      "name": "ctl00$cph$ucNewItem$acCategory$txtAutoCompleteText",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "الفئة الرئيسية"
+    },
+    {
+      "id": "cph_ucNewItem_acCategory_hfAutocomplete",
+      "name": "ctl00$cph$ucNewItem$acCategory$hfAutocomplete",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "الفئة الرئيسية"
+    },
+    {
+      "id": "cph_ucNewItem_txtCost",
+      "name": "ctl00$cph$ucNewItem$txtCost",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "تكلفة الشراء الافتراضية"
+    },
+    {
+      "id": "cph_ucNewItem_txtDefaultPrice",
+      "name": "ctl00$cph$ucNewItem$txtDefaultPrice",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "سعر البيع الافتراضي"
+    },
+    {
+      "id": "cph_ucNewItem_acMainUnit_txtAutoCompleteText",
+      "name": "ctl00$cph$ucNewItem$acMainUnit$txtAutoCompleteText",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "وحدة القياس الاساسية"
+    },
+    {
+      "id": "cph_ucNewItem_acMainUnit_hfAutocomplete",
+      "name": "ctl00$cph$ucNewItem$acMainUnit$hfAutocomplete",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "وحدة القياس الاساسية"
+    },
+    {
+      "id": "cph_ucNewItem_txtBarcode",
+      "name": "ctl00$cph$ucNewItem$txtBarcode",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "الباركود"
+    },
+    {
+      "id": "cph_ucNewItem_acAltCategory_txtAutoCompleteText",
+      "name": "ctl00$cph$ucNewItem$acAltCategory$txtAutoCompleteText",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "فئة بديلة"
+    },
+    {
+      "id": "cph_ucNewItem_acAltCategory_hfAutocomplete",
+      "name": "ctl00$cph$ucNewItem$acAltCategory$hfAutocomplete",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "فئة بديلة"
+    },
+    {
+      "id": "cph_ucNewItem_txtPercentageDiscount",
+      "name": "ctl00$cph$ucNewItem$txtPercentageDiscount",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "خصم نسبة"
+    },
+    {
+      "id": "cph_ucNewItem_txtCashDiscount",
+      "name": "ctl00$cph$ucNewItem$txtCashDiscount",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "خصم نقدي"
+    },
+    {
+      "id": "cph_ucNewItem_acTax_txtAutoCompleteText",
+      "name": "ctl00$cph$ucNewItem$acTax$txtAutoCompleteText",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "الضريبة"
+    },
+    {
+      "id": "cph_ucNewItem_acTax_hfAutocomplete",
+      "name": "ctl00$cph$ucNewItem$acTax$hfAutocomplete",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "الضريبة"
+    },
+    {
+      "id": "cph_ucNewBatchID_txtBatchID",
+      "name": "ctl00$cph$ucNewBatchID$txtBatchID",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "رقم التشغيلة"
+    },
+    {
+      "id": "cph_ucNewBatchID_txtProductionDate",
+      "name": "ctl00$cph$ucNewBatchID$txtProductionDate",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "تاريخ الانتاج"
+    },
+    {
+      "id": "cph_ucNewBatchID_txtExpirationDate",
+      "name": "ctl00$cph$ucNewBatchID$txtExpirationDate",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "تاريخ الانتهاء"
+    },
+    {
+      "id": "cph_ucNewBatchID_txtItemID",
+      "name": "ctl00$cph$ucNewBatchID$txtItemID",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "الصنف"
+    }
+  ],
+  "bodyStart": " مخزون اول المدة\n      \nانشأ بواسطة: امير سمير\nاعتمد بواسطة: امير سمير\nالتاريخ\nالفرع\nرقم المرجع\n\nالاصناف\n\nبحث\nالصنف\n \nالمخزن\tالفئة\tالباركود\tالصنف\tالكمية\tالوحدة\tرقم التشغيلة\tالتكلفة\tالاجمالي\nمخزن KAM - الخامات\tخامات\t301001\tT101\t482\tكيلو\t \t19\t9,158\nمخزن KAM - توالف\tخامات\t301001\tT101\t274\tكيلو\t \t18\t4,932\nمخزن ايفا - انتاج نصف تام تحت التسوية\tكله سايبة\t601003\tكله احمر - H1\t0.0048\tكيلو\t \t32.75\t0.1572\nمخزن KAM - انتاج نصف تام تحت التسوية\tكله سايبة\t601003\tكله احمر - H1\t4,156.36\tكيلو\t \t33.6094\t139,692.7658\nمخزن KAM - انتاج نصف تام\tكله سايبة\t601003\tكله احمر - H1\t49.84\tكيلو\t \t22.8448\t1,138.5848\nمخزن KAM - مواد تعبئة وتغلييف\tمستلزمات تعبئة وتغلييف\t401007\tعلبة كيلو شعلة احمر فارغة\t42\tقطعة\t \t5.3895\t226.359\nمخزن ايفا - توالف\tخامات\t301002\tT102\t180\tكيلو\t \t19\t3,420\nمخزن KAM - الخامات\tخامات\t301003\tT X\t1,726\tكيلو\t \t14\t24,164\nمخزن KAM - توالف\tخامات\t301003\tT X\t143\tكيلو\t \t4.5\t643.5\nمخزن KAM - الخامات\tخامات\t301007\tF H\t1\tكيلو\t \t60\t60\nمخزن KAM - توالف\tخامات\t301009\tH\t18\tكيلو\t \t24\t432\nمخزن KAM - الخامات\tخامات\t301010\tB253\t13\tكيلو\t \t135\t1,755\nمخزن KAM - الخامات\tخامات\t301011\tB 350\t22\tكيلو\t \t90\t1,980\nمخزن KAM - الخامات\tخامات\t301012\tM G\t388.5\tكيلو\t \t75\t29,137.5\nمخزن KAM - الخامات\tخامات\t301013\tZ N\t41.3\tكيلو\t \t75\t3,097.5\nمخزن KAM - توالف\tخامات\t301013\tZ N\t11\tكيلو\t \t70\t770\nمخزن KAM - الخامات\tخامات\t301018\t42/2\t19\tكيلو\t \t91.75\t1,743.25\nمخزن ايفا - انتاج نصف تام تحت التسوية\tكله سايبة\t601001\tكلة بروتان - صنف 1\t158\tكيلو\t \t30.8036\t4,866.9688\nمخزن KAM - انتاج تام تحت التسوية\tT B U\t705001\tصفيحة بلوجولد بروتان عبوة 10 كجم\t12\tصفيحة\t \t270\t3,240\nمخزن KAM - الخامات\tخامات\t301020\tS T Y\t14\tكيلو\t \t18\t252\nعدد الصفحات: 8 / اجمالي عدد الصفوف: 147\n\n1\t2\t3\t4\t5\t6\t7\t8\nملاحظات\nالاجمالي:\t3,190,207.3475\nالكمية:\t212,887.446\n\nمن فضلك لا تعتمد مخزون اول المدة قبل ادخال كل الاصناف فى كل المخازن فى كل الفروع ومراجعته جيدا\n\n \n\n",
+  "url": "https://km.mega-cash.net/Inv/BeginingInventory.aspx?ID=2",
+  "key": "beginning-inventory",
+  "megaLabel": "مخزون اول المدة",
+  "path": "/Inv/BeginingInventory.aspx?OneUser=1"
+}

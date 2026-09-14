@@ -1,0 +1,553 @@
+{
+  "title": "",
+  "labels": [
+    "متوسط التكلفة من الفرع",
+    "متوسط التكلفة من المخزن",
+    "العملة",
+    "نوع السعر",
+    "نوع الصنف",
+    "الباركود",
+    "الفئة",
+    "فئة بديلة",
+    "الصنف",
+    "وحدة القياس الاضافية",
+    "حالة السعر",
+    "الضريبة",
+    "مسلسل فاتورة الشراء",
+    "عرض بوحدات القياس الافتراضية",
+    "عرض الاصناف التى لها رصيد فقط",
+    "القيمة",
+    "تعديل في",
+    "من",
+    "من نوع السعر",
+    "التقريب الى كم رقم عشري؟",
+    "تطبيق النسبة فقط"
+  ],
+  "headers": [
+    "الفئة",
+    "الاسم",
+    "الباركود",
+    "نوع الصنف",
+    "وحدة القياس",
+    "تكلفة الشراء الافتراضية",
+    "متوسط التكلفة (كل المخازن)",
+    "السعر",
+    "خصم نسبة",
+    "خصم نقدي",
+    "السعر الادنى",
+    "السعر الاعلى"
+  ],
+  "buttons": [
+    "اضافة تعليق",
+    "بحث",
+    "تفريغ",
+    "تغيير بالقيمة",
+    "تغيير بنسبة",
+    "حفظ",
+    "نعم",
+    "لا"
+  ],
+  "selects": [
+    {
+      "id": "cph_ddlCurrency",
+      "name": "ctl00$cph$ddlCurrency",
+      "options": [
+        "جنيه مصري",
+        "جنيه استرليني",
+        "جنيه سوداني",
+        "درهم اماراتي",
+        "درهم مغربي",
+        "دولار امريكي",
+        "دينار اردني",
+        "دينار عراقي",
+        "دينار كويتي",
+        "دينار ليبي",
+        "روبل روسي",
+        "روبية هندي"
+      ],
+      "nearby": "العملة"
+    },
+    {
+      "id": "cph_ddlItemType",
+      "name": "ctl00$cph$ddlItemType",
+      "options": [
+        "اختر",
+        "وحدة مخزنية",
+        "وحدة خدمية",
+        "مادة خام",
+        "منتج وسيط",
+        "منتج تام",
+        "مجموعة / طقم",
+        "صنف مركب",
+        "صنف وكالة"
+      ],
+      "nearby": "نوع الصنف"
+    },
+    {
+      "id": "cph_ddlPriceStatus",
+      "name": "ctl00$cph$ddlPriceStatus",
+      "options": [
+        "اختر",
+        "اقل من متوسط التكلفة",
+        "مساوي لمتوسط التكلفة",
+        "اكبر من متوسط التكلفة"
+      ],
+      "nearby": "حالة السعر"
+    },
+    {
+      "id": "cph_ddlEditIN",
+      "name": "ctl00$cph$ddlEditIN",
+      "options": [
+        "السعر",
+        "تكلفة الشراء الافتراضية",
+        "السعر الادنى",
+        "السعر الاعلى",
+        "خصم نقدي",
+        "خصم نسبة"
+      ],
+      "nearby": "تعديل في"
+    },
+    {
+      "id": "cph_ddlEditFrom",
+      "name": "ctl00$cph$ddlEditFrom",
+      "options": [
+        "اختر",
+        "السعر",
+        "تكلفة الشراء الافتراضية",
+        "متوسط التكلفة",
+        "السعر الادنى",
+        "السعر الاعلى",
+        "خصم نقدي",
+        "خصم نسبة"
+      ],
+      "nearby": "من"
+    }
+  ],
+  "inputs": [
+    {
+      "id": "txtHidden",
+      "name": "ctl00$txtHidden",
+      "type": "text",
+      "placeholder": "",
+      "nearby": ""
+    },
+    {
+      "id": "txtComment",
+      "name": "ctl00$txtComment",
+      "type": "textarea",
+      "placeholder": "",
+      "nearby": ""
+    },
+    {
+      "id": "cph_acBranch_txtAutoCompleteText",
+      "name": "ctl00$cph$acBranch$txtAutoCompleteText",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "متوسط التكلفة من الفرع"
+    },
+    {
+      "id": "cph_acBranch_hfAutocomplete",
+      "name": "ctl00$cph$acBranch$hfAutocomplete",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "متوسط التكلفة من الفرع"
+    },
+    {
+      "id": "cph_acStore_txtAutoCompleteText",
+      "name": "ctl00$cph$acStore$txtAutoCompleteText",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "متوسط التكلفة من المخزن"
+    },
+    {
+      "id": "cph_acStore_hfAutocomplete",
+      "name": "ctl00$cph$acStore$hfAutocomplete",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "متوسط التكلفة من المخزن"
+    },
+    {
+      "id": "cph_acPriceNameSrch_txtAutoCompleteText",
+      "name": "ctl00$cph$acPriceNameSrch$txtAutoCompleteText",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "نوع السعر"
+    },
+    {
+      "id": "cph_acPriceNameSrch_hfAutocomplete",
+      "name": "ctl00$cph$acPriceNameSrch$hfAutocomplete",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "نوع السعر"
+    },
+    {
+      "id": "cph_txtBarcodeSrch",
+      "name": "ctl00$cph$txtBarcodeSrch",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "الباركود"
+    },
+    {
+      "id": "cph_acCategory_txtAutoCompleteText",
+      "name": "ctl00$cph$acCategory$txtAutoCompleteText",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "الفئة"
+    },
+    {
+      "id": "cph_acCategory_hfAutocomplete",
+      "name": "ctl00$cph$acCategory$hfAutocomplete",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "الفئة"
+    },
+    {
+      "id": "cph_acAltCategory_txtAutoCompleteText",
+      "name": "ctl00$cph$acAltCategory$txtAutoCompleteText",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "فئة بديلة"
+    },
+    {
+      "id": "cph_acAltCategory_hfAutocomplete",
+      "name": "ctl00$cph$acAltCategory$hfAutocomplete",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "فئة بديلة"
+    },
+    {
+      "id": "cph_acNameSrch_txtAutoCompleteText",
+      "name": "ctl00$cph$acNameSrch$txtAutoCompleteText",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "الصنف"
+    },
+    {
+      "id": "cph_acNameSrch_hfAutocomplete",
+      "name": "ctl00$cph$acNameSrch$hfAutocomplete",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "الصنف"
+    },
+    {
+      "id": "cph_acExtraUnit_txtAutoCompleteText",
+      "name": "ctl00$cph$acExtraUnit$txtAutoCompleteText",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "وحدة القياس الاضافية"
+    },
+    {
+      "id": "cph_acExtraUnit_hfAutocomplete",
+      "name": "ctl00$cph$acExtraUnit$hfAutocomplete",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "وحدة القياس الاضافية"
+    },
+    {
+      "id": "cph_acTax_txtAutoCompleteText",
+      "name": "ctl00$cph$acTax$txtAutoCompleteText",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "الضريبة"
+    },
+    {
+      "id": "cph_acTax_hfAutocomplete",
+      "name": "ctl00$cph$acTax$hfAutocomplete",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "الضريبة"
+    },
+    {
+      "id": "cph_txtRecSerial",
+      "name": "ctl00$cph$txtRecSerial",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "مسلسل فاتورة الشراء"
+    },
+    {
+      "id": "cph_txtAddValue",
+      "name": "ctl00$cph$txtAddValue",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "القيمة"
+    },
+    {
+      "id": "cph_acFromPriceName_txtAutoCompleteText",
+      "name": "ctl00$cph$acFromPriceName$txtAutoCompleteText",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "من نوع السعر"
+    },
+    {
+      "id": "cph_acFromPriceName_hfAutocomplete",
+      "name": "ctl00$cph$acFromPriceName$hfAutocomplete",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "من نوع السعر"
+    },
+    {
+      "id": "cph_txtRoundBy",
+      "name": "ctl00$cph$txtRoundBy",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "التقريب الى كم رقم عشري؟"
+    },
+    {
+      "id": "cph_gvItemssList_txtCost_0",
+      "name": "ctl00$cph$gvItemssList$ctl02$txtCost",
+      "type": "text",
+      "placeholder": "",
+      "nearby": ""
+    },
+    {
+      "id": "cph_gvItemssList_txtPrice_0",
+      "name": "ctl00$cph$gvItemssList$ctl02$txtPrice",
+      "type": "text",
+      "placeholder": "",
+      "nearby": ""
+    },
+    {
+      "id": "cph_gvItemssList_txtPercentageDiscount_0",
+      "name": "ctl00$cph$gvItemssList$ctl02$txtPercentageDiscount",
+      "type": "text",
+      "placeholder": "",
+      "nearby": ""
+    },
+    {
+      "id": "cph_gvItemssList_txtCashDiscount_0",
+      "name": "ctl00$cph$gvItemssList$ctl02$txtCashDiscount",
+      "type": "text",
+      "placeholder": "",
+      "nearby": ""
+    },
+    {
+      "id": "cph_gvItemssList_txtMinPrice_0",
+      "name": "ctl00$cph$gvItemssList$ctl02$txtMinPrice",
+      "type": "text",
+      "placeholder": "",
+      "nearby": ""
+    },
+    {
+      "id": "cph_gvItemssList_txtMaxPrice_0",
+      "name": "ctl00$cph$gvItemssList$ctl02$txtMaxPrice",
+      "type": "text",
+      "placeholder": "",
+      "nearby": ""
+    },
+    {
+      "id": "cph_gvItemssList_txtCost_1",
+      "name": "ctl00$cph$gvItemssList$ctl03$txtCost",
+      "type": "text",
+      "placeholder": "",
+      "nearby": ""
+    },
+    {
+      "id": "cph_gvItemssList_txtPrice_1",
+      "name": "ctl00$cph$gvItemssList$ctl03$txtPrice",
+      "type": "text",
+      "placeholder": "",
+      "nearby": ""
+    },
+    {
+      "id": "cph_gvItemssList_txtPercentageDiscount_1",
+      "name": "ctl00$cph$gvItemssList$ctl03$txtPercentageDiscount",
+      "type": "text",
+      "placeholder": "",
+      "nearby": ""
+    },
+    {
+      "id": "cph_gvItemssList_txtCashDiscount_1",
+      "name": "ctl00$cph$gvItemssList$ctl03$txtCashDiscount",
+      "type": "text",
+      "placeholder": "",
+      "nearby": ""
+    },
+    {
+      "id": "cph_gvItemssList_txtMinPrice_1",
+      "name": "ctl00$cph$gvItemssList$ctl03$txtMinPrice",
+      "type": "text",
+      "placeholder": "",
+      "nearby": ""
+    },
+    {
+      "id": "cph_gvItemssList_txtMaxPrice_1",
+      "name": "ctl00$cph$gvItemssList$ctl03$txtMaxPrice",
+      "type": "text",
+      "placeholder": "",
+      "nearby": ""
+    },
+    {
+      "id": "cph_gvItemssList_txtCost_2",
+      "name": "ctl00$cph$gvItemssList$ctl04$txtCost",
+      "type": "text",
+      "placeholder": "",
+      "nearby": ""
+    },
+    {
+      "id": "cph_gvItemssList_txtPrice_2",
+      "name": "ctl00$cph$gvItemssList$ctl04$txtPrice",
+      "type": "text",
+      "placeholder": "",
+      "nearby": ""
+    },
+    {
+      "id": "cph_gvItemssList_txtPercentageDiscount_2",
+      "name": "ctl00$cph$gvItemssList$ctl04$txtPercentageDiscount",
+      "type": "text",
+      "placeholder": "",
+      "nearby": ""
+    },
+    {
+      "id": "cph_gvItemssList_txtCashDiscount_2",
+      "name": "ctl00$cph$gvItemssList$ctl04$txtCashDiscount",
+      "type": "text",
+      "placeholder": "",
+      "nearby": ""
+    },
+    {
+      "id": "cph_gvItemssList_txtMinPrice_2",
+      "name": "ctl00$cph$gvItemssList$ctl04$txtMinPrice",
+      "type": "text",
+      "placeholder": "",
+      "nearby": ""
+    },
+    {
+      "id": "cph_gvItemssList_txtMaxPrice_2",
+      "name": "ctl00$cph$gvItemssList$ctl04$txtMaxPrice",
+      "type": "text",
+      "placeholder": "",
+      "nearby": ""
+    },
+    {
+      "id": "cph_gvItemssList_txtCost_3",
+      "name": "ctl00$cph$gvItemssList$ctl05$txtCost",
+      "type": "text",
+      "placeholder": "",
+      "nearby": ""
+    },
+    {
+      "id": "cph_gvItemssList_txtPrice_3",
+      "name": "ctl00$cph$gvItemssList$ctl05$txtPrice",
+      "type": "text",
+      "placeholder": "",
+      "nearby": ""
+    },
+    {
+      "id": "cph_gvItemssList_txtPercentageDiscount_3",
+      "name": "ctl00$cph$gvItemssList$ctl05$txtPercentageDiscount",
+      "type": "text",
+      "placeholder": "",
+      "nearby": ""
+    },
+    {
+      "id": "cph_gvItemssList_txtCashDiscount_3",
+      "name": "ctl00$cph$gvItemssList$ctl05$txtCashDiscount",
+      "type": "text",
+      "placeholder": "",
+      "nearby": ""
+    },
+    {
+      "id": "cph_gvItemssList_txtMinPrice_3",
+      "name": "ctl00$cph$gvItemssList$ctl05$txtMinPrice",
+      "type": "text",
+      "placeholder": "",
+      "nearby": ""
+    },
+    {
+      "id": "cph_gvItemssList_txtMaxPrice_3",
+      "name": "ctl00$cph$gvItemssList$ctl05$txtMaxPrice",
+      "type": "text",
+      "placeholder": "",
+      "nearby": ""
+    },
+    {
+      "id": "cph_gvItemssList_txtCost_4",
+      "name": "ctl00$cph$gvItemssList$ctl06$txtCost",
+      "type": "text",
+      "placeholder": "",
+      "nearby": ""
+    },
+    {
+      "id": "cph_gvItemssList_txtPrice_4",
+      "name": "ctl00$cph$gvItemssList$ctl06$txtPrice",
+      "type": "text",
+      "placeholder": "",
+      "nearby": ""
+    },
+    {
+      "id": "cph_gvItemssList_txtPercentageDiscount_4",
+      "name": "ctl00$cph$gvItemssList$ctl06$txtPercentageDiscount",
+      "type": "text",
+      "placeholder": "",
+      "nearby": ""
+    },
+    {
+      "id": "cph_gvItemssList_txtCashDiscount_4",
+      "name": "ctl00$cph$gvItemssList$ctl06$txtCashDiscount",
+      "type": "text",
+      "placeholder": "",
+      "nearby": ""
+    },
+    {
+      "id": "cph_gvItemssList_txtMinPrice_4",
+      "name": "ctl00$cph$gvItemssList$ctl06$txtMinPrice",
+      "type": "text",
+      "placeholder": "",
+      "nearby": ""
+    },
+    {
+      "id": "cph_gvItemssList_txtMaxPrice_4",
+      "name": "ctl00$cph$gvItemssList$ctl06$txtMaxPrice",
+      "type": "text",
+      "placeholder": "",
+      "nearby": ""
+    },
+    {
+      "id": "cph_gvItemssList_txtCost_5",
+      "name": "ctl00$cph$gvItemssList$ctl07$txtCost",
+      "type": "text",
+      "placeholder": "",
+      "nearby": ""
+    },
+    {
+      "id": "cph_gvItemssList_txtPrice_5",
+      "name": "ctl00$cph$gvItemssList$ctl07$txtPrice",
+      "type": "text",
+      "placeholder": "",
+      "nearby": ""
+    },
+    {
+      "id": "cph_gvItemssList_txtPercentageDiscount_5",
+      "name": "ctl00$cph$gvItemssList$ctl07$txtPercentageDiscount",
+      "type": "text",
+      "placeholder": "",
+      "nearby": ""
+    },
+    {
+      "id": "cph_gvItemssList_txtCashDiscount_5",
+      "name": "ctl00$cph$gvItemssList$ctl07$txtCashDiscount",
+      "type": "text",
+      "placeholder": "",
+      "nearby": ""
+    },
+    {
+      "id": "cph_gvItemssList_txtMinPrice_5",
+      "name": "ctl00$cph$gvItemssList$ctl07$txtMinPrice",
+      "type": "text",
+      "placeholder": "",
+      "nearby": ""
+    },
+    {
+      "id": "cph_gvItemssList_txtMaxPrice_5",
+      "name": "ctl00$cph$gvItemssList$ctl07$txtMaxPrice",
+      "type": "text",
+      "placeholder": "",
+      "nearby": ""
+    }
+  ],
+  "bodyStart": " تغيير الاسعار\n    \nبحث\nبحث\nمتوسط التكلفة من الفرع\nمتوسط التكلفة من المخزن\nالعملة\nجنيه مصري\nجنيه استرليني\nجنيه سوداني\nدرهم اماراتي\nدرهم مغربي\nدولار امريكي\nدينار اردني\nدينار عراقي\nدينار كويتي\nدينار ليبي\nروبل روسي\nروبية هندي\nريال ايراني\nريال سعودي\nريال عماني\nريال قطري\nريال يمني\nين ياباني\nيوان صيني\nيورو\nنوع السعر\nنوع الصنف\nاختر\nوحدة مخزنية\nوحدة خدمية\nمادة خام\nمنتج وسيط\nمنتج تام\nمجموعة / طقم\nصنف مركب\nصنف وكالة\nالباركود\nالفئة\nفئة بديلة\nالصنف\nوحدة القياس الاضافية\nحالة السعر\nاختر\nاقل من متوسط التكلفة\nمساوي لمتوسط التكلفة\nاكبر من متوسط التكلفة\nالضريبة\nمسلسل فاتورة الشراء\nعرض بوحدات القياس الافتراضية\nعرض الاصناف التى لها رصيد فقط\n \nالقيمة\nتعديل في\nالسعر\nتكلفة الشراء الافتراضية\nالسعر الادنى\nالسعر الاعلى\nخصم نقدي\nخصم نسبة\nمن\nاختر\nالسعر\nتكلفة الشراء الافتراضية\nمتوسط التكلفة\nالسعر الادنى\nالسعر الاعلى\nخصم نقدي\nخصم نسبة\nمن نوع السعر\nالتقريب الى كم رقم عشري؟\n تطبيق النسبة فقط\n \n\n\n\nالفئة\tالاسم\tالباركود\tنوع الصنف\tوحدة القياس\tتكلفة الشراء الافتراضية\tمتوسط التكلفة (كل المخازن)\tالسعر\tخصم نسبة\tخصم نقدي\tالسعر الادنى\tالسعر الاعلى\nخامات\t(فينولك رزين) F.R\t301088\tمادة خام\tكيلو\t\n\t28.4767\t\n\t\n\t\n\t\n\t\n\nخامات\t320/2\t301033\tمادة خام\tكيلو\t\n\t0\t\n\t\n\t\n\t\n\t\n\nخامات\t42\t301017\tمادة خام\tكيلو\t\n\t0\t\n\t\n\t\n\t\n\t\n\nخامات\t42/2\t301018\tمادة خام\tكيلو\t\n\t210.2109\t\n\t\n\t\n\t\n\t\n\nخامات\t42/3000\t301059\tمادة خام\tكيلو\t\n\t303.6431\t\n\t\n\t\n\t\n\t\n\nخامات\t540\t301015\tمادة خام\tكيلو\t\n\t0\t\n\t\n\t\n\t\n\t\n\nخامات\t560\t301021\tمادة خام\tكيلو\t\n\t0\t\n\t\n\t\n\t\n\t\n\nخامات\t560/2\t301024\tمادة خام\tكيلو\t\n\t0\t\n\t\n\t\n\t\n\t\n\nخامات\t560/3000\t301023\tمادة خام\tكيلو\t\n\t0\t\n\t\n\t\n\t\n\t\n\nخامات\t6 K P S\t301019\tمادة خام\tكيلو\t\n\t0\t\n\t\n\t\n\t\n\t\n\nخامات\t621\t301016\tمادة خام\tكيلو\t\n\t0\t\n\t\n\t\n\t\n\t\n\nخامات\t621 (m)\t301086\tمادة خام\tكيلو\t\n\t0\t\n\t\n\t\n\t\n\t\n\nخامات\ta 90\t301026\tمادة خام\tكيلو\t\n\t0\t\n\t\n\t\n\t\n\t\n\nخامات\tA R C\t301069\tمادة خام\tكيلو\t\n\t0\t\n\t\n\t\n\t\n\t\n\nخامات\tA.K.T\t301047\tمادة خام\tكيلو\t\n\t0\t\n\t\n\t\n\t\n\t\n\nخامات\tAH-1\t301038\tمادة خام\tكيلو\t\n\t0\t\n\t\n\t\n\t\n\t\n\nخامات\tAH-1 (m)\t301085\tمادة خام\tكيلو\t\n\t0\t\n\t\n\t\n\t\n\t\n\nخامات\tAH-2\t301039\tمادة خام\tكيلو\t\n\t0\t\n\t\n\t\n\t\n\t\n\nخامات\tB 350\t301011\tمادة خام\tكيلو\t\n\t0\t\n\t\n\t\n\t\n\t\n\nخامات\tB S\t301004\tمادة خام\tكيلو\t\n\t0\t\n\t\n\t\n\t\n\t\n\nعدد الصفح",
+  "url": "https://km.mega-cash.net/Inv/PriceChanger.aspx",
+  "key": "price-changer",
+  "megaLabel": "تغيير الاسعار",
+  "path": "/Inv/PriceChanger.aspx"
+}

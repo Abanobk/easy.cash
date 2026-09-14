@@ -1,0 +1,134 @@
+{
+  "title": "",
+  "labels": [
+    "الباركود",
+    "الصنف",
+    "رقم التشغيلة",
+    "تاريخ انتاج التشغيلة من",
+    "تاريخ انتاج التشغيلة الي",
+    "تاريخ انتهاء التشغيلة من",
+    "تاريخ انتهاء التشغيلة الى",
+    "تاريخ الانتاج",
+    "تاريخ الانتهاء"
+  ],
+  "headers": [],
+  "buttons": [
+    "اضافة تعليق",
+    "بحث",
+    "تفريغ",
+    "حفظ"
+  ],
+  "selects": [],
+  "inputs": [
+    {
+      "id": "txtHidden",
+      "name": "ctl00$txtHidden",
+      "type": "text",
+      "placeholder": "",
+      "nearby": ""
+    },
+    {
+      "id": "txtComment",
+      "name": "ctl00$txtComment",
+      "type": "textarea",
+      "placeholder": "",
+      "nearby": ""
+    },
+    {
+      "id": "cph_txtBarcodeSrch",
+      "name": "ctl00$cph$txtBarcodeSrch",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "الباركود"
+    },
+    {
+      "id": "cph_acItemNameSrch_txtAutoCompleteText",
+      "name": "ctl00$cph$acItemNameSrch$txtAutoCompleteText",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "الصنف"
+    },
+    {
+      "id": "cph_acItemNameSrch_hfAutocomplete",
+      "name": "ctl00$cph$acItemNameSrch$hfAutocomplete",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "الصنف"
+    },
+    {
+      "id": "cph_txtBatchNameSrch",
+      "name": "ctl00$cph$txtBatchNameSrch",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "رقم التشغيلة"
+    },
+    {
+      "id": "cph_txtProductionDateFrom",
+      "name": "ctl00$cph$txtProductionDateFrom",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "تاريخ انتاج التشغيلة من"
+    },
+    {
+      "id": "cph_txtProductionDateTo",
+      "name": "ctl00$cph$txtProductionDateTo",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "تاريخ انتاج التشغيلة الي"
+    },
+    {
+      "id": "cph_txtExpirationDateFrom",
+      "name": "ctl00$cph$txtExpirationDateFrom",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "تاريخ انتهاء التشغيلة من"
+    },
+    {
+      "id": "cph_txtExpirationDateTo",
+      "name": "ctl00$cph$txtExpirationDateTo",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "تاريخ انتهاء التشغيلة الى"
+    },
+    {
+      "id": "cph_acItem_txtAutoCompleteText",
+      "name": "ctl00$cph$acItem$txtAutoCompleteText",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "الصنف"
+    },
+    {
+      "id": "cph_acItem_hfAutocomplete",
+      "name": "ctl00$cph$acItem$hfAutocomplete",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "الصنف"
+    },
+    {
+      "id": "cph_txtBatchName",
+      "name": "ctl00$cph$txtBatchName",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "رقم التشغيلة"
+    },
+    {
+      "id": "cph_txtProductionDate",
+      "name": "ctl00$cph$txtProductionDate",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "تاريخ الانتاج"
+    },
+    {
+      "id": "cph_txtExpirationDate",
+      "name": "ctl00$cph$txtExpirationDate",
+      "type": "text",
+      "placeholder": "",
+      "nearby": "تاريخ الانتهاء"
+    }
+  ],
+  "bodyStart": " ارقام التشغيلة\n    \nبحث اضافة جديد\nبحث\nالباركود\nالصنف\nرقم التشغيلة\nتاريخ انتاج التشغيلة من\nتاريخ انتاج التشغيلة الي\nتاريخ انتهاء التشغيلة من\nتاريخ انتهاء التشغيلة الى\n \nلا توجد بيانات للعرض\n\n",
+  "url": "https://km.mega-cash.net/Inv/ItemsBatches.aspx",
+  "key": "items-batches",
+  "megaLabel": "ارقام التشغيلة",
+  "path": "/Inv/ItemsBatches.aspx"
+}
