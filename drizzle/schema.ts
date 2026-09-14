@@ -1727,10 +1727,14 @@ export const factoryDailyUploads = mysqlTable("factory_daily_uploads", {
   linkedInboxItemId: int("linkedInboxItemId"),
   /** نوع البيان: شراء / مبيعات / خلاطات (مرجع الإنتاج) / عام */
   type: mysqlEnum("type", ["purchase", "sales", "mixing", "general"]).notNull().default("general"),
-  /** المورد (شراء) أو العميل (مبيعات) — نص حر، بيان يومي سريع مش مربوط بكشف الحسابات الرسمي */
+  /** المورد (شراء) أو العميل (مبيعات) — نص حر (بيانات قديمة) أو منسوخ من اسم الـpartyId وقت الاختيار */
   partyName: varchar("partyName", { length: 255 }),
+  /** المورد/العميل المختار من البحث الذكي (customers/suppliers حسب type) — لو موجود بيغني عن المطابقة التقريبية */
+  partyId: int("partyId"),
   /** بيان الصنف/المنتج — بيان شراء ومبيعات وخلاطات */
   itemDescription: varchar("itemDescription", { length: 255 }),
+  /** المنتج التام (خلاطات فقط) المختار من البحث الذكي — بيغني عن المطابقة التقريبية بالاسم */
+  productItemId: int("productItemId"),
   quantity: decimal("quantity", { precision: 15, scale: 3 }),
   /** قيمة العملية — شراء ومبيعات فقط */
   amount: decimal("amount", { precision: 15, scale: 2 }),
@@ -1753,6 +1757,8 @@ export const factoryDailyUploadItems = mysqlTable("factory_daily_upload_items", 
   tenantId: int("tenantId").notNull().default(1),
   uploadId: int("uploadId").notNull(),
   itemDescription: varchar("itemDescription", { length: 255 }).notNull(),
+  /** الصنف المختار من البحث الذكي — لو موجود بيغني عن مطابقة الاسم التقريبية عند التحويل */
+  itemId: int("itemId"),
   quantity: decimal("quantity", { precision: 15, scale: 3 }),
   amount: decimal("amount", { precision: 15, scale: 2 }),
   sortOrder: int("sortOrder").notNull().default(0),

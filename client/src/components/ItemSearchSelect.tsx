@@ -20,10 +20,11 @@ function fmtStock(n: number) {
  */
 export function ItemSearchSelect({
   items, value, onChange, placeholder = "ابحث بالكود أو الاسم أو الباركود...",
-  excludeId,
+  excludeId, favoriteIds, onToggleFavorite,
 }: {
   items: ItemSearchOption[]; value: string; onChange: (id: string) => void;
   placeholder?: string; excludeId?: string;
+  favoriteIds?: Set<string>; onToggleFavorite?: (id: string) => void;
 }) {
   const options = useMemo(() => items.map((i) => ({
     id: i.id,
@@ -39,6 +40,8 @@ export function ItemSearchSelect({
       onChange={onChange}
       placeholder={placeholder}
       excludeId={excludeId}
+      favoriteIds={favoriteIds}
+      onToggleFavorite={onToggleFavorite}
     />
   );
 }

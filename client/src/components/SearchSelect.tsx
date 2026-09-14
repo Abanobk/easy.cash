@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { ChevronsUpDown, Search } from "lucide-react";
+import { ChevronsUpDown, Search, Star } from "lucide-react";
 import { normalizeArabicKey } from "@shared/arabic-normalize";
 
 export type SearchSelectOption = {
@@ -22,6 +22,7 @@ export type SearchSelectOption = {
  */
 export function SearchSelect({
   options, value, onChange, placeholder = "بحث...", excludeId, emptyLabel = "لا نتائج",
+  favoriteIds, onToggleFavorite,
 }: {
   options: SearchSelectOption[];
   value: string;
@@ -29,6 +30,10 @@ export function SearchSelect({
   placeholder?: string;
   excludeId?: string;
   emptyLabel?: string;
+  /** لو موجودة: العناصر اللي id بتاعها جوّاها بتتقدّم فوق القايمة قبل ما تكتب أي حرف */
+  favoriteIds?: Set<string>;
+  /** لو موجودة: بيظهر نجمة جنب كل عنصر تقدر تدوس عليها تضيف/تشيل من المفضلة */
+  onToggleFavorite?: (id: string) => void;
 }) {
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
@@ -38,7 +43,7 @@ export function SearchSelect({
     // وتقسيم كل كلمة لوحدها عشان "TR كرتونة" يلاقي الكود في label والاسم في نفس label
     // حتى لو مش متجاورين حرفياً (زي "TR-0012 — كرتونة كبيرة")
     const terms = normalizeArabicKey(q).split(/\s+/).filter(Boolean);
-    return options
+    const matched = options
       .filter((o) => !excludeId || String(o.id) !== excludeId)
       .filter((o) => {
         if (terms.length === 0) return true;
@@ -49,9 +54,15 @@ export function SearchSelect({
           String(o.id),
         ].join(" ");
         return terms.every((t) => haystack.includes(t));
-      })
-      .slice(0, 80);
-  }, [options, q, excludeId]);
+      });
+    // من غير كتابة بحث: المفضلة تظهر الأول عشان تسهّل الاختيار السريع
+    if (terms.length === 0 && favoriteIds?.size) {
+      const fav = matched.filter((o) => favoriteIds.has(String(o.id)));
+      const rest = matched.filter((o) => !favoriteIds.has(String(o.id)));
+      return [...fav, ...rest].slice(0, 80);
+    }
+    return matched.slice(0, 80);
+  }, [options, q, excludeId, favoriteIds]);
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -73,21 +84,35 @@ export function SearchSelect({
         <div className="max-h-56 overflow-y-auto space-y-0.5">
           {filtered.length === 0 ? (
             <p className="text-xs text-slate-400 p-3 text-center">{emptyLabel}</p>
-          ) : filtered.map((o) => (
-            <button
-              key={o.id}
-              type="button"
-              className={`w-full text-right rounded-lg px-2.5 py-2 text-sm hover:bg-sky-50 ${
-                String(o.id) === value ? "bg-blue-50 text-blue-800 font-bold" : "text-slate-800"
-              }`}
-              onClick={() => { onChange(String(o.id)); setOpen(false); setQ(""); }}
-            >
-              <div className="font-bold truncate">{o.label}</div>
-              {o.sublabel && (
-                <div className="text-[11px] text-slate-500 font-semibold mt-0.5">{o.sublabel}</div>
-              )}
-            </button>
-          ))}
+          ) : filtered.map((o) => {
+            const isFav = !!favoriteIds?.has(String(o.id));
+            return (
+              <div key={o.id} className="flex items-center gap-1">
+                {onToggleFavorite && (
+                  <button
+                    type="button"
+                    className="shrink-0 p-1.5 rounded-md hover:bg-amber-50"
+                    title={isFav ? "إزالة من المفضلة" : "إضافة للمفضلة"}
+                    onClick={(e) => { e.stopPropagation(); onToggleFavorite(String(o.id)); }}
+                  >
+                    <Star size={14} className={isFav ? "fill-amber-400 text-amber-400" : "text-slate-300"} />
+                  </button>
+                )}
+                <button
+                  type="button"
+                  className={`flex-1 min-w-0 text-right rounded-lg px-2.5 py-2 text-sm hover:bg-sky-50 ${
+                    String(o.id) === value ? "bg-blue-50 text-blue-800 font-bold" : "text-slate-800"
+                  }`}
+                  onClick={() => { onChange(String(o.id)); setOpen(false); setQ(""); }}
+                >
+                  <div className="font-bold truncate">{o.label}</div>
+                  {o.sublabel && (
+                    <div className="text-[11px] text-slate-500 font-semibold mt-0.5">{o.sublabel}</div>
+                  )}
+                </button>
+              </div>
+            );
+          })}
         </div>
       </PopoverContent>
     </Popover>

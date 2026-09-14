@@ -414,6 +414,13 @@
       "when": 1787700000000,
       "tag": "0058_factory_daily_items",
       "breakpoints": true
+    },
+    {
+      "idx": 59,
+      "version": "5",
+      "when": 1787800000000,
+      "tag": "0059_factory_daily_smart_ids",
+      "breakpoints": true
     }
   ]
 }

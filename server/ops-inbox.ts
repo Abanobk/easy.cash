@@ -755,11 +755,14 @@ export async function uploadFactoryDaily(
     alsoToInbox?: boolean;
     type?: "purchase" | "sales" | "mixing" | "general";
     partyName?: string;
+    partyId?: number;
     itemDescription?: string;
+    productItemId?: number;
     quantity?: string;
     amount?: string;
     materialsUsed?: string;
-    items?: Array<{ itemDescription: string; quantity?: string; amount?: string }>;
+    /** بيان شراء/مبيعات: أصناف الفاتورة. بيان خلاطات: الخامات المستخدمة (amount مش مستخدم هنا) */
+    items?: Array<{ itemDescription: string; itemId?: number; quantity?: string; amount?: string }>;
   },
 ) {
   const hasFile = !!input.contentBase64;
@@ -767,7 +770,10 @@ export async function uploadFactoryDaily(
   if (contentBase64.length > MAX_BASE64) throw new Error("حجم الملف كبير — الحد ~5 ميجابايت");
   const fileName = input.fileName?.trim() || "بدون ملف مرفق";
   const lineItems = (input.items || []).filter((i) => i.itemDescription.trim());
-  const totalAmount = lineItems.length
+  // بيان شراء/مبيعات بأكتر من صنف: الهيدر بيحمل الإجمالي بس، والبنود التفصيلية في factory_daily_upload_items.
+  // بيان الخلاطات: البنود هنا خامات، مش بديل عن المنتج/الكمية على الهيدر.
+  const isMultiItemHeader = (input.type === "purchase" || input.type === "sales") && lineItems.length > 0;
+  const totalAmount = isMultiItemHeader
     ? lineItems.reduce((s, i) => s + (Number(i.amount) || 0), 0)
     : null;
 
@@ -782,10 +788,11 @@ export async function uploadFactoryDaily(
     status: "uploaded",
     type: input.type || "general",
     partyName: input.partyName || null,
-    // بيان بأكتر من صنف: الهيدر بيحمل الإجمالي بس، والبنود التفصيلية في factory_daily_upload_items
-    itemDescription: lineItems.length ? null : input.itemDescription || null,
-    quantity: lineItems.length ? null : input.quantity || null,
-    amount: lineItems.length ? (totalAmount != null ? String(totalAmount) : null) : input.amount || null,
+    partyId: input.partyId || null,
+    productItemId: input.productItemId || null,
+    itemDescription: isMultiItemHeader ? null : input.itemDescription || null,
+    quantity: isMultiItemHeader ? null : input.quantity || null,
+    amount: isMultiItemHeader ? (totalAmount != null ? String(totalAmount) : null) : input.amount || null,
     materialsUsed: input.materialsUsed || null,
     createdBy: input.createdBy || null,
   });
@@ -797,6 +804,7 @@ export async function uploadFactoryDaily(
         tenantId,
         uploadId: id,
         itemDescription: item.itemDescription.trim().slice(0, 255),
+        itemId: item.itemId || null,
         quantity: item.quantity || null,
         amount: item.amount || null,
         sortOrder: i,
@@ -1010,6 +1018,22 @@ function rankCandidates<T extends { id: number; name: string | null }>(
   return scored.sort((a, b) => b.score - a.score).slice(0, 5);
 }
 
+/**
+ * لو البيان اتسجّل من بحث ذكي (فيه id مؤكّد) بنرجّع مرشّح واحد بثقة كاملة بدل المطابقة التقريبية
+ * بالاسم — البحث الذكي وقت الإدخال أدق من أي تخمين لاحق.
+ */
+function confirmedOrRanked<T extends { id: number; name: string | null }>(
+  rows: T[],
+  confirmedId: number | null | undefined,
+  fallbackQuery: string,
+): MatchCandidate[] {
+  if (confirmedId) {
+    const found = rows.find((r) => r.id === confirmedId);
+    return [{ id: confirmedId, name: found?.name || fallbackQuery, score: 100 }];
+  }
+  return rankCandidates(rows, fallbackQuery);
+}
+
 /** يحاول يفصّل سطر "اسم الخامة: كمية" أو "اسم الخامة - كمية" لاسم ورقم؛ يرجّع الاسم كله لو مقدرش */
 function parseMaterialLine(line: string): { name: string; quantity: number | null } {
   const m = line.match(/^(.+?)[\s]*[:\-–—][\s]*([\d.,]+)\s*$/) || line.match(/^(.+?)[\s]+([\d.,]+)\s*$/);
@@ -1060,35 +1084,47 @@ export async function getFactoryConvertPreview(
     const partyRows = row.type === "purchase"
       ? await db.select({ id: suppliers.id, name: suppliers.name }).from(suppliers).where(tenantWhere(suppliers, tenantId))
       : await db.select({ id: customers.id, name: customers.name }).from(customers).where(tenantWhere(customers, tenantId));
-    party = { input: row.partyName || "", candidates: rankCandidates(partyRows, row.partyName || "") };
+    party = { input: row.partyName || "", candidates: confirmedOrRanked(partyRows, row.partyId, row.partyName || "") };
   }
 
   let item: FactoryConvertPreview["item"] = null;
   const materials: FactoryConvertPreview["materials"] = [];
   const lineItems: FactoryConvertPreview["items"] = [];
+  const childRows = await db
+    .select({
+      itemDescription: factoryDailyUploadItems.itemDescription,
+      itemId: factoryDailyUploadItems.itemId,
+      quantity: factoryDailyUploadItems.quantity,
+      amount: factoryDailyUploadItems.amount,
+    })
+    .from(factoryDailyUploadItems)
+    .where(and(eq(factoryDailyUploadItems.tenantId, tenantId), eq(factoryDailyUploadItems.uploadId, id)))
+    .orderBy(factoryDailyUploadItems.sortOrder, factoryDailyUploadItems.id);
   if (row.type === "purchase" || row.type === "sales") {
-    const childItems = await db
-      .select({
-        itemDescription: factoryDailyUploadItems.itemDescription,
-        quantity: factoryDailyUploadItems.quantity,
-        amount: factoryDailyUploadItems.amount,
-      })
-      .from(factoryDailyUploadItems)
-      .where(and(eq(factoryDailyUploadItems.tenantId, tenantId), eq(factoryDailyUploadItems.uploadId, id)))
-      .orderBy(factoryDailyUploadItems.sortOrder, factoryDailyUploadItems.id);
-    for (const it of childItems) {
+    for (const it of childRows) {
       lineItems.push({
         input: it.itemDescription,
         quantity: it.quantity != null ? Number(it.quantity) : null,
         amount: it.amount != null ? Number(it.amount) : null,
-        candidates: rankCandidates(itemRows, it.itemDescription),
+        candidates: confirmedOrRanked(itemRows, it.itemId, it.itemDescription),
       });
     }
   }
   if ((row.type === "purchase" || row.type === "sales" || row.type === "mixing") && !lineItems.length) {
-    item = { input: row.itemDescription || "", candidates: rankCandidates(itemRows, row.itemDescription || "") };
+    item = {
+      input: row.itemDescription || "",
+      candidates: confirmedOrRanked(itemRows, row.productItemId, row.itemDescription || ""),
+    };
   }
-  if (row.type === "mixing" && row.materialsUsed) {
+  if (row.type === "mixing" && childRows.length) {
+    for (const it of childRows) {
+      materials.push({
+        input: it.itemDescription,
+        quantity: it.quantity != null ? Number(it.quantity) : null,
+        candidates: confirmedOrRanked(itemRows, it.itemId, it.itemDescription),
+      });
+    }
+  } else if (row.type === "mixing" && row.materialsUsed) {
     const lines = row.materialsUsed.split(/\n|,/).map((l) => l.trim()).filter(Boolean);
     for (const line of lines) {
       const parsed = parseMaterialLine(line);

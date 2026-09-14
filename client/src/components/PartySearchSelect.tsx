@@ -14,10 +14,11 @@ export type PartyOption = {
  */
 export function PartySearchSelect({
   parties, value, onChange, placeholder = "ابحث بالاسم أو الكود أو التليفون...",
-  excludeId,
+  excludeId, favoriteIds, onToggleFavorite,
 }: {
   parties: PartyOption[]; value: string; onChange: (id: string) => void;
   placeholder?: string; excludeId?: string;
+  favoriteIds?: Set<string>; onToggleFavorite?: (id: string) => void;
 }) {
   const options = useMemo(() => parties.map((p) => ({
     id: p.id,
@@ -34,6 +35,8 @@ export function PartySearchSelect({
       placeholder={placeholder}
       excludeId={excludeId}
       emptyLabel="لا نتائج"
+      favoriteIds={favoriteIds}
+      onToggleFavorite={onToggleFavorite}
     />
   );
 }

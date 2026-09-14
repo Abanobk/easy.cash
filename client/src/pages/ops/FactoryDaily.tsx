@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "wouter";
 import ERPLayout from "@/components/ERPLayout";
 import EntityPermissionGate from "@/components/EntityPermissionGate";
@@ -7,6 +7,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { PartySearchSelect } from "@/components/PartySearchSelect";
+import { ItemSearchSelect } from "@/components/ItemSearchSelect";
+import { QuickAddDialog } from "@/components/invoices/QuickAddDialog";
+import { useFactoryDailyFavorites } from "@/hooks/useFactoryDailyFavorites";
 import { trpc } from "@/lib/trpc";
 import { tenantPath, useTenantSlug } from "@/lib/tenant";
 import { toast } from "sonner";
@@ -15,8 +19,11 @@ import FactoryConvertDialog from "@/components/ops/FactoryConvertDialog";
 import { toDateStr } from "@/lib/date";
 
 type EntryType = "general" | "purchase" | "sales" | "mixing";
-type ItemRow = { description: string; quantity: string; amount: string };
-const emptyItemRow = (): ItemRow => ({ description: "", quantity: "", amount: "" });
+type ItemRow = { itemId: string; quantity: string; amount: string };
+const emptyItemRow = (): ItemRow => ({ itemId: "", quantity: "", amount: "" });
+type MaterialRow = { itemId: string; quantity: string };
+const emptyMaterialRow = (): MaterialRow => ({ itemId: "", quantity: "" });
+type QuickAddTarget = "party" | "product" | { kind: "itemRow" | "materialRow"; idx: number };
 
 const TYPE_TABS: Array<{ value: EntryType; label: string; icon: typeof Factory }> = [
   { value: "general", label: "عام", icon: FileText },
@@ -65,11 +72,12 @@ export default function FactoryDailyPage() {
   const [entryType, setEntryType] = useState<EntryType>("general");
   const [title, setTitle] = useState("");
   const [notes, setNotes] = useState("");
-  const [partyName, setPartyName] = useState("");
-  const [itemDescription, setItemDescription] = useState("");
+  const [partyId, setPartyId] = useState("");
+  const [productItemId, setProductItemId] = useState("");
   const [quantity, setQuantity] = useState("");
-  const [materialsUsed, setMaterialsUsed] = useState("");
   const [itemRows, setItemRows] = useState<ItemRow[]>([emptyItemRow()]);
+  const [materialRows, setMaterialRows] = useState<MaterialRow[]>([emptyMaterialRow()]);
+  const [quickAdd, setQuickAdd] = useState<{ kind: "item" | "supplier" | "customer"; target: QuickAddTarget } | null>(null);
   const [month, setMonth] = useState(today.slice(0, 7));
   const [dateFrom, setDateFrom] = useState(monthRange(today.slice(0, 7)).from);
   const [dateTo, setDateTo] = useState(monthRange(today.slice(0, 7)).to);
@@ -77,6 +85,10 @@ export default function FactoryDailyPage() {
   const [typeFilter, setTypeFilter] = useState("all");
   const [pendingFile, setPendingFile] = useState<{ fileName: string; mimeType: string; contentBase64: string } | null>(null);
   const [convertRow, setConvertRow] = useState<{ id: number; type: "purchase" | "sales" | "mixing" | "general"; workDate: string } | null>(null);
+
+  const supplierFavorites = useFactoryDailyFavorites("supplier");
+  const customerFavorites = useFactoryDailyFavorites("customer");
+  const itemFavorites = useFactoryDailyFavorites("item");
 
   useEffect(() => {
     const t = setInterval(() => setNow(new Date()), 1000);
@@ -92,15 +104,24 @@ export default function FactoryDailyPage() {
     type: typeFilter === "all" ? undefined : (typeFilter as EntryType),
     limit: 200,
   });
+  const suppliersQ = trpc.suppliers.list.useQuery({ page: 1, limit: 200 });
+  const customersQ = trpc.customers.list.useQuery({ page: 1, limit: 200 });
+  const itemsQ = trpc.items.all.useQuery();
+  const supplierOptions = suppliersQ.data?.rows || [];
+  const customerOptions = customersQ.data?.rows || [];
+  const itemOptions = itemsQ.data || [];
+  const supplierMap = useMemo(() => new Map(supplierOptions.map((s: any) => [String(s.id), s.name as string])), [supplierOptions]);
+  const customerMap = useMemo(() => new Map(customerOptions.map((c: any) => [String(c.id), c.name as string])), [customerOptions]);
+  const itemNameMap = useMemo(() => new Map(itemOptions.map((i: any) => [String(i.id), i.name as string])), [itemOptions]);
 
   const resetEntryFields = () => {
     setTitle("");
     setNotes("");
-    setPartyName("");
-    setItemDescription("");
+    setPartyId("");
+    setProductItemId("");
     setQuantity("");
-    setMaterialsUsed("");
     setItemRows([emptyItemRow()]);
+    setMaterialRows([emptyMaterialRow()]);
     setPendingFile(null);
   };
 
@@ -149,29 +170,36 @@ export default function FactoryDailyPage() {
       toast.error("اختر ملف PDF أو صورة");
       return;
     }
-    if (entryType === "purchase" && !partyName.trim()) {
-      toast.error("اكتب اسم المورد");
+    if (entryType === "purchase" && !partyId) {
+      toast.error("اختر المورد");
       return;
     }
-    if (entryType === "sales" && !partyName.trim()) {
-      toast.error("اكتب اسم العميل");
+    if (entryType === "sales" && !partyId) {
+      toast.error("اختر العميل");
       return;
     }
-    if (entryType === "mixing" && !itemDescription.trim()) {
-      toast.error("اكتب اسم المنتج/الخلطة");
+    if (entryType === "mixing" && !productItemId) {
+      toast.error("اختر المنتج/الخلطة");
       return;
     }
-    const filledItemRows = itemRows.filter((r) => r.description.trim());
+    const filledItemRows = itemRows.filter((r) => r.itemId);
     if ((entryType === "purchase" || entryType === "sales") && !filledItemRows.length) {
-      toast.error("اكتب صنف واحد على الأقل");
+      toast.error("اختر صنف واحد على الأقل");
+      return;
+    }
+    const filledMaterialRows = materialRows.filter((r) => r.itemId);
+    if (entryType === "mixing" && !filledMaterialRows.length) {
+      toast.error("اختر خامة واحدة على الأقل");
       return;
     }
     const workDate = getWorkDate();
-    const firstItemDesc = filledItemRows[0]?.description;
+    const partyName = partyId ? (entryType === "purchase" ? supplierMap.get(partyId) : customerMap.get(partyId)) : undefined;
+    const productName = productItemId ? itemNameMap.get(productItemId) : undefined;
+    const firstItemName = filledItemRows[0] ? itemNameMap.get(filledItemRows[0].itemId) : undefined;
     const autoTitle =
-      entryType === "purchase" ? `شراء — ${partyName || firstItemDesc || workDate}`
-      : entryType === "sales" ? `بيع — ${partyName || firstItemDesc || workDate}`
-      : entryType === "mixing" ? `خلطة — ${itemDescription || workDate}`
+      entryType === "purchase" ? `شراء — ${partyName || firstItemName || workDate}`
+      : entryType === "sales" ? `بيع — ${partyName || firstItemName || workDate}`
+      : entryType === "mixing" ? `خلطة — ${productName || workDate}`
       : pendingFile?.fileName || workDate;
     uploadMut.mutate({
       workDate,
@@ -182,15 +210,23 @@ export default function FactoryDailyPage() {
       notes: notes.trim() || undefined,
       alsoToInbox: true,
       type: entryType,
-      partyName: partyName.trim() || undefined,
-      itemDescription: entryType === "mixing" ? itemDescription.trim() || undefined : undefined,
+      partyName: partyName || undefined,
+      partyId: partyId ? Number(partyId) : undefined,
+      itemDescription: entryType === "mixing" ? productName || undefined : undefined,
+      productItemId: entryType === "mixing" && productItemId ? Number(productItemId) : undefined,
       quantity: entryType === "mixing" ? quantity.trim() || undefined : undefined,
-      materialsUsed: materialsUsed.trim() || undefined,
       items: (entryType === "purchase" || entryType === "sales")
         ? filledItemRows.map((r) => ({
-            itemDescription: r.description.trim(),
+            itemDescription: itemNameMap.get(r.itemId) || "",
+            itemId: Number(r.itemId),
             quantity: r.quantity.trim() || undefined,
             amount: r.amount.trim() || undefined,
+          }))
+        : entryType === "mixing"
+        ? filledMaterialRows.map((r) => ({
+            itemDescription: itemNameMap.get(r.itemId) || "",
+            itemId: Number(r.itemId),
+            quantity: r.quantity.trim() || undefined,
           }))
         : undefined,
     });
@@ -272,27 +308,63 @@ export default function FactoryDailyPage() {
                 <>
                   <div className="md:col-span-2">
                     <Label className="text-xs">{entryType === "purchase" ? "المورد" : "العميل"}</Label>
-                    <Input className="mt-1 h-9" value={partyName} onChange={(e) => setPartyName(e.target.value)} placeholder={entryType === "purchase" ? "اسم المورد" : "اسم العميل"} />
+                    <div className="mt-1 flex gap-2">
+                      <div className="flex-1 min-w-0">
+                        <PartySearchSelect
+                          parties={entryType === "purchase" ? supplierOptions : customerOptions}
+                          value={partyId}
+                          onChange={setPartyId}
+                          placeholder={entryType === "purchase" ? "اختر المورد" : "اختر العميل"}
+                          favoriteIds={(entryType === "purchase" ? supplierFavorites : customerFavorites).favoriteIds}
+                          onToggleFavorite={(entryType === "purchase" ? supplierFavorites : customerFavorites).toggleFavorite}
+                        />
+                      </div>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="h-9 w-9 p-0 shrink-0"
+                        title={entryType === "purchase" ? "إضافة مورد جديد" : "إضافة عميل جديد"}
+                        onClick={() => setQuickAdd({ kind: entryType === "purchase" ? "supplier" : "customer", target: "party" })}
+                      >
+                        <Plus size={14} />
+                      </Button>
+                    </div>
                   </div>
                   <div className="md:col-span-2 space-y-2">
                     <Label className="text-xs">الأصناف {itemRows.length > 1 && <span className="text-slate-400 font-normal">({itemRows.length})</span>}</Label>
                     {itemRows.map((row, i) => (
-                      <div key={i} className="grid grid-cols-[1fr_6rem_6rem_auto] gap-2 items-center">
+                      <div key={i} className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50/60 p-2">
+                        <span className="shrink-0 w-5 text-center text-[11px] font-bold text-slate-400">{i + 1}</span>
+                        <div className="flex-1 min-w-0">
+                          <ItemSearchSelect
+                            items={itemOptions}
+                            value={row.itemId}
+                            onChange={(v) => setItemRows((rs) => rs.map((r, j) => j === i ? { ...r, itemId: v } : r))}
+                            placeholder="اختر الصنف"
+                            favoriteIds={itemFavorites.favoriteIds}
+                            onToggleFavorite={itemFavorites.toggleFavorite}
+                          />
+                        </div>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="h-9 w-9 p-0 shrink-0"
+                          title="إضافة صنف جديد"
+                          onClick={() => setQuickAdd({ kind: "item", target: { kind: "itemRow", idx: i } })}
+                        >
+                          <Plus size={12} />
+                        </Button>
                         <Input
-                          className="h-9"
-                          value={row.description}
-                          onChange={(e) => setItemRows((rs) => rs.map((r, j) => j === i ? { ...r, description: e.target.value } : r))}
-                          placeholder="وصف الصنف أو الخامة"
-                        />
-                        <Input
-                          className="h-9"
+                          className="h-9 w-24 shrink-0"
                           type="number"
                           value={row.quantity}
                           onChange={(e) => setItemRows((rs) => rs.map((r, j) => j === i ? { ...r, quantity: e.target.value } : r))}
                           placeholder="الكمية"
                         />
                         <Input
-                          className="h-9"
+                          className="h-9 w-24 shrink-0"
                           type="number"
                           value={row.amount}
                           onChange={(e) => setItemRows((rs) => rs.map((r, j) => j === i ? { ...r, amount: e.target.value } : r))}
@@ -302,7 +374,7 @@ export default function FactoryDailyPage() {
                           type="button"
                           variant="ghost"
                           size="sm"
-                          className="h-9 w-9 p-0 text-slate-400 hover:text-red-600 disabled:opacity-30"
+                          className="h-9 w-9 p-0 shrink-0 text-slate-400 hover:text-red-600 disabled:opacity-30"
                           disabled={itemRows.length === 1}
                           onClick={() => setItemRows((rs) => rs.filter((_, j) => j !== i))}
                         >
@@ -325,17 +397,88 @@ export default function FactoryDailyPage() {
 
               {entryType === "mixing" && (
                 <>
-                  <div>
+                  <div className="md:col-span-2">
                     <Label className="text-xs">المنتج / الخلطة</Label>
-                    <Input className="mt-1 h-9" value={itemDescription} onChange={(e) => setItemDescription(e.target.value)} placeholder="اسم المنتج التام" />
+                    <div className="mt-1 flex gap-2">
+                      <div className="flex-1 min-w-0">
+                        <ItemSearchSelect
+                          items={itemOptions}
+                          value={productItemId}
+                          onChange={setProductItemId}
+                          placeholder="اختر المنتج التام"
+                          favoriteIds={itemFavorites.favoriteIds}
+                          onToggleFavorite={itemFavorites.toggleFavorite}
+                        />
+                      </div>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="h-9 w-9 p-0 shrink-0"
+                        title="إضافة صنف جديد"
+                        onClick={() => setQuickAdd({ kind: "item", target: "product" })}
+                      >
+                        <Plus size={14} />
+                      </Button>
+                    </div>
                   </div>
                   <div>
                     <Label className="text-xs">الكمية المنتجة</Label>
                     <Input className="mt-1 h-9" type="number" value={quantity} onChange={(e) => setQuantity(e.target.value)} />
                   </div>
-                  <div className="md:col-span-2">
-                    <Label className="text-xs">الخامات المستخدمة</Label>
-                    <Textarea className="mt-1" rows={2} value={materialsUsed} onChange={(e) => setMaterialsUsed(e.target.value)} placeholder="اسم الخامة والكمية، سطر لكل خامة" />
+                  <div className="md:col-span-2 space-y-2">
+                    <Label className="text-xs">الخامات المستخدمة {materialRows.length > 1 && <span className="text-slate-400 font-normal">({materialRows.length})</span>}</Label>
+                    {materialRows.map((row, i) => (
+                      <div key={i} className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50/60 p-2">
+                        <span className="shrink-0 w-5 text-center text-[11px] font-bold text-slate-400">{i + 1}</span>
+                        <div className="flex-1 min-w-0">
+                          <ItemSearchSelect
+                            items={itemOptions}
+                            value={row.itemId}
+                            onChange={(v) => setMaterialRows((rs) => rs.map((r, j) => j === i ? { ...r, itemId: v } : r))}
+                            placeholder="اختر الخامة"
+                            favoriteIds={itemFavorites.favoriteIds}
+                            onToggleFavorite={itemFavorites.toggleFavorite}
+                          />
+                        </div>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="h-9 w-9 p-0 shrink-0"
+                          title="إضافة صنف جديد"
+                          onClick={() => setQuickAdd({ kind: "item", target: { kind: "materialRow", idx: i } })}
+                        >
+                          <Plus size={12} />
+                        </Button>
+                        <Input
+                          className="h-9 w-24 shrink-0"
+                          type="number"
+                          value={row.quantity}
+                          onChange={(e) => setMaterialRows((rs) => rs.map((r, j) => j === i ? { ...r, quantity: e.target.value } : r))}
+                          placeholder="الكمية"
+                        />
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-9 w-9 p-0 shrink-0 text-slate-400 hover:text-red-600 disabled:opacity-30"
+                          disabled={materialRows.length === 1}
+                          onClick={() => setMaterialRows((rs) => rs.filter((_, j) => j !== i))}
+                        >
+                          <X size={14} />
+                        </Button>
+                      </div>
+                    ))}
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-8 text-xs gap-1"
+                      onClick={() => setMaterialRows((rs) => [...rs, emptyMaterialRow()])}
+                    >
+                      <Plus size={12} /> إضافة خامة
+                    </Button>
                   </div>
                 </>
               )}
@@ -481,6 +624,20 @@ export default function FactoryDailyPage() {
           row={convertRow}
           onClose={() => setConvertRow(null)}
           onPosted={() => setConvertRow(null)}
+        />
+        <QuickAddDialog
+          kind={quickAdd?.kind || "item"}
+          open={!!quickAdd}
+          onClose={() => setQuickAdd(null)}
+          onCreated={(row) => {
+            if (!quickAdd) return;
+            const t = quickAdd.target;
+            if (t === "party") setPartyId(String(row.id));
+            else if (t === "product") setProductItemId(String(row.id));
+            else if (t.kind === "itemRow") setItemRows((rs) => rs.map((r, j) => j === t.idx ? { ...r, itemId: String(row.id) } : r));
+            else setMaterialRows((rs) => rs.map((r, j) => j === t.idx ? { ...r, itemId: String(row.id) } : r));
+            setQuickAdd(null);
+          }}
         />
       </EntityPermissionGate>
     </ERPLayout>
