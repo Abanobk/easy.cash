@@ -13,12 +13,25 @@ import { useEntityAllowed } from "@/hooks/useEntityPermission";
 import { tenantPath, useTenantSlug } from "@/lib/tenant";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 
+const MEGA_ITEM_TYPES = [
+  "وحدة مخزنية",
+  "وحدة خدمية",
+  "مادة خام",
+  "منتج وسيط",
+  "منتج تام",
+  "مجموعة / طقم",
+  "صنف مركب",
+  "صنف وكالة",
+] as const;
+
 /** قائمة الأصناف (Mega ItemsList) — التعديل في بطاقة صفحة كاملة */
 export default function Items() {
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
   const debouncedSearch = useDebouncedValue(search);
   const [categoryId, setCategoryId] = useState("");
+  const [altCategoryId, setAltCategoryId] = useState("");
+  const [itemType, setItemType] = useState("");
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const canEdit = useEntityAllowed("inventory", "item", "edit");
   const canDelete = useEntityAllowed("inventory", "item", "deleteCancel");
@@ -26,12 +39,14 @@ export default function Items() {
   const [, navigate] = useLocation();
   const utils = trpc.useUtils();
 
-  useEffect(() => setPage(1), [debouncedSearch, categoryId]);
+  useEffect(() => setPage(1), [debouncedSearch, categoryId, altCategoryId, itemType]);
   const { data, isLoading, refetch } = trpc.items.list.useQuery({
     page,
     limit: 20,
     search: debouncedSearch,
     categoryId: categoryId ? Number(categoryId) : undefined,
+    altCategoryId: altCategoryId ? Number(altCategoryId) : undefined,
+    itemType: itemType || undefined,
   });
   const { data: categories } = trpc.items.categories.useQuery();
   const rows = data?.rows || [];
@@ -136,12 +151,12 @@ export default function Items() {
         </Button>
       </div>
 
-      {/* Mega ItemsList filters: باركود/صنف (بحث) · الفئة */}
+      {/* Mega ItemsList filters: باركود/صنف · الفئة · فئة بديلة · نوع الصنف */}
       <div className="mb-3 flex flex-wrap gap-3 items-end rounded-lg border bg-slate-50 p-3">
         <div className="space-y-1">
           <Label className="text-xs font-bold">الفئة</Label>
           <Select value={categoryId || "all"} onValueChange={(v) => setCategoryId(v === "all" ? "" : v)}>
-            <SelectTrigger className="h-9 w-48 text-sm"><SelectValue placeholder="كل الفئات" /></SelectTrigger>
+            <SelectTrigger className="h-9 w-44 text-sm"><SelectValue placeholder="كل الفئات" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">كل الفئات</SelectItem>
               {(categories || []).map((c: any) => (
@@ -150,6 +165,39 @@ export default function Items() {
             </SelectContent>
           </Select>
         </div>
+        <div className="space-y-1">
+          <Label className="text-xs font-bold">فئة بديلة</Label>
+          <Select value={altCategoryId || "all"} onValueChange={(v) => setAltCategoryId(v === "all" ? "" : v)}>
+            <SelectTrigger className="h-9 w-44 text-sm"><SelectValue placeholder="كل البديلة" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">كل البديلة</SelectItem>
+              {(categories || []).map((c: any) => (
+                <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-1">
+          <Label className="text-xs font-bold">نوع الصنف</Label>
+          <Select value={itemType || "all"} onValueChange={(v) => setItemType(v === "all" ? "" : v)}>
+            <SelectTrigger className="h-9 w-44 text-sm"><SelectValue placeholder="كل الأنواع" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">كل الأنواع</SelectItem>
+              {MEGA_ITEM_TYPES.map((x) => (
+                <SelectItem key={x} value={x}>{x}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="h-9"
+          onClick={() => { setCategoryId(""); setAltCategoryId(""); setItemType(""); setSearch(""); setPage(1); }}
+        >
+          تفريغ
+        </Button>
       </div>
 
       <DataTable
@@ -203,6 +251,16 @@ export default function Items() {
             key: "categoryId",
             label: "الفئة",
             render: (row) => categoryName(row.categoryId),
+          },
+          {
+            key: "altCategoryId",
+            label: "فئة بديلة",
+            render: (row) => categoryName((row as any).altCategoryId),
+          },
+          {
+            key: "itemType",
+            label: "نوع الصنف",
+            render: (row) => (row as any).itemType || "—",
           },
           { key: "code", label: "الكود", className: "w-28" },
           { key: "unit", label: "وحدة القياس الاساسية", className: "w-28" },

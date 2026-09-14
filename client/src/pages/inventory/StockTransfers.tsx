@@ -140,6 +140,24 @@ export default function StockTransfers() {
   };
 
   const addItem = () => setItems((prev) => [...prev, { itemId: "", quantity: "1", expensePercent: "0" }]);
+  const addAllFromWarehouse = async () => {
+    if (!form.fromWarehouseId) return toast.error("اختر المخزن المصدر أولاً");
+    try {
+      const rows = await utils.inventory.stockAtWarehouse.fetch({ warehouseId: Number(form.fromWarehouseId) });
+      if (!rows?.length) return toast.message("لا يوجد رصيد في المخزن المصدر");
+      const mapped = rows.map((r: any) => ({
+        itemId: String(r.itemId),
+        quantity: String(r.quantity),
+        expensePercent: "0",
+        available: Number(r.quantity),
+        expectedCost: Number(r.unitCost || 0),
+      }));
+      setItems(mapped);
+      toast.success(`تمت إضافة ${mapped.length} صنف من المخزن`);
+    } catch (e: any) {
+      toast.error(e?.message || "تعذر تحميل أصناف المخزن");
+    }
+  };
   const removeItem = (i: number) => setItems((prev) => prev.filter((_, idx) => idx !== i));
   const updateItem = async (i: number, field: string, val: string) => {
     setItems((prev) => prev.map((item, idx) => (idx === i ? { ...item, [field]: val } : item)));
@@ -449,9 +467,14 @@ export default function StockTransfers() {
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <Label className="text-xs font-semibold">الاصناف</Label>
-                <Button type="button" variant="outline" size="sm" className="h-7 text-xs gap-1" onClick={addItem}>
-                  <Plus size={12} /> اضافة
-                </Button>
+                <div className="flex gap-1">
+                  <Button type="button" variant="outline" size="sm" className="h-7 text-xs gap-1" onClick={() => void addAllFromWarehouse()}>
+                    اضافة كل المخزن
+                  </Button>
+                  <Button type="button" variant="outline" size="sm" className="h-7 text-xs gap-1" onClick={addItem}>
+                    <Plus size={12} /> اضافة
+                  </Button>
+                </div>
               </div>
               <div className="border rounded-lg overflow-hidden">
                 <Table>

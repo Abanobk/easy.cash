@@ -900,6 +900,7 @@ const itemsRouter = router({
     search: z.string().optional(),
     categoryId: z.number().optional(),
     itemType: z.string().optional(),
+    altCategoryId: z.number().optional(),
     /** استبعاد أصناف فئات غير معروضة في فواتير البيع — مطابقة ميجا */
     forSalesInvoice: z.boolean().optional(),
     page: z.number().default(1),
@@ -918,6 +919,7 @@ const itemsRouter = router({
     }
     if (input.categoryId) conditions.push(eq(items.categoryId, input.categoryId));
     if (input.itemType) conditions.push(eq(items.itemType, input.itemType));
+    if (input.altCategoryId) conditions.push(eq(items.altCategoryId, input.altCategoryId));
     if (input.forSalesInvoice) {
       conditions.push(or(
         isNull(items.categoryId),
@@ -6238,6 +6240,30 @@ const inventoryRouter = router({
     const qty = await getWarehouseItemQty(db, ctx.tenantId, input.itemId, input.warehouseId);
     return { quantity: qty };
   }),
+  /** أصناف لها رصيد في مخزن — زر «اضافة كل المخزن» في التحويل */
+  stockAtWarehouse: protectedProcedure.input(z.object({
+    warehouseId: z.number(),
+  })).query(async ({ ctx, input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    const scope = await loadUserScopeFromCtx(db, ctx.saasUser);
+    assertWarehouseAccess(scope, input.warehouseId);
+    return db.select({
+      itemId: itemWarehouseStock.itemId,
+      quantity: itemWarehouseStock.quantity,
+      unitCost: itemWarehouseStock.unitCost,
+      itemName: items.name,
+      itemCode: items.code,
+      barcode: items.barcode,
+      unit: items.unit,
+    }).from(itemWarehouseStock)
+      .innerJoin(items, eq(itemWarehouseStock.itemId, items.id))
+      .where(tenantWhere(itemWarehouseStock, ctx.tenantId, and(
+        eq(itemWarehouseStock.warehouseId, input.warehouseId),
+        sql`CAST(${itemWarehouseStock.quantity} AS DECIMAL(15,3)) > 0`,
+      )))
+      .orderBy(items.name);
+  }),
   transfers: router({
     list: protectedProcedure.input(z.object({
       page: z.number().default(1),
@@ -6507,6 +6533,8 @@ const inventoryRouter = router({
       dateFrom: z.string().optional(),
       dateTo: z.string().optional(),
       warehouseId: z.number().optional(),
+      branchId: z.number().optional(),
+      customerId: z.number().optional(),
       status: z.enum(["draft", "confirmed", "cancelled"]).optional(),
       search: z.string().optional(),
     })).query(async ({ ctx, input }) => {
@@ -6520,6 +6548,8 @@ const inventoryRouter = router({
         input.dateFrom ? gte(inventoryAdjustments.date, input.dateFrom as any) : undefined,
         input.dateTo ? lte(inventoryAdjustments.date, input.dateTo as any) : undefined,
         input.warehouseId ? eq(inventoryAdjustments.warehouseId, input.warehouseId) : undefined,
+        input.customerId ? eq(inventoryAdjustments.customerId, input.customerId) : undefined,
+        input.branchId ? eq(warehouses.branchId, input.branchId) : undefined,
         input.status ? eq(inventoryAdjustments.status, input.status) : undefined,
         input.search
           ? or(
@@ -6537,12 +6567,16 @@ const inventoryRouter = router({
         reason: inventoryAdjustments.reason,
         status: inventoryAdjustments.status,
         referenceNumber: inventoryAdjustments.referenceNumber,
+        customerId: inventoryAdjustments.customerId,
         warehouseName: warehouses.name,
       }).from(inventoryAdjustments)
-        .where(whereClause)
         .leftJoin(warehouses, eq(inventoryAdjustments.warehouseId, warehouses.id))
+        .where(whereClause)
         .orderBy(desc(inventoryAdjustments.createdAt)).limit(input.limit).offset(offset);
-      const [total] = await db.select({ count: count() }).from(inventoryAdjustments).where(whereClause);
+      // العد يحتاج نفس الـ join لو فيه فلتر فرع على warehouses.branchId
+      const [total] = await db.select({ count: count() }).from(inventoryAdjustments)
+        .leftJoin(warehouses, eq(inventoryAdjustments.warehouseId, warehouses.id))
+        .where(whereClause);
       return { rows, total: total.count };
     }),
     create: protectedProcedure.input(z.object({

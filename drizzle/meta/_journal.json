@@ -442,6 +442,13 @@
       "when": 1788100000000,
       "tag": "0062_item_taxes_warehouse_mins",
       "breakpoints": true
+    },
+    {
+      "idx": 63,
+      "version": "5",
+      "when": 1788200000000,
+      "tag": "0063_inventory_depth_parity",
+      "breakpoints": true
     }
   ]
 }

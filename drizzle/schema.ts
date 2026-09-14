@@ -1318,6 +1318,12 @@ export const itemOffers = mysqlTable("item_offers", {
   name: varchar("name", { length: 255 }).notNull(),
   itemId: int("itemId"),
   categoryId: int("categoryId"),
+  /** نوع السعر · فرع · منطقة · فئة عميل · عميل — فلاتر ميجا العروض */
+  priceType: varchar("priceType", { length: 50 }),
+  branchId: int("branchId"),
+  areaId: int("areaId"),
+  contactCategoryId: int("contactCategoryId"),
+  customerId: int("customerId"),
   discountPercent: decimal("discountPercent", { precision: 5, scale: 2 }).default("0"),
   startDate: date("startDate"),
   endDate: date("endDate"),

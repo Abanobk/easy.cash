@@ -63,20 +63,33 @@ export function ItemBatchesPage() {
   const q = trpc.parity.inventory.batches.list.useQuery();
   const items = useItemOptions();
   const c = trpc.parity.inventory.batches.create.useMutation();
+  const u = trpc.parity.inventory.batches.update.useMutation();
   const d = trpc.parity.inventory.batches.delete.useMutation();
   const [itemFilter, setItemFilter] = useState("");
   const [batchSearch, setBatchSearch] = useState("");
+  const [barcodeFilter, setBarcodeFilter] = useState("");
+  const [prodFrom, setProdFrom] = useState("");
+  const [prodTo, setProdTo] = useState("");
+  const [expFrom, setExpFrom] = useState("");
+  const [expTo, setExpTo] = useState("");
   const filtered = useMemo(() => {
     return (q.data || []).filter((r: any) => {
       if (itemFilter && String(r.itemId) !== itemFilter) return false;
       if (batchSearch.trim() && !String(r.batchNumber || "").toLowerCase().includes(batchSearch.trim().toLowerCase())) return false;
+      if (barcodeFilter.trim() && !String(r.itemBarcode || "").toLowerCase().includes(barcodeFilter.trim().toLowerCase())) return false;
+      const pd = r.productionDate ? toDateStr(r.productionDate) : "";
+      const ed = r.expiryDate ? toDateStr(r.expiryDate) : "";
+      if (prodFrom && pd && pd < prodFrom) return false;
+      if (prodTo && pd && pd > prodTo) return false;
+      if (expFrom && ed && ed < expFrom) return false;
+      if (expTo && ed && ed > expTo) return false;
       return true;
     });
-  }, [q.data, itemFilter, batchSearch]);
+  }, [q.data, itemFilter, batchSearch, barcodeFilter, prodFrom, prodTo, expFrom, expTo]);
   return (
     <SimpleEntityPage title="ارقام التشغيلة" tableTitle="التشغيلات" data={filtered as any} isLoading={q.isLoading} onRefresh={() => q.refetch()}
       entity={{ moduleKey: "inventory", entityKey: "batchNumbers" }}
-      canEdit={false}
+      canEdit={true}
       extraActions={
         <div className="flex flex-wrap gap-2 items-end">
           <div className="space-y-1">
@@ -90,13 +103,37 @@ export function ItemBatchesPage() {
             </Select>
           </div>
           <div className="space-y-1">
+            <Label className="text-xs">الباركود</Label>
+            <Input className="h-9 w-36" value={barcodeFilter} onChange={(e) => setBarcodeFilter(e.target.value)} placeholder="بحث..." />
+          </div>
+          <div className="space-y-1">
             <Label className="text-xs">رقم التشغيلة</Label>
             <Input className="h-9 w-40" value={batchSearch} onChange={(e) => setBatchSearch(e.target.value)} placeholder="بحث..." />
           </div>
+          <div className="space-y-1">
+            <Label className="text-xs">انتاج من</Label>
+            <Input type="date" className="h-9 w-36" value={prodFrom} onChange={(e) => setProdFrom(e.target.value)} />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">انتاج الى</Label>
+            <Input type="date" className="h-9 w-36" value={prodTo} onChange={(e) => setProdTo(e.target.value)} />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">انتهاء من</Label>
+            <Input type="date" className="h-9 w-36" value={expFrom} onChange={(e) => setExpFrom(e.target.value)} />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">انتهاء الى</Label>
+            <Input type="date" className="h-9 w-36" value={expTo} onChange={(e) => setExpTo(e.target.value)} />
+          </div>
+          <Button type="button" variant="outline" size="sm" className="h-9" onClick={() => {
+            setItemFilter(""); setBatchSearch(""); setBarcodeFilter(""); setProdFrom(""); setProdTo(""); setExpFrom(""); setExpTo("");
+          }}>تفريغ</Button>
         </div>
       }
       columns={[
         { key: "itemName", label: "الصنف" },
+        { key: "itemBarcode", label: "الباركود", render: (r) => (r.itemBarcode ? String(r.itemBarcode) : "—") },
         { key: "batchNumber", label: "رقم التشغيلة" },
         { key: "productionDate", label: "تاريخ الانتاج", render: (r) => r.productionDate ? toDateStr(r.productionDate) : "—" },
         { key: "expiryDate", label: "تاريخ الانتهاء", render: (r) => r.expiryDate ? toDateStr(r.expiryDate) : "—" },
@@ -109,7 +146,9 @@ export function ItemBatchesPage() {
         { key: "expiryDate", label: "تاريخ الانتهاء", type: "date" },
         { key: "quantity", label: "الكمية", type: "number" },
       ]}
-      onCreate={(v) => c.mutateAsync({ ...v, itemId: Number(v.itemId) } as any)} onUpdate={() => {}} onDelete={(id) => d.mutateAsync(id)} />
+      onCreate={(v) => c.mutateAsync({ ...v, itemId: Number(v.itemId) } as any)}
+      onUpdate={(id, v) => u.mutateAsync({ id, ...v, itemId: v.itemId ? Number(v.itemId) : undefined } as any)}
+      onDelete={(id) => d.mutateAsync(id)} />
   );
 }
 
@@ -126,6 +165,17 @@ export function ItemOffersPage() {
   const [filterCategoryId, setFilterCategoryId] = useState("");
   const [filterItemId, setFilterItemId] = useState("");
   const [barcodeSearch, setBarcodeSearch] = useState("");
+  const [filterPriceType, setFilterPriceType] = useState("");
+  const [filterBranchId, setFilterBranchId] = useState("");
+  const [filterAreaId, setFilterAreaId] = useState("");
+  const [filterContactCategoryId, setFilterContactCategoryId] = useState("");
+  const [filterCustomerId, setFilterCustomerId] = useState("");
+  const [filterActive, setFilterActive] = useState<"" | "1" | "0">("");
+
+  const branchesQ = trpc.settings.branches.list.useQuery();
+  const areasQ = trpc.parity.sales.areas.list.useQuery();
+  const contactCatsQ = trpc.contactCategories.list.useQuery();
+  const customersQ = trpc.customers.list.useQuery({ page: 1, limit: 400 });
 
   const itemOptions = [
     { value: "", label: "— كل الأصناف —" },
@@ -143,6 +193,12 @@ export function ItemOffersPage() {
     ...v,
     itemId: v.itemId ? Number(v.itemId) : null,
     categoryId: v.categoryId ? Number(v.categoryId) : null,
+    priceType: v.priceType || null,
+    branchId: v.branchId ? Number(v.branchId) : null,
+    areaId: v.areaId ? Number(v.areaId) : null,
+    contactCategoryId: v.contactCategoryId ? Number(v.contactCategoryId) : null,
+    customerId: v.customerId ? Number(v.customerId) : null,
+    isActive: v.isActive === undefined ? undefined : v.isActive === "true" || v.isActive === "1",
   });
 
   const filtered = useMemo(() => {
@@ -152,15 +208,22 @@ export function ItemOffersPage() {
       if (dateTo && r.endDate && toDateStr(r.endDate) > dateTo) return false;
       if (filterCategoryId && String(r.categoryId || "") !== filterCategoryId) return false;
       if (filterItemId && String(r.itemId || "") !== filterItemId) return false;
+      if (filterPriceType && String(r.priceType || "") !== filterPriceType) return false;
+      if (filterBranchId && String(r.branchId || "") !== filterBranchId) return false;
+      if (filterAreaId && String(r.areaId || "") !== filterAreaId) return false;
+      if (filterContactCategoryId && String(r.contactCategoryId || "") !== filterContactCategoryId) return false;
+      if (filterCustomerId && String(r.customerId || "") !== filterCustomerId) return false;
+      if (filterActive === "1" && r.isActive === false) return false;
+      if (filterActive === "0" && r.isActive !== false) return false;
       if (barcodeSearch.trim()) {
         const qBar = barcodeSearch.trim().toLowerCase();
         const hit = itemRows.find((i: any) => i.id === r.itemId);
-        const hay = `${hit?.barcode || ""} ${hit?.code || ""} ${r.itemName || ""}`.toLowerCase();
+        const hay = `${hit?.barcode || ""} ${hit?.code || ""} ${r.itemName || ""} ${r.itemBarcode || ""}`.toLowerCase();
         if (!hay.includes(qBar)) return false;
       }
       return true;
     });
-  }, [q.data, dateFrom, dateTo, filterCategoryId, filterItemId, barcodeSearch, items.data]);
+  }, [q.data, dateFrom, dateTo, filterCategoryId, filterItemId, barcodeSearch, filterPriceType, filterBranchId, filterAreaId, filterContactCategoryId, filterCustomerId, filterActive, items.data]);
 
   return (
     <SimpleEntityPage title="العروض" tableTitle="عروض الأسعار" data={filtered as any} isLoading={q.isLoading} onRefresh={() => q.refetch()}
@@ -201,24 +264,99 @@ export function ItemOffersPage() {
             <Label className="text-xs">الباركود</Label>
             <Input className="h-9 w-36" value={barcodeSearch} onChange={(e) => setBarcodeSearch(e.target.value)} placeholder="بحث..." />
           </div>
+          <div className="space-y-1">
+            <Label className="text-xs">نوع السعر</Label>
+            <Select value={filterPriceType || "all"} onValueChange={(v) => setFilterPriceType(v === "all" ? "" : v)}>
+              <SelectTrigger className="h-9 w-36 text-sm"><SelectValue placeholder="الكل" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">الكل</SelectItem>
+                {["سعر البيع", "سعر الجملة", "سعر القطاعي", "سعر التصدير", "سعر خاص"].map((x) => (
+                  <SelectItem key={x} value={x}>{x}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">الفرع</Label>
+            <Select value={filterBranchId || "all"} onValueChange={(v) => setFilterBranchId(v === "all" ? "" : v)}>
+              <SelectTrigger className="h-9 w-36 text-sm"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">الكل</SelectItem>
+                {(branchesQ.data || []).map((b: any) => <SelectItem key={b.id} value={String(b.id)}>{b.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">المنطقة</Label>
+            <Select value={filterAreaId || "all"} onValueChange={(v) => setFilterAreaId(v === "all" ? "" : v)}>
+              <SelectTrigger className="h-9 w-36 text-sm"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">الكل</SelectItem>
+                {(areasQ.data || []).map((a: any) => <SelectItem key={a.id} value={String(a.id)}>{a.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">فئة العميل</Label>
+            <Select value={filterContactCategoryId || "all"} onValueChange={(v) => setFilterContactCategoryId(v === "all" ? "" : v)}>
+              <SelectTrigger className="h-9 w-40 text-sm"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">الكل</SelectItem>
+                {(contactCatsQ.data || []).map((c: any) => <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">العميل</Label>
+            <Select value={filterCustomerId || "all"} onValueChange={(v) => setFilterCustomerId(v === "all" ? "" : v)}>
+              <SelectTrigger className="h-9 w-44 text-sm"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">الكل</SelectItem>
+                {(customersQ.data?.rows || []).map((c: any) => <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">الحالة</Label>
+            <Select value={filterActive || "all"} onValueChange={(v) => setFilterActive(v === "all" ? "" : v as any)}>
+              <SelectTrigger className="h-9 w-28 text-sm"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">الكل</SelectItem>
+                <SelectItem value="1">نشط</SelectItem>
+                <SelectItem value="0">متوقف</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
           <Button type="button" variant="outline" size="sm" className="h-9" onClick={() => {
             setDateFrom(""); setDateTo(""); setFilterCategoryId(""); setFilterItemId(""); setBarcodeSearch("");
+            setFilterPriceType(""); setFilterBranchId(""); setFilterAreaId(""); setFilterContactCategoryId(""); setFilterCustomerId(""); setFilterActive("");
           }}>تفريغ</Button>
         </div>
       }
       columns={[
         { key: "name", label: "العرض" },
+        { key: "priceType", label: "نوع السعر", render: (r) => r.priceType ? String(r.priceType) : "—" },
         { key: "discountPercent", label: "الخصم %" },
         { key: "itemName", label: "الصنف", render: (r) => r.itemName ? String(r.itemName) : "—" },
         { key: "categoryName", label: "الفئة", render: (r) => r.categoryName ? String(r.categoryName) : "—" },
+        { key: "isActive", label: "الحالة", render: (r) => r.isActive === false ? "متوقف" : "نشط" },
         { key: "startDate", label: "من", render: (r) => r.startDate ? toDateStr(r.startDate) : "—" },
         { key: "endDate", label: "إلى", render: (r) => r.endDate ? toDateStr(r.endDate) : "—" },
       ]}
       fields={[
         { key: "name", label: "اسم العرض", required: true },
+        { key: "priceType", label: "نوع السعر", type: "select", options: [
+          { value: "", label: "—" },
+          ...["سعر البيع", "سعر الجملة", "سعر القطاعي", "سعر التصدير", "سعر خاص"].map((x) => ({ value: x, label: x })),
+        ] },
         { key: "discountPercent", label: "نسبة الخصم" },
         { key: "itemId", label: "صنف محدد (اختياري)", type: "select", options: itemOptions },
         { key: "categoryId", label: "فئة محددة (اختياري)", type: "select", options: categoryOptions },
+        { key: "branchId", label: "الفرع", type: "select", options: [{ value: "", label: "—" }, ...(branchesQ.data || []).map((b: any) => ({ value: String(b.id), label: b.name }))] },
+        { key: "areaId", label: "المنطقة", type: "select", options: [{ value: "", label: "—" }, ...(areasQ.data || []).map((a: any) => ({ value: String(a.id), label: a.name }))] },
+        { key: "contactCategoryId", label: "فئة العميل", type: "select", options: [{ value: "", label: "—" }, ...(contactCatsQ.data || []).map((c: any) => ({ value: String(c.id), label: c.name }))] },
+        { key: "customerId", label: "العميل", type: "select", options: [{ value: "", label: "—" }, ...(customersQ.data?.rows || []).map((c: any) => ({ value: String(c.id), label: c.name }))] },
+        { key: "isActive", label: "نشط", type: "select", options: [{ value: "true", label: "نعم" }, { value: "false", label: "لا" }] },
         { key: "startDate", label: "من", type: "date" },
         { key: "endDate", label: "إلى", type: "date" },
       ]}
@@ -433,6 +571,7 @@ export function PriceChangerPage() {
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
   const [search, setSearch] = useState("");
   const [categoryId, setCategoryId] = useState("");
+  const [altCategoryId, setAltCategoryId] = useState("");
   const [itemType, setItemType] = useState("");
   const [priceStatus, setPriceStatus] = useState<"" | "lt_avg" | "eq_avg" | "gt_avg">("");
   const [withStockOnly, setWithStockOnly] = useState(false);
@@ -446,6 +585,7 @@ export function PriceChangerPage() {
     const q = search.trim().toLowerCase();
     return all.filter((i: any) => {
       if (categoryId && String(i.categoryId || "") !== categoryId) return false;
+      if (altCategoryId && String(i.altCategoryId || "") !== altCategoryId) return false;
       if (itemType && String(i.itemType || "") !== itemType) return false;
       if (withStockOnly && Number(i.currentStock || 0) <= 0) return false;
       if (priceStatus) {
@@ -462,7 +602,7 @@ export function PriceChangerPage() {
         || String(i.barcode || "").toLowerCase().includes(q)
       );
     });
-  }, [items.data, search, categoryId, itemType, priceStatus, withStockOnly]);
+  }, [items.data, search, categoryId, altCategoryId, itemType, priceStatus, withStockOnly]);
 
   const dirtyRows = Object.entries(draft)
     .filter(([, v]) => v.trim() !== "")
@@ -486,6 +626,7 @@ export function PriceChangerPage() {
       decimals: Number(decimals) || 2,
       filter: {
         categoryId: categoryId ? Number(categoryId) : undefined,
+        altCategoryId: altCategoryId ? Number(altCategoryId) : undefined,
         itemType: itemType || undefined,
         search: search || undefined,
         priceStatus: priceStatus || undefined,
@@ -511,6 +652,16 @@ export function PriceChangerPage() {
                   <SelectTrigger className="h-10 w-40"><SelectValue placeholder="كل الفئات" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">كل الفئات</SelectItem>
+                    {(categories.data || []).map((c: any) => <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs font-bold">فئة بديلة</Label>
+                <Select value={altCategoryId || "all"} onValueChange={(v) => setAltCategoryId(v === "all" ? "" : v)}>
+                  <SelectTrigger className="h-10 w-40"><SelectValue placeholder="كل البديلة" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">كل البديلة</SelectItem>
                     {(categories.data || []).map((c: any) => <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>)}
                   </SelectContent>
                 </Select>
@@ -725,14 +876,17 @@ export function BeginningInventoryPage() {
       }
       columns={[
         { key: "warehouseName", label: "المخزن" },
+        { key: "categoryName", label: "الفئة", render: (r) => (r.categoryName ? String(r.categoryName) : "—") },
         { key: "itemName", label: "الصنف", render: (r) => (
           <span className="font-bold">
-            {r.itemCode ? `${r.itemCode} — ` : ""}{String(r.itemName || "—")}
-            {r.itemBarcode ? <span className="block text-[11px] text-slate-500 font-semibold">سيريل نمبر: {String(r.itemBarcode)}</span> : null}
+            {r.itemCode ? `${String(r.itemCode)} — ` : ""}{String(r.itemName || "—")}
+            {r.itemBarcode ? <span className="block text-[11px] text-slate-500 font-semibold">باركود: {String(r.itemBarcode)}</span> : null}
           </span>
         ) },
+        { key: "itemUnit", label: "الوحدة", render: (r) => (r.itemUnit ? String(r.itemUnit) : "—") },
         { key: "quantity", label: "الكمية", render: (r) => Number(r.quantity || 0).toLocaleString("en-US") },
         { key: "unitCost", label: "التكلفة", render: (r) => Number(r.unitCost || 0).toLocaleString("en-US") },
+        { key: "lineTotal", label: "الإجمالي", render: (r) => Number(r.lineTotal ?? (Number(r.quantity || 0) * Number(r.unitCost || 0))).toLocaleString("en-US") },
         { key: "date", label: "التاريخ", render: (r) => toDateStr(r.date) },
       ]}
       fields={[

@@ -46,6 +46,8 @@ export default function InventoryAdjustments() {
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [filterWarehouseId, setFilterWarehouseId] = useState("");
+  const [filterBranchId, setFilterBranchId] = useState("");
+  const [filterCustomerId, setFilterCustomerId] = useState("");
   const [filterStatus, setFilterStatus] = useState<"" | "draft" | "confirmed" | "cancelled">("");
   const [search, setSearch] = useState("");
   const debouncedSearch = useDebouncedValue(search);
@@ -60,10 +62,13 @@ export default function InventoryAdjustments() {
     dateFrom: dateFrom || undefined,
     dateTo: dateTo || undefined,
     warehouseId: filterWarehouseId ? Number(filterWarehouseId) : undefined,
+    branchId: filterBranchId ? Number(filterBranchId) : undefined,
+    customerId: filterCustomerId ? Number(filterCustomerId) : undefined,
     status: filterStatus || undefined,
     search: debouncedSearch || undefined,
   });
   const { data: warehouses } = trpc.warehouses.list.useQuery();
+  const { data: branches } = trpc.settings.branches.list.useQuery();
   const { data: itemsList } = trpc.items.list.useQuery({ page: 1, limit: 500 });
   const { data: accountsChart } = trpc.accounts.chart.useQuery();
   const { data: costCentersList } = trpc.costCenters.list.useQuery();
@@ -181,6 +186,8 @@ export default function InventoryAdjustments() {
     setDateFrom("");
     setDateTo("");
     setFilterWarehouseId("");
+    setFilterBranchId("");
+    setFilterCustomerId("");
     setFilterStatus("");
     setSearch("");
   };
@@ -225,6 +232,30 @@ export default function InventoryAdjustments() {
                     <SelectItem value="all">الكل</SelectItem>
                     {(warehouses as any[] || []).map((w: any) => (
                       <SelectItem key={w.id} value={String(w.id)}>{w.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">الفرع</Label>
+                <Select value={filterBranchId || "all"} onValueChange={(v) => setFilterBranchId(v === "all" ? "" : v)}>
+                  <SelectTrigger className="h-9 w-40 text-sm"><SelectValue placeholder="الكل" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">الكل</SelectItem>
+                    {(branches || []).map((b: any) => (
+                      <SelectItem key={b.id} value={String(b.id)}>{b.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">العميل</Label>
+                <Select value={filterCustomerId || "all"} onValueChange={(v) => setFilterCustomerId(v === "all" ? "" : v)}>
+                  <SelectTrigger className="h-9 w-44 text-sm"><SelectValue placeholder="الكل" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">الكل</SelectItem>
+                    {(customersList?.rows || []).map((c: any) => (
+                      <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>

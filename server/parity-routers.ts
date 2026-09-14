@@ -907,6 +907,7 @@ export const inventoryExtendedRouter = router({
         id: itemBatches.id,
         itemId: itemBatches.itemId,
         itemName: items.name,
+        itemBarcode: items.barcode,
         batchNumber: itemBatches.batchNumber,
         productionDate: itemBatches.productionDate,
         expiryDate: itemBatches.expiryDate,
@@ -927,6 +928,21 @@ export const inventoryExtendedRouter = router({
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       await db.insert(itemBatches).values(withTenantId(ctx.tenantId, input) as any);
+      return { success: true };
+    }),
+    update: protectedProcedure.input(z.object({
+      id: z.number(),
+      itemId: z.number().optional(),
+      batchNumber: z.string().min(1).optional(),
+      productionDate: z.string().optional().nullable(),
+      expiryDate: z.string().optional().nullable(),
+      quantity: z.string().optional(),
+    })).mutation(async ({ ctx, input }) => {
+      await assertEntityAction(ctx, "inventory", "batchNumbers", "edit");
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const { id, ...data } = input;
+      await db.update(itemBatches).set(data as any).where(tenantWhere(itemBatches, ctx.tenantId, eq(itemBatches.id, id)));
       return { success: true };
     }),
     delete: protectedProcedure.input(z.number()).mutation(async ({ ctx, input }) => {
@@ -954,11 +970,17 @@ export const inventoryExtendedRouter = router({
         name: itemOffers.name,
         itemId: itemOffers.itemId,
         categoryId: itemOffers.categoryId,
+        priceType: itemOffers.priceType,
+        branchId: itemOffers.branchId,
+        areaId: itemOffers.areaId,
+        contactCategoryId: itemOffers.contactCategoryId,
+        customerId: itemOffers.customerId,
         discountPercent: itemOffers.discountPercent,
         startDate: itemOffers.startDate,
         endDate: itemOffers.endDate,
         isActive: itemOffers.isActive,
         itemName: items.name,
+        itemBarcode: items.barcode,
         categoryName: itemCategories.name,
       }).from(itemOffers)
         .where(tenantWhere(itemOffers, ctx.tenantId))
@@ -979,6 +1001,11 @@ export const inventoryExtendedRouter = router({
       name: z.string().min(1),
       itemId: z.number().optional().nullable(),
       categoryId: z.number().optional().nullable(),
+      priceType: z.string().optional().nullable(),
+      branchId: z.number().optional().nullable(),
+      areaId: z.number().optional().nullable(),
+      contactCategoryId: z.number().optional().nullable(),
+      customerId: z.number().optional().nullable(),
       discountPercent: z.string().optional(),
       startDate: z.string().optional(),
       endDate: z.string().optional(),
@@ -995,6 +1022,11 @@ export const inventoryExtendedRouter = router({
       name: z.string().min(1).optional(),
       itemId: z.number().optional().nullable(),
       categoryId: z.number().optional().nullable(),
+      priceType: z.string().optional().nullable(),
+      branchId: z.number().optional().nullable(),
+      areaId: z.number().optional().nullable(),
+      contactCategoryId: z.number().optional().nullable(),
+      customerId: z.number().optional().nullable(),
       discountPercent: z.string().optional(),
       startDate: z.string().optional(),
       endDate: z.string().optional(),
@@ -1067,6 +1099,7 @@ export const inventoryExtendedRouter = router({
       decimals: z.number().min(0).max(6).optional(),
       filter: z.object({
         categoryId: z.number().optional(),
+        altCategoryId: z.number().optional(),
         itemType: z.string().optional(),
         search: z.string().optional(),
         priceStatus: z.enum(["lt_avg", "eq_avg", "gt_avg"]).optional(),
@@ -1105,6 +1138,7 @@ export const inventoryExtendedRouter = router({
       } else {
         const conditions = [eq(items.isActive, true)];
         if (input.filter?.categoryId) conditions.push(eq(items.categoryId, input.filter.categoryId));
+        if (input.filter?.altCategoryId) conditions.push(eq(items.altCategoryId, input.filter.altCategoryId));
         if (input.filter?.itemType) conditions.push(eq(items.itemType, input.filter.itemType));
         if (input.filter?.withStockOnly) conditions.push(sql`CAST(${items.currentStock} AS DECIMAL(15,3)) > 0`);
         if (input.filter?.search) {
@@ -1261,12 +1295,16 @@ export const inventoryExtendedRouter = router({
         itemName: items.name,
         itemCode: items.code,
         itemBarcode: items.barcode,
+        itemUnit: items.unit,
+        categoryName: itemCategories.name,
         quantity: beginningInventory.quantity,
         unitCost: beginningInventory.unitCost,
+        lineTotal: sql<string>`CAST(${beginningInventory.quantity} AS DECIMAL(15,3)) * CAST(COALESCE(${beginningInventory.unitCost}, 0) AS DECIMAL(15,4))`,
         date: beginningInventory.date,
       }).from(beginningInventory)
         .where(tenantWhere(beginningInventory, ctx.tenantId))
         .leftJoin(items, eq(beginningInventory.itemId, items.id))
+        .leftJoin(itemCategories, eq(items.categoryId, itemCategories.id))
         .leftJoin(warehouses, eq(beginningInventory.warehouseId, warehouses.id))
         .orderBy(desc(beginningInventory.date));
     }),
