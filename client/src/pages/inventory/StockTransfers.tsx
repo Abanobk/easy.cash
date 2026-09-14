@@ -11,7 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { Plus, ArrowLeftRight, Trash2, Search } from "lucide-react";
+import { Plus, ArrowLeftRight, Trash2, Search, PackageCheck } from "lucide-react";
 import { toast } from "sonner";
 import { AddActionButton } from "@/components/AddActionButton";
 import { ItemSearchSelect } from "@/components/ItemSearchSelect";
@@ -19,11 +19,8 @@ import { findItemByScan } from "@/lib/barcode";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 
 /**
- * تحويل مخزني — مطابقة ميجا:
- * إنشاء = /Inv/InventoryTransfer.aspx · قائمة = InventoryDocumentsList/InvTrans
- * فلاتر: من/إلى تاريخ · من/إلى مخزن · حالة · مسلسل
- * أتمتة: كمية متاحة + تكلفة متوقعة عند اختيار الصنف
- * ملاحظة صدق: تحويل بمرحلتين في ميجا غير مطبّق بعد (تحويل مباشر فقط)
+ * تحويل مخزني — مطابقة ميجا InventoryTransfer:
+ * نوع التحويل: مباشر | بمرحلتين · حفظ معلق / اعتماد · استلام للمرحلتين
  */
 export default function StockTransfers() {
   const { isNewRoute, goToList, goToCreate } = useMegaCreateRoute("/inventory/transfers");
@@ -33,6 +30,8 @@ export default function StockTransfers() {
     toWarehouseId: "",
     date: new Date().toISOString().split("T")[0],
     notes: "",
+    transferType: "direct" as "direct" | "two_stage",
+    referenceNumber: "",
   });
   const [items, setItems] = useState<{ itemId: string; quantity: string; available?: number; expectedCost?: number }[]>([
     { itemId: "", quantity: "1" },
@@ -43,7 +42,8 @@ export default function StockTransfers() {
   const [dateTo, setDateTo] = useState("");
   const [fromWh, setFromWh] = useState("");
   const [toWh, setToWh] = useState("");
-  const [filterStatus, setFilterStatus] = useState<"" | "draft" | "confirmed" | "cancelled">("");
+  const [filterType, setFilterType] = useState<"" | "direct" | "two_stage">("");
+  const [filterStatus, setFilterStatus] = useState<"" | "draft" | "in_transit" | "confirmed" | "cancelled">("");
   const [search, setSearch] = useState("");
   const debouncedSearch = useDebouncedValue(search);
 
@@ -58,6 +58,7 @@ export default function StockTransfers() {
     dateTo: dateTo || undefined,
     fromWarehouseId: fromWh ? Number(fromWh) : undefined,
     toWarehouseId: toWh ? Number(toWh) : undefined,
+    transferType: filterType || undefined,
     status: filterStatus || undefined,
     search: debouncedSearch || undefined,
   });
@@ -66,11 +67,15 @@ export default function StockTransfers() {
   const utils = trpc.useUtils();
 
   const createMut = trpc.inventory.transfers.create.useMutation({
-    onSuccess: () => {
-      toast.success("تم تسجيل التحويل بنجاح");
+    onSuccess: (r) => {
+      toast.success(r.status === "draft" ? "تم حفظ التحويل معلقاً" : r.status === "in_transit" ? "تم اعتماد الشحن — بانتظار الاستلام" : "تم اعتماد التحويل");
       refetch();
       closeDialog();
     },
+    onError: (e) => toast.error(e.message),
+  });
+  const receiveMut = trpc.inventory.transfers.receive.useMutation({
+    onSuccess: () => { toast.success("تم استلام التحويل في المخزن المستقبل"); refetch(); },
     onError: (e) => toast.error(e.message),
   });
 
@@ -80,6 +85,8 @@ export default function StockTransfers() {
       toWarehouseId: "",
       date: new Date().toISOString().split("T")[0],
       notes: "",
+      transferType: "direct",
+      referenceNumber: "",
     });
     setItems([{ itemId: "", quantity: "1" }]);
     setBarcode("");
@@ -145,13 +152,15 @@ export default function StockTransfers() {
     setBarcode("");
   };
 
-  const handleSubmit = () => {
+  const submit = (confirm: boolean) => {
     if (!form.fromWarehouseId || !form.toWarehouseId) return toast.error("يجب اختيار المخزن المصدر والمستقبل");
     if (form.fromWarehouseId === form.toWarehouseId) return toast.error("لا يمكن التحويل لنفس المخزن");
     if (items.some((it) => !it.itemId)) return toast.error("يجب اختيار الصنف في كل بند");
-    for (const it of items) {
-      if (it.available != null && Number(it.quantity) > Number(it.available)) {
-        return toast.error(`الكمية أكبر من المتاحة للصنف`);
+    if (confirm) {
+      for (const it of items) {
+        if (it.available != null && Number(it.quantity) > Number(it.available)) {
+          return toast.error(`الكمية أكبر من المتاحة للصنف`);
+        }
       }
     }
     createMut.mutate({
@@ -159,19 +168,24 @@ export default function StockTransfers() {
       toWarehouseId: Number(form.toWarehouseId),
       date: form.date,
       notes: form.notes,
+      transferType: form.transferType,
+      referenceNumber: form.referenceNumber || undefined,
+      confirm,
       items: items.map((it) => ({ itemId: Number(it.itemId), quantity: it.quantity })),
     });
   };
 
-  const statusLabel = (s: string) => ({ draft: "معلق", confirmed: "معتمد", cancelled: "ملغي" }[s] || s);
+  const statusLabel = (s: string) =>
+    ({ draft: "معلق", in_transit: "معتمد جزئياً", confirmed: "معتمد", cancelled: "ملغي" }[s] || s);
   const statusColor = (s: string) =>
-    ({ draft: "outline", confirmed: "default", cancelled: "destructive" }[s] || "outline") as any;
+    ({ draft: "outline", in_transit: "secondary", confirmed: "default", cancelled: "destructive" }[s] || "outline") as any;
 
   const clearFilters = () => {
     setDateFrom("");
     setDateTo("");
     setFromWh("");
     setToWh("");
+    setFilterType("");
     setFilterStatus("");
     setSearch("");
   };
@@ -210,65 +224,75 @@ export default function StockTransfers() {
               <div className="space-y-1">
                 <Label className="text-xs">المخزن</Label>
                 <Select value={fromWh || "all"} onValueChange={(v) => setFromWh(v === "all" ? "" : v)}>
-                  <SelectTrigger className="h-9 w-40 text-sm"><SelectValue placeholder="من" /></SelectTrigger>
+                  <SelectTrigger className="h-9 w-40 text-sm"><SelectValue placeholder="الكل" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">الكل</SelectItem>
-                    {(warehouses as any[] || []).map((w: any) => (
-                      <SelectItem key={w.id} value={String(w.id)}>{w.name}</SelectItem>
-                    ))}
+                    {(warehouses as any[] || []).map((w: any) => <SelectItem key={w.id} value={String(w.id)}>{w.name}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
               <div className="space-y-1">
                 <Label className="text-xs">الى مخزن</Label>
                 <Select value={toWh || "all"} onValueChange={(v) => setToWh(v === "all" ? "" : v)}>
-                  <SelectTrigger className="h-9 w-40 text-sm"><SelectValue placeholder="إلى" /></SelectTrigger>
+                  <SelectTrigger className="h-9 w-40 text-sm"><SelectValue placeholder="الكل" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">الكل</SelectItem>
-                    {(warehouses as any[] || []).map((w: any) => (
-                      <SelectItem key={w.id} value={String(w.id)}>{w.name}</SelectItem>
-                    ))}
+                    {(warehouses as any[] || []).map((w: any) => <SelectItem key={w.id} value={String(w.id)}>{w.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">نوع التحويل</Label>
+                <Select value={filterType || "all"} onValueChange={(v) => setFilterType(v === "all" ? "" : v as any)}>
+                  <SelectTrigger className="h-9 w-40 text-sm"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">الكل</SelectItem>
+                    <SelectItem value="direct">تحويل مباشر</SelectItem>
+                    <SelectItem value="two_stage">تحويل بمرحلتين</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
               <div className="space-y-1">
                 <Label className="text-xs">الحالة</Label>
                 <Select value={filterStatus || "all"} onValueChange={(v) => setFilterStatus(v === "all" ? "" : v as any)}>
-                  <SelectTrigger className="h-9 w-36 text-sm"><SelectValue /></SelectTrigger>
+                  <SelectTrigger className="h-9 w-40 text-sm"><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">اختر</SelectItem>
+                    <SelectItem value="all">الكل</SelectItem>
                     <SelectItem value="draft">معلق</SelectItem>
+                    <SelectItem value="in_transit">معتمد جزئياً</SelectItem>
                     <SelectItem value="confirmed">معتمد</SelectItem>
                     <SelectItem value="cancelled">ملغي</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
-              <div className="space-y-1 flex-1 min-w-[140px]">
-                <Label className="text-xs">المسلسل / رقم المرجع</Label>
-                <Input className="h-9" placeholder="بحث..." value={search} onChange={(e) => setSearch(e.target.value)} />
+              <div className="space-y-1">
+                <Label className="text-xs">المسلسل / المرجع</Label>
+                <div className="relative">
+                  <Search size={14} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <Input className="h-9 w-40 pr-7" value={search} onChange={(e) => setSearch(e.target.value)} />
+                </div>
               </div>
-              <Button type="button" variant="outline" size="sm" className="h-9 gap-1" onClick={() => refetch()}>
-                <Search size={14} /> بحث
-              </Button>
-              <Button type="button" variant="ghost" size="sm" className="h-9" onClick={clearFilters}>تفريغ</Button>
+              <Button type="button" variant="outline" size="sm" className="h-9" onClick={clearFilters}>تفريغ</Button>
             </div>
           )}
 
-          <div className="overflow-x-auto rounded-lg border">
+          <div className="rounded-lg border overflow-hidden">
             <Table>
               <TableHeader>
                 <TableRow className="bg-slate-50">
-                  <TableHead className="text-right text-xs font-semibold text-slate-600">المسلسل</TableHead>
-                  <TableHead className="text-right text-xs font-semibold text-slate-600">من مخزن</TableHead>
-                  <TableHead className="text-right text-xs font-semibold text-slate-600">الى مخزن</TableHead>
-                  <TableHead className="text-right text-xs font-semibold text-slate-600">التاريخ</TableHead>
-                  <TableHead className="text-right text-xs font-semibold text-slate-600">الحالة</TableHead>
+                  <TableHead className="text-right text-xs">المسلسل</TableHead>
+                  <TableHead className="text-right text-xs">من</TableHead>
+                  <TableHead className="text-right text-xs">الى</TableHead>
+                  <TableHead className="text-right text-xs">النوع</TableHead>
+                  <TableHead className="text-right text-xs">التاريخ</TableHead>
+                  <TableHead className="text-right text-xs">الحالة</TableHead>
+                  <TableHead className="text-right text-xs">إجراء</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {(!data?.rows || data.rows.length === 0) && (
+                {!data?.rows?.length && (
                   <TableRow>
-                    <TableCell colSpan={5} className="text-center text-slate-400 py-10">لا توجد بيانات للعرض</TableCell>
+                    <TableCell colSpan={7} className="text-center text-sm text-slate-400 py-8">لا توجد بيانات للعرض</TableCell>
                   </TableRow>
                 )}
                 {data?.rows?.map((row: any) => (
@@ -276,11 +300,28 @@ export default function StockTransfers() {
                     <TableCell className="text-sm font-medium text-purple-700">#{row.number}</TableCell>
                     <TableCell className="text-sm text-slate-700">{row.fromWarehouseName}</TableCell>
                     <TableCell className="text-sm text-slate-700">{row.toWarehouseName}</TableCell>
+                    <TableCell className="text-xs text-slate-600">
+                      {row.transferType === "two_stage" ? "بمرحلتين" : "مباشر"}
+                    </TableCell>
                     <TableCell className="text-xs text-slate-500">
                       {row.date ? new Date(row.date).toLocaleDateString("en-GB") : "-"}
                     </TableCell>
                     <TableCell>
                       <Badge variant={statusColor(row.status)} className="text-xs">{statusLabel(row.status)}</Badge>
+                    </TableCell>
+                    <TableCell>
+                      {row.status === "in_transit" && (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          className="h-7 text-xs gap-1"
+                          disabled={receiveMut.isPending}
+                          onClick={() => receiveMut.mutate({ id: row.id })}
+                        >
+                          <PackageCheck size={12} /> استلام
+                        </Button>
+                      )}
                     </TableCell>
                   </TableRow>
                 ))}
@@ -294,10 +335,24 @@ export default function StockTransfers() {
         <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto" dir="rtl">
           <DialogHeader><DialogTitle>تحويل مخزني</DialogTitle></DialogHeader>
           <div className="grid gap-4 py-2">
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
               <div className="space-y-1">
                 <Label className="text-xs">التاريخ *</Label>
                 <Input type="date" value={form.date} onChange={(e) => setForm((f) => ({ ...f, date: e.target.value }))} className="h-9 text-sm" />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">نوع التحويل</Label>
+                <Select value={form.transferType} onValueChange={(v) => setForm((f) => ({ ...f, transferType: v as any }))}>
+                  <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="direct">تحويل مباشر</SelectItem>
+                    <SelectItem value="two_stage">تحويل بمرحلتين</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">رقم المرجع</Label>
+                <Input value={form.referenceNumber} onChange={(e) => setForm((f) => ({ ...f, referenceNumber: e.target.value }))} className="h-9 text-sm" />
               </div>
               <div className="space-y-1">
                 <Label className="text-xs">المخزن *</Label>
@@ -335,7 +390,11 @@ export default function StockTransfers() {
                 </div>
               </div>
             </div>
-            <p className="text-[11px] text-slate-500">نوع التحويل: تحويل مباشر (تحويل بمرحلتين في ميجا غير مفعّل بعد)</p>
+            {form.transferType === "two_stage" && (
+              <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-100 rounded px-2 py-1.5">
+                بمرحلتين: الاعتماد يخصم من المصدر فقط — ثم «استلام» من القائمة يضيف للمستقبل.
+              </p>
+            )}
 
             <div className="space-y-2">
               <div className="flex items-center justify-between">
@@ -395,9 +454,10 @@ export default function StockTransfers() {
             </div>
           </div>
           <DialogFooter className="gap-2">
-            <Button variant="outline" size="sm" onClick={closeDialog}>تفريغ / إلغاء</Button>
-            <Button size="sm" className="bg-purple-600 hover:bg-purple-700" disabled={createMut.isPending} onClick={handleSubmit}>
-              حفظ
+            <Button variant="outline" size="sm" onClick={closeDialog}>إلغاء</Button>
+            <Button variant="secondary" size="sm" disabled={createMut.isPending} onClick={() => submit(false)}>حفظ</Button>
+            <Button size="sm" className="bg-purple-600 hover:bg-purple-700" disabled={createMut.isPending} onClick={() => submit(true)}>
+              اعتماد
             </Button>
           </DialogFooter>
         </DialogContent>

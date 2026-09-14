@@ -71,11 +71,15 @@ export default function InventoryAdjustments() {
   const utils = trpc.useUtils();
 
   const createMut = trpc.inventory.adjustments.create.useMutation({
-    onSuccess: () => {
-      toast.success("تم تسجيل تسوية المخزون");
+    onSuccess: (r) => {
+      toast.success(r.status === "draft" ? "تم حفظ التسوية معلّقة" : "تم اعتماد تسوية المخزون");
       refetch();
       closeDialog();
     },
+    onError: (e) => toast.error(e.message),
+  });
+  const confirmMut = trpc.inventory.adjustments.confirm.useMutation({
+    onSuccess: () => { toast.success("تم اعتماد التسوية وترحيل المخزون/القيد"); refetch(); },
     onError: (e) => toast.error(e.message),
   });
 
@@ -152,7 +156,7 @@ export default function InventoryAdjustments() {
     setBarcode("");
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = (confirm: boolean) => {
     if (!form.warehouseId) return toast.error("يجب اختيار المخزن");
     if (items.some((it) => !it.itemId)) return toast.error("يجب اختيار الصنف في كل بند");
     createMut.mutate({
@@ -164,6 +168,7 @@ export default function InventoryAdjustments() {
       costCenterId: form.costCenterId ? Number(form.costCenterId) : null,
       customerId: form.customerId ? Number(form.customerId) : null,
       referenceNumber: form.referenceNumber || undefined,
+      confirm,
       items: items.map((it) => ({ itemId: Number(it.itemId), quantity: it.quantity, reason: it.reason })),
     });
   };
@@ -256,12 +261,13 @@ export default function InventoryAdjustments() {
                   <TableHead className="text-right text-xs font-semibold text-slate-600">التاريخ</TableHead>
                   <TableHead className="text-right text-xs font-semibold text-slate-600">ملاحظات</TableHead>
                   <TableHead className="text-right text-xs font-semibold text-slate-600">الحالة</TableHead>
+                  <TableHead className="text-right text-xs font-semibold text-slate-600">إجراء</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {(!data?.rows || data.rows.length === 0) && (
                   <TableRow>
-                    <TableCell colSpan={5} className="text-center text-slate-400 py-10">لا توجد بيانات للعرض</TableCell>
+                    <TableCell colSpan={6} className="text-center text-slate-400 py-10">لا توجد بيانات للعرض</TableCell>
                   </TableRow>
                 )}
                 {data?.rows?.map((row: any) => (
@@ -276,6 +282,20 @@ export default function InventoryAdjustments() {
                       <Badge variant={statusColor(row.status || "confirmed")} className="text-xs">
                         {statusLabel(row.status || "confirmed")}
                       </Badge>
+                    </TableCell>
+                    <TableCell>
+                      {row.status === "draft" && (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          className="h-7 text-xs"
+                          disabled={confirmMut.isPending}
+                          onClick={() => confirmMut.mutate({ id: row.id })}
+                        >
+                          اعتماد
+                        </Button>
+                      )}
                     </TableCell>
                   </TableRow>
                 ))}
@@ -426,11 +446,17 @@ export default function InventoryAdjustments() {
               <Label className="text-xs">ملاحظات</Label>
               <Textarea value={form.notes} onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))} className="text-sm min-h-[60px]" />
             </div>
+            {form.oppositeAccountId && (
+              <p className="text-[11px] text-teal-800 bg-teal-50 border border-teal-100 rounded px-2 py-1.5">
+                عند الاعتماد يُنشأ قيد محاسبي: مخزون ↔ الحساب المقابل (بتكلفة متوسط/شراء الأصناف).
+              </p>
+            )}
           </div>
           <DialogFooter className="gap-2">
-            <Button variant="outline" size="sm" onClick={closeDialog}>تفريغ / إلغاء</Button>
-            <Button size="sm" className="bg-teal-600 hover:bg-teal-700" disabled={createMut.isPending} onClick={handleSubmit}>
-              حفظ
+            <Button variant="outline" size="sm" onClick={closeDialog}>إلغاء</Button>
+            <Button variant="secondary" size="sm" disabled={createMut.isPending} onClick={() => handleSubmit(false)}>حفظ</Button>
+            <Button size="sm" className="bg-teal-600 hover:bg-teal-700" disabled={createMut.isPending} onClick={() => handleSubmit(true)}>
+              اعتماد
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -896,7 +896,12 @@ export const stockTransfers = mysqlTable("stock_transfers", {
   fromWarehouseId: int("fromWarehouseId").notNull(),
   toWarehouseId: int("toWarehouseId").notNull(),
   date: date("date").notNull(),
-  status: mysqlEnum("status", ["draft", "confirmed", "cancelled"]).default("draft"),
+  /** تحويل مباشر | تحويل بمرحلتين — مطابقة ميجا InventoryTransfer */
+  transferType: varchar("transferType", { length: 20 }).default("direct"),
+  referenceNumber: varchar("referenceNumber", { length: 100 }),
+  /** draft=معلق · in_transit=شُحن بمرحلتين · confirmed=معتمد · cancelled=ملغي */
+  status: mysqlEnum("status", ["draft", "in_transit", "confirmed", "cancelled"]).default("draft"),
+  receivedAt: date("receivedAt"),
   notes: text("notes"),
   createdBy: int("createdBy"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),

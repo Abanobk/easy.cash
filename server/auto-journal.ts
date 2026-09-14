@@ -1711,3 +1711,48 @@ export async function postHrIncentiveJournal(
     ],
   });
 }
+
+/**
+ * قيد تسوية مخزنية — مطابقة ميجا InventoryCorrection عند وجود الحساب المقابل:
+ * زيادة مخزون: مدين مخزون / دائن الحساب المقابل
+ * نقص مخزون: مدين الحساب المقابل / دائن مخزون
+ */
+export async function postInventoryAdjustmentJournal(
+  db: Db,
+  tenantId: number,
+  createdBy: number | undefined,
+  opts: {
+    id: number;
+    number: string;
+    date: string;
+    oppositeAccountId: number;
+    costCenterId?: number | null;
+    /** صافي قيمة التسوية بالموجب = زيادة مخزون، بالسالب = نقص */
+    netInventoryValue: number;
+    description?: string;
+  },
+) {
+  const value = Math.abs(num(opts.netInventoryValue));
+  if (value <= 0) return { skipped: true as const };
+
+  const map = await resolveAccountMap(db, tenantId);
+  const amount = money(value);
+  const reference = `INV-ADJ-${opts.id}`;
+  const isIncrease = num(opts.netInventoryValue) > 0;
+  const cc = opts.costCenterId ?? undefined;
+
+  return createPostedJournal(db, tenantId, createdBy, {
+    date: opts.date,
+    description: opts.description || `تسوية مخزنية ${opts.number}`,
+    reference,
+    lines: isIncrease
+      ? [
+          { accountId: map.inventory, debit: amount, credit: "0.00", description: `زيادة مخزون — ${opts.number}`, costCenterId: cc },
+          { accountId: opts.oppositeAccountId, debit: "0.00", credit: amount, description: `حساب مقابل تسوية — ${opts.number}`, costCenterId: cc },
+        ]
+      : [
+          { accountId: opts.oppositeAccountId, debit: amount, credit: "0.00", description: `حساب مقابل تسوية — ${opts.number}`, costCenterId: cc },
+          { accountId: map.inventory, debit: "0.00", credit: amount, description: `نقص مخزون — ${opts.number}`, costCenterId: cc },
+        ],
+  });
+}

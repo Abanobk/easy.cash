@@ -6065,7 +6065,8 @@ const inventoryRouter = router({
       dateTo: z.string().optional(),
       fromWarehouseId: z.number().optional(),
       toWarehouseId: z.number().optional(),
-      status: z.enum(["draft", "confirmed", "cancelled"]).optional(),
+      transferType: z.enum(["direct", "two_stage"]).optional(),
+      status: z.enum(["draft", "in_transit", "confirmed", "cancelled"]).optional(),
       search: z.string().optional(),
     })).query(async ({ ctx, input }) => {
       await assertEntityAction(ctx, "inventory", "stockTransfer", "viewDocList");
@@ -6080,11 +6081,13 @@ const inventoryRouter = router({
         input.dateTo ? lte(stockTransfers.date, input.dateTo as any) : undefined,
         input.fromWarehouseId ? eq(stockTransfers.fromWarehouseId, input.fromWarehouseId) : undefined,
         input.toWarehouseId ? eq(stockTransfers.toWarehouseId, input.toWarehouseId) : undefined,
+        input.transferType ? eq(stockTransfers.transferType, input.transferType) : undefined,
         input.status ? eq(stockTransfers.status, input.status) : undefined,
         input.search
           ? or(
               like(stockTransfers.number, `%${input.search}%`),
               like(stockTransfers.notes, `%${input.search}%`),
+              like(stockTransfers.referenceNumber, `%${input.search}%`),
             )
           : undefined,
       ].filter(Boolean);
@@ -6094,7 +6097,11 @@ const inventoryRouter = router({
         number: stockTransfers.number,
         date: stockTransfers.date,
         status: stockTransfers.status,
+        transferType: stockTransfers.transferType,
+        referenceNumber: stockTransfers.referenceNumber,
         notes: stockTransfers.notes,
+        fromWarehouseId: stockTransfers.fromWarehouseId,
+        toWarehouseId: stockTransfers.toWarehouseId,
         fromWarehouseName: sql<string>`fw.name`,
         toWarehouseName: sql<string>`tw.name`,
       }).from(stockTransfers)
@@ -6110,6 +6117,10 @@ const inventoryRouter = router({
       toWarehouseId: z.number(),
       date: z.string(),
       notes: z.string().optional(),
+      referenceNumber: z.string().optional(),
+      transferType: z.enum(["direct", "two_stage"]).default("direct"),
+      /** حفظ=مسودة بدون حركة · اعتماد=ترحيل مخزون */
+      confirm: z.boolean().default(true),
       items: z.array(z.object({ itemId: z.number(), quantity: z.string(), batchId: z.number().optional() })),
     })).mutation(async ({ ctx, input }) => {
       await assertEntityAction(ctx, "inventory", "stockTransfer", "add");
@@ -6119,25 +6130,97 @@ const inventoryRouter = router({
       const scope = await loadUserScopeFromCtx(db, ctx.saasUser);
       assertWarehouseAccess(scope, input.fromWarehouseId);
       assertWarehouseAccess(scope, input.toWarehouseId);
+      if (input.fromWarehouseId === input.toWarehouseId) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "لا يمكن التحويل لنفس المخزن" });
+      }
       const [countResult] = await db.select({ count: count() }).from(stockTransfers).where(tenantWhere(stockTransfers, ctx.tenantId));
       const number = `ST-${String(countResult.count + 1).padStart(5, "0")}`;
+
+      let status: "draft" | "in_transit" | "confirmed" = "draft";
+      if (input.confirm) {
+        status = input.transferType === "two_stage" ? "in_transit" : "confirmed";
+      }
+
       const [result] = await db.insert(stockTransfers).values(withTenantId(ctx.tenantId, {
-        number, fromWarehouseId: input.fromWarehouseId, toWarehouseId: input.toWarehouseId,
-        date: input.date as any, notes: input.notes, status: "confirmed",
+        number,
+        fromWarehouseId: input.fromWarehouseId,
+        toWarehouseId: input.toWarehouseId,
+        date: input.date as any,
+        notes: input.notes,
+        transferType: input.transferType,
+        referenceNumber: input.referenceNumber || null,
+        status,
+        createdBy: ctx.saasUser?.id,
       }) as any);
       const transferId = (result as any).insertId;
-      const { transferStockBetweenWarehouses } = await import("./inventory-stock");
+
       for (const item of input.items) {
         await db.insert(stockTransferItems).values(withTenantId(ctx.tenantId, { transferId, ...item }) as any);
-        await transferStockBetweenWarehouses(db, ctx.tenantId, {
-          itemId: item.itemId,
-          quantity: item.quantity,
-          fromWarehouseId: input.fromWarehouseId,
-          toWarehouseId: input.toWarehouseId,
-          batchId: item.batchId,
+      }
+
+      if (input.confirm) {
+        const { transferStockBetweenWarehouses, applyStockMovement } = await import("./inventory-stock");
+        for (const item of input.items) {
+          if (input.transferType === "two_stage") {
+            // مرحلة 1: خروج من المصدر فقط — الكمية «في الطريق»
+            await applyStockMovement(db, ctx.tenantId, {
+              itemId: item.itemId,
+              quantity: item.quantity,
+              direction: "out",
+              warehouseId: input.fromWarehouseId,
+              batchId: item.batchId,
+            });
+          } else {
+            await transferStockBetweenWarehouses(db, ctx.tenantId, {
+              itemId: item.itemId,
+              quantity: item.quantity,
+              fromWarehouseId: input.fromWarehouseId,
+              toWarehouseId: input.toWarehouseId,
+              batchId: item.batchId,
+            });
+          }
+        }
+      }
+      return { success: true, id: transferId, number, status };
+    }),
+    /** استلام تحويل بمرحلتين — يدخل للمخزن المستقبل */
+    receive: protectedProcedure.input(z.object({
+      id: z.number(),
+      receivedAt: z.string().optional(),
+    })).mutation(async ({ ctx, input }) => {
+      await assertEntityAction(ctx, "inventory", "stockTransfer", "edit");
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const [row] = await db.select().from(stockTransfers).where(tenantWhere(stockTransfers, ctx.tenantId, eq(stockTransfers.id, input.id)));
+      if (!row) throw new TRPCError({ code: "NOT_FOUND", message: "التحويل غير موجود" });
+      if (row.transferType !== "two_stage") {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "الاستلام متاح فقط للتحويل بمرحلتين" });
+      }
+      if (row.status !== "in_transit") {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "التحويل ليس في حالة شحن / معتمد جزئياً" });
+      }
+      const scope = await loadUserScopeFromCtx(db, ctx.saasUser);
+      assertWarehouseAccess(scope, row.toWarehouseId);
+      const receivedAt = input.receivedAt || new Date().toISOString().slice(0, 10);
+      await assertDateNotInClosedPeriod(db, ctx.tenantId, receivedAt);
+
+      const lines = await db.select().from(stockTransferItems)
+        .where(tenantWhere(stockTransferItems, ctx.tenantId, eq(stockTransferItems.transferId, row.id)));
+      const { applyStockMovement } = await import("./inventory-stock");
+      for (const line of lines) {
+        await applyStockMovement(db, ctx.tenantId, {
+          itemId: line.itemId,
+          quantity: line.quantity || "0",
+          direction: "in",
+          warehouseId: row.toWarehouseId,
+          batchId: line.batchId,
         });
       }
-      return { success: true, id: transferId, number };
+      await db.update(stockTransfers).set({
+        status: "confirmed",
+        receivedAt: receivedAt as any,
+      }).where(tenantWhere(stockTransfers, ctx.tenantId, eq(stockTransfers.id, row.id)));
+      return { success: true };
     }),
   }),
   adjustments: router({
@@ -6165,6 +6248,7 @@ const inventoryRouter = router({
           ? or(
               like(inventoryAdjustments.number, `%${input.search}%`),
               like(inventoryAdjustments.reason, `%${input.search}%`),
+              like(inventoryAdjustments.referenceNumber, `%${input.search}%`),
             )
           : undefined,
       ].filter(Boolean);
@@ -6175,6 +6259,7 @@ const inventoryRouter = router({
         date: inventoryAdjustments.date,
         reason: inventoryAdjustments.reason,
         status: inventoryAdjustments.status,
+        referenceNumber: inventoryAdjustments.referenceNumber,
         warehouseName: warehouses.name,
       }).from(inventoryAdjustments)
         .where(whereClause)
@@ -6192,6 +6277,8 @@ const inventoryRouter = router({
       costCenterId: z.number().optional().nullable(),
       customerId: z.number().optional().nullable(),
       referenceNumber: z.string().optional(),
+      /** حفظ معلق بدون حركة · اعتماد يرحّل المخزون والقيد */
+      confirm: z.boolean().default(true),
       items: z.array(z.object({ itemId: z.number(), quantity: z.string(), reason: z.string().optional() })),
     })).mutation(async ({ ctx, input }) => {
       await assertEntityAction(ctx, "inventory", "stockAdjustment", "add");
@@ -6202,16 +6289,19 @@ const inventoryRouter = router({
       assertWarehouseAccess(scope, input.warehouseId);
       const [countResult] = await db.select({ count: count() }).from(inventoryAdjustments).where(tenantWhere(inventoryAdjustments, ctx.tenantId));
       const number = `IA-${String(countResult.count + 1).padStart(5, "0")}`;
+      const status = input.confirm ? "confirmed" : "draft";
       const [result] = await db.insert(inventoryAdjustments).values(withTenantId(ctx.tenantId, {
         number, warehouseId: input.warehouseId, date: input.date as any,
-        reason: input.notes, status: "confirmed",
+        reason: input.notes, status,
         oppositeAccountId: input.oppositeAccountId ?? null,
         costCenterId: input.costCenterId ?? null,
         customerId: input.customerId ?? null,
         referenceNumber: input.referenceNumber || null,
+        createdBy: ctx.saasUser?.id,
       }) as any);
       const adjId = (result as any).insertId;
       const { applyStockMovement, getWarehouseItemQty } = await import("./inventory-stock");
+      let netInventoryValue = 0;
       for (const item of input.items) {
         const qty = Number(item.quantity);
         const currentQty = await getWarehouseItemQty(db, ctx.tenantId, item.itemId, input.warehouseId);
@@ -6224,14 +6314,83 @@ const inventoryRouter = router({
           newQty: String(newQty),
           difference: String(difference),
         }) as any);
-        await applyStockMovement(db, ctx.tenantId, {
-          itemId: item.itemId,
-          quantity: Math.abs(difference),
-          direction: difference >= 0 ? "in" : "out",
-          warehouseId: input.warehouseId,
+        if (input.confirm && difference !== 0) {
+          await applyStockMovement(db, ctx.tenantId, {
+            itemId: item.itemId,
+            quantity: Math.abs(difference),
+            direction: difference >= 0 ? "in" : "out",
+            warehouseId: input.warehouseId,
+          });
+          const [itemRow] = await db.select({
+            averageCost: items.averageCost,
+            purchasePrice: items.purchasePrice,
+          }).from(items).where(tenantWhere(items, ctx.tenantId, eq(items.id, item.itemId)));
+          const unitCost = Number(itemRow?.averageCost || itemRow?.purchasePrice || 0);
+          netInventoryValue += difference * unitCost;
+        }
+      }
+      if (input.confirm && input.oppositeAccountId && netInventoryValue !== 0) {
+        const { postInventoryAdjustmentJournal } = await import("./auto-journal");
+        await postInventoryAdjustmentJournal(db, ctx.tenantId, ctx.saasUser?.id, {
+          id: adjId,
+          number,
+          date: input.date,
+          oppositeAccountId: input.oppositeAccountId,
+          costCenterId: input.costCenterId,
+          netInventoryValue,
+          description: input.notes || `تسوية مخزنية ${number}`,
         });
       }
-      return { success: true, id: adjId, number };
+      return { success: true, id: adjId, number, status };
+    }),
+    confirm: protectedProcedure.input(z.object({ id: z.number() })).mutation(async ({ ctx, input }) => {
+      await assertEntityAction(ctx, "inventory", "stockAdjustment", "edit");
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const [row] = await db.select().from(inventoryAdjustments)
+        .where(tenantWhere(inventoryAdjustments, ctx.tenantId, eq(inventoryAdjustments.id, input.id)));
+      if (!row) throw new TRPCError({ code: "NOT_FOUND" });
+      if (row.status !== "draft") throw new TRPCError({ code: "BAD_REQUEST", message: "التسوية ليست معلقة" });
+      const adjDate = toDateStr(row.date);
+      await assertDateNotInClosedPeriod(db, ctx.tenantId, adjDate);
+      const scope = await loadUserScopeFromCtx(db, ctx.saasUser);
+      assertWarehouseAccess(scope, row.warehouseId);
+
+      const lines = await db.select().from(inventoryAdjustmentItems)
+        .where(tenantWhere(inventoryAdjustmentItems, ctx.tenantId, eq(inventoryAdjustmentItems.adjustmentId, row.id)));
+      const { applyStockMovement } = await import("./inventory-stock");
+      let netInventoryValue = 0;
+      for (const line of lines) {
+        const difference = Number(line.difference || 0);
+        if (difference === 0) continue;
+        await applyStockMovement(db, ctx.tenantId, {
+          itemId: line.itemId,
+          quantity: Math.abs(difference),
+          direction: difference >= 0 ? "in" : "out",
+          warehouseId: row.warehouseId,
+        });
+        const [itemRow] = await db.select({
+          averageCost: items.averageCost,
+          purchasePrice: items.purchasePrice,
+        }).from(items).where(tenantWhere(items, ctx.tenantId, eq(items.id, line.itemId)));
+        const unitCost = Number(itemRow?.averageCost || itemRow?.purchasePrice || 0);
+        netInventoryValue += difference * unitCost;
+      }
+      await db.update(inventoryAdjustments).set({ status: "confirmed" })
+        .where(tenantWhere(inventoryAdjustments, ctx.tenantId, eq(inventoryAdjustments.id, row.id)));
+      if (row.oppositeAccountId && netInventoryValue !== 0) {
+        const { postInventoryAdjustmentJournal } = await import("./auto-journal");
+        await postInventoryAdjustmentJournal(db, ctx.tenantId, ctx.saasUser?.id, {
+          id: row.id,
+          number: row.number,
+          date: adjDate,
+          oppositeAccountId: row.oppositeAccountId,
+          costCenterId: row.costCenterId,
+          netInventoryValue,
+          description: row.reason || `تسوية مخزنية ${row.number}`,
+        });
+      }
+      return { success: true };
     }),
   }),
 });
