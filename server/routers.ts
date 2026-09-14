@@ -5,6 +5,7 @@ import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
 import { getDb } from "./db";
 import {
   customers, suppliers, items, itemCategories, warehouses,
+  itemExtraPrices, itemExtraUnits,
   contactCategories, purchaseInvoices, salesInvoices, employees,
   departments, jobTitles, accounts, cashTransactions, bankTransactions,
   bankAccounts, checks, journalEntries, journalEntryLines,
@@ -1035,6 +1036,8 @@ const itemsRouter = router({
     salePrice: z.string().optional(),
     minPrice: z.string().optional(),
     maxPrice: z.string().optional(),
+    percentDiscount: z.string().optional(),
+    cashDiscount: z.string().optional(),
     minStock: z.string().optional(),
     taxRate: z.string().optional(),
     trackSerial: z.boolean().optional(),
@@ -1092,6 +1095,8 @@ const itemsRouter = router({
     salePrice: z.string().optional(),
     minPrice: z.string().optional(),
     maxPrice: z.string().optional(),
+    percentDiscount: z.string().optional(),
+    cashDiscount: z.string().optional(),
     minStock: z.string().optional(),
     taxRate: z.string().optional(),
     trackSerial: z.boolean().optional(),
@@ -1171,6 +1176,95 @@ const itemsRouter = router({
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     const { purgeItemsWithStock } = await import("./inventory-clean-import");
     return purgeItemsWithStock(db, ctx.tenantId!, input.itemIds);
+  }),
+  /** أسعار إضافية (نوع سعر + عملة) — تبويب ميجا */
+  extraPrices: router({
+    list: protectedProcedure.input(z.object({ itemId: z.number() })).query(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      return db.select().from(itemExtraPrices)
+        .where(tenantWhere(itemExtraPrices, ctx.tenantId, eq(itemExtraPrices.itemId, input.itemId)))
+        .orderBy(itemExtraPrices.id);
+    }),
+    set: protectedProcedure.input(z.object({
+      itemId: z.number(),
+      rows: z.array(z.object({
+        priceName: z.string().min(1),
+        currencyCode: z.string().optional(),
+        unit: z.string().optional(),
+        price: z.string(),
+        percentDiscount: z.string().optional(),
+        cashDiscount: z.string().optional(),
+      })),
+    })).mutation(async ({ ctx, input }) => {
+      // add أو edit — الحفظ بعد إنشاء صنف جديد يستخدم نفس المسار
+      try {
+        await assertEntityAction(ctx, "inventory", "item", "edit");
+      } catch {
+        await assertEntityAction(ctx, "inventory", "item", "add");
+      }
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const [item] = await db.select({ id: items.id }).from(items)
+        .where(tenantWhere(items, ctx.tenantId, eq(items.id, input.itemId)));
+      if (!item) throw new TRPCError({ code: "NOT_FOUND", message: "الصنف غير موجود" });
+      await db.delete(itemExtraPrices)
+        .where(tenantWhere(itemExtraPrices, ctx.tenantId, eq(itemExtraPrices.itemId, input.itemId)));
+      for (const row of input.rows) {
+        if (!row.priceName.trim()) continue;
+        await db.insert(itemExtraPrices).values(withTenantId(ctx.tenantId, {
+          itemId: input.itemId,
+          priceName: row.priceName.trim(),
+          currencyCode: row.currencyCode || "EGP",
+          unit: row.unit || null,
+          price: row.price || "0",
+          percentDiscount: row.percentDiscount || "0",
+          cashDiscount: row.cashDiscount || "0",
+        }) as any);
+      }
+      return { success: true };
+    }),
+  }),
+  /** وحدات قياس إضافية — تبويب ميجا */
+  extraUnits: router({
+    list: protectedProcedure.input(z.object({ itemId: z.number() })).query(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      return db.select().from(itemExtraUnits)
+        .where(tenantWhere(itemExtraUnits, ctx.tenantId, eq(itemExtraUnits.itemId, input.itemId)))
+        .orderBy(itemExtraUnits.id);
+    }),
+    set: protectedProcedure.input(z.object({
+      itemId: z.number(),
+      rows: z.array(z.object({
+        unit: z.string().min(1),
+        factorToBase: z.string(),
+        priceFactor: z.string().optional(),
+      })),
+    })).mutation(async ({ ctx, input }) => {
+      try {
+        await assertEntityAction(ctx, "inventory", "item", "edit");
+      } catch {
+        await assertEntityAction(ctx, "inventory", "item", "add");
+      }
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const [item] = await db.select({ id: items.id }).from(items)
+        .where(tenantWhere(items, ctx.tenantId, eq(items.id, input.itemId)));
+      if (!item) throw new TRPCError({ code: "NOT_FOUND", message: "الصنف غير موجود" });
+      await db.delete(itemExtraUnits)
+        .where(tenantWhere(itemExtraUnits, ctx.tenantId, eq(itemExtraUnits.itemId, input.itemId)));
+      for (const row of input.rows) {
+        if (!row.unit.trim()) continue;
+        await db.insert(itemExtraUnits).values(withTenantId(ctx.tenantId, {
+          itemId: input.itemId,
+          unit: row.unit.trim(),
+          factorToBase: row.factorToBase || "1",
+          priceFactor: row.priceFactor || "1",
+        }) as any);
+      }
+      return { success: true };
+    }),
   }),
   categories: protectedProcedure.query(async ({ ctx }) => {
     // مصدر بيانات مشترك (اختيار فئة صنف) — مش مقيّد هنا.

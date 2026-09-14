@@ -38,6 +38,8 @@ export const TENANT_WIPE_TABLES_CHILD_FIRST: string[] = [
   "production_order_materials",
   "production_orders",
   "item_bom_lines",
+  "item_extra_prices",
+  "item_extra_units",
   "item_serials",
   "item_batches",
   "item_offers",

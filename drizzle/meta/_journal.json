@@ -428,6 +428,13 @@
       "when": 1787900000000,
       "tag": "0060_stock_transfer_expenses",
       "breakpoints": true
+    },
+    {
+      "idx": 61,
+      "version": "5",
+      "when": 1788000000000,
+      "tag": "0061_item_extra_prices_units",
+      "breakpoints": true
     }
   ]
 }

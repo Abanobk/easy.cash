@@ -190,6 +190,9 @@ export const items = mysqlTable("items", {
   salePrice: decimal("salePrice", { precision: 15, scale: 2 }).default("0"),
   minPrice: decimal("minPrice", { precision: 15, scale: 2 }).default("0"),
   maxPrice: decimal("maxPrice", { precision: 15, scale: 2 }).default("0"),
+  /** خصم نسبة / خصم نقدي على بطاقة الصنف — مطابقة ميجا */
+  percentDiscount: decimal("percentDiscount", { precision: 8, scale: 2 }).default("0"),
+  cashDiscount: decimal("cashDiscount", { precision: 15, scale: 2 }).default("0"),
   minStock: decimal("minStock", { precision: 15, scale: 3 }).default("0"),
   currentStock: decimal("currentStock", { precision: 15, scale: 3 }).default("0"),
   taxRate: decimal("taxRate", { precision: 5, scale: 2 }).default("0"),
@@ -198,6 +201,29 @@ export const items = mysqlTable("items", {
   isActive: boolean("isActive").default(true),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+/** أسعار إضافية للصنف (نوع سعر + عملة) — تبويب «الأسعار الإضافية» في ميجا */
+export const itemExtraPrices = mysqlTable("item_extra_prices", {
+  id: int("id").autoincrement().primaryKey(),
+  tenantId: int("tenantId").notNull().default(1),
+  itemId: int("itemId").notNull(),
+  priceName: varchar("priceName", { length: 100 }).notNull(),
+  currencyCode: varchar("currencyCode", { length: 10 }).default("EGP"),
+  unit: varchar("unit", { length: 50 }),
+  price: decimal("price", { precision: 15, scale: 2 }).notNull().default("0"),
+  percentDiscount: decimal("percentDiscount", { precision: 8, scale: 2 }).default("0"),
+  cashDiscount: decimal("cashDiscount", { precision: 15, scale: 2 }).default("0"),
+});
+
+/** وحدات قياس إضافية للصنف — تبويب «وحدات القياس الإضافية» في ميجا */
+export const itemExtraUnits = mysqlTable("item_extra_units", {
+  id: int("id").autoincrement().primaryKey(),
+  tenantId: int("tenantId").notNull().default(1),
+  itemId: int("itemId").notNull(),
+  unit: varchar("unit", { length: 50 }).notNull(),
+  factorToBase: decimal("factorToBase", { precision: 15, scale: 6 }).notNull().default("1"),
+  priceFactor: decimal("priceFactor", { precision: 15, scale: 6 }).default("1"),
 });
 
 // ===================== ITEM WAREHOUSE STOCK =====================

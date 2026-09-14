@@ -45,6 +45,8 @@ const emptyForm = {
   salePrice: "",
   minPrice: "",
   maxPrice: "",
+  percentDiscount: "",
+  cashDiscount: "",
   minStock: "",
   taxRate: "",
   description: "",
@@ -61,6 +63,41 @@ const MEGA_ITEM_TYPES = [
   "صنف مركب",
   "صنف وكالة",
 ] as const;
+
+/** أسماء أسعار شائعة — في المصدر autocomplete حر */
+const COMMON_PRICE_NAMES = ["سعر البيع", "سعر الجملة", "سعر القطاعي", "سعر التصدير", "سعر خاص"];
+const CURRENCY_OPTIONS = [
+  { code: "EGP", label: "جنيه مصري" },
+  { code: "USD", label: "دولار امريكي" },
+  { code: "EUR", label: "يورو" },
+  { code: "SAR", label: "ريال سعودي" },
+  { code: "AED", label: "درهم اماراتي" },
+  { code: "KWD", label: "دينار كويتي" },
+  { code: "GBP", label: "جنيه استرليني" },
+  { code: "SDG", label: "جنيه سوداني" },
+  { code: "MAD", label: "درهم مغربي" },
+  { code: "JOD", label: "دينار اردني" },
+  { code: "IQD", label: "دينار عراقي" },
+  { code: "LYD", label: "دينار ليبي" },
+  { code: "RUB", label: "روبل روسي" },
+  { code: "INR", label: "روبية هندي" },
+];
+
+type ExtraPriceRow = {
+  key: string;
+  priceName: string;
+  currencyCode: string;
+  unit: string;
+  price: string;
+  percentDiscount: string;
+  cashDiscount: string;
+};
+type ExtraUnitRow = {
+  key: string;
+  unit: string;
+  factorToBase: string;
+  priceFactor: string;
+};
 
 const emptyComp = { barcode: "", itemId: "", quantity: "1", unit: "" };
 
@@ -178,6 +215,8 @@ export default function ItemDetail() {
   const [compForm, setCompForm] = useState(emptyComp);
   const [compLines, setCompLines] = useState<BomLine[]>([]);
   const [editingCompKey, setEditingCompKey] = useState<string | null>(null);
+  const [extraPrices, setExtraPrices] = useState<ExtraPriceRow[]>([]);
+  const [extraUnits, setExtraUnits] = useState<ExtraUnitRow[]>([]);
 
   const itemQ = trpc.items.byId.useQuery(editId!, { enabled: !!editId && !Number.isNaN(editId) });
   const { data: categories } = trpc.items.categories.useQuery();
@@ -185,6 +224,14 @@ export default function ItemDetail() {
   const catalogQ = trpc.items.all.useQuery();
   const bomQ = trpc.production.bom.get.useQuery(
     { productId: editId! },
+    { enabled: !!editId && !Number.isNaN(editId) },
+  );
+  const extraPricesQ = trpc.items.extraPrices.list.useQuery(
+    { itemId: editId! },
+    { enabled: !!editId && !Number.isNaN(editId) },
+  );
+  const extraUnitsQ = trpc.items.extraUnits.list.useQuery(
+    { itemId: editId! },
     { enabled: !!editId && !Number.isNaN(editId) },
   );
 
@@ -199,12 +246,16 @@ export default function ItemDetail() {
    * لسه ما اتحفظتش من غير ما هو حاسس، وتخلي الحفظ يبعت القيم القديمة بدل الجديدة.
    */
   const syncedForId = useRef<number | null | undefined>(undefined);
+  const extrasSyncedForId = useRef<number | null | undefined>(undefined);
   useEffect(() => {
     if (isNew) {
       if (syncedForId.current !== null) {
         syncedForId.current = null;
+        extrasSyncedForId.current = null;
         setForm({ ...emptyForm, unit: defaultUnit });
         setCompLines([]);
+        setExtraPrices([]);
+        setExtraUnits([]);
       }
       return;
     }
@@ -225,12 +276,35 @@ export default function ItemDetail() {
       salePrice: row.salePrice || "",
       minPrice: (row as any).minPrice || "",
       maxPrice: (row as any).maxPrice || "",
+      percentDiscount: (row as any).percentDiscount || "",
+      cashDiscount: (row as any).cashDiscount || "",
       minStock: row.minStock || "",
       taxRate: row.taxRate || "",
       description: row.description || "",
       trackSerial: Boolean(row.trackSerial),
     });
   }, [isNew, itemQ.data, editId, defaultUnit]);
+
+  useEffect(() => {
+    if (isNew || !extraPricesQ.data || !extraUnitsQ.data) return;
+    if (extrasSyncedForId.current === editId) return;
+    extrasSyncedForId.current = editId;
+    setExtraPrices(extraPricesQ.data.map((r: any) => ({
+      key: `p-${r.id}`,
+      priceName: r.priceName || "",
+      currencyCode: r.currencyCode || "EGP",
+      unit: r.unit || "",
+      price: String(r.price ?? "0"),
+      percentDiscount: String(r.percentDiscount ?? "0"),
+      cashDiscount: String(r.cashDiscount ?? "0"),
+    })));
+    setExtraUnits(extraUnitsQ.data.map((r: any) => ({
+      key: `u-${r.id}`,
+      unit: r.unit || "",
+      factorToBase: String(r.factorToBase ?? "1"),
+      priceFactor: String(r.priceFactor ?? "1"),
+    })));
+  }, [extraPricesQ.data, extraUnitsQ.data, isNew, editId]);
 
   useEffect(() => {
     if (!bomQ.data) return;
@@ -264,9 +338,10 @@ export default function ItemDetail() {
   const createMut = trpc.items.create.useMutation({
     onSuccess: async (res) => {
       toast.success(res?.code ? `تم إضافة الصنف — الكود ${res.code}` : "تم إضافة الصنف");
-      if (res.id && compLines.length) {
+      if (res.id) {
         try {
-          await persistBom(res.id, compLines);
+          if (compLines.length) await persistBom(res.id, compLines);
+          await persistExtras(res.id);
         } catch {
           /* toast from mutation */
         }
@@ -281,15 +356,51 @@ export default function ItemDetail() {
       if (editId) {
         try {
           await persistBom(editId, compLines);
-          toast.success("تم حفظ المكونات");
+          await persistExtras(editId);
+          toast.success("تم حفظ المكونات والأسعار/الوحدات");
         } catch {
           /* toast from mutation */
         }
       }
+      extrasSyncedForId.current = null; // اسمح بإعادة مزامنة الأسعار/الوحدات بعد الحفظ
       void itemQ.refetch();
+      void extraPricesQ.refetch();
+      void extraUnitsQ.refetch();
     },
     onError: (err) => toast.error(err.message || "فشل تحديث الصنف"),
   });
+  const setExtraPricesMut = trpc.items.extraPrices.set.useMutation({
+    onError: (e) => toast.error(e.message),
+  });
+  const setExtraUnitsMut = trpc.items.extraUnits.set.useMutation({
+    onError: (e) => toast.error(e.message),
+  });
+
+  const persistExtras = useCallback(async (itemId: number) => {
+    await setExtraPricesMut.mutateAsync({
+      itemId,
+      rows: extraPrices
+        .filter((r) => r.priceName.trim())
+        .map((r) => ({
+          priceName: r.priceName.trim(),
+          currencyCode: r.currencyCode || "EGP",
+          unit: r.unit || undefined,
+          price: r.price || "0",
+          percentDiscount: r.percentDiscount || "0",
+          cashDiscount: r.cashDiscount || "0",
+        })),
+    });
+    await setExtraUnitsMut.mutateAsync({
+      itemId,
+      rows: extraUnits
+        .filter((r) => r.unit.trim())
+        .map((r) => ({
+          unit: r.unit.trim(),
+          factorToBase: r.factorToBase || "1",
+          priceFactor: r.priceFactor || "1",
+        })),
+    });
+  }, [extraPrices, extraUnits, setExtraPricesMut, setExtraUnitsMut]);
 
   const applyComponentItem = (item: ItemOpt | null) => {
     if (!item) {
@@ -437,6 +548,8 @@ export default function ItemDetail() {
       salePrice: form.salePrice.trim() || undefined,
       minPrice: form.minPrice.trim() || undefined,
       maxPrice: form.maxPrice.trim() || undefined,
+      percentDiscount: form.percentDiscount.trim() || undefined,
+      cashDiscount: form.cashDiscount.trim() || undefined,
       minStock: form.minStock.trim() || undefined,
       taxRate: form.taxRate.trim() || undefined,
       description: form.description.trim() || undefined,
@@ -654,6 +767,14 @@ export default function ItemDetail() {
                 <Input value={form.maxPrice} onChange={f("maxPrice")} type="number" placeholder="0.00" className={entryControlClass} />
               </div>
               <div>
+                <FieldLabel>خصم نسبة</FieldLabel>
+                <Input value={form.percentDiscount} onChange={f("percentDiscount")} type="number" placeholder="0" className={entryControlClass} />
+              </div>
+              <div>
+                <FieldLabel>خصم نقدي</FieldLabel>
+                <Input value={form.cashDiscount} onChange={f("cashDiscount")} type="number" placeholder="0.00" className={entryControlClass} />
+              </div>
+              <div>
                 <FieldLabel>نسبة الضريبة %</FieldLabel>
                 <Input value={form.taxRate} onChange={f("taxRate")} type="number" placeholder="0" className={entryControlClass} />
               </div>
@@ -662,19 +783,171 @@ export default function ItemDetail() {
         )}
 
         {tab === "prices" && (
-          <FormBanner tone="info">
-            <p className="text-sm text-slate-700">
-              أسعار البيع/الشراء الأساسية في تبويب «البيانات الأساسية». تعدد قوائم الأسعار (جملة/قطاعي حسب العميل) هيتعمل في خطوة لاحقة بنفس أسلوب الشاشة المرجعية.
-            </p>
-          </FormBanner>
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <p className="text-sm text-slate-600">أسعار إضافية بنوع السعر والعملة والخصم — تُحفظ مع بطاقة الصنف.</p>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-8 text-xs gap-1"
+                onClick={() => setExtraPrices((p) => [...p, {
+                  key: `np-${Date.now()}`,
+                  priceName: "سعر الجملة",
+                  currencyCode: "EGP",
+                  unit: form.unit || "",
+                  price: "",
+                  percentDiscount: "0",
+                  cashDiscount: "0",
+                }])}
+              >
+                <Plus size={12} /> إضافة سعر
+              </Button>
+            </div>
+            <datalist id="item-price-name-suggestions">
+              {COMMON_PRICE_NAMES.map((n) => <option key={n} value={n} />)}
+            </datalist>
+            <div className="border rounded-lg overflow-hidden">
+              <table className="w-full text-sm">
+                <thead className="bg-slate-50">
+                  <tr>
+                    <th className="px-2 py-2 text-right text-xs">نوع السعر</th>
+                    <th className="px-2 py-2 text-right text-xs">العملة</th>
+                    <th className="px-2 py-2 text-right text-xs">وحدة القياس</th>
+                    <th className="px-2 py-2 text-right text-xs">السعر</th>
+                    <th className="px-2 py-2 text-right text-xs">خصم %</th>
+                    <th className="px-2 py-2 text-right text-xs">خصم نقدي</th>
+                    <th />
+                  </tr>
+                </thead>
+                <tbody>
+                  {extraPrices.length === 0 && (
+                    <tr><td colSpan={7} className="px-3 py-6 text-center text-slate-400 text-xs">لا توجد أسعار إضافية</td></tr>
+                  )}
+                  {extraPrices.map((row, idx) => (
+                    <tr key={row.key} className="border-t">
+                      <td className="p-1">
+                        <Input
+                          className="h-8 text-xs min-w-[7rem]"
+                          list="item-price-name-suggestions"
+                          placeholder="نوع السعر"
+                          value={row.priceName}
+                          onChange={(e) => setExtraPrices((rows) => rows.map((r, i) => i === idx ? { ...r, priceName: e.target.value } : r))}
+                        />
+                      </td>
+                      <td className="p-1">
+                        <Select
+                          value={row.currencyCode || "EGP"}
+                          onValueChange={(v) => setExtraPrices((rows) => rows.map((r, i) => i === idx ? { ...r, currencyCode: v } : r))}
+                        >
+                          <SelectTrigger className="h-8 text-xs w-36"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            {CURRENCY_OPTIONS.map((c) => <SelectItem key={c.code} value={c.code}>{c.label}</SelectItem>)}
+                          </SelectContent>
+                        </Select>
+                      </td>
+                      <td className="p-1">
+                        <Select
+                          value={row.unit || undefined}
+                          onValueChange={(v) => setExtraPrices((rows) => rows.map((r, i) => i === idx ? { ...r, unit: v } : r))}
+                        >
+                          <SelectTrigger className="h-8 text-xs w-28"><SelectValue placeholder="الوحدة" /></SelectTrigger>
+                          <SelectContent>
+                            {row.unit && !unitOptions.includes(row.unit) && (
+                              <SelectItem value={row.unit}>{row.unit}</SelectItem>
+                            )}
+                            {unitOptions.map((u) => <SelectItem key={u} value={u}>{u}</SelectItem>)}
+                          </SelectContent>
+                        </Select>
+                      </td>
+                      <td className="p-1">
+                        <Input type="number" className="h-8 text-xs w-24" value={row.price} onChange={(e) => setExtraPrices((rows) => rows.map((r, i) => i === idx ? { ...r, price: e.target.value } : r))} />
+                      </td>
+                      <td className="p-1">
+                        <Input type="number" className="h-8 text-xs w-20" value={row.percentDiscount} onChange={(e) => setExtraPrices((rows) => rows.map((r, i) => i === idx ? { ...r, percentDiscount: e.target.value } : r))} />
+                      </td>
+                      <td className="p-1">
+                        <Input type="number" className="h-8 text-xs w-24" value={row.cashDiscount} onChange={(e) => setExtraPrices((rows) => rows.map((r, i) => i === idx ? { ...r, cashDiscount: e.target.value } : r))} />
+                      </td>
+                      <td className="p-1">
+                        <Button type="button" variant="ghost" size="sm" className="h-7 w-7 p-0 text-red-500" onClick={() => setExtraPrices((rows) => rows.filter((_, i) => i !== idx))}>
+                          <Trash2 size={12} />
+                        </Button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
         )}
 
         {tab === "units" && (
-          <FormBanner tone="info">
-            <p className="text-sm text-slate-700">
-              الوحدة الأساسية من خصائص عامة. تعدد الوحدات للصنف الواحد (كرتونة = N قطعة) هيتعمل لاحقاً مع سيريل نمبر لكل وحدة.
-            </p>
-          </FormBanner>
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <p className="text-sm text-slate-600">وحدات قياس إضافية ونسبتها للوحدة الأساسية ونسبة السعر.</p>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-8 text-xs gap-1"
+                onClick={() => setExtraUnits((u) => [...u, {
+                  key: `nu-${Date.now()}`,
+                  unit: "",
+                  factorToBase: "1",
+                  priceFactor: "1",
+                }])}
+              >
+                <Plus size={12} /> إضافة وحدة
+              </Button>
+            </div>
+            <div className="border rounded-lg overflow-hidden">
+              <table className="w-full text-sm">
+                <thead className="bg-slate-50">
+                  <tr>
+                    <th className="px-2 py-2 text-right text-xs">وحدة القياس الإضافية</th>
+                    <th className="px-2 py-2 text-right text-xs">النسبة الى وحدة القياس الاساسية</th>
+                    <th className="px-2 py-2 text-right text-xs">نسبة السعر</th>
+                    <th />
+                  </tr>
+                </thead>
+                <tbody>
+                  {extraUnits.length === 0 && (
+                    <tr><td colSpan={4} className="px-3 py-6 text-center text-slate-400 text-xs">لا توجد وحدات إضافية</td></tr>
+                  )}
+                  {extraUnits.map((row, idx) => (
+                    <tr key={row.key} className="border-t">
+                      <td className="p-1">
+                        <Select
+                          value={row.unit || undefined}
+                          onValueChange={(v) => setExtraUnits((rows) => rows.map((r, i) => i === idx ? { ...r, unit: v } : r))}
+                        >
+                          <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="اختر الوحدة" /></SelectTrigger>
+                          <SelectContent>
+                            {row.unit && !unitOptions.includes(row.unit) && (
+                              <SelectItem value={row.unit}>{row.unit}</SelectItem>
+                            )}
+                            {unitOptions.map((u) => <SelectItem key={u} value={u}>{u}</SelectItem>)}
+                          </SelectContent>
+                        </Select>
+                      </td>
+                      <td className="p-1">
+                        <Input type="number" className="h-8 text-xs w-32" value={row.factorToBase} onChange={(e) => setExtraUnits((rows) => rows.map((r, i) => i === idx ? { ...r, factorToBase: e.target.value } : r))} />
+                      </td>
+                      <td className="p-1">
+                        <Input type="number" className="h-8 text-xs w-32" value={row.priceFactor} onChange={(e) => setExtraUnits((rows) => rows.map((r, i) => i === idx ? { ...r, priceFactor: e.target.value } : r))} />
+                      </td>
+                      <td className="p-1">
+                        <Button type="button" variant="ghost" size="sm" className="h-7 w-7 p-0 text-red-500" onClick={() => setExtraUnits((rows) => rows.filter((_, i) => i !== idx))}>
+                          <Trash2 size={12} />
+                        </Button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
         )}
 
         {tab === "minmax" && (
