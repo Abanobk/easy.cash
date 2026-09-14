@@ -102,6 +102,7 @@ type ExtraUnitRow = {
   unit: string;
   factorToBase: string;
   priceFactor: string;
+  barcode: string;
 };
 type WarehouseMinRow = {
   key: string;
@@ -325,10 +326,11 @@ export default function ItemDetail() {
       cashDiscount: String(r.cashDiscount ?? "0"),
     })));
     setExtraUnits(extraUnitsQ.data.map((r: any) => ({
-      key: `u-${r.id}`,
+      key: `eu-${r.id}`,
       unit: r.unit || "",
       factorToBase: String(r.factorToBase ?? "1"),
       priceFactor: String(r.priceFactor ?? "1"),
+      barcode: r.barcode || "",
     })));
   }, [extraPricesQ.data, extraUnitsQ.data, isNew, editId]);
 
@@ -461,6 +463,7 @@ export default function ItemDetail() {
           unit: r.unit.trim(),
           factorToBase: r.factorToBase || "1",
           priceFactor: r.priceFactor || "1",
+          barcode: r.barcode || null,
         })),
     });
     const whRows = warehouseMins.filter((r) => {
@@ -1037,6 +1040,7 @@ export default function ItemDetail() {
                   unit: "",
                   factorToBase: "1",
                   priceFactor: "1",
+                  barcode: "",
                 }])}
               >
                 <Plus size={12} /> إضافة وحدة
@@ -1047,6 +1051,7 @@ export default function ItemDetail() {
                 <thead className="bg-slate-50">
                   <tr>
                     <th className="px-2 py-2 text-right text-xs">وحدة القياس الإضافية</th>
+                    <th className="px-2 py-2 text-right text-xs">الباركود</th>
                     <th className="px-2 py-2 text-right text-xs">النسبة الى وحدة القياس الاساسية</th>
                     <th className="px-2 py-2 text-right text-xs">نسبة السعر</th>
                     <th />
@@ -1054,7 +1059,7 @@ export default function ItemDetail() {
                 </thead>
                 <tbody>
                   {extraUnits.length === 0 && (
-                    <tr><td colSpan={4} className="px-3 py-6 text-center text-slate-400 text-xs">لا توجد وحدات إضافية</td></tr>
+                    <tr><td colSpan={5} className="px-3 py-6 text-center text-slate-400 text-xs">لا توجد وحدات إضافية</td></tr>
                   )}
                   {extraUnits.map((row, idx) => (
                     <tr key={row.key} className="border-t">
@@ -1071,6 +1076,9 @@ export default function ItemDetail() {
                             {unitOptions.map((u) => <SelectItem key={u} value={u}>{u}</SelectItem>)}
                           </SelectContent>
                         </Select>
+                      </td>
+                      <td className="p-1">
+                        <Input className="h-8 text-xs w-36" value={row.barcode} onChange={(e) => setExtraUnits((rows) => rows.map((r, i) => i === idx ? { ...r, barcode: e.target.value } : r))} placeholder="باركود الوحدة" />
                       </td>
                       <td className="p-1">
                         <Input type="number" className="h-8 text-xs w-32" value={row.factorToBase} onChange={(e) => setExtraUnits((rows) => rows.map((r, i) => i === idx ? { ...r, factorToBase: e.target.value } : r))} />
@@ -1148,7 +1156,13 @@ export default function ItemDetail() {
         )}
 
         {tab === "components" && (
+
           <div className="space-y-4">
+            {(form.itemType === "مجموعة / طقم" || form.itemType === "صنف مركب" || String(form.itemType || "").includes("طقم")) && (
+              <p className="text-xs text-amber-800 bg-amber-50 border border-amber-100 rounded px-2 py-1.5">
+                أصناف المجموعة/الطقم/المركب تستخدم تبويب المكونات كوصفة BOM (مطابقة ميجا). تفجير المكونات تلقائياً في فاتورة البيع ما زال خارج هذه الموجة.
+              </p>
+            )}
             {isNew && (
               <FormBanner tone="warn">
                 <p className="text-sm">تقدر تضيف المكونات الآن، وهتتحفظ مع أول حفظ للصنف. أو احفظ الصنف أولاً ثم أضف المكونات مباشرة.</p>

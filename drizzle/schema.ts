@@ -230,6 +230,8 @@ export const itemExtraUnits = mysqlTable("item_extra_units", {
   unit: varchar("unit", { length: 50 }).notNull(),
   factorToBase: decimal("factorToBase", { precision: 15, scale: 6 }).notNull().default("1"),
   priceFactor: decimal("priceFactor", { precision: 15, scale: 6 }).default("1"),
+  /** باركود الوحدة الإضافية — مطابقة ميجا txtUnitBarcode */
+  barcode: varchar("barcode", { length: 100 }),
 });
 
 // ===================== ITEM WAREHOUSE STOCK =====================
@@ -907,8 +909,11 @@ export const inventoryAdjustments = mysqlTable("inventory_adjustments", {
   costCenterId: int("costCenterId"),
   customerId: int("customerId"),
   referenceNumber: varchar("referenceNumber", { length: 100 }),
+  /** فرع رأس المستند — مطابقة ميجا InventoryCorrection */
+  branchId: int("branchId"),
   status: mysqlEnum("status", ["draft", "confirmed", "cancelled"]).default("draft"),
   createdBy: int("createdBy"),
+  approvedBy: int("approvedBy"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
 
@@ -926,6 +931,8 @@ export const inventoryAdjustmentItems = mysqlTable("inventory_adjustment_items",
   batchNumber: varchar("batchNumber", { length: 100 }),
   productionDate: date("productionDate"),
   expiryDate: date("expiryDate"),
+  unit: varchar("unit", { length: 50 }),
+  notes: text("notes"),
 });
 
 // ===================== STOCK TRANSFERS =====================
@@ -946,6 +953,7 @@ export const stockTransfers = mysqlTable("stock_transfers", {
   receivedAt: date("receivedAt"),
   notes: text("notes"),
   createdBy: int("createdBy"),
+  approvedBy: int("approvedBy"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
 
@@ -961,6 +969,8 @@ export const stockTransferItems = mysqlTable("stock_transfer_items", {
   batchNumber: varchar("batchNumber", { length: 100 }),
   /** نسبة المصروفات على السطر — مطابقة ميجا */
   expensePercent: decimal("expensePercent", { precision: 8, scale: 3 }).default("0"),
+  unit: varchar("unit", { length: 50 }),
+  notes: text("notes"),
 });
 
 export const stockTransferExpenses = mysqlTable("stock_transfer_expenses", {
@@ -1363,8 +1373,12 @@ export const beginningInventory = mysqlTable("beginning_inventory", {
   referenceNumber: varchar("referenceNumber", { length: 100 }),
   notes: text("notes"),
   batchNumber: varchar("batchNumber", { length: 100 }),
+  /** مسلسل مستند ميجا BeginingInventory */
+  documentNumber: varchar("documentNumber", { length: 50 }),
   /** draft=معلق بدون حركة · confirmed=معتمد مرحّل للمخزن */
   status: mysqlEnum("status", ["draft", "confirmed"]).default("confirmed").notNull(),
+  createdBy: int("createdBy"),
+  approvedBy: int("approvedBy"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
 
@@ -1463,6 +1477,19 @@ export const employeeVacationRecords = mysqlTable("employee_vacation_records", {
   days: int("days").default(0),
   status: mysqlEnum("status", ["pending", "approved", "rejected", "cancelled"]).default("approved").notNull(),
   notes: text("notes"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+// ===================== DOCUMENT COMMENTS (ميجا: اضافة تعليق) =====================
+export const documentComments = mysqlTable("document_comments", {
+  id: int("id").autoincrement().primaryKey(),
+  tenantId: int("tenantId").notNull().default(1),
+  /** inventory_adjustment | stock_transfer | beginning_inventory | item | warehouse | ... */
+  documentType: varchar("documentType", { length: 50 }).notNull(),
+  documentId: int("documentId").notNull(),
+  documentNumber: varchar("documentNumber", { length: 50 }),
+  body: text("body").notNull(),
+  createdBy: int("createdBy"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
 

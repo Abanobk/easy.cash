@@ -9,11 +9,11 @@ import {
   exchangeRates, generalAttributes, measureUnits, fiscalYears, userActivities, cities, companyAddresses,
   hrShifts, hrVacations, employeeShifts, hrIncentives, underRequestEmployees,
   fingerprintMachines, mobileFpLocations, hrSystems, hrDepEmpSystems, machinePunches,
-  itemBatches, itemOffers, itemPriceChanges, beginningInventory, itemSerials,
+  itemBatches, itemOffers, itemPriceChanges, beginningInventory, itemSerials, itemExtraPrices, itemExtraUnits,
   assetCategories, assetCapitalMaintenance, assetSales, salesAreas,
   items, customers, employees, attendance, itemCategories, fixedAssets,
   employeeVacationRecords, departments, warehouses, suppliers, branches,
-  salesInvoices, purchaseInvoices, itemWarehouseStock,
+  salesInvoices, purchaseInvoices, purchaseInvoiceItems, itemWarehouseStock,
 } from "../drizzle/schema";
 import { isInsideGeofence, syncMachineFromTcp, syncMachinePunches, testMachineTcpConnection, upsertDailyAttendance } from "./hr-attendance";
 import { postAssetSaleJournal, cancelPostedJournalByReference, postHrIncentiveJournal } from "./auto-journal";
@@ -1104,6 +1104,11 @@ export const inventoryExtendedRouter = router({
       /** متوسط التكلفة من فرع / مخزن — مطابقة ميجا PriceChanger */
       avgFromBranchId: z.number().optional(),
       avgFromWarehouseId: z.number().optional(),
+      /** نوع السعر المستهدف / من نوع السعر / عملة — تطبق على item_extra_prices عند التعيين */
+      targetPriceName: z.string().optional(),
+      fromPriceName: z.string().optional(),
+      currencyCode: z.string().optional(),
+      extraUnit: z.string().optional(),
       filter: z.object({
         categoryId: z.number().optional(),
         altCategoryId: z.number().optional(),
@@ -1111,6 +1116,8 @@ export const inventoryExtendedRouter = router({
         search: z.string().optional(),
         priceStatus: z.enum(["lt_avg", "eq_avg", "gt_avg"]).optional(),
         withStockOnly: z.boolean().optional(),
+        taxRate: z.string().optional(),
+        purchaseInvoiceNumber: z.string().optional(),
       }).optional(),
       rows: z.array(z.object({ itemId: z.number(), newPrice: z.string().optional() })).optional(),
     })).mutation(async ({ ctx, input }) => {
@@ -1150,6 +1157,19 @@ export const inventoryExtendedRouter = router({
         }
       }
 
+      /** أسعار مسماة لكل صنف: priceName|currency|unit -> price */
+      const namedPriceMap = new Map<string, string>();
+      if (input.targetPriceName || input.fromPriceName || input.currencyCode || input.extraUnit) {
+        const namedRows = await db.select().from(itemExtraPrices)
+          .where(tenantWhere(itemExtraPrices, ctx.tenantId));
+        for (const r of namedRows) {
+          const key = `${r.itemId}|${(r.priceName || "").trim()}|${(r.currencyCode || "EGP").trim()}|${(r.unit || "").trim()}`;
+          namedPriceMap.set(key, String(r.price || "0"));
+        }
+      }
+      const namedKey = (itemId: number, priceName: string) =>
+        `${itemId}|${priceName.trim()}|${(input.currencyCode || "EGP").trim()}|${(input.extraUnit || "").trim()}`;
+
       const fieldOf = (it: typeof items.$inferSelect, kind: string) => {
         if (kind === "purchase") return it.purchasePrice;
         if (kind === "avg") {
@@ -1162,6 +1182,10 @@ export const inventoryExtendedRouter = router({
         if (kind === "percent_discount") return it.percentDiscount;
         if (kind === "cash_discount") return it.cashDiscount;
         return it.salePrice;
+      };
+      const baseFromNamed = (itemId: number) => {
+        if (!input.fromPriceName?.trim()) return null;
+        return namedPriceMap.get(namedKey(itemId, input.fromPriceName)) ?? null;
       };
       const setField = (price: string) => {
         if (input.priceType === "purchase") return { purchasePrice: price };
@@ -1206,6 +1230,22 @@ export const inventoryExtendedRouter = router({
             return price > avg;
           });
         }
+        if (input.filter?.taxRate != null && String(input.filter.taxRate).trim() !== "") {
+          const tr = Number(input.filter.taxRate);
+          targetItems = targetItems.filter((it) => Math.abs(Number(it.taxRate || 0) - tr) < 0.0001
+            || Math.abs(Number((it as any).taxRate2 || 0) - tr) < 0.0001
+            || Math.abs(Number((it as any).taxRate3 || 0) - tr) < 0.0001);
+        }
+        if (input.filter?.purchaseInvoiceNumber?.trim()) {
+          const q = `%${input.filter.purchaseInvoiceNumber.trim()}%`;
+          const invHits = await db.select({
+            itemId: purchaseInvoiceItems.itemId,
+          }).from(purchaseInvoiceItems)
+            .innerJoin(purchaseInvoices, eq(purchaseInvoiceItems.invoiceId, purchaseInvoices.id))
+            .where(tenantWhere(purchaseInvoices, ctx.tenantId, like(purchaseInvoices.number, q)));
+          const allowed = new Set(invHits.map((r) => r.itemId));
+          targetItems = targetItems.filter((it) => allowed.has(it.id));
+        }
       }
 
       let updated = 0;
@@ -1216,8 +1256,9 @@ export const inventoryExtendedRouter = router({
           if (input.mode === "percent") {
             const pct = Number(input.value);
             if (!Number.isFinite(pct)) continue;
+            const namedBase = baseFromNamed(item.id);
             const baseKind = input.editFrom || input.priceType;
-            const base = Number(fieldOf(item, baseKind) || 0);
+            const base = namedBase != null ? Number(namedBase) : Number(fieldOf(item, baseKind) || 0);
             newPrice = input.percentOnly
               ? roundTo(base * (pct / 100))
               : roundTo(base * (1 + pct / 100));
@@ -1230,16 +1271,53 @@ export const inventoryExtendedRouter = router({
           newPrice = roundTo(Number(newPrice));
         }
         if (!newPrice) continue;
-        const oldPrice = fieldOf(item, input.priceType) || "0";
-        const logType = input.priceType === "purchase" ? "purchase" : "sale";
-        await db.insert(itemPriceChanges).values(withTenantId(ctx.tenantId, {
-          itemId: item.id,
-          oldPrice,
-          newPrice,
-          priceType: logType,
-          date: input.date,
-        }) as any);
-        await db.update(items).set(setField(newPrice) as any).where(tenantWhere(items, ctx.tenantId, eq(items.id, item.id)));
+
+        if (input.targetPriceName?.trim()) {
+          const priceName = input.targetPriceName.trim();
+          const currencyCode = input.currencyCode || "EGP";
+          const unit = input.extraUnit || null;
+          const existing = await db.select().from(itemExtraPrices).where(tenantWhere(
+            itemExtraPrices,
+            ctx.tenantId,
+            and(
+              eq(itemExtraPrices.itemId, item.id),
+              eq(itemExtraPrices.priceName, priceName),
+              eq(itemExtraPrices.currencyCode, currencyCode),
+              unit ? eq(itemExtraPrices.unit, unit) : sql`(${itemExtraPrices.unit} is null or ${itemExtraPrices.unit} = '')`,
+            ) as any,
+          ));
+          const oldPrice = existing[0]?.price || "0";
+          if (existing[0]) {
+            await db.update(itemExtraPrices).set({ price: newPrice } as any)
+              .where(tenantWhere(itemExtraPrices, ctx.tenantId, eq(itemExtraPrices.id, existing[0].id)));
+          } else {
+            await db.insert(itemExtraPrices).values(withTenantId(ctx.tenantId, {
+              itemId: item.id,
+              priceName,
+              currencyCode,
+              unit,
+              price: newPrice,
+            }) as any);
+          }
+          await db.insert(itemPriceChanges).values(withTenantId(ctx.tenantId, {
+            itemId: item.id,
+            oldPrice,
+            newPrice,
+            priceType: "sale",
+            date: input.date,
+          }) as any);
+        } else {
+          const oldPrice = fieldOf(item, input.priceType) || "0";
+          const logType = input.priceType === "purchase" ? "purchase" : "sale";
+          await db.insert(itemPriceChanges).values(withTenantId(ctx.tenantId, {
+            itemId: item.id,
+            oldPrice,
+            newPrice,
+            priceType: logType,
+            date: input.date,
+          }) as any);
+          await db.update(items).set(setField(newPrice) as any).where(tenantWhere(items, ctx.tenantId, eq(items.id, item.id)));
+        }
         updated += 1;
       }
       return { success: true, updated };
@@ -1355,7 +1433,10 @@ export const inventoryExtendedRouter = router({
         referenceNumber: beginningInventory.referenceNumber,
         notes: beginningInventory.notes,
         batchNumber: beginningInventory.batchNumber,
+        documentNumber: beginningInventory.documentNumber,
         status: beginningInventory.status,
+        createdBy: beginningInventory.createdBy,
+        approvedBy: beginningInventory.approvedBy,
       }).from(beginningInventory)
         .where(tenantWhere(beginningInventory, ctx.tenantId))
         .leftJoin(items, eq(beginningInventory.itemId, items.id))
@@ -1374,6 +1455,7 @@ export const inventoryExtendedRouter = router({
       referenceNumber: z.string().optional().nullable(),
       notes: z.string().optional().nullable(),
       batchNumber: z.string().optional().nullable(),
+      documentNumber: z.string().optional().nullable(),
       /** false = حفظ معلق بدون حركة مخزون (ميجا: حفظ ثم اعتماد) */
       confirm: z.boolean().default(true),
     })).mutation(async ({ ctx, input }) => {
@@ -1381,14 +1463,23 @@ export const inventoryExtendedRouter = router({
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       const status = input.confirm ? "confirmed" : "draft";
-      const { confirm: _c, ...rest } = input;
+      let documentNumber = input.documentNumber?.trim() || null;
+      if (!documentNumber) {
+        const [cnt] = await db.select({ count: sql<number>`count(distinct ${beginningInventory.documentNumber})` })
+          .from(beginningInventory).where(tenantWhere(beginningInventory, ctx.tenantId));
+        documentNumber = `BI-${String(Number(cnt?.count || 0) + 1).padStart(5, "0")}`;
+      }
+      const { confirm: _c, documentNumber: _d, ...rest } = input;
       await db.insert(beginningInventory).values(withTenantId(ctx.tenantId, {
         ...rest,
         status,
+        documentNumber,
         branchId: input.branchId ?? null,
         referenceNumber: input.referenceNumber || null,
         notes: input.notes || null,
         batchNumber: input.batchNumber || null,
+        createdBy: ctx.saasUser?.id ?? null,
+        approvedBy: input.confirm ? (ctx.saasUser?.id ?? null) : null,
       }) as any);
       if (input.confirm) {
         const { applyStockMovement } = await import("./inventory-stock");
@@ -1403,7 +1494,7 @@ export const inventoryExtendedRouter = router({
           await updateAverageCostAfterPurchase(db, ctx.tenantId, input.itemId, Number(input.quantity), Number(input.unitCost), input.warehouseId);
         }
       }
-      return { success: true, status };
+      return { success: true, status, documentNumber };
     }),
     /** اعتماد سطور معلقة — يرحّل المخزون مثل زر اعتماد ميجا */
     confirm: protectedProcedure.input(z.object({
@@ -1428,8 +1519,10 @@ export const inventoryExtendedRouter = router({
         if (row.unitCost && Number(row.unitCost) > 0) {
           await updateAverageCostAfterPurchase(db, ctx.tenantId, row.itemId, Number(row.quantity), Number(row.unitCost), row.warehouseId);
         }
-        await db.update(beginningInventory).set({ status: "confirmed" })
-          .where(tenantWhere(beginningInventory, ctx.tenantId, eq(beginningInventory.id, id)));
+        await db.update(beginningInventory).set({
+          status: "confirmed",
+          approvedBy: ctx.saasUser?.id ?? null,
+        }).where(tenantWhere(beginningInventory, ctx.tenantId, eq(beginningInventory.id, id)));
         confirmed += 1;
       }
       return { success: true, confirmed };
@@ -1454,7 +1547,7 @@ export const inventoryExtendedRouter = router({
           warehouseId: row.warehouseId,
           allowNegative: true,
         });
-        await db.update(beginningInventory).set({ status: "draft" })
+        await db.update(beginningInventory).set({ status: "draft", approvedBy: null })
           .where(tenantWhere(beginningInventory, ctx.tenantId, eq(beginningInventory.id, id)));
         unconfirmed += 1;
       }

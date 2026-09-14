@@ -21,6 +21,7 @@ import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { InvoiceExpenseList, type InvoiceExpenseLine } from "@/components/invoices/InvoiceExpenseList";
 import { AccountSearchSelect } from "@/components/AccountSearchSelect";
 import { printInvoiceQuick, printWarehouseNote } from "@/lib/print-invoice-quick";
+import { DocumentCommentsButton } from "@/components/DocumentCommentsButton";
 
 /**
  * تحويل مخزني — مطابقة ميجا InventoryTransfer:
@@ -46,11 +47,16 @@ export default function StockTransfers() {
     expensePercent: string;
     unitCost: string;
     batchNumber: string;
+    unit: string;
+    notes: string;
     available?: number;
     expectedCost?: number;
   }[]>([
-    { itemId: "", quantity: "1", expensePercent: "0", unitCost: "", batchNumber: "" },
+    { itemId: "", quantity: "1", expensePercent: "0", unitCost: "", batchNumber: "", unit: "", notes: "" },
   ]);
+  const [lineCategoryId, setLineCategoryId] = useState("");
+  const [lastSavedId, setLastSavedId] = useState<number | null>(null);
+  const [lastSavedNumber, setLastSavedNumber] = useState("");
   const [expenses, setExpenses] = useState<InvoiceExpenseLine[]>([]);
   const [barcode, setBarcode] = useState("");
   const [printAfterSave, setPrintAfterSave] = useState(false);
@@ -90,6 +96,7 @@ export default function StockTransfers() {
   const { data: warehouses } = trpc.warehouses.list.useQuery();
   const { data: branches } = trpc.settings.branches.list.useQuery();
   const { data: itemsList } = trpc.items.list.useQuery({ page: 1, limit: 500 });
+  const { data: categories } = trpc.items.categories.useQuery();
   const { data: accountsChart } = trpc.accounts.chart.useQuery();
   const leafAccounts = (accountsChart || []).filter((a: any) => !a.isParent);
   const utils = trpc.useUtils();
@@ -150,6 +157,14 @@ export default function StockTransfers() {
     onSuccess: () => { toast.success("تم استلام التحويل في المخزن المستقبل"); refetch(); },
     onError: (e) => toast.error(e.message),
   });
+  const unconfirmMut = trpc.inventory.transfers.unconfirm.useMutation({
+    onSuccess: () => { toast.success("تم فك اعتماد التحويل"); refetch(); },
+    onError: (e) => toast.error(e.message),
+  });
+  const cancelMut = trpc.inventory.transfers.cancel.useMutation({
+    onSuccess: () => { toast.success("تم إلغاء التحويل"); refetch(); },
+    onError: (e) => toast.error(e.message),
+  });
 
   const resetForm = () => {
     setForm({
@@ -163,9 +178,12 @@ export default function StockTransfers() {
       referenceNumber: "",
       plAccountId: "",
     });
-    setItems([{ itemId: "", quantity: "1", expensePercent: "0", unitCost: "", batchNumber: "" }]);
+    setItems([{ itemId: "", quantity: "1", expensePercent: "0", unitCost: "", batchNumber: "", unit: "", notes: "" }]);
     setExpenses([]);
     setBarcode("");
+    setLineCategoryId("");
+    setLastSavedId(null);
+    setLastSavedNumber("");
   };
 
   const closeDialog = () => {
@@ -198,6 +216,7 @@ export default function StockTransfers() {
           available: res.quantity,
           expectedCost,
           unitCost: it.unitCost || (expectedCost ? String(expectedCost) : ""),
+          unit: it.unit || String(catalogItem?.unit || ""),
         } : it)),
       );
     } catch {
@@ -205,7 +224,7 @@ export default function StockTransfers() {
     }
   };
 
-  const addItem = () => setItems((prev) => [...prev, { itemId: "", quantity: "1", expensePercent: "0", unitCost: "", batchNumber: "" }]);
+  const addItem = () => setItems((prev) => [...prev, { itemId: "", quantity: "1", expensePercent: "0", unitCost: "", batchNumber: "", unit: "", notes: "" }]);
   const addAllFromWarehouse = async () => {
     if (!form.fromWarehouseId) return toast.error("اختر المخزن المصدر أولاً");
     try {
@@ -217,6 +236,8 @@ export default function StockTransfers() {
         expensePercent: "0",
         unitCost: String(r.unitCost || r.averageCost || ""),
         batchNumber: "",
+        unit: String(r.unit || ""),
+        notes: "",
         available: Number(r.quantity),
         expectedCost: Number(r.unitCost || r.averageCost || 0),
       }));
@@ -247,7 +268,7 @@ export default function StockTransfers() {
     if (emptyIdx >= 0) {
       await updateItem(emptyIdx, "itemId", String(hit.id));
     } else {
-      setItems((prev) => [...prev, { itemId: String(hit.id), quantity: "1", expensePercent: "0", unitCost: "", batchNumber: "" }]);
+      setItems((prev) => [...prev, { itemId: String(hit.id), quantity: "1", expensePercent: "0", unitCost: "", batchNumber: "", unit: String((hit as any).unit || ""), notes: "" }]);
       await refreshLineMeta(items.length, String(hit.id), form.fromWarehouseId);
     }
     setBarcode("");
@@ -279,6 +300,8 @@ export default function StockTransfers() {
         expensePercent: it.expensePercent || "0",
         unitCost: it.unitCost || (it.expectedCost != null ? String(it.expectedCost) : undefined),
         batchNumber: it.batchNumber || undefined,
+        unit: it.unit || undefined,
+        notes: it.notes || undefined,
       })),
       expenses: expenses
         .filter((e) => Number(e.amount) > 0 && e.creditAccountId != null)
@@ -292,6 +315,8 @@ export default function StockTransfers() {
     }, {
       onSuccess: (r) => {
         toast.success(r.status === "draft" ? "تم حفظ التحويل معلقاً" : r.status === "in_transit" ? "تم اعتماد الشحن — بانتظار الاستلام" : "تم اعتماد التحويل");
+        setLastSavedId(r.id);
+        setLastSavedNumber(r.number);
         if (confirm ? printAfterApprove : printAfterSave) firePrint(r.number);
       },
     });
@@ -440,6 +465,7 @@ export default function StockTransfers() {
                   <TableHead className="text-right text-xs">الى</TableHead>
                   <TableHead className="text-right text-xs">النوع</TableHead>
                   <TableHead className="text-right text-xs">التاريخ</TableHead>
+                  <TableHead className="text-right text-xs">أنشئ بواسطة</TableHead>
                   <TableHead className="text-right text-xs">الحالة</TableHead>
                   <TableHead className="text-right text-xs">إجراء</TableHead>
                 </TableRow>
@@ -447,7 +473,7 @@ export default function StockTransfers() {
               <TableBody>
                 {!data?.rows?.length && (
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center text-sm text-slate-400 py-8">لا توجد بيانات للعرض</TableCell>
+                    <TableCell colSpan={8} className="text-center text-sm text-slate-400 py-8">لا توجد بيانات للعرض</TableCell>
                   </TableRow>
                 )}
                 {data?.rows?.map((row: any) => (
@@ -461,34 +487,34 @@ export default function StockTransfers() {
                     <TableCell className="text-xs text-slate-500">
                       {row.date ? new Date(row.date).toLocaleDateString("en-GB") : "-"}
                     </TableCell>
+                    <TableCell className="text-xs text-slate-600">{row.createdByName || "—"}</TableCell>
                     <TableCell>
                       <Badge variant={statusColor(row.status)} className="text-xs">{statusLabel(row.status)}</Badge>
                     </TableCell>
                     <TableCell>
-                      {row.status === "draft" && (
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="outline"
-                          className="h-7 text-xs"
-                          disabled={confirmMut.isPending}
-                          onClick={() => confirmMut.mutate({ id: row.id })}
-                        >
-                          اعتماد
-                        </Button>
-                      )}
-                      {row.status === "in_transit" && (
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="outline"
-                          className="h-7 text-xs gap-1"
-                          disabled={receiveMut.isPending}
-                          onClick={() => receiveMut.mutate({ id: row.id })}
-                        >
-                          <PackageCheck size={12} /> استلام
-                        </Button>
-                      )}
+                      <div className="flex flex-wrap gap-1">
+                        {row.status === "draft" && (
+                          <>
+                            <Button type="button" size="sm" variant="outline" className="h-7 text-xs" disabled={confirmMut.isPending} onClick={() => confirmMut.mutate({ id: row.id })}>اعتماد</Button>
+                            <Button type="button" size="sm" variant="ghost" className="h-7 text-xs text-red-600" disabled={cancelMut.isPending} onClick={() => { if (confirm("إلغاء التحويل؟")) cancelMut.mutate({ id: row.id }); }}>إلغاء</Button>
+                          </>
+                        )}
+                        {row.status === "in_transit" && (
+                          <>
+                            <Button type="button" size="sm" variant="outline" className="h-7 text-xs gap-1" disabled={receiveMut.isPending} onClick={() => receiveMut.mutate({ id: row.id })}>
+                              <PackageCheck size={12} /> استلام
+                            </Button>
+                            <Button type="button" size="sm" variant="secondary" className="h-7 text-xs" disabled={unconfirmMut.isPending} onClick={() => { if (confirm("فك اعتماد الشحن؟")) unconfirmMut.mutate({ id: row.id }); }}>فك اعتماد</Button>
+                          </>
+                        )}
+                        {row.status === "confirmed" && (
+                          <>
+                            <Button type="button" size="sm" variant="secondary" className="h-7 text-xs" disabled={unconfirmMut.isPending} onClick={() => { if (confirm("فك اعتماد التحويل وعكس المخزون؟")) unconfirmMut.mutate({ id: row.id }); }}>فك اعتماد</Button>
+                            <Button type="button" size="sm" variant="ghost" className="h-7 text-xs text-red-600" disabled={cancelMut.isPending} onClick={() => { if (confirm("إلغاء التحويل المعتمد؟")) cancelMut.mutate({ id: row.id }); }}>إلغاء</Button>
+                          </>
+                        )}
+                        <DocumentCommentsButton documentType="stock_transfer" documentId={row.id} documentNumber={row.number} />
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -607,9 +633,16 @@ export default function StockTransfers() {
             )}
 
             <div className="space-y-2">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between flex-wrap gap-2">
                 <Label className="text-xs font-semibold">الاصناف</Label>
-                <div className="flex gap-1">
+                <div className="flex gap-1 flex-wrap items-center">
+                  <Select value={lineCategoryId || "all"} onValueChange={(v) => setLineCategoryId(v === "all" ? "" : v)}>
+                    <SelectTrigger className="h-7 w-36 text-xs"><SelectValue placeholder="الفئة" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">كل الفئات</SelectItem>
+                      {(categories || []).map((c: any) => <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
                   <Button type="button" variant="outline" size="sm" className="h-7 text-xs gap-1" onClick={() => void addAllFromWarehouse()}>
                     اضافة كل المخزن
                   </Button>
@@ -626,8 +659,10 @@ export default function StockTransfers() {
                       <TableHead className="text-right text-xs">المتاحة</TableHead>
                       <TableHead className="text-right text-xs">التكلفة</TableHead>
                       <TableHead className="text-right text-xs">التشغيلة</TableHead>
+                      <TableHead className="text-right text-xs">الوحدة</TableHead>
                       <TableHead className="text-right text-xs">الكمية</TableHead>
                       <TableHead className="text-right text-xs">نسبة المصروفات</TableHead>
+                      <TableHead className="text-right text-xs">ملاحظات</TableHead>
                       <TableHead />
                     </TableRow>
                   </TableHeader>
@@ -636,7 +671,7 @@ export default function StockTransfers() {
                       <TableRow key={i}>
                         <TableCell className="p-1 min-w-[180px]">
                           <ItemSearchSelect
-                            items={itemsList?.rows || []}
+                            items={(itemsList?.rows || []).filter((x: any) => !lineCategoryId || String(x.categoryId || "") === lineCategoryId)}
                             value={it.itemId}
                             onChange={(v) => void updateItem(i, "itemId", v)}
                             placeholder="اختر الصنف"
@@ -652,10 +687,16 @@ export default function StockTransfers() {
                           <Input value={it.batchNumber} onChange={(e) => void updateItem(i, "batchNumber", e.target.value)} className="h-8 text-xs w-24" />
                         </TableCell>
                         <TableCell className="p-1">
+                          <Input value={it.unit} onChange={(e) => void updateItem(i, "unit", e.target.value)} className="h-8 text-xs w-16" />
+                        </TableCell>
+                        <TableCell className="p-1">
                           <Input type="number" value={it.quantity} onChange={(e) => void updateItem(i, "quantity", e.target.value)} className="h-8 text-xs w-24" />
                         </TableCell>
                         <TableCell className="p-1">
                           <Input type="number" value={it.expensePercent} onChange={(e) => void updateItem(i, "expensePercent", e.target.value)} className="h-8 text-xs w-20" />
+                        </TableCell>
+                        <TableCell className="p-1">
+                          <Input value={it.notes} onChange={(e) => void updateItem(i, "notes", e.target.value)} className="h-8 text-xs w-28" />
                         </TableCell>
                         <TableCell className="p-1">
                           {items.length > 1 && (
@@ -678,6 +719,11 @@ export default function StockTransfers() {
               </p>
             )}
 
+            <div className="flex flex-wrap gap-4 text-xs font-semibold text-slate-700 bg-slate-50 border rounded px-2 py-1.5">
+              <span>اجمالي الكمية: {items.reduce((s, it) => s + Number(it.quantity || 0), 0).toLocaleString("en-US")}</span>
+              <span>اجمالي التكلفة: {items.reduce((s, it) => s + Number(it.quantity || 0) * Number(it.unitCost || it.expectedCost || 0), 0).toLocaleString("en-US")}</span>
+              <span>اجمالي المصروفات: {expenses.reduce((s, e) => s + Number(e.amount || 0) * Number(e.exchangeRate || 1), 0).toLocaleString("en-US")}</span>
+            </div>
             <div className="space-y-1">
               <Label className="text-xs">ملاحظات</Label>
               <Textarea value={form.notes} onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))} className="text-sm min-h-[60px]" />
@@ -688,8 +734,9 @@ export default function StockTransfers() {
               <label className="flex items-center gap-2"><Checkbox checked={printWithoutCosts} onCheckedChange={(v) => setPrintWithoutCosts(!!v)} />طباعة بدون تكاليف</label>
             </div>
           </div>
-          <DialogFooter className="gap-2">
-            <Button variant="outline" size="sm" onClick={closeDialog}>إلغاء</Button>
+          <DialogFooter className="gap-2 flex-wrap">
+            <DocumentCommentsButton documentType="stock_transfer" documentId={lastSavedId} documentNumber={lastSavedNumber} />
+            <Button variant="outline" size="sm" onClick={closeDialog}>إغلاق</Button>
             <Button variant="secondary" size="sm" disabled={createMut.isPending} onClick={() => submit(false)}>حفظ</Button>
             <Button size="sm" className="bg-purple-600 hover:bg-purple-700" disabled={createMut.isPending} onClick={() => submit(true)}>
               اعتماد

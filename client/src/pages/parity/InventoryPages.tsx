@@ -583,12 +583,29 @@ export function PriceChangerPage() {
   const [percentOnly, setPercentOnly] = useState(false);
   const [avgFromBranchId, setAvgFromBranchId] = useState("");
   const [avgFromWarehouseId, setAvgFromWarehouseId] = useState("");
+  const [targetPriceName, setTargetPriceName] = useState("");
+  const [fromPriceName, setFromPriceName] = useState("");
+  const [currencyCode, setCurrencyCode] = useState("");
+  const [extraUnit, setExtraUnit] = useState("");
+  const [taxRateFilter, setTaxRateFilter] = useState("");
+  const [purchaseInvoiceNumber, setPurchaseInvoiceNumber] = useState("");
+  const [showDefaultUnits, setShowDefaultUnits] = useState(true);
   const [bulkValue, setBulkValue] = useState("");
   const [percentValue, setPercentValue] = useState("");
   const [decimals, setDecimals] = useState("2");
   const [draft, setDraft] = useState<Record<number, string>>({});
   const branchesQ = trpc.settings.branches.list.useQuery();
   const warehousesQ = trpc.warehouses.list.useQuery();
+  const measureUnitsQ = trpc.parity.settings.measureUnits.listActive.useQuery();
+  const namedPriceOptions = useMemo(() => {
+    const names = new Set<string>();
+    for (const i of (items.data?.rows || []) as any[]) {
+      // names collected client-side from known defaults + later from extra prices if present on rows
+      if (i.priceName) names.add(String(i.priceName));
+    }
+    ["سعر نقدي", "سعر جملة", "سعر خاص", "سعر وكيل"].forEach((n) => names.add(n));
+    return Array.from(names);
+  }, [items.data]);
 
   const catName = (id: unknown) => {
     if (id == null || id === "") return "—";
@@ -642,6 +659,13 @@ export function PriceChangerPage() {
     setWithStockOnly(false);
     setAvgFromBranchId("");
     setAvgFromWarehouseId("");
+    setTargetPriceName("");
+    setFromPriceName("");
+    setCurrencyCode("");
+    setExtraUnit("");
+    setTaxRateFilter("");
+    setPurchaseInvoiceNumber("");
+    setShowDefaultUnits(true);
     setBulkValue("");
     setPercentValue("");
     setPercentOnly(false);
@@ -661,6 +685,10 @@ export function PriceChangerPage() {
       percentOnly: mode === "percent" ? percentOnly : undefined,
       avgFromBranchId: avgFromBranchId ? Number(avgFromBranchId) : undefined,
       avgFromWarehouseId: avgFromWarehouseId ? Number(avgFromWarehouseId) : undefined,
+      targetPriceName: targetPriceName || undefined,
+      fromPriceName: fromPriceName || undefined,
+      currencyCode: currencyCode || undefined,
+      extraUnit: extraUnit || undefined,
       filter: {
         categoryId: categoryId ? Number(categoryId) : undefined,
         altCategoryId: altCategoryId ? Number(altCategoryId) : undefined,
@@ -668,6 +696,8 @@ export function PriceChangerPage() {
         search: search || undefined,
         priceStatus: priceStatus || undefined,
         withStockOnly: withStockOnly || undefined,
+        taxRate: taxRateFilter || undefined,
+        purchaseInvoiceNumber: purchaseInvoiceNumber || undefined,
       },
       rows: dirtyRows.length ? dirtyRows : rows.map((r: any) => ({ itemId: r.id })),
     });
@@ -777,6 +807,54 @@ export function PriceChangerPage() {
                 </Select>
               </div>
               <div className="space-y-1">
+                <Label className="text-xs font-bold">نوع السعر</Label>
+                <Select value={targetPriceName || "base"} onValueChange={(v) => setTargetPriceName(v === "base" ? "" : v)}>
+                  <SelectTrigger className="h-10 w-40"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="base">السعر الأساسي</SelectItem>
+                    {namedPriceOptions.map((n) => <SelectItem key={n} value={n}>{n}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs font-bold">من نوع السعر</Label>
+                <Select value={fromPriceName || "none"} onValueChange={(v) => setFromPriceName(v === "none" ? "" : v)}>
+                  <SelectTrigger className="h-10 w-40"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">—</SelectItem>
+                    {namedPriceOptions.map((n) => <SelectItem key={n} value={n}>{n}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs font-bold">العملة</Label>
+                <Select value={currencyCode || "all"} onValueChange={(v) => setCurrencyCode(v === "all" ? "" : v)}>
+                  <SelectTrigger className="h-10 w-28"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">الكل</SelectItem>
+                    {["EGP", "USD", "EUR", "SAR", "AED"].map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs font-bold">وحدة قياس إضافية</Label>
+                <Select value={extraUnit || "all"} onValueChange={(v) => setExtraUnit(v === "all" ? "" : v)}>
+                  <SelectTrigger className="h-10 w-36"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">الكل</SelectItem>
+                    {(measureUnitsQ.data || []).map((u: any) => <SelectItem key={u.id || u.name} value={u.name || u}>{u.name || u}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs font-bold">الضريبة %</Label>
+                <Input className="h-10 w-24" value={taxRateFilter} onChange={(e) => setTaxRateFilter(e.target.value)} placeholder="14" />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs font-bold">مسلسل فاتورة الشراء</Label>
+                <Input className="h-10 w-40" value={purchaseInvoiceNumber} onChange={(e) => setPurchaseInvoiceNumber(e.target.value)} />
+              </div>
+              <div className="space-y-1">
                 <Label className="text-xs font-bold">التاريخ</Label>
                 <Input type="date" className="h-10" value={date} onChange={(e) => setDate(e.target.value)} />
               </div>
@@ -786,6 +864,10 @@ export function PriceChangerPage() {
               <label className="flex items-center gap-2 text-sm font-semibold h-10 px-1">
                 <input type="checkbox" checked={withStockOnly} onChange={(e) => setWithStockOnly(e.target.checked)} />
                 عرض الاصناف التى لها رصيد فقط
+              </label>
+              <label className="flex items-center gap-2 text-sm font-semibold h-10 px-1">
+                <input type="checkbox" checked={showDefaultUnits} onChange={(e) => setShowDefaultUnits(e.target.checked)} />
+                عرض بوحدات القياس الافتراضية
               </label>
               <label className="flex items-center gap-2 text-sm font-semibold h-10 px-1">
                 <input type="checkbox" checked={percentOnly} onChange={(e) => setPercentOnly(e.target.checked)} />
@@ -948,7 +1030,7 @@ export function BeginningInventoryPage() {
     const qBar = itemSearch.trim().toLowerCase();
     if (!qBar) return q.data || [];
     return (q.data || []).filter((r: any) => {
-      const hay = `${r.itemName || ""} ${r.itemCode || ""} ${r.itemBarcode || ""} ${r.warehouseName || ""} ${r.branchName || ""} ${r.categoryName || ""} ${r.referenceNumber || ""} ${r.batchNumber || ""}`.toLowerCase();
+      const hay = `${r.documentNumber || ""} ${r.itemName || ""} ${r.itemCode || ""} ${r.itemBarcode || ""} ${r.warehouseName || ""} ${r.branchName || ""} ${r.categoryName || ""} ${r.referenceNumber || ""} ${r.batchNumber || ""}`.toLowerCase();
       return hay.includes(qBar);
     });
   }, [q.data, itemSearch]);
@@ -1075,6 +1157,7 @@ export function BeginningInventoryPage() {
         </div>
       }
       columns={[
+        { key: "documentNumber", label: "المسلسل", render: (r) => (r.documentNumber ? String(r.documentNumber) : "—") },
         { key: "branchName", label: "الفرع", render: (r) => (r.branchName ? String(r.branchName) : "—") },
         { key: "warehouseName", label: "المخزن" },
         { key: "referenceNumber", label: "المرجع", render: (r) => (r.referenceNumber ? String(r.referenceNumber) : "—") },

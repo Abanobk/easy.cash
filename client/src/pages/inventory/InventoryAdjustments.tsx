@@ -19,6 +19,7 @@ import { ItemSearchSelect } from "@/components/ItemSearchSelect";
 import { findItemByScan } from "@/lib/barcode";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { printWarehouseNote } from "@/lib/print-invoice-quick";
+import { DocumentCommentsButton } from "@/components/DocumentCommentsButton";
 
 /**
  * تسوية مخزنية — مطابقة ميجا:
@@ -31,6 +32,7 @@ export default function InventoryAdjustments() {
   const [open, setOpen] = useState(isNewRoute);
   const [form, setForm] = useState({
     warehouseId: "",
+    branchId: "",
     date: new Date().toISOString().split("T")[0],
     adjustmentType: "addition" as "addition" | "deduction",
     notes: "",
@@ -47,11 +49,15 @@ export default function InventoryAdjustments() {
     batchNumber: string;
     productionDate: string;
     expiryDate: string;
+    unit: string;
     reason: string;
     available?: number;
   }[]>([
-    { itemId: "", quantity: "1", actualQty: "", unitCost: "", batchNumber: "", productionDate: "", expiryDate: "", reason: "" },
+    { itemId: "", quantity: "1", actualQty: "", unitCost: "", batchNumber: "", productionDate: "", expiryDate: "", unit: "", reason: "" },
   ]);
+  const [lineCategoryId, setLineCategoryId] = useState("");
+  const [lastSavedId, setLastSavedId] = useState<number | null>(null);
+  const [lastSavedNumber, setLastSavedNumber] = useState("");
   const [barcode, setBarcode] = useState("");
   const [printAfterSave, setPrintAfterSave] = useState(false);
   const [printAfterApprove, setPrintAfterApprove] = useState(false);
@@ -84,6 +90,7 @@ export default function InventoryAdjustments() {
   const { data: warehouses } = trpc.warehouses.list.useQuery();
   const { data: branches } = trpc.settings.branches.list.useQuery();
   const { data: itemsList } = trpc.items.list.useQuery({ page: 1, limit: 500 });
+  const { data: categories } = trpc.items.categories.useQuery();
   const { data: accountsChart } = trpc.accounts.chart.useQuery();
   const { data: costCentersList } = trpc.costCenters.list.useQuery();
   const { data: customersList } = trpc.customers.list.useQuery({ page: 1, limit: 300 });
@@ -123,10 +130,19 @@ export default function InventoryAdjustments() {
     onSuccess: () => { toast.success("تم اعتماد التسوية وترحيل المخزون/القيد"); refetch(); },
     onError: (e) => toast.error(e.message),
   });
+  const unconfirmMut = trpc.inventory.adjustments.unconfirm.useMutation({
+    onSuccess: () => { toast.success("تم فك اعتماد التسوية"); refetch(); },
+    onError: (e) => toast.error(e.message),
+  });
+  const cancelMut = trpc.inventory.adjustments.cancel.useMutation({
+    onSuccess: () => { toast.success("تم إلغاء التسوية"); refetch(); },
+    onError: (e) => toast.error(e.message),
+  });
 
   const resetForm = () => {
     setForm({
       warehouseId: "",
+      branchId: "",
       date: new Date().toISOString().split("T")[0],
       adjustmentType: "addition",
       notes: "",
@@ -135,8 +151,11 @@ export default function InventoryAdjustments() {
       customerId: "",
       referenceNumber: "",
     });
-    setItems([{ itemId: "", quantity: "1", actualQty: "", unitCost: "", batchNumber: "", productionDate: "", expiryDate: "", reason: "" }]);
+    setItems([{ itemId: "", quantity: "1", actualQty: "", unitCost: "", batchNumber: "", productionDate: "", expiryDate: "", unit: "", reason: "" }]);
     setBarcode("");
+    setLineCategoryId("");
+    setLastSavedId(null);
+    setLastSavedNumber("");
   };
 
   const closeDialog = () => {
@@ -167,7 +186,7 @@ export default function InventoryAdjustments() {
     }
   };
 
-  const addItem = () => setItems((prev) => [...prev, { itemId: "", quantity: "1", actualQty: "", unitCost: "", batchNumber: "", productionDate: "", expiryDate: "", reason: "" }]);
+  const addItem = () => setItems((prev) => [...prev, { itemId: "", quantity: "1", actualQty: "", unitCost: "", batchNumber: "", productionDate: "", expiryDate: "", unit: "", reason: "" }]);
   const removeItem = (i: number) => setItems((prev) => prev.filter((_, idx) => idx !== i));
   const updateItem = async (i: number, field: string, val: string) => {
     setItems((prev) => prev.map((item, idx) => {
@@ -175,8 +194,9 @@ export default function InventoryAdjustments() {
       const next = { ...item, [field]: val };
       if (field === "itemId") {
         const row = (itemsList?.rows || []).find((x: any) => String(x.id) === val);
-        if (row && !item.unitCost) {
-          next.unitCost = String(row.averageCost ?? row.purchasePrice ?? "");
+        if (row) {
+          if (!item.unitCost) next.unitCost = String(row.averageCost ?? row.purchasePrice ?? "");
+          if (!item.unit) next.unit = String(row.unit || "");
         }
       }
       return next;
@@ -202,7 +222,7 @@ export default function InventoryAdjustments() {
       await updateItem(emptyIdx, "itemId", String(hit.id));
     } else {
       const cost = String((hit as any).averageCost ?? (hit as any).purchasePrice ?? "");
-      setItems((prev) => [...prev, { itemId: String(hit.id), quantity: "1", actualQty: "", unitCost: cost, batchNumber: "", productionDate: "", expiryDate: "", reason: "" }]);
+      setItems((prev) => [...prev, { itemId: String(hit.id), quantity: "1", actualQty: "", unitCost: cost, batchNumber: "", productionDate: "", expiryDate: "", unit: String((hit as any).unit || ""), reason: "" }]);
       await refreshAvailable(items.length, String(hit.id), form.warehouseId);
     }
     setBarcode("");
@@ -213,6 +233,7 @@ export default function InventoryAdjustments() {
     if (items.some((it) => !it.itemId)) return toast.error("يجب اختيار الصنف في كل بند");
     createMut.mutate({
       warehouseId: Number(form.warehouseId),
+      branchId: form.branchId ? Number(form.branchId) : null,
       date: form.date,
       adjustmentType: form.adjustmentType,
       notes: form.notes,
@@ -229,11 +250,15 @@ export default function InventoryAdjustments() {
         batchNumber: it.batchNumber || undefined,
         productionDate: it.productionDate || undefined,
         expiryDate: it.expiryDate || undefined,
+        unit: it.unit || undefined,
         reason: it.reason,
+        notes: it.reason || undefined,
       })),
     }, {
       onSuccess: (r) => {
         toast.success(r.status === "draft" ? "تم حفظ التسوية معلّقة" : "تم اعتماد تسوية المخزون");
+        setLastSavedId(r.id);
+        setLastSavedNumber(r.number);
         if (confirm ? printAfterApprove : printAfterSave) firePrint(r.number);
       },
     });
@@ -352,6 +377,7 @@ export default function InventoryAdjustments() {
                   <TableHead className="text-right text-xs font-semibold text-slate-600">المخزن</TableHead>
                   <TableHead className="text-right text-xs font-semibold text-slate-600">التاريخ</TableHead>
                   <TableHead className="text-right text-xs font-semibold text-slate-600">ملاحظات</TableHead>
+                  <TableHead className="text-right text-xs font-semibold text-slate-600">أنشئ بواسطة</TableHead>
                   <TableHead className="text-right text-xs font-semibold text-slate-600">الحالة</TableHead>
                   <TableHead className="text-right text-xs font-semibold text-slate-600">إجراء</TableHead>
                 </TableRow>
@@ -359,7 +385,7 @@ export default function InventoryAdjustments() {
               <TableBody>
                 {(!data?.rows || data.rows.length === 0) && (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center text-slate-400 py-10">لا توجد بيانات للعرض</TableCell>
+                    <TableCell colSpan={7} className="text-center text-slate-400 py-10">لا توجد بيانات للعرض</TableCell>
                   </TableRow>
                 )}
                 {data?.rows?.map((row: any) => (
@@ -370,24 +396,28 @@ export default function InventoryAdjustments() {
                       {row.date ? new Date(row.date).toLocaleDateString("en-GB") : "-"}
                     </TableCell>
                     <TableCell className="text-xs text-slate-500">{row.reason || "-"}</TableCell>
+                    <TableCell className="text-xs text-slate-600">{row.createdByName || "—"}</TableCell>
                     <TableCell>
                       <Badge variant={statusColor(row.status || "confirmed")} className="text-xs">
                         {statusLabel(row.status || "confirmed")}
                       </Badge>
                     </TableCell>
                     <TableCell>
-                      {row.status === "draft" && (
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="outline"
-                          className="h-7 text-xs"
-                          disabled={confirmMut.isPending}
-                          onClick={() => confirmMut.mutate({ id: row.id })}
-                        >
-                          اعتماد
-                        </Button>
-                      )}
+                      <div className="flex flex-wrap gap-1">
+                        {row.status === "draft" && (
+                          <>
+                            <Button type="button" size="sm" variant="outline" className="h-7 text-xs" disabled={confirmMut.isPending} onClick={() => confirmMut.mutate({ id: row.id })}>اعتماد</Button>
+                            <Button type="button" size="sm" variant="ghost" className="h-7 text-xs text-red-600" disabled={cancelMut.isPending} onClick={() => { if (confirm("إلغاء التسوية؟")) cancelMut.mutate({ id: row.id }); }}>إلغاء</Button>
+                          </>
+                        )}
+                        {row.status === "confirmed" && (
+                          <>
+                            <Button type="button" size="sm" variant="secondary" className="h-7 text-xs" disabled={unconfirmMut.isPending} onClick={() => { if (confirm("فك اعتماد التسوية وعكس المخزون؟")) unconfirmMut.mutate({ id: row.id }); }}>فك اعتماد</Button>
+                            <Button type="button" size="sm" variant="ghost" className="h-7 text-xs text-red-600" disabled={cancelMut.isPending} onClick={() => { if (confirm("إلغاء التسوية المعتمدة؟")) cancelMut.mutate({ id: row.id }); }}>إلغاء</Button>
+                          </>
+                        )}
+                        <DocumentCommentsButton documentType="inventory_adjustment" documentId={row.id} documentNumber={row.number} />
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -407,11 +437,25 @@ export default function InventoryAdjustments() {
                 <Input type="date" value={form.date} onChange={(e) => setForm((f) => ({ ...f, date: e.target.value }))} className="h-9 text-sm" />
               </div>
               <div className="space-y-1">
+                <Label className="text-xs">الفرع</Label>
+                <Select value={form.branchId || "none"} onValueChange={(v) => setForm((f) => ({ ...f, branchId: v === "none" ? "" : v, warehouseId: "" }))}>
+                  <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="اختياري" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">—</SelectItem>
+                    {(branches || []).map((b: any) => (
+                      <SelectItem key={b.id} value={String(b.id)}>{b.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
                 <Label className="text-xs">المخزن *</Label>
                 <Select value={form.warehouseId} onValueChange={(v) => setForm((f) => ({ ...f, warehouseId: v }))}>
                   <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="اختر المخزن" /></SelectTrigger>
                   <SelectContent>
-                    {(warehouses as any[] || []).map((w: any) => (
+                    {(warehouses as any[] || [])
+                      .filter((w: any) => !form.branchId || String(w.branchId || "") === form.branchId)
+                      .map((w: any) => (
                       <SelectItem key={w.id} value={String(w.id)}>{w.name}</SelectItem>
                     ))}
                   </SelectContent>
@@ -483,11 +527,22 @@ export default function InventoryAdjustments() {
             </div>
 
             <div className="space-y-2">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between flex-wrap gap-2">
                 <Label className="text-xs font-semibold">الاصناف</Label>
-                <Button type="button" variant="outline" size="sm" className="h-7 text-xs gap-1" onClick={addItem}>
-                  <Plus size={12} /> اضافة
-                </Button>
+                <div className="flex items-center gap-2">
+                  <Select value={lineCategoryId || "all"} onValueChange={(v) => setLineCategoryId(v === "all" ? "" : v)}>
+                    <SelectTrigger className="h-7 w-40 text-xs"><SelectValue placeholder="الفئة" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">كل الفئات</SelectItem>
+                      {(categories || []).map((c: any) => (
+                        <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Button type="button" variant="outline" size="sm" className="h-7 text-xs gap-1" onClick={addItem}>
+                    <Plus size={12} /> اضافة
+                  </Button>
+                </div>
               </div>
               <div className="border rounded-lg overflow-hidden">
                 <Table>
@@ -497,6 +552,7 @@ export default function InventoryAdjustments() {
                       <TableHead className="text-right text-xs">المتاحة</TableHead>
                       <TableHead className="text-right text-xs">الكمية</TableHead>
                       <TableHead className="text-right text-xs">الفعلية</TableHead>
+                      <TableHead className="text-right text-xs">الوحدة</TableHead>
                       <TableHead className="text-right text-xs">التكلفة</TableHead>
                       <TableHead className="text-right text-xs">التشغيلة</TableHead>
                       <TableHead className="text-right text-xs">إنتاج</TableHead>
@@ -510,7 +566,7 @@ export default function InventoryAdjustments() {
                       <TableRow key={i}>
                         <TableCell className="p-1 min-w-[180px]">
                           <ItemSearchSelect
-                            items={itemsList?.rows || []}
+                            items={(itemsList?.rows || []).filter((x: any) => !lineCategoryId || String(x.categoryId || "") === lineCategoryId)}
                             value={it.itemId}
                             onChange={(v) => void updateItem(i, "itemId", v)}
                             placeholder="اختر الصنف"
@@ -524,6 +580,9 @@ export default function InventoryAdjustments() {
                         </TableCell>
                         <TableCell className="p-1">
                           <Input type="number" value={it.actualQty} onChange={(e) => void updateItem(i, "actualQty", e.target.value)} className="h-8 text-xs w-20" placeholder="جرد" title="الكمية الفعلية بعد الجرد" />
+                        </TableCell>
+                        <TableCell className="p-1">
+                          <Input value={it.unit} onChange={(e) => void updateItem(i, "unit", e.target.value)} className="h-8 text-xs w-16" />
                         </TableCell>
                         <TableCell className="p-1">
                           <Input type="number" value={it.unitCost} onChange={(e) => void updateItem(i, "unitCost", e.target.value)} className="h-8 text-xs w-20" />
@@ -554,6 +613,10 @@ export default function InventoryAdjustments() {
               </div>
             </div>
 
+            <div className="flex flex-wrap gap-4 text-xs font-semibold text-slate-700 bg-slate-50 border rounded px-2 py-1.5">
+              <span>اجمالي الكمية: {items.reduce((s, it) => s + Number(it.quantity || 0), 0).toLocaleString("en-US")}</span>
+              <span>اجمالي التكلفة: {items.reduce((s, it) => s + Number(it.quantity || it.actualQty || 0) * Number(it.unitCost || 0), 0).toLocaleString("en-US")}</span>
+            </div>
             <div className="space-y-1">
               <Label className="text-xs">ملاحظات</Label>
               <Textarea value={form.notes} onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))} className="text-sm min-h-[60px]" />
@@ -568,8 +631,9 @@ export default function InventoryAdjustments() {
               </p>
             )}
           </div>
-          <DialogFooter className="gap-2">
-            <Button variant="outline" size="sm" onClick={closeDialog}>إلغاء</Button>
+          <DialogFooter className="gap-2 flex-wrap">
+            <DocumentCommentsButton documentType="inventory_adjustment" documentId={lastSavedId} documentNumber={lastSavedNumber} />
+            <Button variant="outline" size="sm" onClick={closeDialog}>إغلاق</Button>
             <Button variant="secondary" size="sm" disabled={createMut.isPending} onClick={() => handleSubmit(false)}>حفظ</Button>
             <Button size="sm" className="bg-teal-600 hover:bg-teal-700" disabled={createMut.isPending} onClick={() => handleSubmit(true)}>
               اعتماد
