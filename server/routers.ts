@@ -898,6 +898,9 @@ const itemsRouter = router({
   list: protectedProcedure.input(z.object({
     search: z.string().optional(),
     categoryId: z.number().optional(),
+    itemType: z.string().optional(),
+    /** استبعاد أصناف فئات غير معروضة في فواتير البيع — مطابقة ميجا */
+    forSalesInvoice: z.boolean().optional(),
     page: z.number().default(1),
     limit: z.number().default(20),
   })).query(async ({ ctx, input }) => {
@@ -913,6 +916,13 @@ const itemsRouter = router({
       ));
     }
     if (input.categoryId) conditions.push(eq(items.categoryId, input.categoryId));
+    if (input.itemType) conditions.push(eq(items.itemType, input.itemType));
+    if (input.forSalesInvoice) {
+      conditions.push(or(
+        isNull(items.categoryId),
+        eq(itemCategories.showInSalesInvoices, true),
+      ));
+    }
     const where = conditions.length > 0 ? and(...conditions) : undefined;
     // ترتيب بالكود (الأصناف بدون كود في الآخر) ثم الاسم — أوضح من ترتيب الاسم العربي المختلط
     const itemOrder = [
@@ -921,13 +931,85 @@ const itemsRouter = router({
       items.name,
       items.id,
     ] as const;
-    const rows = await db.select().from(items).where(tenantWhere(items, ctx.tenantId, where)).orderBy(...itemOrder).limit(input.limit).offset(offset);
-    const [total] = await db.select({ count: count() }).from(items).where(tenantWhere(items, ctx.tenantId, where));
+    const baseQuery = db.select({
+      id: items.id,
+      tenantId: items.tenantId,
+      code: items.code,
+      barcode: items.barcode,
+      name: items.name,
+      categoryId: items.categoryId,
+      altCategoryId: items.altCategoryId,
+      itemType: items.itemType,
+      unit: items.unit,
+      purchasePrice: items.purchasePrice,
+      averageCost: items.averageCost,
+      salePrice: items.salePrice,
+      minPrice: items.minPrice,
+      maxPrice: items.maxPrice,
+      minStock: items.minStock,
+      currentStock: items.currentStock,
+      taxRate: items.taxRate,
+      trackSerial: items.trackSerial,
+      description: items.description,
+      isActive: items.isActive,
+      createdAt: items.createdAt,
+      updatedAt: items.updatedAt,
+    }).from(items);
+    const joined = input.forSalesInvoice
+      ? baseQuery.leftJoin(itemCategories, eq(items.categoryId, itemCategories.id))
+      : baseQuery;
+    const rows = await joined.where(tenantWhere(items, ctx.tenantId, where)).orderBy(...itemOrder).limit(input.limit).offset(offset);
+    const [total] = input.forSalesInvoice
+      ? await db.select({ count: count() }).from(items)
+          .leftJoin(itemCategories, eq(items.categoryId, itemCategories.id))
+          .where(tenantWhere(items, ctx.tenantId, where))
+      : await db.select({ count: count() }).from(items).where(tenantWhere(items, ctx.tenantId, where));
     return { rows, total: total.count };
   }),
-  all: protectedProcedure.query(async ({ ctx }) => {
+  all: protectedProcedure.input(z.object({
+    forSalesInvoice: z.boolean().optional(),
+  }).optional()).query(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    const conditions = [eq(items.isActive, true)];
+    if (input?.forSalesInvoice) {
+      conditions.push(or(
+        isNull(items.categoryId),
+        eq(itemCategories.showInSalesInvoices, true),
+      )!);
+      return db.select({
+        id: items.id,
+        tenantId: items.tenantId,
+        code: items.code,
+        barcode: items.barcode,
+        name: items.name,
+        categoryId: items.categoryId,
+        altCategoryId: items.altCategoryId,
+        itemType: items.itemType,
+        unit: items.unit,
+        purchasePrice: items.purchasePrice,
+        averageCost: items.averageCost,
+        salePrice: items.salePrice,
+        minPrice: items.minPrice,
+        maxPrice: items.maxPrice,
+        minStock: items.minStock,
+        currentStock: items.currentStock,
+        taxRate: items.taxRate,
+        trackSerial: items.trackSerial,
+        description: items.description,
+        isActive: items.isActive,
+        createdAt: items.createdAt,
+        updatedAt: items.updatedAt,
+      }).from(items)
+        .leftJoin(itemCategories, eq(items.categoryId, itemCategories.id))
+        .where(tenantWhere(items, ctx.tenantId, and(...conditions)))
+        .orderBy(
+          sql`(CASE WHEN ${items.code} IS NULL OR TRIM(${items.code}) = '' THEN 1 ELSE 0 END)`,
+          items.code,
+          items.name,
+          items.id,
+        );
+    }
     return db.select().from(items).where(tenantWhere(items, ctx.tenantId, eq(items.isActive, true))).orderBy(
       sql`(CASE WHEN ${items.code} IS NULL OR TRIM(${items.code}) = '' THEN 1 ELSE 0 END)`,
       items.code,
@@ -946,9 +1028,13 @@ const itemsRouter = router({
     code: z.string().optional(),
     barcode: z.string().optional(),
     categoryId: z.number().optional(),
+    altCategoryId: z.number().optional().nullable(),
+    itemType: z.string().optional(),
     unit: z.string().optional(),
     purchasePrice: z.string().optional(),
     salePrice: z.string().optional(),
+    minPrice: z.string().optional(),
+    maxPrice: z.string().optional(),
     minStock: z.string().optional(),
     taxRate: z.string().optional(),
     trackSerial: z.boolean().optional(),
@@ -999,9 +1085,13 @@ const itemsRouter = router({
     code: z.string().optional(),
     barcode: z.string().optional(),
     categoryId: z.number().optional(),
+    altCategoryId: z.number().optional().nullable(),
+    itemType: z.string().optional(),
     unit: z.string().optional(),
     purchasePrice: z.string().optional(),
     salePrice: z.string().optional(),
+    minPrice: z.string().optional(),
+    maxPrice: z.string().optional(),
     minStock: z.string().optional(),
     taxRate: z.string().optional(),
     trackSerial: z.boolean().optional(),
@@ -1036,6 +1126,11 @@ const itemsRouter = router({
       }
       if (typeof input.trackSerial === "boolean") {
         patch.trackSerial = input.trackSerial;
+      }
+      if (input.altCategoryId === null) {
+        patch.altCategoryId = null;
+      } else if (typeof input.altCategoryId === "number") {
+        patch.altCategoryId = input.altCategoryId;
       }
       await db.update(items).set(patch as any).where(tenantWhere(items, ctx.tenantId, eq(items.id, id)));
     } catch (e: unknown) {
@@ -1113,11 +1208,14 @@ const warehousesRouter = router({
       name: warehouses.name,
       address: warehouses.address,
       branchId: warehouses.branchId,
+      employeeId: warehouses.employeeId,
       isActive: warehouses.isActive,
       createdAt: warehouses.createdAt,
       branchName: branches.name,
+      employeeName: employees.name,
     }).from(warehouses)
       .leftJoin(branches, eq(warehouses.branchId, branches.id))
+      .leftJoin(employees, eq(warehouses.employeeId, employees.id))
       .where(tenantWhere(warehouses, ctx.tenantId, and(
         scopeIdsFilter(warehouses.id, scope.warehouseIds),
         branchFilter,
@@ -1129,6 +1227,7 @@ const warehousesRouter = router({
     name: z.string().min(1),
     address: z.string().optional(),
     branchId: z.number().optional().nullable(),
+    employeeId: z.number().optional().nullable(),
   })).mutation(async ({ ctx, input }) => {
     await assertEntityAction(ctx, "inventory", "warehouses", "add");
     const db = await getDb();
@@ -1142,6 +1241,7 @@ const warehousesRouter = router({
       name: input.name,
       address: input.address,
       branchId: input.branchId ?? null,
+      employeeId: input.employeeId ?? null,
     })) as any);
     return { success: true };
   }),
@@ -1150,6 +1250,7 @@ const warehousesRouter = router({
     name: z.string().min(1),
     address: z.string().optional(),
     branchId: z.number().optional().nullable(),
+    employeeId: z.number().optional().nullable(),
     isActive: z.boolean().optional(),
   })).mutation(async ({ ctx, input }) => {
     await assertEntityAction(ctx, "inventory", "warehouses", "edit");
@@ -1158,7 +1259,12 @@ const warehousesRouter = router({
     const scope = await loadUserScopeFromCtx(db, ctx.saasUser);
     assertBranchAccess(scope, input.branchId ?? undefined);
     const { id, ...data } = input;
-    await db.update(warehouses).set(compactRow(data as Record<string, unknown>) as any)
+    const patch = compactRow(data as Record<string, unknown>) as Record<string, unknown>;
+    if (input.branchId === null) patch.branchId = null;
+    else if (typeof input.branchId === "number") patch.branchId = input.branchId;
+    if (input.employeeId === null) patch.employeeId = null;
+    else if (typeof input.employeeId === "number") patch.employeeId = input.employeeId;
+    await db.update(warehouses).set(patch as any)
       .where(tenantWhere(warehouses, ctx.tenantId, eq(warehouses.id, id)));
     return { success: true };
   }),
@@ -6082,6 +6188,10 @@ const inventoryRouter = router({
       date: z.string(),
       adjustmentType: z.enum(["addition", "deduction"]),
       notes: z.string().optional(),
+      oppositeAccountId: z.number().optional().nullable(),
+      costCenterId: z.number().optional().nullable(),
+      customerId: z.number().optional().nullable(),
+      referenceNumber: z.string().optional(),
       items: z.array(z.object({ itemId: z.number(), quantity: z.string(), reason: z.string().optional() })),
     })).mutation(async ({ ctx, input }) => {
       await assertEntityAction(ctx, "inventory", "stockAdjustment", "add");
@@ -6095,6 +6205,10 @@ const inventoryRouter = router({
       const [result] = await db.insert(inventoryAdjustments).values(withTenantId(ctx.tenantId, {
         number, warehouseId: input.warehouseId, date: input.date as any,
         reason: input.notes, status: "confirmed",
+        oppositeAccountId: input.oppositeAccountId ?? null,
+        costCenterId: input.costCenterId ?? null,
+        customerId: input.customerId ?? null,
+        referenceNumber: input.referenceNumber || null,
       }) as any);
       const adjId = (result as any).insertId;
       const { applyStockMovement, getWarehouseItemQty } = await import("./inventory-stock");

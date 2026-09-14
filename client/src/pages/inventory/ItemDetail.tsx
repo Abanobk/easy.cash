@@ -38,14 +38,29 @@ const emptyForm = {
   code: "",
   barcode: "",
   categoryId: undefined as number | undefined,
+  altCategoryId: undefined as number | undefined,
+  itemType: "وحدة مخزنية",
   unit: "قطعة",
   purchasePrice: "",
   salePrice: "",
+  minPrice: "",
+  maxPrice: "",
   minStock: "",
   taxRate: "",
   description: "",
   trackSerial: false,
 };
+
+const MEGA_ITEM_TYPES = [
+  "وحدة مخزنية",
+  "وحدة خدمية",
+  "مادة خام",
+  "منتج وسيط",
+  "منتج تام",
+  "مجموعة / طقم",
+  "صنف مركب",
+  "صنف وكالة",
+] as const;
 
 const emptyComp = { barcode: "", itemId: "", quantity: "1", unit: "" };
 
@@ -203,9 +218,13 @@ export default function ItemDetail() {
       code: row.code || "",
       barcode: row.barcode || "",
       categoryId: row.categoryId ?? undefined,
+      altCategoryId: (row as any).altCategoryId ?? undefined,
+      itemType: (row as any).itemType || "وحدة مخزنية",
       unit,
       purchasePrice: row.purchasePrice || "",
       salePrice: row.salePrice || "",
+      minPrice: (row as any).minPrice || "",
+      maxPrice: (row as any).maxPrice || "",
       minStock: row.minStock || "",
       taxRate: row.taxRate || "",
       description: row.description || "",
@@ -411,9 +430,13 @@ export default function ItemDetail() {
       code: form.code.trim() || undefined,
       barcode: form.barcode.trim() || undefined,
       categoryId: form.categoryId,
+      altCategoryId: form.altCategoryId ?? null,
+      itemType: form.itemType || undefined,
       unit,
       purchasePrice: form.purchasePrice.trim() || undefined,
       salePrice: form.salePrice.trim() || undefined,
+      minPrice: form.minPrice.trim() || undefined,
+      maxPrice: form.maxPrice.trim() || undefined,
       minStock: form.minStock.trim() || undefined,
       taxRate: form.taxRate.trim() || undefined,
       description: form.description.trim() || undefined,
@@ -538,6 +561,34 @@ export default function ItemDetail() {
                   </SelectContent>
                 </Select>
               </div>
+              <div>
+                <FieldLabel>فئة بديلة</FieldLabel>
+                <Select
+                  value={form.altCategoryId != null ? String(form.altCategoryId) : "__none__"}
+                  onValueChange={(v) => setForm((prev) => ({
+                    ...prev,
+                    altCategoryId: v === "__none__" ? undefined : Number(v),
+                  }))}
+                >
+                  <SelectTrigger className={entrySelectTriggerClass}><SelectValue placeholder="فئة بديلة" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">بدون</SelectItem>
+                    {categories?.map((c) => <SelectItem key={`alt-${c.id}`} value={c.id.toString()}>{c.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <FieldLabel>نوع الصنف</FieldLabel>
+                <Select
+                  value={form.itemType || "وحدة مخزنية"}
+                  onValueChange={(v) => setForm((prev) => ({ ...prev, itemType: v }))}
+                >
+                  <SelectTrigger className={entrySelectTriggerClass}><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {MEGA_ITEM_TYPES.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
               <div className="sm:col-span-2 space-y-2">
                 <FieldLabel required>وحدة القياس</FieldLabel>
                 <Select
@@ -593,6 +644,14 @@ export default function ItemDetail() {
               <div>
                 <FieldLabel>سعر البيع</FieldLabel>
                 <Input value={form.salePrice} onChange={f("salePrice")} type="number" placeholder="0.00" className={entryControlClass} />
+              </div>
+              <div>
+                <FieldLabel>السعر الادنى</FieldLabel>
+                <Input value={form.minPrice} onChange={f("minPrice")} type="number" placeholder="0.00" className={entryControlClass} />
+              </div>
+              <div>
+                <FieldLabel>السعر الاعلى</FieldLabel>
+                <Input value={form.maxPrice} onChange={f("maxPrice")} type="number" placeholder="0.00" className={entryControlClass} />
               </div>
               <div>
                 <FieldLabel>نسبة الضريبة %</FieldLabel>

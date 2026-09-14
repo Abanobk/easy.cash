@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import { Edit, Trash2 } from "lucide-react";
 import { useEntityAllowed } from "@/hooks/useEntityPermission";
@@ -16,9 +17,11 @@ import type { DataTableEntity } from "@/components/DataTable";
 export type EntityField = {
   key: string;
   label: string;
-  type?: "text" | "number" | "date" | "time" | "textarea" | "select";
+  type?: "text" | "number" | "date" | "time" | "textarea" | "select" | "checkbox";
   options?: { value: string; label: string }[];
   required?: boolean;
+  /** قيمة افتراضية عند الإضافة (مفيدة للـ checkbox) */
+  defaultValue?: string;
 };
 
 export type EntityColumn = {
@@ -95,7 +98,10 @@ export function SimpleEntityPage({
 
   const resetForm = () => {
     const empty: Record<string, string> = {};
-    for (const f of fields) empty[f.key] = "";
+    for (const f of fields) {
+      if (f.type === "checkbox") empty[f.key] = f.defaultValue ?? "true";
+      else empty[f.key] = f.defaultValue ?? "";
+    }
     setForm(empty);
   };
 
@@ -110,7 +116,11 @@ export function SimpleEntityPage({
     const next: Record<string, string> = {};
     for (const f of fields) {
       const v = row[f.key];
-      next[f.key] = v == null ? "" : String(v).slice(0, f.type === "date" ? 10 : undefined);
+      if (f.type === "checkbox") {
+        next[f.key] = v === true || v === 1 || v === "1" || v === "true" ? "true" : "false";
+      } else {
+        next[f.key] = v == null ? "" : String(v).slice(0, f.type === "date" ? 10 : undefined);
+      }
     }
     setForm(next);
     setOpen(true);
@@ -118,6 +128,7 @@ export function SimpleEntityPage({
 
   const handleSubmit = async () => {
     for (const f of fields) {
+      if (f.type === "checkbox") continue;
       if (f.required && !form[f.key]?.trim()) {
         toast.error(`${f.label} مطلوب`);
         return;
@@ -125,10 +136,16 @@ export function SimpleEntityPage({
     }
     const cleaned: Record<string, string> = {};
     for (const [k, v] of Object.entries(form)) {
+      const field = fields.find((f) => f.key === k);
+      if (field?.type === "checkbox") {
+        cleaned[k] = v === "true" ? "true" : "false";
+        continue;
+      }
       const t = (v ?? "").trim();
       if (t) cleaned[k] = t;
     }
     for (const f of fields) {
+      if (f.type === "checkbox") continue;
       if (f.required && form[f.key]?.trim()) cleaned[f.key] = form[f.key].trim();
     }
     setSaving(true);
@@ -206,7 +223,18 @@ export function SimpleEntityPage({
       >
         <FormSection title="بيانات السجل" accent="blue">
           {fields.map((f) => (
-            <div key={f.key} className={f.type === "textarea" ? "sm:col-span-2" : ""}>
+            <div key={f.key} className={f.type === "textarea" || f.type === "checkbox" ? "sm:col-span-2" : ""}>
+              {f.type === "checkbox" ? (
+                <label className="flex items-center gap-3 cursor-pointer py-2">
+                  <Checkbox
+                    checked={form[f.key] === "true"}
+                    onCheckedChange={(v) => setForm({ ...form, [f.key]: v === true ? "true" : "false" })}
+                    className="size-5"
+                  />
+                  <span className="text-sm font-bold text-slate-800">{f.label}</span>
+                </label>
+              ) : (
+                <>
               <FieldLabel required={!!f.required}>{f.label}</FieldLabel>
               {f.type === "textarea" ? (
                 <Textarea
@@ -239,6 +267,8 @@ export function SimpleEntityPage({
                   onChange={(e) => setForm({ ...form, [f.key]: e.target.value })}
                   className={entryControlClass}
                 />
+              )}
+                </>
               )}
             </div>
           ))}

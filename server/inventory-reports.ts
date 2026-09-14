@@ -1,4 +1,4 @@
-import { and, eq, inArray, like, or, gte, lte } from "drizzle-orm";
+import { and, eq, inArray, like, or, gte, lte, sql } from "drizzle-orm";
 import type { Db } from "./db";
 import {
   customers,
@@ -1381,6 +1381,7 @@ export async function itemsListReport(db: Db, filters: InventoryReportFilters) {
     name: items.name,
     unit: items.unit,
     categoryName: itemCategories.name,
+    altCategoryName: sql<string>`(SELECT c2.name FROM item_categories c2 WHERE c2.id = ${items.altCategoryId} LIMIT 1)`,
     purchasePrice: items.purchasePrice,
     salePrice: items.salePrice,
     currentStock: items.currentStock,
@@ -1394,7 +1395,7 @@ export async function itemsListReport(db: Db, filters: InventoryReportFilters) {
   return rows.map((r, idx) => ({
     ...r,
     serial: idx + 1,
-    altCategoryName: "",
+    altCategoryName: r.altCategoryName || "",
     discountPercent: 0,
     discountCash: 0,
   }));

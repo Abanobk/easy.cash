@@ -155,6 +155,8 @@ export const warehouses = mysqlTable("warehouses", {
   address: text("address"),
   /** الفرع التابع له المخزن — للتقارير والنطاق متعدد الفروع */
   branchId: int("branchId"),
+  /** الموظف المسؤول عن المخزن — مطابقة ميجا Stores.aspx */
+  employeeId: int("employeeId"),
   isActive: boolean("isActive").default(true),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
@@ -165,6 +167,8 @@ export const itemCategories = mysqlTable("item_categories", {
   tenantId: int("tenantId").notNull().default(1),
   name: varchar("name", { length: 255 }).notNull(),
   parentId: int("parentId"),
+  /** عرض فى فواتير البيع — مطابقة ميجا Categories.aspx */
+  showInSalesInvoices: boolean("showInSalesInvoices").default(true),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
 
@@ -176,10 +180,16 @@ export const items = mysqlTable("items", {
   barcode: varchar("barcode", { length: 100 }),
   name: varchar("name", { length: 255 }).notNull(),
   categoryId: int("categoryId"),
+  /** فئة بديلة — مطابقة ميجا Items.aspx */
+  altCategoryId: int("altCategoryId"),
+  /** نوع الصنف: وحدة مخزنية / خدمية / مادة خام / … */
+  itemType: varchar("itemType", { length: 50 }).default("وحدة مخزنية"),
   unit: varchar("unit", { length: 50 }).default("قطعة"),
   purchasePrice: decimal("purchasePrice", { precision: 15, scale: 2 }).default("0"),
   averageCost: decimal("averageCost", { precision: 15, scale: 4 }).default("0"),
   salePrice: decimal("salePrice", { precision: 15, scale: 2 }).default("0"),
+  minPrice: decimal("minPrice", { precision: 15, scale: 2 }).default("0"),
+  maxPrice: decimal("maxPrice", { precision: 15, scale: 2 }).default("0"),
   minStock: decimal("minStock", { precision: 15, scale: 3 }).default("0"),
   currentStock: decimal("currentStock", { precision: 15, scale: 3 }).default("0"),
   taxRate: decimal("taxRate", { precision: 5, scale: 2 }).default("0"),
@@ -857,6 +867,11 @@ export const inventoryAdjustments = mysqlTable("inventory_adjustments", {
   warehouseId: int("warehouseId").notNull(),
   date: date("date").notNull(),
   reason: text("reason"),
+  /** الحساب المقابل / مركز التكلفة / العميل / رقم المرجع — مطابقة ميجا InventoryCorrection */
+  oppositeAccountId: int("oppositeAccountId"),
+  costCenterId: int("costCenterId"),
+  customerId: int("customerId"),
+  referenceNumber: varchar("referenceNumber", { length: 100 }),
   status: mysqlEnum("status", ["draft", "confirmed", "cancelled"]).default("draft"),
   createdBy: int("createdBy"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
@@ -1236,6 +1251,7 @@ export const itemBatches = mysqlTable("item_batches", {
   tenantId: int("tenantId").notNull().default(1),
   itemId: int("itemId").notNull(),
   batchNumber: varchar("batchNumber", { length: 100 }).notNull(),
+  productionDate: date("productionDate"),
   expiryDate: date("expiryDate"),
   quantity: decimal("quantity", { precision: 15, scale: 3 }).default("0"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),

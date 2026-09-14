@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 
-const emptyForm = { name: "", address: "", branchId: "" as string };
+const emptyForm = { name: "", address: "", branchId: "" as string, employeeId: "" as string };
 
 export default function Warehouses() {
   const [open, setOpen] = useState(false);
@@ -23,6 +23,7 @@ export default function Warehouses() {
     branchFilter ? { branchId: Number(branchFilter) } : undefined,
   );
   const { data: branchList } = trpc.settings.branches.list.useQuery();
+  const { data: empData } = trpc.hr.employees.list.useQuery({ page: 1, limit: 500 });
   const filtered = (data || []).filter((w: any) => {
     if (!nameSearch.trim()) return true;
     return String(w.name || "").toLowerCase().includes(nameSearch.trim().toLowerCase());
@@ -49,6 +50,7 @@ export default function Warehouses() {
       name: form.name.trim(),
       address: form.address.trim() || undefined,
       branchId: form.branchId ? Number(form.branchId) : null,
+      employeeId: form.employeeId ? Number(form.employeeId) : null,
     };
     if (editId) updateMut.mutate({ id: editId, ...payload });
     else createMut.mutate(payload);
@@ -93,12 +95,14 @@ export default function Warehouses() {
             name: row.name,
             address: row.address || "",
             branchId: row.branchId ? String(row.branchId) : "",
+            employeeId: row.employeeId ? String(row.employeeId) : "",
           });
           setOpen(true);
         }}
         onDelete={(row: any) => deleteMut.mutate(row.id)}
         columns={[
           { key: "name", label: "الاسم" },
+          { key: "employeeName", label: "الموظف", render: (r: any) => r.employeeName || "—" },
           { key: "branchName", label: "الفرع", render: (r: any) => r.branchName || "—" },
           { key: "address", label: "ملاحظات / العنوان" },
           { key: "isActive", label: "الحالة", render: (r: any) => r.isActive ? "نشط" : "موقوف" },
@@ -136,6 +140,23 @@ export default function Warehouses() {
                 <SelectItem value="none">بدون فرع</SelectItem>
                 {(branchList || []).map((b: { id: number; name: string }) => (
                   <SelectItem key={b.id} value={String(b.id)}>{b.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="sm:col-span-2">
+            <FieldLabel>الموظف</FieldLabel>
+            <Select
+              value={form.employeeId || "none"}
+              onValueChange={(v) => setForm({ ...form, employeeId: v === "none" ? "" : v })}
+            >
+              <SelectTrigger className={entrySelectTriggerClass}>
+                <SelectValue placeholder="اختر الموظف" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">بدون</SelectItem>
+                {(empData?.rows || []).map((e: { id: number; name: string; code?: string | null }) => (
+                  <SelectItem key={e.id} value={String(e.id)}>{e.code ? `${e.code} — ${e.name}` : e.name}</SelectItem>
                 ))}
               </SelectContent>
             </Select>

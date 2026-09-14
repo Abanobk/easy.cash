@@ -863,11 +863,32 @@ export const inventoryExtendedRouter = router({
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       return db.select().from(itemCategories).where(tenantWhere(itemCategories, ctx.tenantId));
     }),
-    create: protectedProcedure.input(z.object({ name: z.string().min(1), parentId: z.number().optional() })).mutation(async ({ ctx, input }) => {
+    create: protectedProcedure.input(z.object({
+      name: z.string().min(1),
+      parentId: z.number().optional(),
+      showInSalesInvoices: z.boolean().optional(),
+    })).mutation(async ({ ctx, input }) => {
       await assertEntityAction(ctx, "inventory", "itemCategories", "add");
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      await db.insert(itemCategories).values(withTenantId(ctx.tenantId, input) as any);
+      await db.insert(itemCategories).values(withTenantId(ctx.tenantId, {
+        name: input.name,
+        parentId: input.parentId,
+        showInSalesInvoices: input.showInSalesInvoices ?? true,
+      }) as any);
+      return { success: true };
+    }),
+    update: protectedProcedure.input(z.object({
+      id: z.number(),
+      name: z.string().min(1).optional(),
+      parentId: z.number().optional().nullable(),
+      showInSalesInvoices: z.boolean().optional(),
+    })).mutation(async ({ ctx, input }) => {
+      await assertEntityAction(ctx, "inventory", "itemCategories", "edit");
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const { id, ...data } = input;
+      await db.update(itemCategories).set(data as any).where(tenantWhere(itemCategories, ctx.tenantId, eq(itemCategories.id, id)));
       return { success: true };
     }),
     delete: protectedProcedure.input(z.number()).mutation(async ({ ctx, input }) => {
@@ -887,6 +908,7 @@ export const inventoryExtendedRouter = router({
         itemId: itemBatches.itemId,
         itemName: items.name,
         batchNumber: itemBatches.batchNumber,
+        productionDate: itemBatches.productionDate,
         expiryDate: itemBatches.expiryDate,
         quantity: itemBatches.quantity,
       }).from(itemBatches)
@@ -897,6 +919,7 @@ export const inventoryExtendedRouter = router({
     create: protectedProcedure.input(z.object({
       itemId: z.number(),
       batchNumber: z.string().min(1),
+      productionDate: z.string().optional(),
       expiryDate: z.string().optional(),
       quantity: z.string().optional(),
     })).mutation(async ({ ctx, input }) => {
@@ -1037,30 +1060,103 @@ export const inventoryExtendedRouter = router({
     }),
     applyBulk: protectedProcedure.input(z.object({
       date: z.string(),
-      priceType: z.enum(["sale", "purchase"]).default("sale"),
-      rows: z.array(z.object({ itemId: z.number(), newPrice: z.string() })).min(1),
+      priceType: z.enum(["sale", "purchase", "min", "max"]).default("sale"),
+      mode: z.enum(["absolute", "percent"]).default("absolute"),
+      /** قيمة ثابتة أو نسبة — عند percent تُطبَّق على كل صفوف الفلتر إن لم تُمرَّر rows */
+      value: z.string().optional(),
+      decimals: z.number().min(0).max(6).optional(),
+      filter: z.object({
+        categoryId: z.number().optional(),
+        itemType: z.string().optional(),
+        search: z.string().optional(),
+        priceStatus: z.enum(["lt_avg", "eq_avg", "gt_avg"]).optional(),
+        withStockOnly: z.boolean().optional(),
+      }).optional(),
+      rows: z.array(z.object({ itemId: z.number(), newPrice: z.string().optional() })).optional(),
     })).mutation(async ({ ctx, input }) => {
       await assertEntityAction(ctx, "inventory", "priceChange", "add");
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+      const fieldOf = (it: typeof items.$inferSelect) => {
+        if (input.priceType === "purchase") return it.purchasePrice;
+        if (input.priceType === "min") return it.minPrice;
+        if (input.priceType === "max") return it.maxPrice;
+        return it.salePrice;
+      };
+      const setField = (price: string) => {
+        if (input.priceType === "purchase") return { purchasePrice: price };
+        if (input.priceType === "min") return { minPrice: price };
+        if (input.priceType === "max") return { maxPrice: price };
+        return { salePrice: price };
+      };
+      const roundTo = (n: number) => {
+        const d = input.decimals ?? 2;
+        const f = 10 ** d;
+        return (Math.round(n * f) / f).toFixed(d);
+      };
+
+      let targetItems: (typeof items.$inferSelect)[] = [];
+      if (input.rows?.length) {
+        for (const row of input.rows) {
+          const [item] = await db.select().from(items).where(tenantWhere(items, ctx.tenantId, eq(items.id, row.itemId)));
+          if (item) targetItems.push(item);
+        }
+      } else {
+        const conditions = [eq(items.isActive, true)];
+        if (input.filter?.categoryId) conditions.push(eq(items.categoryId, input.filter.categoryId));
+        if (input.filter?.itemType) conditions.push(eq(items.itemType, input.filter.itemType));
+        if (input.filter?.withStockOnly) conditions.push(sql`CAST(${items.currentStock} AS DECIMAL(15,3)) > 0`);
+        if (input.filter?.search) {
+          conditions.push(or(
+            like(items.name, `%${input.filter.search}%`),
+            like(items.barcode, `%${input.filter.search}%`),
+            like(items.code, `%${input.filter.search}%`),
+          )!);
+        }
+        targetItems = await db.select().from(items).where(tenantWhere(items, ctx.tenantId, and(...conditions)));
+        if (input.filter?.priceStatus) {
+          targetItems = targetItems.filter((it) => {
+            const price = Number(it.salePrice || 0);
+            const avg = Number(it.averageCost || it.purchasePrice || 0);
+            if (input.filter!.priceStatus === "lt_avg") return price < avg;
+            if (input.filter!.priceStatus === "eq_avg") return Math.abs(price - avg) < 0.0001;
+            return price > avg;
+          });
+        }
+      }
+
       let updated = 0;
-      for (const row of input.rows) {
-        if (!row.newPrice?.trim()) continue;
-        const [item] = await db.select().from(items).where(tenantWhere(items, ctx.tenantId, eq(items.id, row.itemId)));
-        if (!item) continue;
-        const oldPrice = input.priceType === "sale" ? item.salePrice : item.purchasePrice;
+      for (const item of targetItems) {
+        const rowOverride = input.rows?.find((r) => r.itemId === item.id);
+        let newPrice: string | undefined = rowOverride?.newPrice?.trim() || undefined;
+        if (!newPrice) {
+          if (input.mode === "percent") {
+            const pct = Number(input.value);
+            if (!Number.isFinite(pct)) continue;
+            const base = Number(fieldOf(item) || 0);
+            newPrice = roundTo(base * (1 + pct / 100));
+          } else if (input.value != null && input.value.trim() !== "") {
+            newPrice = roundTo(Number(input.value));
+          } else {
+            continue;
+          }
+        } else if (input.mode === "percent" && !rowOverride?.newPrice) {
+          // already handled
+        } else if (input.decimals != null) {
+          newPrice = roundTo(Number(newPrice));
+        }
+        if (!newPrice) continue;
+        const oldPrice = fieldOf(item) || "0";
+        const logType = input.priceType === "purchase" ? "purchase" : "sale";
         await db.insert(itemPriceChanges).values(withTenantId(ctx.tenantId, {
-          itemId: row.itemId,
-          oldPrice: oldPrice || "0",
-          newPrice: row.newPrice,
-          priceType: input.priceType,
+          itemId: item.id,
+          oldPrice,
+          newPrice,
+          priceType: logType,
           date: input.date,
         }) as any);
-        if (input.priceType === "sale") {
-          await db.update(items).set({ salePrice: row.newPrice }).where(tenantWhere(items, ctx.tenantId, eq(items.id, row.itemId)));
-        } else {
-          await db.update(items).set({ purchasePrice: row.newPrice }).where(tenantWhere(items, ctx.tenantId, eq(items.id, row.itemId)));
-        }
+        await db.update(items).set(setField(newPrice) as any).where(tenantWhere(items, ctx.tenantId, eq(items.id, item.id)));
         updated += 1;
       }
       return { success: true, updated };

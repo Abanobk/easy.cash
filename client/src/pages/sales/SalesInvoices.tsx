@@ -162,7 +162,7 @@ export default function SalesInvoices() {
     paymentType: isCashMode ? "cash" : undefined,
   });
   const { data: customers } = trpc.customers.list.useQuery({ page: 1, limit: 200 });
-  const { data: allItems } = trpc.items.all.useQuery();
+  const { data: allItems } = trpc.items.all.useQuery({ forSalesInvoice: true });
   const { data: warehouses } = trpc.warehouses.list.useQuery();
   const { data: branchList } = trpc.settings.branches.list.useQuery();
   const { data: costCentersList } = trpc.costCenters.list.useQuery();

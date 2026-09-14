@@ -32,6 +32,10 @@ export default function InventoryAdjustments() {
     date: new Date().toISOString().split("T")[0],
     adjustmentType: "addition" as "addition" | "deduction",
     notes: "",
+    oppositeAccountId: "",
+    costCenterId: "",
+    customerId: "",
+    referenceNumber: "",
   });
   const [items, setItems] = useState<{ itemId: string; quantity: string; reason: string; available?: number }[]>([
     { itemId: "", quantity: "1", reason: "" },
@@ -61,6 +65,9 @@ export default function InventoryAdjustments() {
   });
   const { data: warehouses } = trpc.warehouses.list.useQuery();
   const { data: itemsList } = trpc.items.list.useQuery({ page: 1, limit: 500 });
+  const { data: accountsChart } = trpc.accounts.chart.useQuery();
+  const { data: costCentersList } = trpc.costCenters.list.useQuery();
+  const { data: customersList } = trpc.customers.list.useQuery({ page: 1, limit: 300 });
   const utils = trpc.useUtils();
 
   const createMut = trpc.inventory.adjustments.create.useMutation({
@@ -78,6 +85,10 @@ export default function InventoryAdjustments() {
       date: new Date().toISOString().split("T")[0],
       adjustmentType: "addition",
       notes: "",
+      oppositeAccountId: "",
+      costCenterId: "",
+      customerId: "",
+      referenceNumber: "",
     });
     setItems([{ itemId: "", quantity: "1", reason: "" }]);
     setBarcode("");
@@ -149,6 +160,10 @@ export default function InventoryAdjustments() {
       date: form.date,
       adjustmentType: form.adjustmentType,
       notes: form.notes,
+      oppositeAccountId: form.oppositeAccountId ? Number(form.oppositeAccountId) : null,
+      costCenterId: form.costCenterId ? Number(form.costCenterId) : null,
+      customerId: form.customerId ? Number(form.customerId) : null,
+      referenceNumber: form.referenceNumber || undefined,
       items: items.map((it) => ({ itemId: Number(it.itemId), quantity: it.quantity, reason: it.reason })),
     });
   };
@@ -286,6 +301,46 @@ export default function InventoryAdjustments() {
                   <SelectContent>
                     {(warehouses as any[] || []).map((w: any) => (
                       <SelectItem key={w.id} value={String(w.id)}>{w.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">الحساب المقابل</Label>
+                <Select value={form.oppositeAccountId || "none"} onValueChange={(v) => setForm((f) => ({ ...f, oppositeAccountId: v === "none" ? "" : v }))}>
+                  <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="اختياري" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">—</SelectItem>
+                    {(accountsChart || []).filter((a: any) => !a.isParent).map((a: any) => (
+                      <SelectItem key={a.id} value={String(a.id)}>{a.code} — {a.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">رقم المرجع</Label>
+                <Input value={form.referenceNumber} onChange={(e) => setForm((f) => ({ ...f, referenceNumber: e.target.value }))} className="h-9 text-sm" />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">العميل</Label>
+                <Select value={form.customerId || "none"} onValueChange={(v) => setForm((f) => ({ ...f, customerId: v === "none" ? "" : v }))}>
+                  <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="اختياري" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">—</SelectItem>
+                    {(customersList?.rows || []).map((c: any) => (
+                      <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">مركز التكلفة</Label>
+                <Select value={form.costCenterId || "none"} onValueChange={(v) => setForm((f) => ({ ...f, costCenterId: v === "none" ? "" : v }))}>
+                  <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="اختياري" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">—</SelectItem>
+                    {(costCentersList || []).map((c: any) => (
+                      <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
