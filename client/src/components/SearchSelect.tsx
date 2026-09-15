@@ -86,9 +86,9 @@ export function SearchSelect({
       <PopoverTrigger asChild>
         <button
           type="button"
-          className="flex h-8 w-full items-center gap-1 rounded-md border border-input bg-background px-2 text-sm font-medium shadow-xs hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+          className="flex h-8 w-full min-w-0 max-w-full items-center gap-1 overflow-hidden rounded-md border border-input bg-background px-2 text-sm font-medium shadow-xs hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
         >
-          <span className="truncate text-right flex-1">
+          <span className="truncate text-right flex-1 min-w-0">
             {selected ? (
               selected.label
             ) : (

@@ -373,16 +373,18 @@ export default function InventoryAdjustments() {
               </CardTitle>
             </CardHeader>
             <CardContent className="pt-4 space-y-5">
-              {/* رأس المستند — ترتيب ميجا + بحث ذكي بدل Select الطويل */}
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-                <div className="space-y-1 min-w-0">
+              {/* رأس المستند — خلايا بـ overflow عشان الاسم الطويل ما يدخلش على الجار */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3">
+                <div className="space-y-1 min-w-0 overflow-hidden">
                   <Label className="text-xs font-medium">التاريخ *</Label>
-                  <Input type="date" value={form.date} onChange={(e) => setForm((f) => ({ ...f, date: e.target.value }))} className="h-9 text-sm" />
+                  <Input type="date" value={form.date} onChange={(e) => setForm((f) => ({ ...f, date: e.target.value }))} className="h-9 text-sm w-full" />
                 </div>
-                <div className="space-y-1 min-w-0">
+                <div className="space-y-1 min-w-0 overflow-hidden">
                   <Label className="text-xs font-medium">الفرع</Label>
                   <Select value={form.branchId || "none"} onValueChange={(v) => setForm((f) => ({ ...f, branchId: v === "none" ? "" : v, warehouseId: "" }))}>
-                    <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="اختر" /></SelectTrigger>
+                    <SelectTrigger className="h-9 text-sm w-full max-w-full" title={(branches || []).find((b: any) => String(b.id) === form.branchId)?.name}>
+                      <SelectValue placeholder="اختر" />
+                    </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="none">—</SelectItem>
                       {(branches || []).map((b: any) => (
@@ -391,7 +393,7 @@ export default function InventoryAdjustments() {
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="space-y-1 min-w-0">
+                <div className="space-y-1 min-w-0 overflow-hidden">
                   <Label className="text-xs font-medium">الحساب المقابل</Label>
                   <AccountSearchSelect
                     accounts={(accountsChart || []).filter((a: any) => !a.isParent)}
@@ -400,11 +402,11 @@ export default function InventoryAdjustments() {
                     placeholder="ابحث كود أو حساب…"
                   />
                 </div>
-                <div className="space-y-1 min-w-0">
+                <div className="space-y-1 min-w-0 overflow-hidden">
                   <Label className="text-xs font-medium">رقم المرجع</Label>
-                  <Input value={form.referenceNumber} onChange={(e) => setForm((f) => ({ ...f, referenceNumber: e.target.value }))} className="h-9 text-sm" />
+                  <Input value={form.referenceNumber} onChange={(e) => setForm((f) => ({ ...f, referenceNumber: e.target.value }))} className="h-9 text-sm w-full" />
                 </div>
-                <div className="space-y-1 min-w-0">
+                <div className="space-y-1 min-w-0 overflow-hidden">
                   <Label className="text-xs font-medium">العميل</Label>
                   <PartySearchSelect
                     parties={customersList?.rows || []}
@@ -413,7 +415,7 @@ export default function InventoryAdjustments() {
                     placeholder="ابحث عميل…"
                   />
                 </div>
-                <div className="space-y-1 min-w-0">
+                <div className="space-y-1 min-w-0 overflow-hidden">
                   <Label className="text-xs font-medium">مركز التكلفة</Label>
                   <SearchSelect
                     options={costCenterOptions}
@@ -424,8 +426,8 @@ export default function InventoryAdjustments() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                <div className="space-y-1 min-w-0">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                <div className="space-y-1 min-w-0 overflow-hidden">
                   <Label className="text-xs font-medium">المخزن *</Label>
                   <SearchSelect
                     options={warehouseOptions}
@@ -434,20 +436,20 @@ export default function InventoryAdjustments() {
                     placeholder="ابحث مخزن…"
                   />
                 </div>
-                <div className="space-y-1 min-w-0">
+                <div className="space-y-1 min-w-0 overflow-hidden">
                   <Label className="text-xs font-medium">الكمية الواردة / الصادرة</Label>
                   <Select value={form.adjustmentType} onValueChange={(v) => setForm((f) => ({ ...f, adjustmentType: v as any }))}>
-                    <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
+                    <SelectTrigger className="h-9 text-sm w-full"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="addition">واردة (إضافة)</SelectItem>
                       <SelectItem value="deduction">صادرة (خصم)</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="space-y-1 min-w-0">
+                <div className="space-y-1 min-w-0 overflow-hidden">
                   <Label className="text-xs font-medium">الفئة</Label>
                   <Select value={lineCategoryId || "all"} onValueChange={(v) => setLineCategoryId(v === "all" ? "" : v)}>
-                    <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="كل الفئات" /></SelectTrigger>
+                    <SelectTrigger className="h-9 text-sm w-full"><SelectValue placeholder="كل الفئات" /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all">كل الفئات</SelectItem>
                       {(categories || []).map((c: any) => (
@@ -456,17 +458,17 @@ export default function InventoryAdjustments() {
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="space-y-1 min-w-0">
+                <div className="space-y-1 min-w-0 overflow-hidden">
                   <Label className="text-xs font-medium">الباركود</Label>
-                  <div className="flex gap-1">
+                  <div className="flex gap-1 min-w-0">
                     <Input
-                      className="h-9 text-sm"
+                      className="h-9 text-sm min-w-0 flex-1"
                       value={barcode}
                       onChange={(e) => setBarcode(e.target.value)}
                       onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); void handleBarcode(); } }}
                       placeholder="مسح باركود"
                     />
-                    <Button type="button" variant="outline" size="sm" className="h-9" onClick={() => void handleBarcode()}>+</Button>
+                    <Button type="button" variant="outline" size="sm" className="h-9 shrink-0" onClick={() => void handleBarcode()}>+</Button>
                   </div>
                 </div>
               </div>
