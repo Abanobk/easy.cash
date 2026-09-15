@@ -65,6 +65,7 @@ import {
   postSalesReturnCogsJournal,
   postLoanOriginJournal,
   postLoanInstallmentPayJournal,
+  postInventoryAdjustmentJournal,
 } from "./auto-journal";
 import { getDebtAgingSummary } from "./debt-aging";
 import { calcPurchaseUnitCostAfterDiscount } from "../shared/invoice-line-calc";
@@ -5998,6 +5999,7 @@ const inventoryRouter = router({
         number: inventoryAdjustments.number,
         date: inventoryAdjustments.date,
         reason: inventoryAdjustments.reason,
+        reference: inventoryAdjustments.reference,
         status: inventoryAdjustments.status,
         warehouseName: warehouses.name,
       }).from(inventoryAdjustments)
@@ -6007,12 +6009,38 @@ const inventoryRouter = router({
       const [total] = await db.select({ count: count() }).from(inventoryAdjustments).where(whereClause);
       return { rows, total: total.count };
     }),
+    /** رصيد كل صنف في كل مخزن — عرض حي لعمود "الكمية المتاحة" أثناء إدخال التسوية */
+    itemStock: protectedProcedure
+      .input(z.object({ itemIds: z.array(z.number()) }))
+      .query(async ({ ctx, input }) => {
+        await assertEntityAction(ctx, "inventory", "stockAdjustment", "viewDocList");
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+        if (!input.itemIds.length) return { rows: [] as { itemId: number; warehouseId: number; quantity: string }[] };
+        const rows = await db.select({
+          itemId: itemWarehouseStock.itemId,
+          warehouseId: itemWarehouseStock.warehouseId,
+          quantity: itemWarehouseStock.quantity,
+        }).from(itemWarehouseStock).where(tenantWhere(
+          itemWarehouseStock, ctx.tenantId, inArray(itemWarehouseStock.itemId, input.itemIds),
+        ));
+        return { rows };
+      }),
     create: protectedProcedure.input(z.object({
       warehouseId: z.number(),
       date: z.string(),
-      adjustmentType: z.enum(["addition", "deduction"]),
+      reference: z.string().optional(),
+      branchId: z.number().optional(),
+      costCenterId: z.number().optional(),
+      contraAccountId: z.number().optional(),
       notes: z.string().optional(),
-      items: z.array(z.object({ itemId: z.number(), quantity: z.string(), reason: z.string().optional() })),
+      items: z.array(z.object({
+        itemId: z.number(),
+        warehouseId: z.number().optional(),
+        actualQty: z.string(),
+        batchNumber: z.string().optional(),
+        notes: z.string().optional(),
+      })),
     })).mutation(async ({ ctx, input }) => {
       await assertEntityAction(ctx, "inventory", "stockAdjustment", "add");
       const db = await getDb();
@@ -6020,33 +6048,71 @@ const inventoryRouter = router({
       await assertDateNotInClosedPeriod(db, ctx.tenantId, input.date);
       const scope = await loadUserScopeFromCtx(db, ctx.saasUser);
       assertWarehouseAccess(scope, input.warehouseId);
+      if (input.branchId) assertEntityBranchAccess(scope, input.branchId);
+      for (const item of input.items) {
+        assertWarehouseAccess(scope, item.warehouseId ?? input.warehouseId);
+      }
       const [countResult] = await db.select({ count: count() }).from(inventoryAdjustments).where(tenantWhere(inventoryAdjustments, ctx.tenantId));
       const number = `IA-${String(countResult.count + 1).padStart(5, "0")}`;
       const [result] = await db.insert(inventoryAdjustments).values(withTenantId(ctx.tenantId, {
         number, warehouseId: input.warehouseId, date: input.date as any,
-        reason: input.notes, status: "confirmed",
+        reason: input.notes, reference: input.reference, branchId: input.branchId,
+        costCenterId: input.costCenterId, contraAccountId: input.contraAccountId,
+        status: "confirmed",
       }) as any);
       const adjId = (result as any).insertId;
       const { applyStockMovement, getWarehouseItemQty } = await import("./inventory-stock");
+
+      let netValue = 0;
+      const costMap = new Map<number, number>();
+      if (input.contraAccountId && input.items.length) {
+        const itemIds = input.items.map((it) => it.itemId);
+        const costRows = await db.select({ id: items.id, averageCost: items.averageCost, purchasePrice: items.purchasePrice })
+          .from(items).where(tenantWhere(items, ctx.tenantId, inArray(items.id, itemIds)));
+        for (const r of costRows) costMap.set(r.id, Number(r.averageCost || 0) || Number(r.purchasePrice || 0));
+      }
+
       for (const item of input.items) {
-        const qty = Number(item.quantity);
-        const currentQty = await getWarehouseItemQty(db, ctx.tenantId, item.itemId, input.warehouseId);
-        const newQty = input.adjustmentType === "addition" ? currentQty + qty : Math.max(0, currentQty - qty);
+        const lineWarehouseId = item.warehouseId ?? input.warehouseId;
+        const currentQty = await getWarehouseItemQty(db, ctx.tenantId, item.itemId, lineWarehouseId);
+        const newQty = Number(item.actualQty);
         const difference = newQty - currentQty;
         await db.insert(inventoryAdjustmentItems).values(withTenantId(ctx.tenantId, {
           adjustmentId: adjId,
           itemId: item.itemId,
+          warehouseId: lineWarehouseId,
           currentQty: String(currentQty),
           newQty: String(newQty),
           difference: String(difference),
+          batchNumber: item.batchNumber,
+          notes: item.notes,
         }) as any);
-        await applyStockMovement(db, ctx.tenantId, {
-          itemId: item.itemId,
-          quantity: Math.abs(difference),
-          direction: difference >= 0 ? "in" : "out",
-          warehouseId: input.warehouseId,
-        });
+        if (difference !== 0) {
+          await applyStockMovement(db, ctx.tenantId, {
+            itemId: item.itemId,
+            quantity: Math.abs(difference),
+            direction: difference >= 0 ? "in" : "out",
+            warehouseId: lineWarehouseId,
+          });
+        }
+        if (input.contraAccountId) {
+          netValue += difference * (costMap.get(item.itemId) ?? 0);
+        }
       }
+
+      if (input.contraAccountId) {
+        const journal = await postInventoryAdjustmentJournal(
+          db, ctx.tenantId, ctx.user?.id,
+          { id: adjId, number, date: input.date },
+          input.contraAccountId, netValue, input.costCenterId,
+        );
+        if (!journal.skipped) {
+          await db.update(inventoryAdjustments).set({ journalId: journal.id }).where(
+            tenantWhere(inventoryAdjustments, ctx.tenantId, eq(inventoryAdjustments.id, adjId)),
+          );
+        }
+      }
+
       return { success: true, id: adjId, number };
     }),
   }),

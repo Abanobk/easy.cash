@@ -860,6 +860,12 @@ export const inventoryAdjustments = mysqlTable("inventory_adjustments", {
   date: date("date").notNull(),
   reason: text("reason"),
   status: mysqlEnum("status", ["draft", "confirmed", "cancelled"]).default("draft"),
+  reference: varchar("reference", { length: 100 }),
+  branchId: int("branchId"),
+  costCenterId: int("costCenterId"),
+  /** الحساب المقابل لترحيل قيد التسوية — لو فاضي، التسوية بتتسجل من غير أي أثر محاسبي (زي القديم) */
+  contraAccountId: int("contraAccountId"),
+  journalId: int("journalId"),
   createdBy: int("createdBy"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
@@ -869,10 +875,14 @@ export const inventoryAdjustmentItems = mysqlTable("inventory_adjustment_items",
   tenantId: int("tenantId").notNull().default(1),
   adjustmentId: int("adjustmentId").notNull(),
   itemId: int("itemId").notNull(),
+  /** مخزن السطر — لو فاضي بيرجع لمخزن المستند الافتراضي */
+  warehouseId: int("warehouseId"),
   currentQty: decimal("currentQty", { precision: 15, scale: 3 }).default("0"),
   newQty: decimal("newQty", { precision: 15, scale: 3 }).notNull(),
   difference: decimal("difference", { precision: 15, scale: 3 }).default("0"),
   batchId: int("batchId"),
+  batchNumber: varchar("batchNumber", { length: 100 }),
+  notes: text("notes"),
 });
 
 // ===================== STOCK TRANSFERS =====================

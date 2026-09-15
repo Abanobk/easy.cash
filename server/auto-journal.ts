@@ -1534,6 +1534,50 @@ export async function postProductionCompletionJournal(
   });
 }
 
+/**
+ * قيد تسوية مخزون — بس لو المستخدم اختار "حساب مقابل" في المستند؛ لو فاضي التسوية
+ * بتتسجل من غير أي أثر محاسبي (زي سلوك تسوية المخزون قبل ما يتضاف الحقل ده).
+ * netValue موجبة = زيادة صافية في المخزون (مدين مخزون / دائن الحساب المقابل)، والعكس صحيح.
+ */
+export async function postInventoryAdjustmentJournal(
+  db: Db,
+  tenantId: number,
+  createdBy: number | undefined,
+  adjustment: { id: number; number: string; date: string },
+  contraAccountId: number,
+  netValue: number,
+  costCenterId?: number,
+) {
+  if (Math.abs(netValue) < 0.005) return { skipped: true as const };
+
+  const map = await resolveAccountMap(db, tenantId);
+  const amount = money(Math.abs(netValue));
+  const increase = netValue > 0;
+  const reference = `INV-ADJ-${adjustment.id}`;
+
+  return createPostedJournal(db, tenantId, createdBy, {
+    date: adjustment.date,
+    description: `تسوية مخزون ${adjustment.number}`,
+    reference,
+    lines: [
+      {
+        accountId: map.inventory,
+        debit: increase ? amount : "0.00",
+        credit: increase ? "0.00" : amount,
+        description: `تسوية مخزون — ${adjustment.number}`,
+        costCenterId,
+      },
+      {
+        accountId: contraAccountId,
+        debit: increase ? "0.00" : amount,
+        credit: increase ? amount : "0.00",
+        description: `حساب مقابل لتسوية مخزون — ${adjustment.number}`,
+        costCenterId,
+      },
+    ],
+  });
+}
+
 async function resolveOrCreateLoanAccount(
   db: Db,
   tenantId: number,

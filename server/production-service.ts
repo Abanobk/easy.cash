@@ -11,7 +11,7 @@ import {
   postProductionCompletionJournal,
   postProductionWipJournal,
 } from "./auto-journal";
-import { applyStockMovement } from "./inventory-stock";
+import { applyStockMovement, getWarehouseItemQty } from "./inventory-stock";
 import { assertDateNotInClosedPeriod } from "./fiscal-period-guard";
 import { downstreamMessage, findDownstreamStockConsumers } from "./reversal-guards";
 import { tenantWhere } from "./tenant-scope";
@@ -143,19 +143,22 @@ export async function assertMaterialsAvailable(
 
   const itemIds = materials.map((m) => m.itemId);
   const itemRows = await db
-    .select({ id: items.id, name: items.name, currentStock: items.currentStock })
+    .select({ id: items.id, name: items.name })
     .from(items)
     .where(tenantWhere(items, tenantId, inArray(items.id, itemIds)));
-  const stockMap = new Map(itemRows.map((i) => [i.id, i]));
+  const nameMap = new Map(itemRows.map((i) => [i.id, i.name]));
 
   const orderQty = num(order.quantity);
   const shortages: string[] = [];
   for (const m of materials) {
     const needed = materialNeedWithScrap(m.quantity, orderQty, m.scrapPercent);
-    const row = stockMap.get(m.itemId);
-    const available = num(row?.currentStock);
+    // كل خامة بترصد من مخزنها الخاص لو محدد، وإلا مخزن الأمر — بالظبط زي الصرف الفعلي في
+    // completeProductionOrder، عشان "الاعتماد هيترفض" في الواجهة يبقى له معنى حقيقي
+    // ومايوافقش بس لأن رصيد الصنف الإجمالي في كل المخازن كافي.
+    const warehouseId = m.warehouseId ?? order.warehouseId;
+    const available = await getWarehouseItemQty(db, tenantId, m.itemId, warehouseId);
     if (needed > available + 1e-9) {
-      shortages.push(`${row?.name || `#${m.itemId}`}: مطلوب ${needed.toLocaleString("en-US")} · متاح ${available.toLocaleString("en-US")}`);
+      shortages.push(`${nameMap.get(m.itemId) || `#${m.itemId}`}: مطلوب ${needed.toLocaleString("en-US")} · متاح ${available.toLocaleString("en-US")}`);
     }
   }
   if (shortages.length) {
