@@ -95,7 +95,7 @@ export default function StockTransfers() {
   });
   const { data: warehouses } = trpc.warehouses.list.useQuery();
   const { data: branches } = trpc.settings.branches.list.useQuery();
-  const { data: itemsList } = trpc.items.list.useQuery({ page: 1, limit: 500 });
+  const { data: allItems } = trpc.items.all.useQuery();
   const { data: categories } = trpc.items.categories.useQuery();
   const { data: accountsChart } = trpc.accounts.chart.useQuery();
   const leafAccounts = (accountsChart || []).filter((a: any) => !a.isParent);
@@ -107,7 +107,7 @@ export default function StockTransfers() {
     const lines = items
       .filter((it) => it.itemId)
       .map((it) => {
-        const row = (itemsList?.rows || []).find((x: any) => String(x.id) === it.itemId);
+        const row = (allItems || []).find((x: any) => String(x.id) === it.itemId);
         return {
           name: row ? (row.code ? `${row.code} — ${row.name}` : row.name) : it.itemId,
           quantity: Number(it.quantity || 0),
@@ -208,7 +208,7 @@ export default function StockTransfers() {
         itemId: Number(itemId),
         warehouseId: Number(warehouseId),
       });
-      const catalogItem = (itemsList?.rows || []).find((r: any) => String(r.id) === itemId);
+      const catalogItem = (allItems || []).find((r: any) => String(r.id) === itemId);
       const expectedCost = Number(catalogItem?.averageCost ?? catalogItem?.purchasePrice ?? 0);
       setItems((prev) =>
         prev.map((it, i) => (i === rowIdx ? {
@@ -262,7 +262,7 @@ export default function StockTransfers() {
   }, [form.fromWarehouseId]);
 
   const handleBarcode = async () => {
-    const hit = findItemByScan((itemsList?.rows || []) as any, barcode);
+    const hit = findItemByScan((allItems || []) as any, barcode);
     if (!hit) return toast.error("باركود غير موجود");
     const emptyIdx = items.findIndex((it) => !it.itemId);
     if (emptyIdx >= 0) {
@@ -671,7 +671,7 @@ export default function StockTransfers() {
                       <TableRow key={i}>
                         <TableCell className="p-1 min-w-[180px]">
                           <ItemSearchSelect
-                            items={(itemsList?.rows || []).filter((x: any) => !lineCategoryId || String(x.categoryId || "") === lineCategoryId)}
+                            items={(allItems || []).filter((x: any) => !lineCategoryId || String(x.categoryId || "") === lineCategoryId)}
                             value={it.itemId}
                             onChange={(v) => void updateItem(i, "itemId", v)}
                             placeholder="اختر الصنف"

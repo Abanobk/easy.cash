@@ -16,10 +16,10 @@ export function useEmployeeOptions() {
 }
 
 export function useItemOptions() {
-  const q = trpc.items.list.useQuery({ page: 1, limit: 500 });
+  const q = trpc.items.all.useQuery();
   return useMemo(
     () =>
-      (q.data?.rows || []).map((i: { id: number; name: string; code?: string | null; unit?: string | null }) => ({
+      (q.data || []).map((i: { id: number; name: string; code?: string | null; unit?: string | null }) => ({
         value: String(i.id),
         label: [
           i.code ? String(i.code) : null,

@@ -79,8 +79,8 @@ export default function BankTransactions() {
     search: listFilters.search,
   });
   const { data: bankAccounts } = trpc.bank.accounts.list.useQuery();
-  const { data: customers } = trpc.customers.list.useQuery({ page: 1, limit: 200 });
-  const { data: suppliers } = trpc.suppliers.list.useQuery({ page: 1, limit: 200 });
+  const { data: customers } = trpc.customers.list.useQuery({ page: 1, limit: 500 });
+  const { data: suppliers } = trpc.suppliers.list.useQuery({ page: 1, limit: 500 });
   const fiscalCheck = trpc.parity.settings.fiscalYears.checkDate.useQuery(
     { date: form.date },
     { enabled: !!form.date },
@@ -245,7 +245,7 @@ export default function BankTransactions() {
               <PartySearchSelect
                 parties={customers?.rows || []}
                 value={form.customerId?.toString() || ""}
-                onChange={(v) => setForm((p) => ({ ...p, customerId: Number(v) }))}
+                onChange={(v) => setForm((p) => ({ ...p, customerId: v ? Number(v) : undefined }))}
                 placeholder="اختر العميل"
               />
               <p className="text-xs text-slate-500 mt-1">
@@ -261,7 +261,7 @@ export default function BankTransactions() {
               <PartySearchSelect
                 parties={suppliers?.rows || []}
                 value={form.supplierId?.toString() || ""}
-                onChange={(v) => setForm((p) => ({ ...p, supplierId: Number(v) }))}
+                onChange={(v) => setForm((p) => ({ ...p, supplierId: v ? Number(v) : undefined }))}
                 placeholder="اختر المورد"
               />
               <p className="text-xs text-slate-500 mt-1">

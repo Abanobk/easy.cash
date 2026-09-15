@@ -143,7 +143,7 @@ export default function Production() {
     dateFrom: query.dateFrom || undefined,
     dateTo: query.dateTo || undefined,
   });
-  const { data: itemsList } = trpc.items.list.useQuery({ page: 1, limit: 500 });
+  const { data: allItems } = trpc.items.all.useQuery();
   const { data: warehouses } = trpc.warehouses.list.useQuery();
   const { data: branches } = trpc.settings.branches.list.useQuery();
   const detailQ = trpc.production.get.useQuery(viewId ?? editId ?? 0, { enabled: !!(viewId || editId) });
@@ -154,7 +154,7 @@ export default function Production() {
   );
   const utils = trpc.useUtils();
 
-  const items: ItemOpt[] = (itemsList?.rows || []) as any;
+  const items: ItemOpt[] = (allItems || []) as any;
   const itemMap = useMemo(() => new Map(items.map((i) => [String(i.id), i])), [items]);
 
   /** رصيد كل خامة في الأمر موزّع على المخازن — عشان "المتاح" يبقى صح حسب المخزن اللي هيتصرف منه فعليًا */

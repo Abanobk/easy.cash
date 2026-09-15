@@ -44,7 +44,7 @@ export default function SalesOrders() {
     number: listFilters.number, referenceNumber: listFilters.referenceNumber, search: listFilters.search,
   });
   const { data: customers } = trpc.customers.list.useQuery({ page: 1, limit: 200 });
-  const { data: itemsList } = trpc.items.list.useQuery({ page: 1, limit: 200 });
+  const { data: allItems } = trpc.items.all.useQuery();
   const { data: branchList } = trpc.settings.branches.list.useQuery();
   const { data: salesReps } = trpc.salesReps.list.useQuery();
   const warehouses = useWarehouseOptions();
@@ -307,7 +307,7 @@ export default function SalesOrders() {
                       <TableRow key={i}>
                         <TableCell className="p-1">
                           <ItemSearchSelect
-                            items={itemsList?.rows || []}
+                            items={allItems || []}
                             value={it.itemId}
                             onChange={(v) => updateItem(i, "itemId", v)}
                             placeholder="اختر الصنف"

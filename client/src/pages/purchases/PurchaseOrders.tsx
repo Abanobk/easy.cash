@@ -45,7 +45,7 @@ export default function PurchaseOrders() {
     number: listFilters.number, referenceNumber: listFilters.referenceNumber, search: listFilters.search,
   });
   const { data: suppliers } = trpc.suppliers.list.useQuery({ page: 1, limit: 200 });
-  const { data: itemsList } = trpc.items.list.useQuery({ page: 1, limit: 200 });
+  const { data: allItems } = trpc.items.all.useQuery();
   const { data: branchList } = trpc.settings.branches.list.useQuery();
   const warehouses = useWarehouseOptions();
   const createMut = trpc.purchases.orders.create.useMutation({ onSuccess: () => { toast.success("تم إنشاء طلب الشراء"); refetch(); closeDialog(); } });
@@ -292,7 +292,7 @@ export default function PurchaseOrders() {
                       <TableRow key={i}>
                         <TableCell className="p-1">
                           <ItemSearchSelect
-                            items={itemsList?.rows || []}
+                            items={allItems || []}
                             value={it.itemId}
                             onChange={(v) => updateItem(i, "itemId", v)}
                             placeholder="اختر الصنف"

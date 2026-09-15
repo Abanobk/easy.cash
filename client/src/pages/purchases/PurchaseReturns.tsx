@@ -76,7 +76,7 @@ export default function PurchaseReturns() {
     search: listFilters.search,
   });
   const { data: suppliers } = trpc.suppliers.list.useQuery({ page: 1, limit: 200 });
-  const { data: itemsList } = trpc.items.list.useQuery({ page: 1, limit: 200 });
+  const { data: allItems } = trpc.items.all.useQuery();
   const { data: branchList } = trpc.settings.branches.list.useQuery();
   const warehouses = useWarehouseOptions();
 
@@ -321,7 +321,7 @@ export default function PurchaseReturns() {
                     {items.map((it, i) => (
                       <TableRow key={i}>
                         <TableCell className="p-1 min-w-[160px]">
-                          <ItemSearchSelect items={itemsList?.rows || []} value={it.itemId} onChange={(v) => updateItem(i, "itemId", v)} placeholder="اختر الصنف" />
+                          <ItemSearchSelect items={allItems || []} value={it.itemId} onChange={(v) => updateItem(i, "itemId", v)} placeholder="اكتب للبحث عن صنف…" />
                         </TableCell>
                         <TableCell className="p-1"><Input type="number" value={it.quantity} onChange={(e) => updateItem(i, "quantity", e.target.value)} className="h-8 text-xs w-16" /></TableCell>
                         <TableCell className="p-1"><Input type="number" value={it.unitPrice} onChange={(e) => updateItem(i, "unitPrice", e.target.value)} className="h-8 text-xs w-20" /></TableCell>

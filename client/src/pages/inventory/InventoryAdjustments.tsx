@@ -15,6 +15,9 @@ import { Plus, ClipboardList, Trash2, Search, ArrowRight } from "lucide-react";
 import { toast } from "sonner";
 import { AddActionButton } from "@/components/AddActionButton";
 import { ItemSearchSelect } from "@/components/ItemSearchSelect";
+import { PartySearchSelect } from "@/components/PartySearchSelect";
+import { SearchSelect } from "@/components/SearchSelect";
+import { AccountSearchSelect } from "@/components/AccountSearchSelect";
 import { findItemByScan } from "@/lib/barcode";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { printWarehouseNote } from "@/lib/print-invoice-quick";
@@ -95,12 +98,25 @@ export default function InventoryAdjustments() {
   }, { enabled: !isNewRoute });
   const { data: warehouses } = trpc.warehouses.list.useQuery();
   const { data: branches } = trpc.settings.branches.list.useQuery();
-  const { data: itemsList } = trpc.items.list.useQuery({ page: 1, limit: 500 });
+  /** كل الأصناف النشطة — نفس مصدر فاتورة البيع عشان البحث الذكي يشوف الكل */
+  const { data: allItems } = trpc.items.all.useQuery();
   const { data: categories } = trpc.items.categories.useQuery();
   const { data: accountsChart } = trpc.accounts.chart.useQuery();
   const { data: costCentersList } = trpc.costCenters.list.useQuery();
-  const { data: customersList } = trpc.customers.list.useQuery({ page: 1, limit: 300 });
+  const { data: customersList } = trpc.customers.list.useQuery({ page: 1, limit: 500 });
   const utils = trpc.useUtils();
+
+  const itemRows = allItems || [];
+  const costCenterOptions = useMemo(
+    () => (costCentersList || []).map((c: any) => ({ id: c.id, label: c.name })),
+    [costCentersList],
+  );
+  const warehouseOptions = useMemo(
+    () => (warehouses as any[] || [])
+      .filter((w: any) => !form.branchId || String(w.branchId || "") === form.branchId)
+      .map((w: any) => ({ id: w.id, label: w.name })),
+    [warehouses, form.branchId],
+  );
 
   const totals = useMemo(() => {
     const qty = items.reduce((s, it) => s + Number(it.quantity || 0), 0);
@@ -121,7 +137,7 @@ export default function InventoryAdjustments() {
     const lines = items
       .filter((it) => it.itemId)
       .map((it) => {
-        const row = (itemsList?.rows || []).find((x: any) => String(x.id) === it.itemId);
+        const row = itemRows.find((x: any) => String(x.id) === it.itemId);
         return {
           name: row ? (row.code ? `${row.code} — ${row.name}` : row.name) : it.itemId,
           quantity: Number(it.quantity || 0),
@@ -196,7 +212,7 @@ export default function InventoryAdjustments() {
       if (idx !== i) return item;
       const next = { ...item, [field]: val };
       if (field === "itemId") {
-        const row = (itemsList?.rows || []).find((x: any) => String(x.id) === val);
+        const row = itemRows.find((x: any) => String(x.id) === val);
         if (row) {
           if (!item.unitCost) next.unitCost = String(row.averageCost ?? row.purchasePrice ?? "");
           if (!item.unit) next.unit = String(row.unit || "");
@@ -218,7 +234,7 @@ export default function InventoryAdjustments() {
   }, [form.warehouseId]);
 
   const handleBarcode = async () => {
-    const hit = findItemByScan((itemsList?.rows || []) as any, barcode);
+    const hit = findItemByScan(itemRows as any, barcode);
     if (!hit) return toast.error("باركود غير موجود");
     const emptyIdx = items.findIndex((it) => !it.itemId);
     if (emptyIdx >= 0) {
@@ -292,7 +308,7 @@ export default function InventoryAdjustments() {
     setSearch("");
   };
 
-  const filteredItems = (itemsList?.rows || []).filter(
+  const filteredItems = itemRows.filter(
     (x: any) => !lineCategoryId || String(x.categoryId || "") === lineCategoryId,
   );
 
@@ -328,13 +344,13 @@ export default function InventoryAdjustments() {
               </CardTitle>
             </CardHeader>
             <CardContent className="pt-4 space-y-5">
-              {/* رأس المستند — ترتيب ميجا */}
+              {/* رأس المستند — ترتيب ميجا + بحث ذكي بدل Select الطويل */}
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-                <div className="space-y-1">
+                <div className="space-y-1 min-w-0">
                   <Label className="text-xs font-medium">التاريخ *</Label>
                   <Input type="date" value={form.date} onChange={(e) => setForm((f) => ({ ...f, date: e.target.value }))} className="h-9 text-sm" />
                 </div>
-                <div className="space-y-1">
+                <div className="space-y-1 min-w-0">
                   <Label className="text-xs font-medium">الفرع</Label>
                   <Select value={form.branchId || "none"} onValueChange={(v) => setForm((f) => ({ ...f, branchId: v === "none" ? "" : v, warehouseId: "" }))}>
                     <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="اختر" /></SelectTrigger>
@@ -346,64 +362,50 @@ export default function InventoryAdjustments() {
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="space-y-1">
+                <div className="space-y-1 min-w-0">
                   <Label className="text-xs font-medium">الحساب المقابل</Label>
-                  <Select value={form.oppositeAccountId || "none"} onValueChange={(v) => setForm((f) => ({ ...f, oppositeAccountId: v === "none" ? "" : v }))}>
-                    <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="اختر" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">—</SelectItem>
-                      {(accountsChart || []).filter((a: any) => !a.isParent).map((a: any) => (
-                        <SelectItem key={a.id} value={String(a.id)}>{a.code} — {a.name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <AccountSearchSelect
+                    accounts={(accountsChart || []).filter((a: any) => !a.isParent)}
+                    value={form.oppositeAccountId}
+                    onChange={(v) => setForm((f) => ({ ...f, oppositeAccountId: v }))}
+                    placeholder="ابحث كود أو حساب…"
+                  />
                 </div>
-                <div className="space-y-1">
+                <div className="space-y-1 min-w-0">
                   <Label className="text-xs font-medium">رقم المرجع</Label>
                   <Input value={form.referenceNumber} onChange={(e) => setForm((f) => ({ ...f, referenceNumber: e.target.value }))} className="h-9 text-sm" />
                 </div>
-                <div className="space-y-1">
+                <div className="space-y-1 min-w-0">
                   <Label className="text-xs font-medium">العميل</Label>
-                  <Select value={form.customerId || "none"} onValueChange={(v) => setForm((f) => ({ ...f, customerId: v === "none" ? "" : v }))}>
-                    <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="اختر" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">—</SelectItem>
-                      {(customersList?.rows || []).map((c: any) => (
-                        <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <PartySearchSelect
+                    parties={customersList?.rows || []}
+                    value={form.customerId}
+                    onChange={(v) => setForm((f) => ({ ...f, customerId: v }))}
+                    placeholder="ابحث عميل…"
+                  />
                 </div>
-                <div className="space-y-1">
+                <div className="space-y-1 min-w-0">
                   <Label className="text-xs font-medium">مركز التكلفة</Label>
-                  <Select value={form.costCenterId || "none"} onValueChange={(v) => setForm((f) => ({ ...f, costCenterId: v === "none" ? "" : v }))}>
-                    <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="اختر" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">—</SelectItem>
-                      {(costCentersList || []).map((c: any) => (
-                        <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <SearchSelect
+                    options={costCenterOptions}
+                    value={form.costCenterId}
+                    onChange={(v) => setForm((f) => ({ ...f, costCenterId: v }))}
+                    placeholder="ابحث مركز تكلفة…"
+                  />
                 </div>
               </div>
 
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                <div className="space-y-1">
+                <div className="space-y-1 min-w-0">
                   <Label className="text-xs font-medium">المخزن *</Label>
-                  <Select value={form.warehouseId || "none"} onValueChange={(v) => setForm((f) => ({ ...f, warehouseId: v === "none" ? "" : v }))}>
-                    <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="اختر المخزن" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">—</SelectItem>
-                      {(warehouses as any[] || [])
-                        .filter((w: any) => !form.branchId || String(w.branchId || "") === form.branchId)
-                        .map((w: any) => (
-                          <SelectItem key={w.id} value={String(w.id)}>{w.name}</SelectItem>
-                        ))}
-                    </SelectContent>
-                  </Select>
+                  <SearchSelect
+                    options={warehouseOptions}
+                    value={form.warehouseId}
+                    onChange={(v) => setForm((f) => ({ ...f, warehouseId: v }))}
+                    placeholder="ابحث مخزن…"
+                  />
                 </div>
-                <div className="space-y-1">
+                <div className="space-y-1 min-w-0">
                   <Label className="text-xs font-medium">الكمية الواردة / الصادرة</Label>
                   <Select value={form.adjustmentType} onValueChange={(v) => setForm((f) => ({ ...f, adjustmentType: v as any }))}>
                     <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
@@ -413,7 +415,7 @@ export default function InventoryAdjustments() {
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="space-y-1">
+                <div className="space-y-1 min-w-0">
                   <Label className="text-xs font-medium">الفئة</Label>
                   <Select value={lineCategoryId || "all"} onValueChange={(v) => setLineCategoryId(v === "all" ? "" : v)}>
                     <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="كل الفئات" /></SelectTrigger>
@@ -425,7 +427,7 @@ export default function InventoryAdjustments() {
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="space-y-1">
+                <div className="space-y-1 min-w-0">
                   <Label className="text-xs font-medium">الباركود</Label>
                   <div className="flex gap-1">
                     <Input
@@ -439,8 +441,13 @@ export default function InventoryAdjustments() {
                   </div>
                 </div>
               </div>
+              <p className="text-[11px] text-slate-500">
+                أصناف متاحة للبحث: <span className="font-semibold text-slate-800 tabular-nums">{filteredItems.length}</span>
+                {lineCategoryId ? " (بعد فلتر الفئة)" : ""}
+                {" — اكتب حرفاً في خانة الصنف / العميل / الحساب للتضييق فوراً"}
+              </p>
 
-              {/* شبكة الأصناف */}
+              {/* شبكة الأصناف — أعمدة أساسية بدون سكرول أفقي؛ الإنتاج/الانتهاء تحت الصنف */}
               <div className="space-y-2">
                 <div className="flex items-center justify-between flex-wrap gap-2">
                   <Label className="text-sm font-semibold text-slate-800">الاصناف</Label>
@@ -453,62 +460,70 @@ export default function InventoryAdjustments() {
                     </Button>
                   </div>
                 </div>
-                <div className="border rounded-lg overflow-x-auto">
-                  <Table>
+                <div className="border rounded-lg overflow-hidden">
+                  <Table className="table-fixed w-full">
                     <TableHeader>
                       <TableRow className="bg-slate-50">
-                        <TableHead className="text-right text-xs whitespace-nowrap">الصنف</TableHead>
-                        <TableHead className="text-right text-xs whitespace-nowrap">المتاحة</TableHead>
-                        <TableHead className="text-right text-xs whitespace-nowrap">الكمية الواردة / الصادرة</TableHead>
-                        <TableHead className="text-right text-xs whitespace-nowrap">الكمية الفعلية</TableHead>
-                        <TableHead className="text-right text-xs whitespace-nowrap">الوحدة</TableHead>
-                        <TableHead className="text-right text-xs whitespace-nowrap">التكلفة</TableHead>
-                        <TableHead className="text-right text-xs whitespace-nowrap">رقم التشغيلة</TableHead>
-                        <TableHead className="text-right text-xs whitespace-nowrap">تاريخ الانتاج</TableHead>
-                        <TableHead className="text-right text-xs whitespace-nowrap">تاريخ الانتهاء</TableHead>
-                        <TableHead className="text-right text-xs whitespace-nowrap">ملاحظات</TableHead>
-                        <TableHead />
+                        <TableHead className="text-right text-xs w-[28%]">الصنف</TableHead>
+                        <TableHead className="text-right text-xs w-[8%]">المتاحة</TableHead>
+                        <TableHead className="text-right text-xs w-[10%]">وارد/صادر</TableHead>
+                        <TableHead className="text-right text-xs w-[9%]">فعلية</TableHead>
+                        <TableHead className="text-right text-xs w-[7%]">وحدة</TableHead>
+                        <TableHead className="text-right text-xs w-[9%]">تكلفة</TableHead>
+                        <TableHead className="text-right text-xs w-[10%]">تشغيلة</TableHead>
+                        <TableHead className="text-right text-xs w-[12%]">ملاحظات</TableHead>
+                        <TableHead className="w-8" />
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {items.map((it, i) => (
                         <TableRow key={i}>
-                          <TableCell className="p-1 min-w-[200px]">
+                          <TableCell className="p-1 align-top">
                             <ItemSearchSelect
                               items={filteredItems}
                               value={it.itemId}
                               onChange={(v) => void updateItem(i, "itemId", v)}
-                              placeholder="اختر الصنف"
+                              placeholder="اكتب للبحث عن صنف…"
                             />
+                            <div className="grid grid-cols-2 gap-1 mt-1">
+                              <Input
+                                type="date"
+                                value={it.productionDate}
+                                onChange={(e) => void updateItem(i, "productionDate", e.target.value)}
+                                className="h-7 text-[10px]"
+                                title="تاريخ الانتاج"
+                              />
+                              <Input
+                                type="date"
+                                value={it.expiryDate}
+                                onChange={(e) => void updateItem(i, "expiryDate", e.target.value)}
+                                className="h-7 text-[10px]"
+                                title="تاريخ الانتهاء"
+                              />
+                            </div>
                           </TableCell>
-                          <TableCell className="p-1 text-xs font-semibold text-slate-600 w-24">
+                          <TableCell className="p-1 text-xs font-semibold text-slate-600 align-top pt-2">
                             {it.available != null ? Number(it.available).toLocaleString("en-US") : "—"}
                           </TableCell>
-                          <TableCell className="p-1">
-                            <Input type="number" value={it.quantity} onChange={(e) => void updateItem(i, "quantity", e.target.value)} className="h-8 text-xs w-24" />
+                          <TableCell className="p-1 align-top">
+                            <Input type="number" value={it.quantity} onChange={(e) => void updateItem(i, "quantity", e.target.value)} className="h-8 text-xs" />
                           </TableCell>
-                          <TableCell className="p-1">
-                            <Input type="number" value={it.actualQty} onChange={(e) => void updateItem(i, "actualQty", e.target.value)} className="h-8 text-xs w-24" placeholder="جرد" title="الكمية الفعلية بعد الجرد" />
+                          <TableCell className="p-1 align-top">
+                            <Input type="number" value={it.actualQty} onChange={(e) => void updateItem(i, "actualQty", e.target.value)} className="h-8 text-xs" placeholder="جرد" title="الكمية الفعلية بعد الجرد" />
                           </TableCell>
-                          <TableCell className="p-1">
-                            <Input value={it.unit} onChange={(e) => void updateItem(i, "unit", e.target.value)} className="h-8 text-xs w-16" />
+                          <TableCell className="p-1 align-top">
+                            <Input value={it.unit} onChange={(e) => void updateItem(i, "unit", e.target.value)} className="h-8 text-xs" />
                           </TableCell>
-                          <TableCell className="p-1">
-                            <Input type="number" value={it.unitCost} onChange={(e) => void updateItem(i, "unitCost", e.target.value)} className="h-8 text-xs w-24" />
+                          <TableCell className="p-1 align-top">
+                            <Input type="number" value={it.unitCost} onChange={(e) => void updateItem(i, "unitCost", e.target.value)} className="h-8 text-xs" />
                           </TableCell>
-                          <TableCell className="p-1">
-                            <Input value={it.batchNumber} onChange={(e) => void updateItem(i, "batchNumber", e.target.value)} className="h-8 text-xs w-28" />
+                          <TableCell className="p-1 align-top">
+                            <Input value={it.batchNumber} onChange={(e) => void updateItem(i, "batchNumber", e.target.value)} className="h-8 text-xs" />
                           </TableCell>
-                          <TableCell className="p-1">
-                            <Input type="date" value={it.productionDate} onChange={(e) => void updateItem(i, "productionDate", e.target.value)} className="h-8 text-xs w-36" />
+                          <TableCell className="p-1 align-top">
+                            <Input value={it.reason} onChange={(e) => void updateItem(i, "reason", e.target.value)} className="h-8 text-xs" placeholder="…" />
                           </TableCell>
-                          <TableCell className="p-1">
-                            <Input type="date" value={it.expiryDate} onChange={(e) => void updateItem(i, "expiryDate", e.target.value)} className="h-8 text-xs w-36" />
-                          </TableCell>
-                          <TableCell className="p-1">
-                            <Input value={it.reason} onChange={(e) => void updateItem(i, "reason", e.target.value)} className="h-8 text-xs w-32" placeholder="ملاحظات..." />
-                          </TableCell>
-                          <TableCell className="p-1">
+                          <TableCell className="p-1 align-top">
                             <Button type="button" variant="ghost" size="sm" className="h-7 w-7 p-0 text-red-500" onClick={() => removeItem(i)} title="حذف">
                               <Trash2 size={12} />
                             </Button>
