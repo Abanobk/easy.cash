@@ -99,7 +99,7 @@ export default function PurchaseInvoices() {
   const utils = trpc.useUtils();
   useEffect(() => setPage(1), [debouncedSearch]);
   const { data, isLoading, refetch } = trpc.purchases.invoices.list.useQuery({ page, limit: 20, search: debouncedSearch || undefined });
-  const { data: suppliers } = trpc.suppliers.list.useQuery({ page: 1, limit: 200 });
+  const { data: suppliers } = trpc.suppliers.all.useQuery();
   const { data: allItems } = trpc.items.all.useQuery();
   const { data: warehouses } = trpc.warehouses.list.useQuery();
   const { data: branchList } = trpc.settings.branches.list.useQuery();
@@ -208,7 +208,7 @@ export default function PurchaseInvoices() {
   const firePrint = (number: string) => {
     printInvoiceQuick({
       title: "فاتورة شراء", number, date: form.date, partyLabel: "المورد",
-      partyName: suppliers?.rows.find((s) => s.id === form.supplierId)?.name || "",
+      partyName: suppliers?.find((s) => s.id === form.supplierId)?.name || "",
       lines: invoiceItems.map((i) => ({
         name: allItems?.find((a) => a.id === i.itemId)?.name || "",
         quantity: Number(i.quantity), unit: allItems?.find((a) => a.id === i.itemId)?.unit,
@@ -220,7 +220,7 @@ export default function PurchaseInvoices() {
   const fireWarehouseNote = (number: string) => {
     printWarehouseNote({
       title: "إذن مخزن", number, date: form.date, partyLabel: "المورد",
-      partyName: suppliers?.rows.find((s) => s.id === form.supplierId)?.name || "",
+      partyName: suppliers?.find((s) => s.id === form.supplierId)?.name || "",
       lines: invoiceItems.map((i) => ({
         name: allItems?.find((a) => a.id === i.itemId)?.name || "",
         quantity: Number(i.quantity), unit: allItems?.find((a) => a.id === i.itemId)?.unit,
@@ -343,7 +343,7 @@ export default function PurchaseInvoices() {
   const amountLabel = foreign ? form.currencyCode : "ج.م";
   const baseTotal = toBaseAmount(total, form.currencyCode, form.exchangeRate);
   const itemTracksSerial = (itemId: number) => Boolean(allItems?.find((i) => i.id === itemId)?.trackSerial);
-  const selectedSupplierBalance = suppliers?.rows.find((s) => s.id === form.supplierId)?.balance;
+  const selectedSupplierBalance = suppliers?.find((s) => s.id === form.supplierId)?.balance;
 
   const handleSubmit = (approveNow: boolean) => {
     setLastApproveNow(approveNow);
@@ -412,7 +412,7 @@ export default function PurchaseInvoices() {
                   <div className="flex gap-1">
                     <div className="flex-1 min-w-[9rem]">
                       <PartySearchSelect
-                        parties={suppliers?.rows || []}
+                        parties={suppliers || []}
                         value={form.supplierId?.toString() || ""}
                         onChange={(v) => setForm((p) => ({ ...p, supplierId: Number(v) }))}
                         placeholder="اختر المورد"

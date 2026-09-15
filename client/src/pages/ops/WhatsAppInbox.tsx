@@ -107,12 +107,12 @@ export default function WhatsAppInboxPage() {
     status: statusFilter === "all" ? undefined : statusFilter,
     limit: 120,
   });
-  const customersQuery = trpc.customers.list.useQuery({ page: 1, limit: 500 } as any, { retry: false });
-  const suppliersQuery = trpc.suppliers.list.useQuery({ page: 1, limit: 500 } as any, { retry: false });
+  const customersQuery = trpc.customers.all.useQuery(undefined, { retry: false });
+  const suppliersQuery = trpc.suppliers.all.useQuery(undefined, { retry: false });
   const banksQuery = trpc.bank.accounts.list.useQuery();
 
-  const customers = (customersQuery.data as any)?.rows || customersQuery.data || [];
-  const suppliers = (suppliersQuery.data as any)?.rows || suppliersQuery.data || [];
+  const customers = customersQuery.data || [];
+  const suppliers = suppliersQuery.data || [];
   const banks = banksQuery.data || [];
 
   const items = listQuery.data || [];

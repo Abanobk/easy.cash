@@ -27,7 +27,7 @@ export default function PurchaseReturns() {
   ]);
 
   const { data, refetch } = trpc.purchases.returns.list.useQuery({ page: 1, limit: 50 });
-  const { data: suppliers } = trpc.suppliers.list.useQuery({ page: 1, limit: 200 });
+  const { data: suppliers } = trpc.suppliers.all.useQuery();
   const { data: itemsList } = trpc.items.all.useQuery();
   const createMut = trpc.purchases.returns.create.useMutation({
     onSuccess: () => { toast.success("تم تسجيل مردود الشراء"); refetch(); setOpen(false); resetForm(); }
@@ -109,7 +109,7 @@ export default function PurchaseReturns() {
               <div className="space-y-1">
                 <Label className="text-xs">المورد *</Label>
                 <PartySearchSelect
-                  parties={suppliers?.rows || []}
+                  parties={suppliers || []}
                   value={form.supplierId}
                   onChange={(v) => setForm(f => ({ ...f, supplierId: v }))}
                   placeholder="اختر المورد"

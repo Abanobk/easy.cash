@@ -54,8 +54,8 @@ export default function BankTransactions() {
     type: lockedType,
   });
   const { data: bankAccounts } = trpc.bank.accounts.list.useQuery();
-  const { data: customers } = trpc.customers.list.useQuery({ page: 1, limit: 200 });
-  const { data: suppliers } = trpc.suppliers.list.useQuery({ page: 1, limit: 200 });
+  const { data: customers } = trpc.customers.all.useQuery();
+  const { data: suppliers } = trpc.suppliers.all.useQuery();
   const fiscalCheck = trpc.parity.settings.fiscalYears.checkDate.useQuery(
     { date: form.date },
     { enabled: !!form.date },
@@ -186,7 +186,7 @@ export default function BankTransactions() {
             <div className="col-span-2">
               <Label className="text-xs font-medium text-slate-700 mb-1.5 block">العميل *</Label>
               <PartySearchSelect
-                parties={customers?.rows || []}
+                parties={customers || []}
                 value={form.customerId?.toString() || ""}
                 onChange={(v) => setForm((p) => ({ ...p, customerId: Number(v) }))}
                 placeholder="اختر العميل"
@@ -202,7 +202,7 @@ export default function BankTransactions() {
             <div className="col-span-2">
               <Label className="text-xs font-medium text-slate-700 mb-1.5 block">المورد *</Label>
               <PartySearchSelect
-                parties={suppliers?.rows || []}
+                parties={suppliers || []}
                 value={form.supplierId?.toString() || ""}
                 onChange={(v) => setForm((p) => ({ ...p, supplierId: Number(v) }))}
                 placeholder="اختر المورد"

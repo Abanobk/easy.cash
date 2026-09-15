@@ -33,7 +33,7 @@ export default function SalesOrders() {
 
   const utils = trpc.useUtils();
   const { data, refetch } = trpc.sales.orders.list.useQuery({ page: 1, limit: 50 });
-  const { data: customers } = trpc.customers.list.useQuery({ page: 1, limit: 200 });
+  const { data: customers } = trpc.customers.all.useQuery();
   const { data: itemsList } = trpc.items.all.useQuery();
   const warehouses = useWarehouseOptions();
   const createMut = trpc.sales.orders.create.useMutation({ onSuccess: () => { toast.success("تم إنشاء طلب البيع"); refetch(); setOpen(false); resetForm(); } });
@@ -175,7 +175,7 @@ export default function SalesOrders() {
               <div className="space-y-1">
                 <Label className="text-xs">العميل *</Label>
                 <PartySearchSelect
-                  parties={customers?.rows || []}
+                  parties={customers || []}
                   value={form.customerId}
                   onChange={(v) => setForm(f => ({ ...f, customerId: v }))}
                   placeholder="اختر العميل"
