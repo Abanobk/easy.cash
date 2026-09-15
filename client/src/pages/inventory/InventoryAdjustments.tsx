@@ -98,15 +98,40 @@ export default function InventoryAdjustments() {
   }, { enabled: !isNewRoute });
   const { data: warehouses } = trpc.warehouses.list.useQuery();
   const { data: branches } = trpc.settings.branches.list.useQuery();
-  /** كل الأصناف النشطة — نفس مصدر فاتورة البيع عشان البحث الذكي يشوف الكل */
-  const { data: allItems } = trpc.items.all.useQuery();
+  /** كل الأصناف — مع احتياط list لو all فاضي/فشل (استيراد isActive أو حجم الاستجابة) */
+  const allItemsQ = trpc.items.all.useQuery(undefined, { retry: 1 });
+  const needListFallback =
+    allItemsQ.isError
+    || (allItemsQ.isSuccess && (allItemsQ.data?.length ?? 0) === 0);
+  const listFallbackQ = trpc.items.list.useQuery(
+    { page: 1, limit: 2000 },
+    { enabled: needListFallback, retry: 1 },
+  );
+  const inactiveAllQ = trpc.items.all.useQuery(
+    { includeInactive: true },
+    {
+      enabled: needListFallback
+        && listFallbackQ.isSuccess
+        && (listFallbackQ.data?.rows?.length ?? 0) === 0,
+      retry: 0,
+    },
+  );
   const { data: categories } = trpc.items.categories.useQuery();
   const { data: accountsChart } = trpc.accounts.chart.useQuery();
   const { data: costCentersList } = trpc.costCenters.list.useQuery();
   const { data: customersList } = trpc.customers.list.useQuery({ page: 1, limit: 500 });
   const utils = trpc.useUtils();
 
-  const itemRows = allItems || [];
+  const itemRows = useMemo(() => {
+    if (allItemsQ.data && allItemsQ.data.length > 0) return allItemsQ.data;
+    if (listFallbackQ.data?.rows && listFallbackQ.data.rows.length > 0) return listFallbackQ.data.rows;
+    if (inactiveAllQ.data && inactiveAllQ.data.length > 0) return inactiveAllQ.data;
+    return [];
+  }, [allItemsQ.data, listFallbackQ.data, inactiveAllQ.data]);
+  const itemsLoading = allItemsQ.isLoading || (needListFallback && listFallbackQ.isLoading);
+  const itemsLoadError = allItemsQ.isError && listFallbackQ.isError
+    ? (allItemsQ.error?.message || listFallbackQ.error?.message || "فشل تحميل الأصناف")
+    : null;
   const costCenterOptions = useMemo(
     () => (costCentersList || []).map((c: any) => ({ id: c.id, label: c.name })),
     [costCentersList],
@@ -316,7 +341,7 @@ export default function InventoryAdjustments() {
   if (isNewRoute) {
     return (
       <ERPLayout title="تسوية مخزنية">
-        <div className="space-y-4" dir="rtl">
+        <div className="space-y-4 overflow-x-hidden" dir="rtl">
           <div className="flex items-center justify-between gap-2 flex-wrap">
             <div className="flex items-center gap-2 flex-wrap">
               <Button variant="ghost" size="sm" onClick={() => { resetForm(); goToList(); }} className="gap-1 text-slate-600">
@@ -442,12 +467,17 @@ export default function InventoryAdjustments() {
                 </div>
               </div>
               <p className="text-[11px] text-slate-500">
-                أصناف متاحة للبحث: <span className="font-semibold text-slate-800 tabular-nums">{filteredItems.length}</span>
+                أصناف متاحة للبحث:{" "}
+                <span className="font-semibold text-slate-800 tabular-nums">{filteredItems.length}</span>
+                {itemsLoading ? " …جاري التحميل" : null}
+                {itemsLoadError ? <span className="text-red-600"> — {itemsLoadError}</span> : null}
+                {!itemsLoading && filteredItems.length === 0 ? (
+                  <span className="text-amber-700"> — لا أصناف في الكتالوج؛ راجع شاشة الأصناف أو الاستيراد</span>
+                ) : null}
                 {lineCategoryId ? " (بعد فلتر الفئة)" : ""}
-                {" — اكتب حرفاً في خانة الصنف / العميل / الحساب للتضييق فوراً"}
               </p>
 
-              {/* شبكة الأصناف — أعمدة أساسية بدون سكرول أفقي؛ الإنتاج/الانتهاء تحت الصنف */}
+              {/* سطور الأصناف — بطاقات متجاوبة بدون سكرول أفقي */}
               <div className="space-y-2">
                 <div className="flex items-center justify-between flex-wrap gap-2">
                   <Label className="text-sm font-semibold text-slate-800">الاصناف</Label>
@@ -460,78 +490,77 @@ export default function InventoryAdjustments() {
                     </Button>
                   </div>
                 </div>
-                <div className="border rounded-lg overflow-hidden">
-                  <Table className="table-fixed w-full">
-                    <TableHeader>
-                      <TableRow className="bg-slate-50">
-                        <TableHead className="text-right text-xs w-[28%]">الصنف</TableHead>
-                        <TableHead className="text-right text-xs w-[8%]">المتاحة</TableHead>
-                        <TableHead className="text-right text-xs w-[10%]">وارد/صادر</TableHead>
-                        <TableHead className="text-right text-xs w-[9%]">فعلية</TableHead>
-                        <TableHead className="text-right text-xs w-[7%]">وحدة</TableHead>
-                        <TableHead className="text-right text-xs w-[9%]">تكلفة</TableHead>
-                        <TableHead className="text-right text-xs w-[10%]">تشغيلة</TableHead>
-                        <TableHead className="text-right text-xs w-[12%]">ملاحظات</TableHead>
-                        <TableHead className="w-8" />
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {items.map((it, i) => (
-                        <TableRow key={i}>
-                          <TableCell className="p-1 align-top">
-                            <ItemSearchSelect
-                              items={filteredItems}
-                              value={it.itemId}
-                              onChange={(v) => void updateItem(i, "itemId", v)}
-                              placeholder="اكتب للبحث عن صنف…"
-                            />
-                            <div className="grid grid-cols-2 gap-1 mt-1">
-                              <Input
-                                type="date"
-                                value={it.productionDate}
-                                onChange={(e) => void updateItem(i, "productionDate", e.target.value)}
-                                className="h-7 text-[10px]"
-                                title="تاريخ الانتاج"
-                              />
-                              <Input
-                                type="date"
-                                value={it.expiryDate}
-                                onChange={(e) => void updateItem(i, "expiryDate", e.target.value)}
-                                className="h-7 text-[10px]"
-                                title="تاريخ الانتهاء"
-                              />
-                            </div>
-                          </TableCell>
-                          <TableCell className="p-1 text-xs font-semibold text-slate-600 align-top pt-2">
+
+                <div className="space-y-2">
+                  {items.map((it, i) => (
+                    <div key={i} className="rounded-lg border border-slate-200 bg-white p-2.5 space-y-2">
+                      <div className="flex gap-2 items-start">
+                        <div className="flex-1 min-w-0 space-y-1">
+                          <Label className="text-[10px] text-slate-500">الصنف</Label>
+                          <ItemSearchSelect
+                            items={filteredItems}
+                            value={it.itemId}
+                            onChange={(v) => void updateItem(i, "itemId", v)}
+                            placeholder={itemsLoading ? "جاري تحميل الأصناف…" : "اكتب للبحث عن صنف…"}
+                          />
+                        </div>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 w-8 p-0 text-red-500 shrink-0 mt-5"
+                          onClick={() => removeItem(i)}
+                          title="حذف"
+                        >
+                          <Trash2 size={14} />
+                        </Button>
+                      </div>
+
+                      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
+                        <div className="space-y-1">
+                          <Label className="text-[10px] text-slate-500">المتاحة</Label>
+                          <div className="h-8 flex items-center text-xs font-semibold text-slate-600 px-1">
                             {it.available != null ? Number(it.available).toLocaleString("en-US") : "—"}
-                          </TableCell>
-                          <TableCell className="p-1 align-top">
-                            <Input type="number" value={it.quantity} onChange={(e) => void updateItem(i, "quantity", e.target.value)} className="h-8 text-xs" />
-                          </TableCell>
-                          <TableCell className="p-1 align-top">
-                            <Input type="number" value={it.actualQty} onChange={(e) => void updateItem(i, "actualQty", e.target.value)} className="h-8 text-xs" placeholder="جرد" title="الكمية الفعلية بعد الجرد" />
-                          </TableCell>
-                          <TableCell className="p-1 align-top">
-                            <Input value={it.unit} onChange={(e) => void updateItem(i, "unit", e.target.value)} className="h-8 text-xs" />
-                          </TableCell>
-                          <TableCell className="p-1 align-top">
-                            <Input type="number" value={it.unitCost} onChange={(e) => void updateItem(i, "unitCost", e.target.value)} className="h-8 text-xs" />
-                          </TableCell>
-                          <TableCell className="p-1 align-top">
-                            <Input value={it.batchNumber} onChange={(e) => void updateItem(i, "batchNumber", e.target.value)} className="h-8 text-xs" />
-                          </TableCell>
-                          <TableCell className="p-1 align-top">
-                            <Input value={it.reason} onChange={(e) => void updateItem(i, "reason", e.target.value)} className="h-8 text-xs" placeholder="…" />
-                          </TableCell>
-                          <TableCell className="p-1 align-top">
-                            <Button type="button" variant="ghost" size="sm" className="h-7 w-7 p-0 text-red-500" onClick={() => removeItem(i)} title="حذف">
-                              <Trash2 size={12} />
-                            </Button>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
+                          </div>
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-[10px] text-slate-500">وارد / صادر</Label>
+                          <Input type="number" value={it.quantity} onChange={(e) => void updateItem(i, "quantity", e.target.value)} className="h-8 text-xs" />
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-[10px] text-slate-500">فعلية (جرد)</Label>
+                          <Input type="number" value={it.actualQty} onChange={(e) => void updateItem(i, "actualQty", e.target.value)} className="h-8 text-xs" placeholder="جرد" />
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-[10px] text-slate-500">الوحدة</Label>
+                          <Input value={it.unit} onChange={(e) => void updateItem(i, "unit", e.target.value)} className="h-8 text-xs" />
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-[10px] text-slate-500">التكلفة</Label>
+                          <Input type="number" value={it.unitCost} onChange={(e) => void updateItem(i, "unitCost", e.target.value)} className="h-8 text-xs" />
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-[10px] text-slate-500">رقم التشغيلة</Label>
+                          <Input value={it.batchNumber} onChange={(e) => void updateItem(i, "batchNumber", e.target.value)} className="h-8 text-xs" />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                        <div className="space-y-1">
+                          <Label className="text-[10px] text-slate-500">تاريخ الانتاج</Label>
+                          <Input type="date" value={it.productionDate} onChange={(e) => void updateItem(i, "productionDate", e.target.value)} className="h-8 text-xs" />
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-[10px] text-slate-500">تاريخ الانتهاء</Label>
+                          <Input type="date" value={it.expiryDate} onChange={(e) => void updateItem(i, "expiryDate", e.target.value)} className="h-8 text-xs" />
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-[10px] text-slate-500">ملاحظات</Label>
+                          <Input value={it.reason} onChange={(e) => void updateItem(i, "reason", e.target.value)} className="h-8 text-xs" placeholder="…" />
+                        </div>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
 

@@ -1000,61 +1000,68 @@ const itemsRouter = router({
   }),
   all: protectedProcedure.input(z.object({
     forSalesInvoice: z.boolean().optional(),
+    /** When false, only active/null. Default: all rows (same as items.list pickers). */
+    includeInactive: z.boolean().optional(),
   }).optional()).query(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-    const conditions = [eq(items.isActive, true)];
-    if (input?.forSalesInvoice) {
-      conditions.push(or(
-        isNull(items.categoryId),
-        eq(itemCategories.showInSalesInvoices, true),
-      )!);
-      return db.select({
-        id: items.id,
-        tenantId: items.tenantId,
-        code: items.code,
-        barcode: items.barcode,
-        name: items.name,
-        categoryId: items.categoryId,
-        altCategoryId: items.altCategoryId,
-        itemType: items.itemType,
-        unit: items.unit,
-        purchasePrice: items.purchasePrice,
-        averageCost: items.averageCost,
-        salePrice: items.salePrice,
-        minPrice: items.minPrice,
-        maxPrice: items.maxPrice,
-        percentDiscount: items.percentDiscount,
-        cashDiscount: items.cashDiscount,
-        minStock: items.minStock,
-        currentStock: items.currentStock,
-        taxRate: items.taxRate,
-        taxRate2: items.taxRate2,
-        taxRate3: items.taxRate3,
-        taxId: items.taxId,
-        tax2Id: items.tax2Id,
-        tax3Id: items.tax3Id,
-        trackSerial: items.trackSerial,
-        description: items.description,
-        isActive: items.isActive,
-        createdAt: items.createdAt,
-        updatedAt: items.updatedAt,
-      }).from(items)
-        .leftJoin(itemCategories, eq(items.categoryId, itemCategories.id))
-        .where(tenantWhere(items, ctx.tenantId, and(...conditions)))
-        .orderBy(
-          sql`(CASE WHEN ${items.code} IS NULL OR TRIM(${items.code}) = '' THEN 1 ELSE 0 END)`,
-          items.code,
-          items.name,
-          items.id,
-        );
-    }
-    return db.select().from(items).where(tenantWhere(items, ctx.tenantId, eq(items.isActive, true))).orderBy(
+    const itemCols = {
+      id: items.id,
+      tenantId: items.tenantId,
+      code: items.code,
+      barcode: items.barcode,
+      name: items.name,
+      categoryId: items.categoryId,
+      altCategoryId: items.altCategoryId,
+      itemType: items.itemType,
+      unit: items.unit,
+      purchasePrice: items.purchasePrice,
+      averageCost: items.averageCost,
+      salePrice: items.salePrice,
+      minPrice: items.minPrice,
+      maxPrice: items.maxPrice,
+      percentDiscount: items.percentDiscount,
+      cashDiscount: items.cashDiscount,
+      minStock: items.minStock,
+      currentStock: items.currentStock,
+      taxRate: items.taxRate,
+      taxRate2: items.taxRate2,
+      taxRate3: items.taxRate3,
+      taxId: items.taxId,
+      tax2Id: items.tax2Id,
+      tax3Id: items.tax3Id,
+      trackSerial: items.trackSerial,
+      description: items.description,
+      isActive: items.isActive,
+      createdAt: items.createdAt,
+      updatedAt: items.updatedAt,
+    };
+    const itemOrder = [
       sql`(CASE WHEN ${items.code} IS NULL OR TRIM(${items.code}) = '' THEN 1 ELSE 0 END)`,
       items.code,
       items.name,
       items.id,
-    );
+    ] as const;
+    // Default: no isActive filter (Mega imports sometimes leave isActive=0 and emptied pickers).
+    const activeCond = input?.includeInactive === false
+      ? or(eq(items.isActive, true), isNull(items.isActive))
+      : undefined;
+    if (input?.forSalesInvoice) {
+      const conditions = [
+        activeCond,
+        or(
+          isNull(items.categoryId),
+          eq(itemCategories.showInSalesInvoices, true),
+        ),
+      ].filter(Boolean);
+      return db.select(itemCols).from(items)
+        .leftJoin(itemCategories, eq(items.categoryId, itemCategories.id))
+        .where(tenantWhere(items, ctx.tenantId, and(...(conditions as any[]))))
+        .orderBy(...itemOrder);
+    }
+    return db.select(itemCols).from(items)
+      .where(tenantWhere(items, ctx.tenantId, activeCond))
+      .orderBy(...itemOrder);
   }),
   byId: protectedProcedure.input(z.number()).query(async ({ ctx, input }) => {
     const db = await getDb();
