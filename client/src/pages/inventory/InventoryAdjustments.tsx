@@ -22,6 +22,7 @@ import { findItemByScan } from "@/lib/barcode";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { printWarehouseNote } from "@/lib/print-invoice-quick";
 import { DocumentCommentsButton } from "@/components/DocumentCommentsButton";
+import { warehousesForBranch } from "@/lib/warehouse-options";
 
 type LineItem = {
   itemId: string;
@@ -141,9 +142,7 @@ export default function InventoryAdjustments() {
     [costCentersList],
   );
   const warehouseOptions = useMemo(
-    () => (warehouses as any[] || [])
-      .filter((w: any) => !form.branchId || String(w.branchId || "") === form.branchId)
-      .map((w: any) => ({ id: w.id, label: w.name })),
+    () => warehousesForBranch(warehouses as any[] || [], form.branchId),
     [warehouses, form.branchId],
   );
 
@@ -434,6 +433,7 @@ export default function InventoryAdjustments() {
                     value={form.warehouseId}
                     onChange={(v) => setForm((f) => ({ ...f, warehouseId: v }))}
                     placeholder="ابحث مخزن…"
+                    emptyLabel={warehouseOptions.length === 0 ? "لا توجد مخازن — أضف مخزناً من شاشة المخازن" : "لا نتائج"}
                   />
                 </div>
                 <div className="space-y-1 min-w-0 overflow-hidden">
