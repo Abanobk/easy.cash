@@ -84,6 +84,39 @@ function withScrap(qty: number, scrapPercent: unknown) {
   return qty * (1 + (Number(scrapPercent) || 0) / 100);
 }
 
+/**
+ * بيحوّل خامات أمر محفوظ (تعديل مسودة أو نسخ) لسطور — لو الخامة لسه موجودة في تركيبة المنتج
+ * الرسمية (item_bom_lines) بناخد quantityPerUnit الحقيقي منها بدقته الكاملة، بدل ما نشتقه بقسمة
+ * quantity÷savedQty. القسمة كانت بتفقد دقة لدرجة إن تغيير الكمية بعد كده بيطلع أرقام زي 179.999
+ * بدل 180 (خطأ تقريب float بيتضخم لما يتضرب في كمية إنتاج جديدة). لو الخامة إضافة يدوية مش في
+ * التركيبة الرسمية، بنفضل نستخدم القسمة لأنه معندناش مصدر تاني أدق.
+ */
+async function buildMaterialRowsFromOrder(
+  utils: ReturnType<typeof trpc.useUtils>,
+  productId: number,
+  savedQty: number,
+  savedMaterials: any[],
+): Promise<MaterialRow[]> {
+  const bomLines = await utils.production.bom.get.fetch({ productId }).catch(() => [] as any[]);
+  const bomByItemId = new Map((bomLines as any[]).map((l) => [String(l.materialItemId), Number(l.quantityPerUnit || 0)]));
+  return savedMaterials.map((m: any) => {
+    const itemId = String(m.itemId);
+    const official = bomByItemId.get(itemId);
+    const perUnit = official != null
+      ? perUnitStr(official)
+      : (savedQty > 0 ? perUnitStr(Number(m.quantity || 0) / savedQty) : String(m.quantity));
+    return {
+      itemId,
+      quantity: String(m.quantity),
+      perUnit,
+      scrapPercent: String(m.scrapPercent ?? "0"),
+      notes: m.notes || "",
+      source: "manual" as const,
+      warehouseId: m.warehouseId ? String(m.warehouseId) : "",
+    };
+  });
+}
+
 
 const emptyForm = () => ({
   productId: "",
@@ -417,15 +450,7 @@ export default function Production() {
       barcode: d.productCode || "",
     });
     const savedQty = Number(d.quantity || 0);
-    setMaterials(d.materials.map((m: any) => ({
-      itemId: String(m.itemId),
-      quantity: String(m.quantity),
-      perUnit: savedQty > 0 ? perUnitStr(Number(m.quantity || 0) / savedQty) : String(m.quantity),
-      scrapPercent: String(m.scrapPercent ?? "0"),
-      notes: m.notes || "",
-      source: "manual" as const,
-      warehouseId: m.warehouseId ? String(m.warehouseId) : "",
-    })));
+    setMaterials(await buildMaterialRowsFromOrder(utils, Number(d.productId), savedQty, d.materials));
     setTabNav("new");
   };
 
@@ -449,15 +474,7 @@ export default function Production() {
         barcode: d.productCode || "",
       });
       const savedQty = Number(d.quantity || 0);
-      setMaterials(d.materials.map((m: any) => ({
-        itemId: String(m.itemId),
-        quantity: String(m.quantity),
-        perUnit: savedQty > 0 ? perUnitStr(Number(m.quantity || 0) / savedQty) : String(m.quantity),
-        scrapPercent: String(m.scrapPercent ?? "0"),
-        notes: m.notes || "",
-        source: "manual" as const,
-        warehouseId: m.warehouseId ? String(m.warehouseId) : "",
-      })));
+      setMaterials(await buildMaterialRowsFromOrder(utils, Number(d.productId), savedQty, d.materials));
       setTabNav("new");
       toast.success(`تم نسخ الأمر ${d.number} — راجع البيانات واحفظ`);
     } catch (e: any) {
