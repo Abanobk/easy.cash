@@ -2,7 +2,9 @@
  * شاشة الإنتاج — مطابقة سلوك Mega Cash:
  * - /Production/ProductionOrder.aspx (أمر إنتاج: حفظ + اعتماد + خامات مطلقة)
  * - /Production/ProductionOrdersList.aspx (قائمة)
- * ملاحظة: Mega ليس فيها قائمة منفصلة باسم «الخلطات».
+ *
+ * مرجع الحقول/الأعمدة: artifacts/mega-wave8-production/COLUMNS.md (تقرير اوامر الانتاج)
+ * — بدون اختراع حقول لم تُلتقط من شاشة ProductionOrder.aspx نفسها.
  */
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearch } from "wouter";
@@ -15,7 +17,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import {
-  Plus, Factory, Trash2, Loader2, CheckCircle2, XCircle, Pencil, Eye, Copy, Undo2,
+  Plus, Factory, Trash2, Loader2, CheckCircle2, XCircle, Pencil, Eye, Copy, Undo2, ArrowRight,
 } from "lucide-react";
 import { toast } from "sonner";
 import EntityPermissionGate from "@/components/EntityPermissionGate";
@@ -23,6 +25,7 @@ import { useEntityAllowed } from "@/hooks/useEntityPermission";
 import { toDateStr } from "@/lib/date";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { ItemSearchSelect } from "@/components/ItemSearchSelect";
+import { warehousesForBranch } from "@/lib/warehouse-options";
 
 type Tab = "orders" | "new";
 /**
@@ -47,7 +50,7 @@ type ItemOpt = {
 };
 
 function statusLabel(s: string) {
-  // تسميات Mega: معلق / معتمد / ملغي (+ مكتمل عندنا لاستلام التام)
+  // تسميات قائمة/تقرير ميجا: معلق / معتمد / مكتمل / ملغي
   return ({ draft: "معلق", in_progress: "معتمد", completed: "مكتمل", cancelled: "ملغي" } as Record<string, string>)[s] || s;
 }
 function statusClass(s: string) {
@@ -82,7 +85,9 @@ function perUnitStr(n: number) {
 function withScrap(qty: number, scrapPercent: unknown) {
   return qty * (1 + (Number(scrapPercent) || 0) / 100);
 }
-
+function scrapQtyOf(qty: number, scrapPercent: unknown) {
+  return qty * ((Number(scrapPercent) || 0) / 100);
+}
 
 const emptyForm = () => ({
   productId: "",
@@ -96,9 +101,31 @@ const emptyForm = () => ({
   barcode: "",
 });
 
+type ListQuery = {
+  status: string;
+  warehouseId: string;
+  branchId: string;
+  productId: string;
+  batchNumber: string;
+  referenceNumber: string;
+  dateFrom: string;
+  dateTo: string;
+};
+
+const emptyListQuery = (): ListQuery => ({
+  status: "all",
+  warehouseId: "all",
+  branchId: "all",
+  productId: "",
+  batchNumber: "",
+  referenceNumber: "",
+  dateFrom: "",
+  dateTo: "",
+});
+
 export default function Production() {
   const searchStr = useSearch();
-    const tabFromUrl = useMemo(() => {
+  const tabFromUrl = useMemo(() => {
     const t = new URLSearchParams(searchStr).get("tab");
     if (t === "new" || t === "orders") return t as Tab;
     if (t === "bom") return "new" as Tab; // الخلطات ليست شاشة Mega — حوّل لأمر الإنتاج
@@ -119,9 +146,13 @@ export default function Production() {
   const debouncedSearch = useDebouncedValue(search);
   const [status, setStatus] = useState("all");
   const [warehouseId, setWarehouseId] = useState("all");
+  const [branchId, setBranchId] = useState("all");
+  const [filterProductId, setFilterProductId] = useState("");
+  const [filterBatch, setFilterBatch] = useState("");
+  const [filterRef, setFilterRef] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
-  const [query, setQuery] = useState({ status: "all", warehouseId: "all", dateFrom: "", dateTo: "" });
+  const [query, setQuery] = useState<ListQuery>(emptyListQuery);
   useEffect(() => setPage(1), [debouncedSearch]);
 
   const [editId, setEditId] = useState<number | null>(null);
@@ -131,15 +162,19 @@ export default function Production() {
   const [viewId, setViewId] = useState<number | null>(null);
   const [form, setForm] = useState(emptyForm);
   const [materials, setMaterials] = useState<MaterialRow[]>([]);
-  const [addMat, setAddMat] = useState({ itemId: "", quantity: "1", notes: "", warehouseId: "" });
+  const [addMat, setAddMat] = useState({ itemId: "", quantity: "1", notes: "", warehouseId: "", scrapPercent: "0" });
   const [printAfterSave, setPrintAfterSave] = useState(false);
 
   const listQ = trpc.production.list.useQuery({
     page,
     limit: 20,
     search: debouncedSearch || undefined,
-    status: query.status !== "all" ? (query.status as any) : undefined,
+    status: query.status !== "all" ? (query.status as "draft" | "in_progress" | "completed" | "cancelled") : undefined,
     warehouseId: query.warehouseId !== "all" ? Number(query.warehouseId) : undefined,
+    branchId: query.branchId !== "all" ? Number(query.branchId) : undefined,
+    productId: query.productId ? Number(query.productId) : undefined,
+    batchNumber: query.batchNumber || undefined,
+    referenceNumber: query.referenceNumber || undefined,
     dateFrom: query.dateFrom || undefined,
     dateTo: query.dateTo || undefined,
   });
@@ -154,8 +189,22 @@ export default function Production() {
   );
   const utils = trpc.useUtils();
 
-  const items: ItemOpt[] = (allItems || []) as any;
+  const items: ItemOpt[] = (allItems || []) as ItemOpt[];
   const itemMap = useMemo(() => new Map(items.map((i) => [String(i.id), i])), [items]);
+  const branchOptions: { id: number; name: string }[] = Array.isArray(branches)
+    ? (branches as { id: number; name: string }[])
+    : (((branches as unknown as { rows?: { id: number; name: string }[] })?.rows) || []);
+  const warehouseOpts = useMemo(
+    () => warehousesForBranch(warehouses as { id: number; name: string; branchId?: number | null; branchName?: string | null }[] | undefined, form.branchId || null),
+    [warehouses, form.branchId],
+  );
+  const listWarehouseOpts = useMemo(
+    () => warehousesForBranch(
+      warehouses as { id: number; name: string; branchId?: number | null; branchName?: string | null }[] | undefined,
+      query.branchId !== "all" ? query.branchId : (branchId !== "all" ? branchId : null),
+    ),
+    [warehouses, query.branchId, branchId],
+  );
 
   /** رصيد كل خامة في الأمر موزّع على المخازن — عشان "المتاح" يبقى صح حسب المخزن اللي هيتصرف منه فعليًا */
   const stockItemIds = useMemo(() => {
@@ -214,12 +263,12 @@ export default function Production() {
     setEditId(null);
     setForm(emptyForm());
     setMaterials([]);
-    setAddMat({ itemId: "", quantity: "1", notes: "", warehouseId: "" });
+    setAddMat({ itemId: "", quantity: "1", notes: "", warehouseId: "", scrapPercent: "0" });
     bomFilledForRef.current = null;
   };
 
   /** يبني سطور الخامات من المكونات المرتبطة بالمنتج مضروبة في كمية الإنتاج */
-  const bomRowsFor = (lines: any[], orderQty: number): MaterialRow[] =>
+  const bomRowsFor = (lines: { materialItemId: number; quantityPerUnit?: string | number | null; scrapPercent?: string | number | null; notes?: string | null }[], orderQty: number): MaterialRow[] =>
     lines
       .filter((l) => String(l.materialItemId) !== form.productId)
       .map((l) => {
@@ -240,12 +289,12 @@ export default function Production() {
     if (tab !== "new" || !form.productId) return;
     if (bomFilledForRef.current === form.productId) return;
     if (bomQ.isFetching || !bomQ.data) return;
-    // تبديل منتج بمنتج تاني = خامات الأمر كلها بتاعة المنتج القديم ⇐ استبدال كامل.
+    // تبديل منتج بمنتج تاني = خامات الأمر كلها بتاعة المنتج الجديد ⇐ استبدال كامل.
     // أول اختيار في أمر جديد بنحافظ فيه على أي خامة المستخدم ضافها يدوياً قبل ما يختار.
     const replacingProduct = bomFilledForRef.current !== null;
     bomFilledForRef.current = form.productId;
     const orderQty = Number(form.quantity || 0) || 0;
-    const rows = bomRowsFor(bomQ.data as any[], orderQty);
+    const rows = bomRowsFor(bomQ.data as { materialItemId: number; quantityPerUnit?: string | number | null; scrapPercent?: string | number | null; notes?: string | null }[], orderQty);
     const keptManual = (prev: MaterialRow[]) => (replacingProduct
       ? []
       : prev.filter((m) => m.source === "manual" && !rows.some((r) => r.itemId === m.itemId)));
@@ -274,10 +323,14 @@ export default function Production() {
       : m));
   };
 
+  const setMaterialScrap = (index: number, value: string) => {
+    setMaterials((prev) => prev.map((m, i) => (i === index ? { ...m, scrapPercent: value } : m)));
+  };
+
   const reloadBom = async () => {
-    if (!form.productId) return toast.error("اختر الصنف أولاً");
+    if (!form.productId) return toast.error("اختر المنتج التام أولاً");
     const lines = await utils.production.bom.get.fetch({ productId: Number(form.productId) });
-    const rows = bomRowsFor(lines as any[], Number(form.quantity || 0) || 0);
+    const rows = bomRowsFor(lines as { materialItemId: number; quantityPerUnit?: string | number | null; scrapPercent?: string | number | null; notes?: string | null }[], Number(form.quantity || 0) || 0);
     if (!rows.length) return toast.error("لا توجد مكونات مرتبطة بهذا المنتج");
     setMaterials((prev) => [...rows, ...prev.filter((m) => m.source === "manual" && !rows.some((r) => r.itemId === m.itemId))]);
     bomFilledForRef.current = form.productId;
@@ -288,21 +341,32 @@ export default function Production() {
   const totals = useMemo(() => {
     let rawQty = 0;
     let rawCost = 0;
+    let scrapCost = 0;
     let maxProd = Number.POSITIVE_INFINITY;
     const shortages: string[] = [];
     for (const m of materials) {
       const it = itemMap.get(m.itemId);
-      const need = withScrap(Number(m.quantity || 0), m.scrapPercent);
+      const base = Number(m.quantity || 0);
+      const need = withScrap(base, m.scrapPercent);
+      const scrapQ = scrapQtyOf(base, m.scrapPercent);
       const perFinished = withScrap(Number(m.perUnit || 0), m.scrapPercent);
       const unitCost = Number(it?.averageCost || 0) || Number(it?.purchasePrice || 0);
       const avail = availableFor(m.itemId, m.warehouseId);
       rawQty += need;
-      rawCost += need * unitCost;
+      rawCost += base * unitCost;
+      scrapCost += scrapQ * unitCost;
       if (perFinished > 0) maxProd = Math.min(maxProd, avail / perFinished);
       if (need > avail + 1e-9) shortages.push(it?.name || `#${m.itemId}`);
     }
     if (!Number.isFinite(maxProd) || !materials.length) maxProd = 0;
-    return { rawQty, rawCost, maxProd: Math.max(0, Math.floor(maxProd * 1000) / 1000), shortages };
+    return {
+      rawQty,
+      rawCost,
+      scrapCost,
+      totalCost: rawCost + scrapCost,
+      maxProd: Math.max(0, Math.floor(maxProd * 1000) / 1000),
+      shortages,
+    };
   }, [materials, itemMap, stockMap, form.warehouseId]);
 
   const applyBarcode = () => {
@@ -312,7 +376,7 @@ export default function Production() {
       String(i.barcode || "").toLowerCase() === code
       || String(i.code || "").toLowerCase() === code,
     );
-    if (!hit) return toast.error("لم يُعثر على الصنف بالسيريل نمبر/الكود");
+    if (!hit) return toast.error("لم يُعثر على المنتج التام بالباركود/الكود");
     setForm((p) => ({ ...p, productId: String(hit.id), barcode: String(hit.barcode || hit.code || "") }));
     toast.success(`تم اختيار ${hit.name}`);
   };
@@ -320,7 +384,7 @@ export default function Production() {
   const addMaterialLine = () => {
     if (!addMat.itemId) return toast.error("اختر المادة الخام");
     if (!(Number(addMat.quantity) > 0)) return toast.error("أدخل كمية أكبر من صفر");
-    if (addMat.itemId === form.productId) return toast.error("لا يمكن أن يكون المنتج مادة في نفس الأمر");
+    if (addMat.itemId === form.productId) return toast.error("لا يمكن أن يكون المنتج التام مادة في نفس الأمر");
     const orderQty = Number(form.quantity || 0);
     const perUnitOf = (qty: number) => (orderQty > 0 ? perUnitStr(qty / orderQty) : perUnitStr(qty));
     if (materials.some((m) => m.itemId === addMat.itemId)) {
@@ -335,13 +399,13 @@ export default function Production() {
         itemId: addMat.itemId,
         quantity: qtyStr(qty),
         perUnit: perUnitOf(qty),
-        scrapPercent: "0",
+        scrapPercent: addMat.scrapPercent || "0",
         notes: addMat.notes,
         source: "manual",
         warehouseId: addMat.warehouseId,
       }]);
     }
-    setAddMat({ itemId: "", quantity: "1", notes: "", warehouseId: "" });
+    setAddMat({ itemId: "", quantity: "1", notes: "", warehouseId: "", scrapPercent: "0" });
   };
 
   const openEdit = async (id: number) => {
@@ -365,7 +429,7 @@ export default function Production() {
       barcode: d.productCode || "",
     });
     const savedQty = Number(d.quantity || 0);
-    setMaterials(d.materials.map((m: any) => ({
+    setMaterials(d.materials.map((m: { itemId: number; quantity: string | number; scrapPercent?: string | number | null; notes?: string | null; warehouseId?: number | null }) => ({
       itemId: String(m.itemId),
       quantity: String(m.quantity),
       perUnit: savedQty > 0 ? perUnitStr(Number(m.quantity || 0) / savedQty) : String(m.quantity),
@@ -397,7 +461,7 @@ export default function Production() {
         barcode: d.productCode || "",
       });
       const savedQty = Number(d.quantity || 0);
-      setMaterials(d.materials.map((m: any) => ({
+      setMaterials(d.materials.map((m: { itemId: number; quantity: string | number; scrapPercent?: string | number | null; notes?: string | null; warehouseId?: number | null }) => ({
         itemId: String(m.itemId),
         quantity: String(m.quantity),
         perUnit: savedQty > 0 ? perUnitStr(Number(m.quantity || 0) / savedQty) : String(m.quantity),
@@ -408,8 +472,8 @@ export default function Production() {
       })));
       setTabNav("new");
       toast.success(`تم نسخ الأمر ${d.number} — راجع البيانات واحفظ`);
-    } catch (e: any) {
-      toast.error(e?.message || "فشل نسخ الأمر");
+    } catch (e: unknown) {
+      toast.error((e as { message?: string })?.message || "فشل نسخ الأمر");
     } finally {
       setDuplicating(false);
     }
@@ -418,9 +482,9 @@ export default function Production() {
   const saveOrder = async (andApprove = false) => {
     if (!entityCanSave) return toast.error("ليس لديك صلاحية");
     if (!form.productId || !form.warehouseId || !form.quantity) {
-      return toast.error("الصنف ومخزن استلام المنتج التام والكمية مطلوبة");
+      return toast.error("المنتج التام ومخزن الاستلام والكمية مطلوبة");
     }
-    if (!materials.length) return toast.error("أضف مادة خام واحدة على الأقل (قسم الخامات)");
+    if (!materials.length) return toast.error("أضف مادة خام واحدة على الأقل");
     const payload = {
       productId: Number(form.productId),
       warehouseId: Number(form.warehouseId),
@@ -443,15 +507,15 @@ export default function Production() {
     try {
       let id = editId;
       if (id) {
-        await updateMut.mutateAsync({ ...payload, id } as any);
+        await updateMut.mutateAsync({ ...payload, id });
         toast.success("تم حفظ التعديلات");
       } else {
-        const r = await createMut.mutateAsync(payload as any);
+        const r = await createMut.mutateAsync(payload);
         id = Number(r.id);
         setEditId(id);
         toast.success(`تم حفظ الأمر ${r.number} (معلق)`);
       }
-      if (andApprove) await statusMut.mutateAsync({ id, status: "in_progress" });
+      if (andApprove) await statusMut.mutateAsync({ id: id!, status: "in_progress" });
       listQ.refetch();
       if (printAfterSave) toast.message("يمكنك طباعة الأمر من القائمة");
       resetForm();
@@ -462,49 +526,105 @@ export default function Production() {
     }
   };
 
+  const applyListFilters = () => {
+    setPage(1);
+    setQuery({
+      status,
+      warehouseId,
+      branchId,
+      productId: filterProductId,
+      batchNumber: filterBatch.trim(),
+      referenceNumber: filterRef.trim(),
+      dateFrom,
+      dateTo,
+    });
+  };
+
+  const clearListFilters = () => {
+    setSearch("");
+    setStatus("all");
+    setWarehouseId("all");
+    setBranchId("all");
+    setFilterProductId("");
+    setFilterBatch("");
+    setFilterRef("");
+    setDateFrom("");
+    setDateTo("");
+    setQuery(emptyListQuery());
+    setPage(1);
+  };
+
   const totalPages = Math.max(1, Math.ceil((listQ.data?.total || 0) / 20));
-  const branchOptions = Array.isArray(branches) ? branches : ((branches as any)?.rows || []);
+  const selectedProduct = form.productId ? itemMap.get(form.productId) : undefined;
 
   return (
     <ERPLayout title="الإنتاج">
       <div className="space-y-4">
-        <div className="flex flex-wrap gap-2 p-1.5 rounded-2xl bg-slate-100 border border-slate-200">
-          {([
-            { id: "orders" as const, label: "قائمة أوامر الإنتاج", icon: Factory },
-            ...(entityCanSave ? [{ id: "new" as const, label: editId ? "تعديل أمر إنتاج" : "أمر إنتاج", icon: Plus }] : []),
-          ]).map((t) => {
-            const Icon = t.icon;
-            const active = tab === t.id;
-            return (
-              <button
-                key={t.id}
-                type="button"
-                onClick={() => {
-                  if (t.id === "new" && !editId) resetForm();
-                  setTabNav(t.id);
-                }}
-                className={`flex-1 min-w-[8rem] flex items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-sm font-extrabold transition-all ${
-                  active ? "bg-white text-amber-900 shadow-sm ring-1 ring-amber-200" : "text-slate-600 hover:bg-white/70"
-                }`}
-              >
-                <Icon size={16} /> {t.label}
-              </button>
-            );
-          })}
-        </div>
-
         {tab === "orders" && (
           <div className="space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-2 text-slate-700">
+                <Factory size={18} className="text-amber-700" />
+                <h2 className="text-base font-extrabold">قائمة أوامر الإنتاج</h2>
+              </div>
+              {entityCanSave && (
+                <Button
+                  className="font-extrabold bg-amber-600 hover:bg-amber-700"
+                  onClick={() => { resetForm(); setTabNav("new"); }}
+                >
+                  <Plus size={16} className="me-1" /> أمر إنتاج
+                </Button>
+              )}
+            </div>
+
             <Card className="erp-data-card border-0">
-              <CardContent className="p-4 flex flex-wrap gap-3 items-end">
-                <div className="space-y-1 flex-1 min-w-[140px]">
-                  <Label className="text-xs font-bold">بحث / رقم المرجع</Label>
-                  <Input className="h-10 font-semibold" value={search} onChange={(e) => setSearch(e.target.value)} />
+              <CardContent className="p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6 gap-3 items-end">
+                <div className="space-y-1 sm:col-span-2">
+                  <Label className="text-xs font-bold">بحث / المسلسل / الباركود</Label>
+                  <Input className="h-10 font-semibold" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="رقم الأمر · منتج · باركود" />
+                </div>
+                {branchOptions.length > 0 && (
+                  <div className="space-y-1">
+                    <Label className="text-xs font-bold">الفرع</Label>
+                    <Select value={branchId} onValueChange={setBranchId}>
+                      <SelectTrigger className="h-10 w-full min-w-0 font-bold"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">الكل</SelectItem>
+                        {branchOptions.map((b) => (
+                          <SelectItem key={b.id} value={String(b.id)}>{b.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+                <div className="space-y-1">
+                  <Label className="text-xs font-bold">مخزن الاستلام</Label>
+                  <Select value={warehouseId} onValueChange={setWarehouseId}>
+                    <SelectTrigger className="h-10 w-full min-w-0 font-bold"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">الكل</SelectItem>
+                      {listWarehouseOpts.map((w) => (
+                        <SelectItem key={String(w.id)} value={String(w.id)}>{w.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1 sm:col-span-2">
+                  <Label className="text-xs font-bold">منتج تام</Label>
+                  <ItemSearchSelect items={items} value={filterProductId} onChange={setFilterProductId} />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs font-bold">رقم التشغيلة</Label>
+                  <Input className="h-10 font-semibold" value={filterBatch} onChange={(e) => setFilterBatch(e.target.value)} />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs font-bold">رقم المرجع</Label>
+                  <Input className="h-10 font-semibold" value={filterRef} onChange={(e) => setFilterRef(e.target.value)} />
                 </div>
                 <div className="space-y-1">
                   <Label className="text-xs font-bold">الحالة</Label>
                   <Select value={status} onValueChange={setStatus}>
-                    <SelectTrigger className="h-10 w-40 font-bold"><SelectValue /></SelectTrigger>
+                    <SelectTrigger className="h-10 w-full min-w-0 font-bold"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all">الكل</SelectItem>
                       <SelectItem value="draft">معلق</SelectItem>
@@ -515,28 +635,17 @@ export default function Production() {
                   </Select>
                 </div>
                 <div className="space-y-1">
-                  <Label className="text-xs font-bold">المخزن</Label>
-                  <Select value={warehouseId} onValueChange={setWarehouseId}>
-                    <SelectTrigger className="h-10 w-40 font-bold"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">الكل</SelectItem>
-                      {(warehouses as any[] || []).map((w: any) => (
-                        <SelectItem key={w.id} value={String(w.id)}>{w.name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-1">
                   <Label className="text-xs font-bold">من تاريخ</Label>
-                  <Input type="date" className="h-10 w-36" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />
+                  <Input type="date" className="h-10" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />
                 </div>
                 <div className="space-y-1">
                   <Label className="text-xs font-bold">إلى تاريخ</Label>
-                  <Input type="date" className="h-10 w-36" value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
+                  <Input type="date" className="h-10" value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
                 </div>
-                <Button className="h-10 font-extrabold" onClick={() => { setPage(1); setQuery({ status, warehouseId, dateFrom, dateTo }); }}>
-                  بحث
-                </Button>
+                <div className="flex gap-2 sm:col-span-2">
+                  <Button className="h-10 flex-1 font-extrabold" onClick={applyListFilters}>بحث</Button>
+                  <Button type="button" variant="outline" className="h-10 font-bold" onClick={clearListFilters}>تفريغ</Button>
+                </div>
               </CardContent>
             </Card>
 
@@ -545,37 +654,41 @@ export default function Production() {
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="bg-slate-800 text-white text-xs">
-                      <th className="px-3 py-2.5 text-right">الرقم</th>
+                      <th className="px-3 py-2.5 text-right">المسلسل</th>
                       <th className="px-3 py-2.5 text-right">التاريخ</th>
-                      <th className="px-3 py-2.5 text-right">الصنف</th>
-                      <th className="px-3 py-2.5 text-right">المخزن</th>
+                      <th className="px-3 py-2.5 text-right">المنتج التام</th>
+                      <th className="px-3 py-2.5 text-right">مخزن الاستلام</th>
                       <th className="px-3 py-2.5 text-right">الكمية</th>
+                      <th className="px-3 py-2.5 text-right">رقم التشغيلة</th>
                       <th className="px-3 py-2.5 text-right">رقم المرجع</th>
+                      <th className="px-3 py-2.5 text-right">تكلفة المواد الخام</th>
                       <th className="px-3 py-2.5 text-right">الحالة</th>
                       <th className="px-3 py-2.5 text-right">إجراءات</th>
                     </tr>
                   </thead>
                   <tbody>
                     {listQ.isLoading ? (
-                      <tr><td colSpan={8} className="py-12 text-center"><Loader2 className="inline animate-spin text-amber-600" /></td></tr>
+                      <tr><td colSpan={10} className="py-12 text-center"><Loader2 className="inline animate-spin text-amber-600" /></td></tr>
                     ) : !(listQ.data?.rows || []).length ? (
-                      <tr><td colSpan={8} className="py-12 text-center text-slate-400 font-semibold">لا توجد بيانات للعرض</td></tr>
-                    ) : (listQ.data?.rows || []).map((row: any, i: number) => (
+                      <tr><td colSpan={10} className="py-12 text-center text-slate-400 font-semibold">لا توجد بيانات للعرض</td></tr>
+                    ) : (listQ.data?.rows || []).map((row, i) => (
                       <tr key={row.id} className={`border-t ${i % 2 ? "bg-slate-50/80" : ""}`}>
                         <td className="px-3 py-2 font-extrabold">{row.number}</td>
                         <td className="px-3 py-2">{toDateStr(row.date, "—")}</td>
                         <td className="px-3 py-2 font-bold">{row.productCode ? `${row.productCode} — ` : ""}{row.productName}</td>
                         <td className="px-3 py-2">{row.warehouseName}</td>
                         <td className="px-3 py-2 font-bold">{fmt(Number(row.quantity))}</td>
+                        <td className="px-3 py-2">{row.batchNumber || "—"}</td>
                         <td className="px-3 py-2">{row.referenceNumber || "—"}</td>
+                        <td className="px-3 py-2 font-semibold">{money(Number(row.wipCostAmount || 0))}</td>
                         <td className="px-3 py-2"><span className={`text-xs font-extrabold px-2 py-0.5 rounded-full ${statusClass(row.status)}`}>{statusLabel(row.status)}</span></td>
                         <td className="px-3 py-2">
                           <div className="flex gap-1">
                             <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setViewId(row.id)}><Eye size={14} /></Button>
                             {row.status === "draft" && (
                               <EntityPermissionGate moduleKey="production" entityKey="productionOrder" action="edit">
-                                  <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(row.id)}><Pencil size={14} /></Button>
-                                </EntityPermissionGate>
+                                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(row.id)}><Pencil size={14} /></Button>
+                              </EntityPermissionGate>
                             )}
                             {(row.status === "in_progress" || row.status === "completed") && (
                               <EntityPermissionGate moduleKey="production" entityKey="productionOrder" action="unapprove">
@@ -592,14 +705,14 @@ export default function Production() {
                               </EntityPermissionGate>
                             )}
                             <EntityPermissionGate moduleKey="production" entityKey="productionOrder" action="add">
-                                <Button
-                                  variant="ghost" size="icon" className="h-8 w-8" title="نسخ لأمر جديد"
-                                  disabled={duplicating}
-                                  onClick={() => void handleDuplicate(row.id)}
-                                >
-                                  <Copy size={14} />
-                                </Button>
-                              </EntityPermissionGate>
+                              <Button
+                                variant="ghost" size="icon" className="h-8 w-8" title="نسخ لأمر جديد"
+                                disabled={duplicating}
+                                onClick={() => void handleDuplicate(row.id)}
+                              >
+                                <Copy size={14} />
+                              </Button>
+                            </EntityPermissionGate>
                           </div>
                         </td>
                       </tr>
@@ -622,7 +735,15 @@ export default function Production() {
                   <div>
                     <CardTitle className="text-base font-extrabold">#{detailQ.data.number} — {detailQ.data.productName}</CardTitle>
                     <p className="text-sm font-semibold text-slate-600 mt-1">
-                      {statusLabel(detailQ.data.status)} · كمية {fmt(Number(detailQ.data.quantity))} · تكلفة خامات {money(Number(detailQ.data.estimatedCost || 0))} ج.م
+                      {statusLabel(detailQ.data.status)} · كمية {fmt(Number(detailQ.data.quantity))} · تكلفة المواد الخام {money(Number(detailQ.data.estimatedCost || 0))} ج.م
+                      {Number(detailQ.data.scrapCostTotal || 0) > 0 && (
+                        <> · تكلفة التوالف {money(Number(detailQ.data.scrapCostTotal))} ج.م</>
+                      )}
+                    </p>
+                    <p className="text-xs font-semibold text-slate-500 mt-1">
+                      مخزن الاستلام: {detailQ.data.warehouseName || "—"}
+                      {detailQ.data.batchNumber ? ` · رقم التشغيلة: ${detailQ.data.batchNumber}` : ""}
+                      {detailQ.data.referenceNumber ? ` · رقم المرجع: ${detailQ.data.referenceNumber}` : ""}
                     </p>
                   </div>
                   <Button variant="outline" size="sm" onClick={() => setViewId(null)}>إغلاق</Button>
@@ -635,29 +756,39 @@ export default function Production() {
                     </div>
                   )}
                   <div className="overflow-x-auto border rounded-xl">
-                    <table className="w-full text-sm">
+                    <table className="w-full text-sm min-w-[720px]">
                       <thead>
                         <tr className="bg-slate-800 text-white text-xs">
                           <th className="px-3 py-2 text-right">المادة الخام</th>
-                          <th className="px-3 py-2 text-right">الوحدة</th>
+                          <th className="px-3 py-2 text-right">الباركود</th>
                           <th className="px-3 py-2 text-right">الكمية</th>
+                          <th className="px-3 py-2 text-right">كمية تالف</th>
+                          <th className="px-3 py-2 text-right">وحدة القياس</th>
+                          <th className="px-3 py-2 text-right">تكلفة خام</th>
+                          <th className="px-3 py-2 text-right">تكلفة تالف</th>
+                          <th className="px-3 py-2 text-right">اجمالى تكلفة</th>
                           <th className="px-3 py-2 text-right">تُصرف من مخزن</th>
-                          <th className="px-3 py-2 text-right">المتاح</th>
-                          <th className="px-3 py-2 text-right">التكلفة</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {detailQ.data.materials.map((m: any) => (
+                        {detailQ.data.materials.map((m: {
+                          id: number; itemCode?: string | null; itemName?: string | null; itemBarcode?: string | null;
+                          baseQty: number; scrapQty: number; unit?: string | null; rawCost: number; scrapCost: number;
+                          lineCost: number; warehouseName?: string | null; warehouseId?: number | null;
+                        }) => (
                           <tr key={m.id} className="border-t">
                             <td className="px-3 py-2 font-bold">{m.itemCode ? `${m.itemCode} — ` : ""}{m.itemName}</td>
+                            <td className="px-3 py-2">{m.itemBarcode || "—"}</td>
+                            <td className="px-3 py-2 font-bold">{fmt(Number(m.baseQty))}</td>
+                            <td className="px-3 py-2">{fmt(Number(m.scrapQty))}</td>
                             <td className="px-3 py-2">{m.unit || "—"}</td>
-                            <td className="px-3 py-2 font-bold">{fmt(Number(m.totalQty))}</td>
+                            <td className="px-3 py-2">{money(Number(m.rawCost))}</td>
+                            <td className="px-3 py-2">{money(Number(m.scrapCost))}</td>
+                            <td className="px-3 py-2 font-bold">{money(Number(m.lineCost))}</td>
                             <td className="px-3 py-2">
                               {m.warehouseName || "—"}
                               {!m.warehouseId && <span className="text-slate-400"> (افتراضي)</span>}
                             </td>
-                            <td className="px-3 py-2">{fmt(Number(m.available))}</td>
-                            <td className="px-3 py-2">{money(Number(m.lineCost))} ج.م</td>
                           </tr>
                         ))}
                       </tbody>
@@ -715,7 +846,6 @@ export default function Production() {
                       </EntityPermissionGate>
                     )}
                     {(detailQ.data.status === "draft" || detailQ.data.status === "cancelled") && (
-                      // السيرفر بيسمح بحذف المسودات والملغاة — الزر كان ظاهر للمسودات بس
                       <EntityPermissionGate moduleKey="production" entityKey="productionOrder" action="deleteCancel">
                         <Button size="sm" variant="outline" className="text-red-700"
                           onClick={() => { if (confirm("حذف الأمر؟")) deleteMut.mutate(viewId); }}>حذف</Button>
@@ -729,75 +859,121 @@ export default function Production() {
         )}
 
         {tab === "new" && (
-          <div className="space-y-4">
+          <div className="space-y-4 max-w-6xl mx-auto">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <Button
+                type="button"
+                variant="ghost"
+                className="font-bold text-slate-600"
+                onClick={() => { resetForm(); setTabNav("orders"); }}
+              >
+                <ArrowRight size={16} className="ms-1" /> قائمة أوامر الإنتاج
+              </Button>
+              <h2 className="text-base font-extrabold text-slate-800">{editId ? "تعديل أمر إنتاج" : "أمر إنتاج"}</h2>
+            </div>
+
+            {/* رأس المستند — تسميات تقرير اوامر الانتاج في ميجا */}
             <Card className="erp-data-card border-0">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-base font-extrabold">{editId ? "تعديل أمر إنتاج" : "أمر إنتاج"}</CardTitle>
-              </CardHeader>
-              <CardContent className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                {branchOptions.length > 0 && (
+              <CardContent className="p-4 grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-3">
+                <div className="space-y-3">
+                  {branchOptions.length > 0 && (
+                    <div className="space-y-1">
+                      <Label className="text-xs font-bold">الفرع</Label>
+                      <Select
+                        value={form.branchId || "none"}
+                        onValueChange={(v) => setForm((p) => ({
+                          ...p,
+                          branchId: v === "none" ? "" : v,
+                          warehouseId: "",
+                        }))}
+                      >
+                        <SelectTrigger className="h-9 w-full min-w-0"><SelectValue placeholder="اختر" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">—</SelectItem>
+                          {branchOptions.map((b) => (
+                            <SelectItem key={b.id} value={String(b.id)}>{b.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
                   <div className="space-y-1">
-                    <Label className="text-xs font-bold">الفرع</Label>
-                    <Select value={form.branchId || "none"} onValueChange={(v) => setForm((p) => ({ ...p, branchId: v === "none" ? "" : v }))}>
-                      <SelectTrigger className="h-9"><SelectValue placeholder="اختر" /></SelectTrigger>
+                    <Label className="text-xs font-bold">التاريخ</Label>
+                    <Input type="date" className="h-9" value={form.date} onChange={(e) => setForm((p) => ({ ...p, date: e.target.value }))} />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs font-bold">الباركود</Label>
+                    <div className="flex gap-1">
+                      <Input
+                        className="h-9"
+                        value={form.barcode}
+                        onChange={(e) => setForm((p) => ({ ...p, barcode: e.target.value }))}
+                        onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), applyBarcode())}
+                        placeholder="باركود المنتج التام"
+                      />
+                      <Button type="button" variant="outline" className="h-9 shrink-0" onClick={applyBarcode}>بحث</Button>
+                    </div>
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs font-bold">المنتج التام *</Label>
+                    <ItemSearchSelect
+                      items={items}
+                      value={form.productId}
+                      onChange={(id) => {
+                        const it = items.find((x) => String(x.id) === id);
+                        setForm((p) => ({
+                          ...p,
+                          productId: id,
+                          barcode: it ? String(it.barcode || it.code || "") : p.barcode,
+                        }));
+                      }}
+                    />
+                    {selectedProduct?.unit && (
+                      <p className="text-[11px] font-semibold text-slate-500">وحدة القياس: {selectedProduct.unit}</p>
+                    )}
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs font-bold">الكمية *</Label>
+                    <Input type="number" step="any" className="h-9 font-bold" value={form.quantity}
+                      onChange={(e) => setOrderQuantity(e.target.value)} />
+                    <p className="text-[11px] font-semibold text-slate-500">
+                      كمية كل خامة = كمية الوحدة × هذه الكمية (تتحدث تلقائياً)
+                    </p>
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  <div className="space-y-1">
+                    <Label className="text-xs font-bold">مخزن الاستلام *</Label>
+                    <Select value={form.warehouseId} onValueChange={(v) => setForm((p) => ({ ...p, warehouseId: v }))}>
+                      <SelectTrigger className="h-9 w-full min-w-0"><SelectValue placeholder="اختر مخزن" /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="none">—</SelectItem>
-                        {branchOptions.map((b: any) => (
-                          <SelectItem key={b.id} value={String(b.id)}>{b.name}</SelectItem>
+                        {warehouseOpts.map((w) => (
+                          <SelectItem key={String(w.id)} value={String(w.id)}>{w.label}</SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
+                    <p className="text-[11px] font-semibold text-slate-500">
+                      وهو كمان المخزن الافتراضي لصرف أي خامة بدون مخزن خاص.
+                    </p>
                   </div>
-                )}
-                <div className="space-y-1">
-                  <Label className="text-xs font-bold">مخزن استلام المنتج التام *</Label>
-                  <Select value={form.warehouseId} onValueChange={(v) => setForm((p) => ({ ...p, warehouseId: v }))}>
-                    <SelectTrigger className="h-9"><SelectValue placeholder="اختر مخزن" /></SelectTrigger>
-                    <SelectContent>
-                      {(warehouses as any[] || []).map((w: any) => (
-                        <SelectItem key={w.id} value={String(w.id)}>{w.name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <p className="text-[11px] font-semibold text-slate-500">
-                    وهو كمان المخزن الافتراضي لصرف أي خامة معملتلهاش مخزن خاص بيها تحت.
-                  </p>
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-xs font-bold">السيريل نمبر</Label>
-                  <div className="flex gap-1">
-                    <Input className="h-9" value={form.barcode} onChange={(e) => setForm((p) => ({ ...p, barcode: e.target.value }))}
-                      onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), applyBarcode())} />
-                    <Button type="button" variant="outline" className="h-9" onClick={applyBarcode}>بحث</Button>
+                  <div className="space-y-1">
+                    <Label className="text-xs font-bold">رقم التشغيلة</Label>
+                    <Input className="h-9" value={form.batchNumber} onChange={(e) => setForm((p) => ({ ...p, batchNumber: e.target.value }))} />
                   </div>
-                </div>
-                <div className="space-y-1 sm:col-span-2">
-                  <Label className="text-xs font-bold">الصنف *</Label>
-                  <ItemSearchSelect items={items} value={form.productId} onChange={(id) => setForm((p) => ({ ...p, productId: id }))} />
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-xs font-bold">الكمية *</Label>
-                  <Input type="number" step="any" className="h-9 font-bold" value={form.quantity}
-                    onChange={(e) => setOrderQuantity(e.target.value)} />
-                  <p className="text-[11px] font-semibold text-slate-500">
-                    كمية كل خامة = كمية الوحدة × هذه الكمية (تتحدث تلقائياً)
-                  </p>
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-xs font-bold">التاريخ</Label>
-                  <Input type="date" className="h-9" value={form.date} onChange={(e) => setForm((p) => ({ ...p, date: e.target.value }))} />
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-xs font-bold">رقم التشغيلة</Label>
-                  <Input className="h-9" value={form.batchNumber} onChange={(e) => setForm((p) => ({ ...p, batchNumber: e.target.value }))} />
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-xs font-bold">رقم المرجع</Label>
-                  <Input className="h-9" value={form.referenceNumber} onChange={(e) => setForm((p) => ({ ...p, referenceNumber: e.target.value }))} />
-                </div>
-                <div className="space-y-1 sm:col-span-2 lg:col-span-3">
-                  <Label className="text-xs font-bold">ملاحظات</Label>
-                  <Textarea className="text-sm resize-none" rows={2} value={form.notes} onChange={(e) => setForm((p) => ({ ...p, notes: e.target.value }))} />
+                  <div className="space-y-1">
+                    <Label className="text-xs font-bold">رقم المرجع</Label>
+                    <Input className="h-9" value={form.referenceNumber} onChange={(e) => setForm((p) => ({ ...p, referenceNumber: e.target.value }))} />
+                  </div>
+                  <div className="rounded-xl border border-amber-100 bg-amber-50/80 px-3 py-2 space-y-1">
+                    <div className="text-xs font-extrabold text-amber-950">تكلفة المواد الخام: {money(totals.rawCost)} ج.م</div>
+                    <div className="text-xs font-bold text-amber-900">تكلفة التوالف: {money(totals.scrapCost)} ج.م</div>
+                    <div className="text-xs font-extrabold text-amber-950">اجمالى التكلفة: {money(totals.totalCost)} ج.م</div>
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs font-bold">ملاحظات</Label>
+                    <Textarea className="text-sm resize-none" rows={2} value={form.notes} onChange={(e) => setForm((p) => ({ ...p, notes: e.target.value }))} />
+                  </div>
                 </div>
               </CardContent>
             </Card>
@@ -818,7 +994,7 @@ export default function Production() {
                 </Button>
               </CardHeader>
               <CardContent className="space-y-3">
-                <div className="grid grid-cols-1 sm:grid-cols-5 gap-2 items-end border rounded-xl p-3 bg-slate-50">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-2 items-end border rounded-xl p-3 bg-emerald-50/60 border-emerald-100">
                   <div className="sm:col-span-2 space-y-1">
                     <Label className="text-xs font-bold">المادة الخام</Label>
                     <ItemSearchSelect items={items} value={addMat.itemId} excludeId={form.productId}
@@ -827,11 +1003,11 @@ export default function Production() {
                   <div className="space-y-1">
                     <Label className="text-xs font-bold">تُصرف من مخزن</Label>
                     <Select value={addMat.warehouseId || "__default"} onValueChange={(v) => setAddMat((p) => ({ ...p, warehouseId: v === "__default" ? "" : v }))}>
-                      <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                      <SelectTrigger className="h-9 w-full min-w-0"><SelectValue /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="__default">افتراضي (مخزن استلام المنتج)</SelectItem>
-                        {(warehouses as any[] || []).map((w: any) => (
-                          <SelectItem key={w.id} value={String(w.id)}>{w.name}</SelectItem>
+                        <SelectItem value="__default">افتراضي (مخزن الاستلام)</SelectItem>
+                        {warehouseOpts.map((w) => (
+                          <SelectItem key={String(w.id)} value={String(w.id)}>{w.label}</SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
@@ -840,43 +1016,50 @@ export default function Production() {
                     <Label className="text-xs font-bold">الكمية</Label>
                     <Input type="number" step="any" className="h-9 font-bold" value={addMat.quantity}
                       onChange={(e) => setAddMat((p) => ({ ...p, quantity: e.target.value }))} />
-                    {addMat.itemId && itemMap.get(addMat.itemId) && (
-                      <p className="text-[11px] font-semibold text-slate-500">
-                        الكمية المتاحة: {fmt(availableFor(addMat.itemId, addMat.warehouseId))}
-                        {" · "}التكلفة المتوقعة: {money((Number(addMat.quantity) || 0) * (Number(itemMap.get(addMat.itemId)!.averageCost || 0) || Number(itemMap.get(addMat.itemId)!.purchasePrice || 0)))} ج.م
-                      </p>
-                    )}
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs font-bold">% تالف</Label>
+                    <Input type="number" step="any" className="h-9 font-bold" value={addMat.scrapPercent}
+                      onChange={(e) => setAddMat((p) => ({ ...p, scrapPercent: e.target.value }))} />
                   </div>
                   <div className="flex gap-1">
                     <Button type="button" className="h-9 flex-1 font-bold" onClick={addMaterialLine}>اضافة</Button>
-                    <Button type="button" variant="outline" className="h-9" onClick={() => setAddMat({ itemId: "", quantity: "1", notes: "", warehouseId: "" })}>تفريغ</Button>
+                    <Button type="button" variant="outline" className="h-9" onClick={() => setAddMat({ itemId: "", quantity: "1", notes: "", warehouseId: "", scrapPercent: "0" })}>تفريغ</Button>
                   </div>
                 </div>
 
                 <div className="overflow-x-auto border rounded-xl">
-                  <table className="w-full text-sm min-w-[520px]">
+                  <table className="w-full text-sm min-w-[900px]">
                     <thead>
                       <tr className="bg-slate-800 text-white text-xs">
                         <th className="px-2 py-2 text-right">المادة الخام</th>
-                        <th className="px-2 py-2 text-right">الوحدة</th>
+                        <th className="px-2 py-2 text-right">الباركود</th>
                         <th className="px-2 py-2 text-right w-24">كمية الوحدة</th>
-                        <th className="px-2 py-2 text-right w-28">الكمية المطلوبة</th>
-                        <th className="px-2 py-2 text-right w-44">تُصرف من مخزن</th>
+                        <th className="px-2 py-2 text-right w-28">الكمية</th>
+                        <th className="px-2 py-2 text-right w-20">% تالف</th>
+                        <th className="px-2 py-2 text-right">كمية تالف</th>
+                        <th className="px-2 py-2 text-right">وحدة القياس</th>
+                        <th className="px-2 py-2 text-right w-40">تُصرف من مخزن</th>
                         <th className="px-2 py-2 text-right">المتاح</th>
-                        <th className="px-2 py-2 text-right">التكلفة</th>
+                        <th className="px-2 py-2 text-right">تكلفة خام</th>
+                        <th className="px-2 py-2 text-right">تكلفة تالف</th>
+                        <th className="px-2 py-2 text-right">اجمالى تكلفة</th>
                         <th className="w-10" />
                       </tr>
                     </thead>
                     <tbody>
                       {!materials.length ? (
-                        <tr><td colSpan={8} className="py-10 text-center text-slate-400 font-semibold">لا توجد بيانات للعرض</td></tr>
+                        <tr><td colSpan={13} className="py-10 text-center text-slate-400 font-semibold">لا توجد بيانات للعرض</td></tr>
                       ) : materials.map((m, i) => {
                         const it = itemMap.get(m.itemId);
                         const qty = Number(m.quantity || 0);
+                        const scrapQ = scrapQtyOf(qty, m.scrapPercent);
                         const need = withScrap(qty, m.scrapPercent);
                         const avail = availableFor(m.itemId, m.warehouseId);
                         const short = need > avail + 1e-9;
                         const unitCost = Number(it?.averageCost || 0) || Number(it?.purchasePrice || 0);
+                        const rawCost = qty * unitCost;
+                        const scrapCost = scrapQ * unitCost;
                         return (
                           <tr key={`${m.itemId}-${i}`} className={`border-t ${i % 2 ? "bg-slate-50/80" : ""}`}>
                             <td className="px-2 py-2 font-bold">
@@ -887,17 +1070,18 @@ export default function Production() {
                                 </span>
                               )}
                             </td>
-                            <td className="px-2 py-2">{it?.unit || "—"}</td>
+                            <td className="px-2 py-2 text-slate-600">{it?.barcode || it?.code || "—"}</td>
                             <td className="px-2 py-2 font-semibold text-slate-600">{fmt(Number(m.perUnit || 0))}</td>
                             <td className="px-2 py-1">
                               <Input type="number" step="any" className="h-8 font-bold" value={m.quantity}
                                 onChange={(e) => setMaterialQuantity(i, e.target.value)} />
-                              {Number(m.scrapPercent || 0) > 0 && (
-                                <p className="text-[10px] font-bold text-amber-700 mt-0.5">
-                                  + هالك {fmt(Number(m.scrapPercent))}% ⇐ صرف {fmt(need)}
-                                </p>
-                              )}
                             </td>
+                            <td className="px-2 py-1">
+                              <Input type="number" step="any" className="h-8 font-bold" value={m.scrapPercent}
+                                onChange={(e) => setMaterialScrap(i, e.target.value)} />
+                            </td>
+                            <td className="px-2 py-2 font-semibold">{fmt(scrapQ)}</td>
+                            <td className="px-2 py-2">{it?.unit || "—"}</td>
                             <td className="px-2 py-1">
                               <Select
                                 value={m.warehouseId || "__default"}
@@ -905,17 +1089,19 @@ export default function Production() {
                                   idx === i ? { ...row, warehouseId: v === "__default" ? "" : v } : row
                                 )))}
                               >
-                                <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                                <SelectTrigger className="h-8 text-xs w-full min-w-0"><SelectValue /></SelectTrigger>
                                 <SelectContent>
-                                  <SelectItem value="__default">افتراضي (مخزن استلام المنتج)</SelectItem>
-                                  {(warehouses as any[] || []).map((w: any) => (
-                                    <SelectItem key={w.id} value={String(w.id)}>{w.name}</SelectItem>
+                                  <SelectItem value="__default">افتراضي (مخزن الاستلام)</SelectItem>
+                                  {warehouseOpts.map((w) => (
+                                    <SelectItem key={String(w.id)} value={String(w.id)}>{w.label}</SelectItem>
                                   ))}
                                 </SelectContent>
                               </Select>
                             </td>
                             <td className={`px-2 py-2 ${short ? "text-red-600 font-extrabold" : ""}`}>{fmt(avail)}</td>
-                            <td className="px-2 py-2 font-bold">{money(need * unitCost)}</td>
+                            <td className="px-2 py-2">{money(rawCost)}</td>
+                            <td className="px-2 py-2">{money(scrapCost)}</td>
+                            <td className="px-2 py-2 font-bold">{money(rawCost + scrapCost)}</td>
                             <td className="px-1">
                               <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500"
                                 onClick={() => setMaterials((p) => p.filter((_, idx) => idx !== i))}>
@@ -930,8 +1116,8 @@ export default function Production() {
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-sm font-extrabold bg-amber-50 border border-amber-100 rounded-xl p-3">
-                  <div>اجمالي تكلفة الخامات: {money(totals.rawCost)} ج.م</div>
-                  <div>اجمالي كمية الخامات: {fmt(totals.rawQty)}</div>
+                  <div>تكلفة المواد الخام: {money(totals.rawCost)} ج.م</div>
+                  <div>تكلفة التوالف: {money(totals.scrapCost)} ج.م</div>
                   <div>اقصى كمية يمكن انتاجها: {fmt(totals.maxProd)}</div>
                 </div>
                 {totals.shortages.length > 0 && (

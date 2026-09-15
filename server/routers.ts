@@ -6513,7 +6513,12 @@ const productionRouter = router({
     search: z.string().optional(),
     status: z.enum(["draft", "in_progress", "completed", "cancelled"]).optional(),
     warehouseId: z.number().optional(),
+    branchId: z.number().optional(),
     productId: z.number().optional(),
+    /** رقم التشغيلة — فلاتر تقرير اوامر الانتاج في ميجا */
+    batchNumber: z.string().optional(),
+    /** رقم المرجع / المسلسل */
+    referenceNumber: z.string().optional(),
     dateFrom: z.string().optional(),
     dateTo: z.string().optional(),
   })).query(async ({ ctx, input }) => {
@@ -6525,7 +6530,10 @@ const productionRouter = router({
     const conds: any[] = [scopeWarehouseFilter(productionOrders, scope)].filter(Boolean);
     if (input.status) conds.push(eq(productionOrders.status, input.status));
     if (input.warehouseId) conds.push(eq(productionOrders.warehouseId, input.warehouseId));
+    if (input.branchId) conds.push(eq(productionOrders.branchId, input.branchId));
     if (input.productId) conds.push(eq(productionOrders.productId, input.productId));
+    if (input.batchNumber?.trim()) conds.push(like(productionOrders.batchNumber, `%${input.batchNumber.trim()}%`));
+    if (input.referenceNumber?.trim()) conds.push(like(productionOrders.referenceNumber, `%${input.referenceNumber.trim()}%`));
     if (input.dateFrom) conds.push(gte(productionOrders.date, input.dateFrom as any));
     if (input.dateTo) conds.push(lte(productionOrders.date, input.dateTo as any));
     if (input.search?.trim()) {
@@ -6535,8 +6543,9 @@ const productionRouter = router({
         like(productionOrders.notes, q),
         like(productionOrders.referenceNumber, q),
         like(productionOrders.batchNumber, q),
-        sql`p.name LIKE ${q}`,
-        sql`p.code LIKE ${q}`,
+        like(items.name, q),
+        like(items.code, q),
+        like(items.barcode, q),
       ));
     }
     const whereClause = tenantWhere(productionOrders, ctx.tenantId, ...(conds.length ? [and(...conds)] : []));
@@ -6608,6 +6617,7 @@ const productionRouter = router({
           id: items.id,
           name: items.name,
           code: items.code,
+          barcode: items.barcode,
           unit: items.unit,
           averageCost: items.averageCost,
           purchasePrice: items.purchasePrice,
@@ -6647,6 +6657,8 @@ const productionRouter = router({
       const unitCost = Number(it?.averageCost || 0) || Number(it?.purchasePrice || 0);
       const effectiveWarehouseId = m.warehouseId ?? order.warehouseId;
       const available = stockMap.get(stockKey(m.itemId, effectiveWarehouseId)) ?? 0;
+      const rawCost = absQty * unitCost;
+      const scrapCost = scrapQty * unitCost;
       return {
         id: m.id,
         itemId: m.itemId,
@@ -6658,6 +6670,7 @@ const productionRouter = router({
         warehouseName: whMap.get(effectiveWarehouseId),
         itemName: it?.name,
         itemCode: it?.code,
+        itemBarcode: it?.barcode,
         unit: it?.unit,
         averageCost: it?.averageCost,
         purchasePrice: it?.purchasePrice,
@@ -6666,11 +6679,14 @@ const productionRouter = router({
         scrapQty,
         totalQty,
         unitCost,
+        rawCost,
+        scrapCost,
         lineCost: totalQty * unitCost,
         available,
       };
     });
     const estimatedCost = lines.reduce((s, l) => s + l.lineCost, 0);
+    const scrapCostTotal = lines.reduce((s, l) => s + l.scrapCost, 0);
     const totalRawQty = lines.reduce((s, l) => s + l.totalQty, 0);
     const orderQty = Number(order.quantity || 0) || 1;
     let maxProducible = Number.POSITIVE_INFINITY;
@@ -6684,6 +6700,7 @@ const productionRouter = router({
       ...order,
       materials: lines,
       estimatedCost,
+      scrapCostTotal,
       totalRawQty,
       maxProducible: Math.max(0, Math.floor(maxProducible * 1000) / 1000),
     };
