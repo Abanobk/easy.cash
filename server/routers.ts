@@ -7528,7 +7528,7 @@ const inventoryRouter = router({
       warehouseId: z.number(),
       branchId: z.number().optional().nullable(),
       date: z.string(),
-      adjustmentType: z.enum(["addition", "deduction"]),
+      adjustmentType: z.enum(["addition", "deduction"]).optional(),
       notes: z.string().optional(),
       oppositeAccountId: z.number().optional().nullable(),
       costCenterId: z.number().optional().nullable(),
@@ -7538,7 +7538,10 @@ const inventoryRouter = router({
       confirm: z.boolean().default(true),
       items: z.array(z.object({
         itemId: z.number(),
-        /** فرق وارد/صادر (متوافق قديم) */
+        /**
+         * ميجا InventoryCorrection: كمية موقّعة لكل صنف
+         * موجب = وارد · سالب = صادر. (الوضع القديم: absolute + adjustmentType)
+         */
         quantity: z.string().optional(),
         /** الكمية الفعلية بعد الجرد — ميجا: يحسب الفرق من المتاح */
         actualQty: z.string().optional(),
@@ -7586,8 +7589,16 @@ const inventoryRouter = router({
         if (item.actualQty != null && String(item.actualQty).trim() !== "") {
           newQty = Number(item.actualQty);
         } else {
-          const qty = Number(item.quantity || 0);
-          newQty = input.adjustmentType === "addition" ? currentQty + qty : Math.max(0, currentQty - qty);
+          const signed = Number(item.quantity || 0);
+          // Legacy: document-level addition/deduction with absolute qty
+          if (input.adjustmentType === "deduction" && signed > 0) {
+            newQty = Math.max(0, currentQty - signed);
+          } else if (input.adjustmentType === "addition" && signed >= 0) {
+            newQty = currentQty + signed;
+          } else {
+            // Mega: per-line signed quantity (negative = out)
+            newQty = currentQty + signed;
+          }
         }
         const difference = newQty - currentQty;
         const [itemRow] = await db.select({

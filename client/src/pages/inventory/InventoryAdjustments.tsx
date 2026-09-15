@@ -39,7 +39,7 @@ type LineItem = {
 
 const emptyLine = (): LineItem => ({
   itemId: "",
-  quantity: "1",
+  quantity: "",
   actualQty: "",
   unitCost: "",
   batchNumber: "",
@@ -50,11 +50,10 @@ const emptyLine = (): LineItem => ({
 });
 
 /**
- * تسوية مخزنية — مرجع Mega: InventoryCorrection.aspx
- * إنشاء = صفحة كاملة (مش Dialog) · قائمة = فلاتر + اعتماد/فك/إلغاء
- * رأس: تاريخ·فرع·حساب مقابل·مرجع·عميل·مركز تكلفة·مخزن·وارد/صادر
- * سطور: صنف·متاحة·كمية·فعلية·وحدة·تكلفة·تشغيلة·إنتاج·انتهاء·ملاحظات
- * مجاميع ميجا: اجمالي الوارد · اجمالي الصادر · الاجمالي · الكمية
+ * تسوية مخزنية — مرجع Mega: InventoryCorrection.aspx (+ لقطة حيّة 2026-09)
+ * رأس عمودين: تاريخ·فرع·حساب مقابل | مرجع·عميل·مركز تكلفة
+ * لوحة الأصناف: مخزن·باركود·فئة ثم سطور
+ * الكمية الواردة/الصادرة = رقم موقّع لكل صنف (موجب وارد · سالب صادر) — مش قائمة على مستوى المستند
  */
 export default function InventoryAdjustments() {
   const { isNewRoute, goToList, goToCreate } = useMegaCreateRoute("/inventory/adjustments");
@@ -62,7 +61,6 @@ export default function InventoryAdjustments() {
     warehouseId: "",
     branchId: "",
     date: new Date().toISOString().split("T")[0],
-    adjustmentType: "addition" as "addition" | "deduction",
     notes: "",
     oppositeAccountId: "",
     costCenterId: "",
@@ -147,18 +145,34 @@ export default function InventoryAdjustments() {
   );
 
   const totals = useMemo(() => {
-    const qty = items.reduce((s, it) => s + Number(it.quantity || 0), 0);
-    const value = items.reduce((s, it) => s + Number(it.quantity || 0) * Number(it.unitCost || 0), 0);
-    const isIn = form.adjustmentType === "addition";
+    let inQty = 0;
+    let outQty = 0;
+    let inValue = 0;
+    let outValue = 0;
+    for (const it of items) {
+      const signed = Number(it.quantity || 0);
+      const cost = Number(it.unitCost || 0);
+      if (it.actualQty != null && String(it.actualQty).trim() !== "" && it.available != null) {
+        const diff = Number(it.actualQty) - Number(it.available);
+        if (diff >= 0) { inQty += diff; inValue += diff * cost; }
+        else { outQty += Math.abs(diff); outValue += Math.abs(diff) * cost; }
+      } else if (signed >= 0) {
+        inQty += signed;
+        inValue += signed * cost;
+      } else {
+        outQty += Math.abs(signed);
+        outValue += Math.abs(signed) * cost;
+      }
+    }
     return {
-      qty,
-      value,
-      inQty: isIn ? qty : 0,
-      outQty: isIn ? 0 : qty,
-      inValue: isIn ? value : 0,
-      outValue: isIn ? 0 : value,
+      qty: inQty + outQty,
+      value: inValue + outValue,
+      inQty,
+      outQty,
+      inValue,
+      outValue,
     };
-  }, [items, form.adjustmentType]);
+  }, [items]);
 
   const firePrint = (number: string) => {
     const whName = (warehouses as any[] || []).find((w: any) => String(w.id) === form.warehouseId)?.name || "—";
@@ -204,7 +218,6 @@ export default function InventoryAdjustments() {
       warehouseId: "",
       branchId: "",
       date: new Date().toISOString().split("T")[0],
-      adjustmentType: "addition",
       notes: "",
       oppositeAccountId: "",
       costCenterId: "",
@@ -288,11 +301,17 @@ export default function InventoryAdjustments() {
   const handleSubmit = (confirm: boolean) => {
     if (!form.warehouseId) return toast.error("يجب اختيار المخزن");
     if (items.some((it) => !it.itemId)) return toast.error("يجب اختيار الصنف في كل بند");
+    if (items.some((it) => {
+      const hasActual = it.actualQty != null && String(it.actualQty).trim() !== "";
+      const signed = Number(it.quantity || 0);
+      return !hasActual && !signed;
+    })) {
+      return toast.error("أدخل كمية واردة/صادرة (موجب أو سالب) أو كمية فعلية لكل صنف");
+    }
     createMut.mutate({
       warehouseId: Number(form.warehouseId),
       branchId: form.branchId ? Number(form.branchId) : null,
       date: form.date,
-      adjustmentType: form.adjustmentType,
       notes: form.notes,
       oppositeAccountId: form.oppositeAccountId ? Number(form.oppositeAccountId) : null,
       costCenterId: form.costCenterId ? Number(form.costCenterId) : null,
@@ -371,202 +390,202 @@ export default function InventoryAdjustments() {
                 تسوية مخزنية
               </CardTitle>
             </CardHeader>
-            <CardContent className="pt-4 space-y-5">
-              {/* رأس المستند — خلايا بـ overflow عشان الاسم الطويل ما يدخلش على الجار */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3">
-                <div className="space-y-1 min-w-0 overflow-hidden">
-                  <Label className="text-xs font-medium">التاريخ *</Label>
-                  <Input type="date" value={form.date} onChange={(e) => setForm((f) => ({ ...f, date: e.target.value }))} className="h-9 text-sm w-full" />
-                </div>
-                <div className="space-y-1 min-w-0 overflow-hidden">
-                  <Label className="text-xs font-medium">الفرع</Label>
-                  <Select value={form.branchId || "none"} onValueChange={(v) => setForm((f) => ({ ...f, branchId: v === "none" ? "" : v, warehouseId: "" }))}>
-                    <SelectTrigger className="h-9 text-sm w-full max-w-full" title={(branches || []).find((b: any) => String(b.id) === form.branchId)?.name}>
-                      <SelectValue placeholder="اختر" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">—</SelectItem>
-                      {(branches || []).map((b: any) => (
-                        <SelectItem key={b.id} value={String(b.id)}>{b.name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-1 min-w-0 overflow-hidden">
-                  <Label className="text-xs font-medium">الحساب المقابل</Label>
-                  <AccountSearchSelect
-                    accounts={(accountsChart || []).filter((a: any) => !a.isParent)}
-                    value={form.oppositeAccountId}
-                    onChange={(v) => setForm((f) => ({ ...f, oppositeAccountId: v }))}
-                    placeholder="ابحث كود أو حساب…"
-                  />
-                </div>
-                <div className="space-y-1 min-w-0 overflow-hidden">
-                  <Label className="text-xs font-medium">رقم المرجع</Label>
-                  <Input value={form.referenceNumber} onChange={(e) => setForm((f) => ({ ...f, referenceNumber: e.target.value }))} className="h-9 text-sm w-full" />
-                </div>
-                <div className="space-y-1 min-w-0 overflow-hidden">
-                  <Label className="text-xs font-medium">العميل</Label>
-                  <PartySearchSelect
-                    parties={customersList?.rows || []}
-                    value={form.customerId}
-                    onChange={(v) => setForm((f) => ({ ...f, customerId: v }))}
-                    placeholder="ابحث عميل…"
-                  />
-                </div>
-                <div className="space-y-1 min-w-0 overflow-hidden">
-                  <Label className="text-xs font-medium">مركز التكلفة</Label>
-                  <SearchSelect
-                    options={costCenterOptions}
-                    value={form.costCenterId}
-                    onChange={(v) => setForm((f) => ({ ...f, costCenterId: v }))}
-                    placeholder="ابحث مركز تكلفة…"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                <div className="space-y-1 min-w-0 overflow-hidden">
-                  <Label className="text-xs font-medium">المخزن *</Label>
-                  <SearchSelect
-                    options={warehouseOptions}
-                    value={form.warehouseId}
-                    onChange={(v) => setForm((f) => ({ ...f, warehouseId: v }))}
-                    placeholder="ابحث مخزن…"
-                    emptyLabel={warehouseOptions.length === 0 ? "لا توجد مخازن — أضف مخزناً من شاشة المخازن" : "لا نتائج"}
-                  />
-                </div>
-                <div className="space-y-1 min-w-0 overflow-hidden">
-                  <Label className="text-xs font-medium">الكمية الواردة / الصادرة</Label>
-                  <Select value={form.adjustmentType} onValueChange={(v) => setForm((f) => ({ ...f, adjustmentType: v as any }))}>
-                    <SelectTrigger className="h-9 text-sm w-full"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="addition">واردة (إضافة)</SelectItem>
-                      <SelectItem value="deduction">صادرة (خصم)</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-1 min-w-0 overflow-hidden">
-                  <Label className="text-xs font-medium">الفئة</Label>
-                  <Select value={lineCategoryId || "all"} onValueChange={(v) => setLineCategoryId(v === "all" ? "" : v)}>
-                    <SelectTrigger className="h-9 text-sm w-full"><SelectValue placeholder="كل الفئات" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">كل الفئات</SelectItem>
-                      {(categories || []).map((c: any) => (
-                        <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-1 min-w-0 overflow-hidden">
-                  <Label className="text-xs font-medium">الباركود</Label>
-                  <div className="flex gap-1 min-w-0">
-                    <Input
-                      className="h-9 text-sm min-w-0 flex-1"
-                      value={barcode}
-                      onChange={(e) => setBarcode(e.target.value)}
-                      onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); void handleBarcode(); } }}
-                      placeholder="مسح باركود"
+            <CardContent className="pt-4 space-y-4">
+              {/* رأس ميجا: عمودان — تاريخ/فرع/حساب | مرجع/عميل/مركز تكلفة */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-3">
+                <div className="space-y-3 min-w-0">
+                  <div className="space-y-1 min-w-0 overflow-hidden">
+                    <Label className="text-xs font-medium">التاريخ *</Label>
+                    <Input type="date" value={form.date} onChange={(e) => setForm((f) => ({ ...f, date: e.target.value }))} className="h-9 text-sm w-full" />
+                  </div>
+                  <div className="space-y-1 min-w-0 overflow-hidden">
+                    <Label className="text-xs font-medium">الفرع</Label>
+                    <Select value={form.branchId || "none"} onValueChange={(v) => setForm((f) => ({ ...f, branchId: v === "none" ? "" : v, warehouseId: "" }))}>
+                      <SelectTrigger className="h-9 text-sm w-full max-w-full" title={(branches || []).find((b: any) => String(b.id) === form.branchId)?.name}>
+                        <SelectValue placeholder="اختر" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">—</SelectItem>
+                        {(branches || []).map((b: any) => (
+                          <SelectItem key={b.id} value={String(b.id)}>{b.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1 min-w-0 overflow-hidden">
+                    <Label className="text-xs font-medium">الحساب المقابل</Label>
+                    <AccountSearchSelect
+                      accounts={(accountsChart || []).filter((a: any) => !a.isParent)}
+                      value={form.oppositeAccountId}
+                      onChange={(v) => setForm((f) => ({ ...f, oppositeAccountId: v }))}
+                      placeholder="ابحث كود أو حساب…"
                     />
-                    <Button type="button" variant="outline" size="sm" className="h-9 shrink-0" onClick={() => void handleBarcode()}>+</Button>
+                  </div>
+                </div>
+                <div className="space-y-3 min-w-0">
+                  <div className="space-y-1 min-w-0 overflow-hidden">
+                    <Label className="text-xs font-medium">رقم المرجع</Label>
+                    <Input value={form.referenceNumber} onChange={(e) => setForm((f) => ({ ...f, referenceNumber: e.target.value }))} className="h-9 text-sm w-full" />
+                  </div>
+                  <div className="space-y-1 min-w-0 overflow-hidden">
+                    <Label className="text-xs font-medium">العميل</Label>
+                    <PartySearchSelect
+                      parties={customersList?.rows || []}
+                      value={form.customerId}
+                      onChange={(v) => setForm((f) => ({ ...f, customerId: v }))}
+                      placeholder="ابحث عميل…"
+                    />
+                  </div>
+                  <div className="space-y-1 min-w-0 overflow-hidden">
+                    <Label className="text-xs font-medium">مركز التكلفة</Label>
+                    <SearchSelect
+                      options={costCenterOptions}
+                      value={form.costCenterId}
+                      onChange={(v) => setForm((f) => ({ ...f, costCenterId: v }))}
+                      placeholder="ابحث مركز تكلفة…"
+                    />
                   </div>
                 </div>
               </div>
-              <p className="text-[11px] text-slate-500">
-                أصناف متاحة للبحث:{" "}
-                <span className="font-semibold text-slate-800 tabular-nums">{filteredItems.length}</span>
-                {itemsLoading ? " …جاري التحميل" : null}
-                {itemsLoadError ? <span className="text-red-600"> — {itemsLoadError}</span> : null}
-                {!itemsLoading && filteredItems.length === 0 ? (
-                  <span className="text-amber-700"> — لا أصناف في الكتالوج؛ راجع شاشة الأصناف أو الاستيراد</span>
-                ) : null}
-                {lineCategoryId ? " (بعد فلتر الفئة)" : ""}
-              </p>
 
-              {/* سطور الأصناف — بطاقات متجاوبة بدون سكرول أفقي */}
-              <div className="space-y-2">
-                <div className="flex items-center justify-between flex-wrap gap-2">
-                  <Label className="text-sm font-semibold text-slate-800">الاصناف</Label>
+              {/* لوحة الأصناف — ترتيب ميجا */}
+              <div className="rounded-lg border border-emerald-200 overflow-hidden">
+                <div className="bg-emerald-600 text-white px-3 py-2 flex items-center justify-between gap-2 flex-wrap">
+                  <span className="text-sm font-semibold">الاصناف</span>
                   <div className="flex items-center gap-2">
-                    <Button type="button" variant="outline" size="sm" className="h-8 text-xs gap-1" onClick={addItem}>
+                    <Button type="button" size="sm" variant="secondary" className="h-7 text-xs gap-1 bg-white/95 text-emerald-800 hover:bg-white" onClick={addItem}>
                       <Plus size={12} /> اضافة
                     </Button>
-                    <Button type="button" variant="ghost" size="sm" className="h-8 text-xs" onClick={clearLines}>
+                    <Button type="button" size="sm" variant="ghost" className="h-7 text-xs text-white hover:bg-emerald-500" onClick={clearLines}>
                       تفريغ
                     </Button>
                   </div>
                 </div>
-
-                <div className="space-y-2">
-                  {items.map((it, i) => (
-                    <div key={i} className="rounded-lg border border-slate-200 bg-white p-2.5 space-y-2">
-                      <div className="flex gap-2 items-start">
-                        <div className="flex-1 min-w-0 space-y-1">
-                          <Label className="text-[10px] text-slate-500">الصنف</Label>
-                          <ItemSearchSelect
-                            items={filteredItems}
-                            value={it.itemId}
-                            onChange={(v) => void updateItem(i, "itemId", v)}
-                            placeholder={itemsLoading ? "جاري تحميل الأصناف…" : "اكتب للبحث عن صنف…"}
-                          />
-                        </div>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          className="h-8 w-8 p-0 text-red-500 shrink-0 mt-5"
-                          onClick={() => removeItem(i)}
-                          title="حذف"
-                        >
-                          <Trash2 size={14} />
-                        </Button>
-                      </div>
-
-                      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
-                        <div className="space-y-1">
-                          <Label className="text-[10px] text-slate-500">المتاحة</Label>
-                          <div className="h-8 flex items-center text-xs font-semibold text-slate-600 px-1">
-                            {it.available != null ? Number(it.available).toLocaleString("en-US") : "—"}
-                          </div>
-                        </div>
-                        <div className="space-y-1">
-                          <Label className="text-[10px] text-slate-500">وارد / صادر</Label>
-                          <Input type="number" value={it.quantity} onChange={(e) => void updateItem(i, "quantity", e.target.value)} className="h-8 text-xs" />
-                        </div>
-                        <div className="space-y-1">
-                          <Label className="text-[10px] text-slate-500">فعلية (جرد)</Label>
-                          <Input type="number" value={it.actualQty} onChange={(e) => void updateItem(i, "actualQty", e.target.value)} className="h-8 text-xs" placeholder="جرد" />
-                        </div>
-                        <div className="space-y-1">
-                          <Label className="text-[10px] text-slate-500">الوحدة</Label>
-                          <Input value={it.unit} onChange={(e) => void updateItem(i, "unit", e.target.value)} className="h-8 text-xs" />
-                        </div>
-                        <div className="space-y-1">
-                          <Label className="text-[10px] text-slate-500">التكلفة</Label>
-                          <Input type="number" value={it.unitCost} onChange={(e) => void updateItem(i, "unitCost", e.target.value)} className="h-8 text-xs" />
-                        </div>
-                        <div className="space-y-1">
-                          <Label className="text-[10px] text-slate-500">رقم التشغيلة</Label>
-                          <Input value={it.batchNumber} onChange={(e) => void updateItem(i, "batchNumber", e.target.value)} className="h-8 text-xs" />
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                        <div className="space-y-1">
-                          <Label className="text-[10px] text-slate-500">تاريخ الانتاج</Label>
-                          <Input type="date" value={it.productionDate} onChange={(e) => void updateItem(i, "productionDate", e.target.value)} className="h-8 text-xs" />
-                        </div>
-                        <div className="space-y-1">
-                          <Label className="text-[10px] text-slate-500">تاريخ الانتهاء</Label>
-                          <Input type="date" value={it.expiryDate} onChange={(e) => void updateItem(i, "expiryDate", e.target.value)} className="h-8 text-xs" />
-                        </div>
-                        <div className="space-y-1">
-                          <Label className="text-[10px] text-slate-500">ملاحظات</Label>
-                          <Input value={it.reason} onChange={(e) => void updateItem(i, "reason", e.target.value)} className="h-8 text-xs" placeholder="…" />
-                        </div>
+                <div className="p-3 space-y-3 bg-emerald-50/40">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                    <div className="space-y-1 min-w-0 overflow-hidden">
+                      <Label className="text-xs font-medium">المخزن *</Label>
+                      <SearchSelect
+                        options={warehouseOptions}
+                        value={form.warehouseId}
+                        onChange={(v) => setForm((f) => ({ ...f, warehouseId: v }))}
+                        placeholder="ابحث مخزن…"
+                        emptyLabel={warehouseOptions.length === 0 ? "لا توجد مخازن — أضف مخزناً من شاشة المخازن" : "لا نتائج"}
+                      />
+                    </div>
+                    <div className="space-y-1 min-w-0 overflow-hidden">
+                      <Label className="text-xs font-medium">الباركود</Label>
+                      <div className="flex gap-1 min-w-0">
+                        <Input
+                          className="h-9 text-sm min-w-0 flex-1"
+                          value={barcode}
+                          onChange={(e) => setBarcode(e.target.value)}
+                          onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); void handleBarcode(); } }}
+                          placeholder="مسح باركود"
+                        />
+                        <Button type="button" variant="outline" size="sm" className="h-9 shrink-0" onClick={() => void handleBarcode()}>+</Button>
                       </div>
                     </div>
-                  ))}
+                    <div className="space-y-1 min-w-0 overflow-hidden">
+                      <Label className="text-xs font-medium">الفئة</Label>
+                      <Select value={lineCategoryId || "all"} onValueChange={(v) => setLineCategoryId(v === "all" ? "" : v)}>
+                        <SelectTrigger className="h-9 text-sm w-full"><SelectValue placeholder="كل الفئات" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">كل الفئات</SelectItem>
+                          {(categories || []).map((c: any) => (
+                            <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  <p className="text-[11px] text-slate-600">
+                    كمية كل صنف: <span className="font-semibold text-emerald-800">موجب = وارد</span>
+                    {" · "}
+                    <span className="font-semibold text-rose-700">سالب = صادر</span>
+                    {" — "}
+                    أصناف للبحث: <span className="tabular-nums font-semibold">{filteredItems.length}</span>
+                    {itemsLoading ? " …تحميل" : null}
+                    {itemsLoadError ? <span className="text-red-600"> — {itemsLoadError}</span> : null}
+                  </p>
+
+                  {items.map((it, i) => {
+                    const signed = Number(it.quantity || 0);
+                    const dirHint = !it.quantity?.trim() ? null : signed < 0 ? "صادر" : signed > 0 ? "وارد" : null;
+                    return (
+                      <div key={i} className="rounded-md border border-slate-200 bg-white p-3 space-y-3">
+                        <div className="flex items-start gap-2">
+                          <div className="flex-1 min-w-0 grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-2">
+                            <div className="space-y-2 min-w-0">
+                              <div className="space-y-1 min-w-0">
+                                <Label className="text-[10px] text-slate-500">الصنف</Label>
+                                <ItemSearchSelect
+                                  items={filteredItems}
+                                  value={it.itemId}
+                                  onChange={(v) => void updateItem(i, "itemId", v)}
+                                  placeholder={itemsLoading ? "جاري تحميل الأصناف…" : "اكتب للبحث عن صنف…"}
+                                />
+                              </div>
+                              <div className="space-y-1">
+                                <Label className="text-[10px] text-slate-500">
+                                  الكمية الواردة / الصادرة
+                                  {dirHint ? (
+                                    <span className={`ms-2 font-semibold ${dirHint === "وارد" ? "text-emerald-700" : "text-rose-700"}`}>({dirHint})</span>
+                                  ) : null}
+                                </Label>
+                                <Input
+                                  type="number"
+                                  step="any"
+                                  value={it.quantity}
+                                  onChange={(e) => void updateItem(i, "quantity", e.target.value)}
+                                  className="h-8 text-xs"
+                                  placeholder="مثال: 5 أو -3"
+                                />
+                              </div>
+                              <div className="space-y-1">
+                                <Label className="text-[10px] text-slate-500">الكمية المتاحة</Label>
+                                <div className="h-8 flex items-center text-xs font-semibold text-slate-600 px-2 rounded-md bg-slate-100 border">
+                                  {it.available != null ? Number(it.available).toLocaleString("en-US") : "—"}
+                                </div>
+                              </div>
+                              <div className="space-y-1">
+                                <Label className="text-[10px] text-slate-500">ملاحظات</Label>
+                                <Input value={it.reason} onChange={(e) => void updateItem(i, "reason", e.target.value)} className="h-8 text-xs" placeholder="…" />
+                              </div>
+                            </div>
+                            <div className="space-y-2 min-w-0">
+                              <div className="space-y-1">
+                                <Label className="text-[10px] text-slate-500">الكمية الفعلية</Label>
+                                <Input type="number" step="any" value={it.actualQty} onChange={(e) => void updateItem(i, "actualQty", e.target.value)} className="h-8 text-xs" placeholder="جرد (اختياري)" />
+                              </div>
+                              <div className="space-y-1">
+                                <Label className="text-[10px] text-slate-500">الوحدة</Label>
+                                <Input value={it.unit} onChange={(e) => void updateItem(i, "unit", e.target.value)} className="h-8 text-xs" />
+                              </div>
+                              <div className="space-y-1">
+                                <Label className="text-[10px] text-slate-500">التكلفة</Label>
+                                <Input type="number" step="any" value={it.unitCost} onChange={(e) => void updateItem(i, "unitCost", e.target.value)} className="h-8 text-xs" />
+                              </div>
+                              <div className="space-y-1">
+                                <Label className="text-[10px] text-slate-500">رقم التشغيلة</Label>
+                                <Input value={it.batchNumber} onChange={(e) => void updateItem(i, "batchNumber", e.target.value)} className="h-8 text-xs" />
+                              </div>
+                            </div>
+                          </div>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 w-8 p-0 text-red-500 shrink-0"
+                            onClick={() => removeItem(i)}
+                            title="حذف"
+                          >
+                            <Trash2 size={14} />
+                          </Button>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
 
