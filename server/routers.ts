@@ -951,7 +951,7 @@ const itemsRouter = router({
     const where = conditions.length > 0 ? and(...conditions) : undefined;
     // ترتيب بالكود (الأصناف بدون كود في الآخر) ثم الاسم — أوضح من ترتيب الاسم العربي المختلط
     const itemOrder = [
-      sql`(CASE WHEN ${items.code} IS NULL OR TRIM(${items.code}) = '' THEN 1 ELSE 0 END)`,
+      sql`(CASE WHEN ${items.code} IS NULL OR CHAR_LENGTH(TRIM(${items.code})) = 0 THEN 1 ELSE 0 END)`,
       items.code,
       items.name,
       items.id,
@@ -1000,68 +1000,71 @@ const itemsRouter = router({
   }),
   all: protectedProcedure.input(z.object({
     forSalesInvoice: z.boolean().optional(),
-    /** When false, only active/null. Default: all rows (same as items.list pickers). */
+    /** When false, only active/null. Default: all rows for pickers. */
     includeInactive: z.boolean().optional(),
   }).optional()).query(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-    const itemCols = {
-      id: items.id,
-      tenantId: items.tenantId,
-      code: items.code,
-      barcode: items.barcode,
-      name: items.name,
-      categoryId: items.categoryId,
-      altCategoryId: items.altCategoryId,
-      itemType: items.itemType,
-      unit: items.unit,
-      purchasePrice: items.purchasePrice,
-      averageCost: items.averageCost,
-      salePrice: items.salePrice,
-      minPrice: items.minPrice,
-      maxPrice: items.maxPrice,
-      percentDiscount: items.percentDiscount,
-      cashDiscount: items.cashDiscount,
-      minStock: items.minStock,
-      currentStock: items.currentStock,
-      taxRate: items.taxRate,
-      taxRate2: items.taxRate2,
-      taxRate3: items.taxRate3,
-      taxId: items.taxId,
-      tax2Id: items.tax2Id,
-      tax3Id: items.tax3Id,
-      trackSerial: items.trackSerial,
-      description: items.description,
-      isActive: items.isActive,
-      createdAt: items.createdAt,
-      updatedAt: items.updatedAt,
-    };
-    const itemOrder = [
-      sql`(CASE WHEN ${items.code} IS NULL OR TRIM(${items.code}) = '' THEN 1 ELSE 0 END)`,
-      items.code,
-      items.name,
-      items.id,
-    ] as const;
-    // Default: no isActive filter (Mega imports sometimes leave isActive=0 and emptied pickers).
+    // Avoid sql`... = ''` — some MySQL modes/drivers emit "" and the query fails.
+    // Empty codes sort last via CHAR_LENGTH, no string-literal quotes.
+    const codeLast = sql`(CASE WHEN ${items.code} IS NULL OR CHAR_LENGTH(TRIM(${items.code})) = 0 THEN 1 ELSE 0 END)`;
     const activeCond = input?.includeInactive === false
       ? or(eq(items.isActive, true), isNull(items.isActive))
       : undefined;
-    if (input?.forSalesInvoice) {
-      const conditions = [
-        activeCond,
-        or(
-          isNull(items.categoryId),
-          eq(itemCategories.showInSalesInvoices, true),
-        ),
-      ].filter(Boolean);
-      return db.select(itemCols).from(items)
-        .leftJoin(itemCategories, eq(items.categoryId, itemCategories.id))
-        .where(tenantWhere(items, ctx.tenantId, and(...(conditions as any[]))))
-        .orderBy(...itemOrder);
+    try {
+      if (input?.forSalesInvoice) {
+        const conditions = [
+          activeCond,
+          or(
+            isNull(items.categoryId),
+            eq(itemCategories.showInSalesInvoices, true),
+          ),
+        ].filter(Boolean);
+        return await db.select({
+          id: items.id,
+          tenantId: items.tenantId,
+          code: items.code,
+          barcode: items.barcode,
+          name: items.name,
+          categoryId: items.categoryId,
+          altCategoryId: items.altCategoryId,
+          itemType: items.itemType,
+          unit: items.unit,
+          purchasePrice: items.purchasePrice,
+          averageCost: items.averageCost,
+          salePrice: items.salePrice,
+          minPrice: items.minPrice,
+          maxPrice: items.maxPrice,
+          percentDiscount: items.percentDiscount,
+          cashDiscount: items.cashDiscount,
+          minStock: items.minStock,
+          currentStock: items.currentStock,
+          taxRate: items.taxRate,
+          taxRate2: items.taxRate2,
+          taxRate3: items.taxRate3,
+          taxId: items.taxId,
+          tax2Id: items.tax2Id,
+          tax3Id: items.tax3Id,
+          trackSerial: items.trackSerial,
+          description: items.description,
+          isActive: items.isActive,
+          createdAt: items.createdAt,
+          updatedAt: items.updatedAt,
+        }).from(items)
+          .leftJoin(itemCategories, eq(items.categoryId, itemCategories.id))
+          .where(tenantWhere(items, ctx.tenantId, and(...(conditions as any[]))))
+          .orderBy(codeLast, items.code, items.name, items.id);
+      }
+      // Plain select() — same proven path as before the picker fix
+      return await db.select().from(items)
+        .where(tenantWhere(items, ctx.tenantId, activeCond))
+        .orderBy(codeLast, items.code, items.name, items.id);
+    } catch (e: unknown) {
+      throw new TRPCError({
+        code: "INTERNAL_SERVER_ERROR",
+        message: dbErrorMessage(e, "فشل تحميل الأصناف"),
+      });
     }
-    return db.select(itemCols).from(items)
-      .where(tenantWhere(items, ctx.tenantId, activeCond))
-      .orderBy(...itemOrder);
   }),
   byId: protectedProcedure.input(z.number()).query(async ({ ctx, input }) => {
     const db = await getDb();
@@ -5023,7 +5026,7 @@ const reportsRouter = router({
       .where(tenantWhere(items, ctx.tenantId))
       .leftJoin(itemCategories, eq(items.categoryId, itemCategories.id))
       .orderBy(
-        sql`(CASE WHEN ${items.code} IS NULL OR TRIM(${items.code}) = '' THEN 1 ELSE 0 END)`,
+        sql`(CASE WHEN ${items.code} IS NULL OR CHAR_LENGTH(TRIM(${items.code})) = 0 THEN 1 ELSE 0 END)`,
         items.code,
         items.name,
         items.id,

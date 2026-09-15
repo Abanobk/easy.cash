@@ -130,7 +130,11 @@ export default function InventoryAdjustments() {
   }, [allItemsQ.data, listFallbackQ.data, inactiveAllQ.data]);
   const itemsLoading = allItemsQ.isLoading || (needListFallback && listFallbackQ.isLoading);
   const itemsLoadError = allItemsQ.isError && listFallbackQ.isError
-    ? (allItemsQ.error?.message || listFallbackQ.error?.message || "فشل تحميل الأصناف")
+    ? (() => {
+        const raw = allItemsQ.error?.message || listFallbackQ.error?.message || "فشل تحميل الأصناف";
+        if (/Failed query/i.test(raw) || raw.length > 160) return "فشل تحميل الأصناف — أعد تحديث الصفحة أو راجع نشر قاعدة البيانات";
+        return raw;
+      })()
     : null;
   const costCenterOptions = useMemo(
     () => (costCentersList || []).map((c: any) => ({ id: c.id, label: c.name })),
