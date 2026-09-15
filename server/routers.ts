@@ -43,6 +43,11 @@ import {
   invoiceMegaLineFields,
   invoiceListFilterFields,
   collectionStatusSql,
+  orderReturnListFilterFields,
+  returnMegaHeaderFields,
+  returnMegaLineFields,
+  orderMegaHeaderFields,
+  orderMegaLineFields,
 } from "./invoice-mega-fields";
 import { getTenantOwnerUserId } from "./tenant";
 import { assertUniqueEntityCode, resolveTypedEntityCode, partySearchCondition, codeSearchCondition } from "./entity-codes";
@@ -2228,24 +2233,40 @@ const purchasesRouter = router({
     }),
   }),
   orders: router({
-    list: protectedProcedure.input(z.object({ page: z.number().default(1), limit: z.number().default(20) })).query(async ({ ctx, input }) => {
+    list: protectedProcedure.input(z.object({
+      ...orderReturnListFilterFields,
+    })).query(async ({ ctx, input }) => {
       await assertEntityAction(ctx, "purchases", "purchaseOrder", "viewDocList");
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       const scope = await loadUserScopeFromCtx(db, ctx.saasUser);
       const offset = (input.page - 1) * input.limit;
-      const scopeFilters = [scopeWarehouseFilter(purchaseOrders, scope)].filter(Boolean);
-      const whereClause = tenantWhere(purchaseOrders, ctx.tenantId, ...(scopeFilters.length ? [and(...scopeFilters)] : []));
+      const filters = [
+        scopeWarehouseFilter(purchaseOrders, scope),
+        input.status ? eq(purchaseOrders.status, input.status as any) : undefined,
+        input.dateFrom ? gte(purchaseOrders.date, input.dateFrom as any) : undefined,
+        input.dateTo ? lte(purchaseOrders.date, input.dateTo as any) : undefined,
+        input.branchId ? eq(purchaseOrders.branchId, input.branchId) : undefined,
+        input.warehouseId ? eq(purchaseOrders.warehouseId, input.warehouseId) : undefined,
+        input.partyId ? eq(purchaseOrders.supplierId, input.partyId) : undefined,
+        input.number ? like(purchaseOrders.number, `%${input.number}%`) : undefined,
+        input.referenceNumber ? like(purchaseOrders.referenceNumber, `%${input.referenceNumber}%`) : undefined,
+        input.search
+          ? or(like(purchaseOrders.number, `%${input.search}%`), like(suppliers.name, `%${input.search}%`))
+          : undefined,
+      ].filter(Boolean);
+      const whereClause = tenantWhere(purchaseOrders, ctx.tenantId, ...(filters as any[]));
       const rows = await db.select({
         id: purchaseOrders.id,
         number: purchaseOrders.number,
         date: purchaseOrders.date,
         total: purchaseOrders.total,
         status: purchaseOrders.status,
+        referenceNumber: purchaseOrders.referenceNumber,
         supplierName: suppliers.name,
       }).from(purchaseOrders)
-        .where(whereClause)
         .leftJoin(suppliers, eq(purchaseOrders.supplierId, suppliers.id))
+        .where(whereClause)
         .orderBy(desc(purchaseOrders.createdAt)).limit(input.limit).offset(offset);
       const [total] = await db.select({ count: count() }).from(purchaseOrders).where(whereClause);
       return { rows, total: total.count };
@@ -2261,9 +2282,13 @@ const purchasesRouter = router({
       const orderItems = await db.select({
         id: purchaseOrderItems.id,
         itemId: purchaseOrderItems.itemId,
+        warehouseId: purchaseOrderItems.warehouseId,
         quantity: purchaseOrderItems.quantity,
         price: purchaseOrderItems.price,
         discount: purchaseOrderItems.discount,
+        cashDiscount: purchaseOrderItems.cashDiscount,
+        priceType: purchaseOrderItems.priceType,
+        unit: purchaseOrderItems.unit,
         tax: purchaseOrderItems.tax,
         total: purchaseOrderItems.total,
         convertedQuantity: purchaseOrderItems.convertedQuantity,
@@ -2305,14 +2330,13 @@ const purchasesRouter = router({
     create: protectedProcedure.input(z.object({
       supplierId: z.number(),
       date: z.string(),
-      expectedDate: z.string().optional(),
-      warehouseId: z.number().optional(),
-      notes: z.string().optional(),
+      ...orderMegaHeaderFields,
       items: z.array(z.object({
         itemId: z.number(),
         quantity: z.string(),
         unitPrice: z.string(),
         notes: z.string().optional(),
+        ...orderMegaLineFields,
       })),
     })).mutation(async ({ ctx, input }) => {
       await assertEntityAction(ctx, "purchases", "purchaseOrder", "add");
@@ -2326,26 +2350,41 @@ const purchasesRouter = router({
       }
       const [countResult] = await db.select({ count: count() }).from(purchaseOrders).where(tenantWhere(purchaseOrders, ctx.tenantId));
       const number = `PO-${String(countResult.count + 1).padStart(5, "0")}`;
-      const total = input.items.reduce((s, it) => s + (Number(it.quantity) * Number(it.unitPrice)), 0);
+      const { lineReturnTotal } = await import("./return-approval");
+      const totals = input.items.map((it) => lineReturnTotal(it.quantity, it.unitPrice, it.discount, it.cashDiscount, it.tax));
+      const total = totals.reduce((s, t) => s + Number(t), 0);
       const [result] = await db.insert(purchaseOrders).values(withTenantId(ctx.tenantId, {
         number, supplierId: input.supplierId,
         date: input.date as any,
         expectedDate: input.expectedDate as any,
         warehouseId: input.warehouseId,
+        branchId: input.branchId,
+        costCenterId: input.costCenterId,
+        referenceNumber: input.referenceNumber,
+        phone: input.phone,
+        address: input.address,
+        currencyCode: input.currencyCode,
+        exchangeRate: input.exchangeRate,
         total: String(total),
         notes: input.notes,
         status: "draft",
+        createdBy: ctx.user?.id,
       }) as any);
       const orderId = (result as any).insertId;
-      for (const item of input.items) {
+      for (let i = 0; i < input.items.length; i++) {
+        const item = input.items[i];
         await db.insert(purchaseOrderItems).values(withTenantId(ctx.tenantId, {
           orderId,
           itemId: item.itemId,
+          warehouseId: item.warehouseId,
           quantity: item.quantity,
           price: item.unitPrice,
-          discount: "0",
-          tax: "0",
-          total: String(Number(item.quantity) * Number(item.unitPrice)),
+          discount: item.discount ?? "0",
+          cashDiscount: item.cashDiscount ?? "0",
+          priceType: item.priceType,
+          unit: item.unit,
+          tax: item.tax ?? "0",
+          total: totals[i],
         }) as any);
       }
       return { success: true, id: orderId, number };
@@ -2380,14 +2419,13 @@ const purchasesRouter = router({
       id: z.number(),
       supplierId: z.number(),
       date: z.string(),
-      expectedDate: z.string().optional(),
-      warehouseId: z.number().optional(),
-      notes: z.string().optional(),
+      ...orderMegaHeaderFields,
       items: z.array(z.object({
         itemId: z.number(),
         quantity: z.string(),
         unitPrice: z.string(),
         notes: z.string().optional(),
+        ...orderMegaLineFields,
       })),
     })).mutation(async ({ ctx, input }) => {
       await assertEntityAction(ctx, "purchases", "purchaseOrder", "edit");
@@ -2399,20 +2437,39 @@ const purchasesRouter = router({
       await assertDateNotInClosedPeriod(db, ctx.tenantId, input.date);
       const scope = await loadUserScopeFromCtx(db, ctx.saasUser);
       assertWarehouseAccess(scope, input.warehouseId);
-      const total = input.items.reduce((s, it) => s + (Number(it.quantity) * Number(it.unitPrice)), 0);
+      const { lineReturnTotal } = await import("./return-approval");
+      const totals = input.items.map((it) => lineReturnTotal(it.quantity, it.unitPrice, it.discount, it.cashDiscount, it.tax));
+      const total = totals.reduce((s, t) => s + Number(t), 0);
       await db.update(purchaseOrders).set({
         supplierId: input.supplierId,
         date: input.date as any,
         expectedDate: input.expectedDate as any,
         warehouseId: input.warehouseId,
+        branchId: input.branchId,
+        costCenterId: input.costCenterId,
+        referenceNumber: input.referenceNumber,
+        phone: input.phone,
+        address: input.address,
+        currencyCode: input.currencyCode,
+        exchangeRate: input.exchangeRate,
         total: String(total),
         notes: input.notes,
       } as any).where(tenantWhere(purchaseOrders, ctx.tenantId, eq(purchaseOrders.id, input.id)));
       await db.delete(purchaseOrderItems).where(tenantWhere(purchaseOrderItems, ctx.tenantId, eq(purchaseOrderItems.orderId, input.id)));
-      for (const item of input.items) {
+      for (let i = 0; i < input.items.length; i++) {
+        const item = input.items[i];
         await db.insert(purchaseOrderItems).values(withTenantId(ctx.tenantId, {
-          orderId: input.id, itemId: item.itemId, quantity: item.quantity, price: item.unitPrice,
-          discount: "0", tax: "0", total: String(Number(item.quantity) * Number(item.unitPrice)),
+          orderId: input.id,
+          itemId: item.itemId,
+          warehouseId: item.warehouseId,
+          quantity: item.quantity,
+          price: item.unitPrice,
+          discount: item.discount ?? "0",
+          cashDiscount: item.cashDiscount ?? "0",
+          priceType: item.priceType,
+          unit: item.unit,
+          tax: item.tax ?? "0",
+          total: totals[i],
         }) as any);
       }
       return { success: true };
@@ -2463,84 +2520,215 @@ const purchasesRouter = router({
       return { success: true };
     }),
   }),
+
   returns: router({
-    list: protectedProcedure.input(z.object({ page: z.number().default(1), limit: z.number().default(20) })).query(async ({ ctx, input }) => {
+    list: protectedProcedure.input(z.object({
+      ...orderReturnListFilterFields,
+    })).query(async ({ ctx, input }) => {
       await assertEntityAction(ctx, "purchases", "purchaseReturnInvoice", "viewDocList");
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       const offset = (input.page - 1) * input.limit;
+      const filters = [
+        input.status ? eq(purchaseReturns.status, input.status as any) : undefined,
+        input.dateFrom ? gte(purchaseReturns.date, input.dateFrom as any) : undefined,
+        input.dateTo ? lte(purchaseReturns.date, input.dateTo as any) : undefined,
+        input.branchId ? eq(purchaseReturns.branchId, input.branchId) : undefined,
+        input.warehouseId ? eq(purchaseReturns.warehouseId, input.warehouseId) : undefined,
+        input.partyId ? eq(purchaseReturns.supplierId, input.partyId) : undefined,
+        input.number ? like(purchaseReturns.number, `%${input.number}%`) : undefined,
+        input.referenceNumber ? like(purchaseReturns.referenceNumber, `%${input.referenceNumber}%`) : undefined,
+        input.search
+          ? or(like(purchaseReturns.number, `%${input.search}%`), like(suppliers.name, `%${input.search}%`))
+          : undefined,
+      ].filter(Boolean);
+      const whereClause = tenantWhere(purchaseReturns, ctx.tenantId, ...(filters as any[]));
       const rows = await db.select({
         id: purchaseReturns.id,
         number: purchaseReturns.number,
         date: purchaseReturns.date,
         total: purchaseReturns.total,
         status: purchaseReturns.status,
+        referenceNumber: purchaseReturns.referenceNumber,
         supplierName: suppliers.name,
       }).from(purchaseReturns)
-        .where(tenantWhere(purchaseReturns, ctx.tenantId))
         .leftJoin(suppliers, eq(purchaseReturns.supplierId, suppliers.id))
+        .where(whereClause)
         .orderBy(desc(purchaseReturns.createdAt)).limit(input.limit).offset(offset);
-      const [total] = await db.select({ count: count() }).from(purchaseReturns).where(tenantWhere(purchaseReturns, ctx.tenantId));
+      const [total] = await db.select({ count: count() }).from(purchaseReturns).where(whereClause);
       return { rows, total: total.count };
+    }),
+    byId: protectedProcedure.input(z.number()).query(async ({ ctx, input }) => {
+      await assertEntityAction(ctx, "purchases", "purchaseReturnInvoice", "viewDoc");
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const [ret] = await db.select().from(purchaseReturns).where(tenantWhere(purchaseReturns, ctx.tenantId, eq(purchaseReturns.id, input)));
+      if (!ret) throw new TRPCError({ code: "NOT_FOUND" });
+      const lines = await db.select({
+        id: purchaseReturnItems.id,
+        itemId: purchaseReturnItems.itemId,
+        warehouseId: purchaseReturnItems.warehouseId,
+        quantity: purchaseReturnItems.quantity,
+        price: purchaseReturnItems.price,
+        discount: purchaseReturnItems.discount,
+        cashDiscount: purchaseReturnItems.cashDiscount,
+        priceType: purchaseReturnItems.priceType,
+        unit: purchaseReturnItems.unit,
+        tax: purchaseReturnItems.tax,
+        total: purchaseReturnItems.total,
+        batchId: purchaseReturnItems.batchId,
+        itemName: items.name,
+        itemCode: items.code,
+      }).from(purchaseReturnItems)
+        .leftJoin(items, eq(purchaseReturnItems.itemId, items.id))
+        .where(tenantWhere(purchaseReturnItems, ctx.tenantId, eq(purchaseReturnItems.returnId, input)));
+      return { ...ret, items: lines };
     }),
     create: protectedProcedure.input(z.object({
       supplierId: z.number(),
       invoiceId: z.number().optional(),
       date: z.string(),
-      reason: z.string().optional(),
-      notes: z.string().optional(),
-      warehouseId: z.number().optional(),
+      ...returnMegaHeaderFields,
       items: z.array(z.object({
         itemId: z.number(),
         quantity: z.string(),
         unitPrice: z.string(),
+        ...returnMegaLineFields,
+        batchId: z.number().optional(),
       })),
     })).mutation(async ({ ctx, input }) => {
       await assertEntityAction(ctx, "purchases", "purchaseReturnInvoice", "add");
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       await assertDateNotInClosedPeriod(db, ctx.tenantId, input.date);
+      const scope = await loadUserScopeFromCtx(db, ctx.saasUser);
+      assertWarehouseAccess(scope, input.warehouseId);
+      const { lineReturnTotal } = await import("./return-approval");
       const [countResult] = await db.select({ count: count() }).from(purchaseReturns).where(tenantWhere(purchaseReturns, ctx.tenantId));
       const number = `PR-${String(countResult.count + 1).padStart(5, "0")}`;
-      const total = input.items.reduce((s, it) => s + (Number(it.quantity) * Number(it.unitPrice)), 0);
+      const totals = input.items.map((it) => lineReturnTotal(it.quantity, it.unitPrice, it.discount, it.cashDiscount, it.tax));
+      const total = totals.reduce((s, t) => s + Number(t), 0);
       const [result] = await db.insert(purchaseReturns).values(withTenantId(ctx.tenantId, {
         number, supplierId: input.supplierId,
         invoiceId: input.invoiceId,
         date: input.date as any,
-        total: String(total),
+        warehouseId: input.warehouseId,
+        branchId: input.branchId,
+        costCenterId: input.costCenterId,
+        referenceNumber: input.referenceNumber,
+        cashAccountId: input.cashAccountId,
+        phone: input.phone,
+        address: input.address,
         reason: input.reason,
         notes: input.notes,
-        status: "confirmed",
+        total: String(total),
+        status: "draft",
+        createdBy: ctx.user?.id,
       }) as any);
       const retId = (result as any).insertId;
-      for (const item of input.items) {
-        const lineTotal = Number(item.quantity) * Number(item.unitPrice);
+      for (let i = 0; i < input.items.length; i++) {
+        const item = input.items[i];
         await db.insert(purchaseReturnItems).values(withTenantId(ctx.tenantId, {
           returnId: retId,
           itemId: item.itemId,
+          warehouseId: item.warehouseId,
           quantity: item.quantity,
           price: item.unitPrice,
-          total: String(lineTotal),
+          discount: item.discount ?? "0",
+          cashDiscount: item.cashDiscount ?? "0",
+          priceType: item.priceType,
+          unit: item.unit,
+          tax: item.tax ?? "0",
+          total: totals[i],
+          batchId: item.batchId,
         }) as any);
-        const { applyStockMovement } = await import("./inventory-stock");
-        await applyStockMovement(db, ctx.tenantId, {
-          itemId: item.itemId,
-          quantity: item.quantity,
-          direction: "out",
-          warehouseId: input.warehouseId,
-        });
       }
-      const [supplier] = await db.select({ name: suppliers.name }).from(suppliers)
-        .where(tenantWhere(suppliers, ctx.tenantId, eq(suppliers.id, input.supplierId)));
-      await postPurchaseReturnJournal(db, ctx.tenantId, ctx.user.id, {
-        number,
-        date: input.date,
-        total: String(total),
-        supplierName: supplier?.name,
-        items: input.items.map((it) => ({ itemId: it.itemId, quantity: it.quantity })),
-      });
-      await recalculateSupplierBalance(db, ctx.tenantId, input.supplierId);
       return { success: true, id: retId, number };
+    }),
+    update: protectedProcedure.input(z.object({
+      id: z.number(),
+      supplierId: z.number(),
+      invoiceId: z.number().optional(),
+      date: z.string(),
+      ...returnMegaHeaderFields,
+      items: z.array(z.object({
+        itemId: z.number(),
+        quantity: z.string(),
+        unitPrice: z.string(),
+        ...returnMegaLineFields,
+        batchId: z.number().optional(),
+      })),
+    })).mutation(async ({ ctx, input }) => {
+      await assertEntityAction(ctx, "purchases", "purchaseReturnInvoice", "edit");
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const [ret] = await db.select().from(purchaseReturns).where(tenantWhere(purchaseReturns, ctx.tenantId, eq(purchaseReturns.id, input.id)));
+      if (!ret) throw new TRPCError({ code: "NOT_FOUND" });
+      if (ret.status !== "draft") throw new TRPCError({ code: "BAD_REQUEST", message: "لا يمكن تعديل مردود غير مسودة — فك الاعتماد أولاً" });
+      await assertDateNotInClosedPeriod(db, ctx.tenantId, input.date);
+      const scope = await loadUserScopeFromCtx(db, ctx.saasUser);
+      assertWarehouseAccess(scope, input.warehouseId);
+      const { lineReturnTotal } = await import("./return-approval");
+      const totals = input.items.map((it) => lineReturnTotal(it.quantity, it.unitPrice, it.discount, it.cashDiscount, it.tax));
+      const total = totals.reduce((s, t) => s + Number(t), 0);
+      await db.update(purchaseReturns).set({
+        supplierId: input.supplierId,
+        invoiceId: input.invoiceId,
+        date: input.date as any,
+        warehouseId: input.warehouseId,
+        branchId: input.branchId,
+        costCenterId: input.costCenterId,
+        referenceNumber: input.referenceNumber,
+        cashAccountId: input.cashAccountId,
+        phone: input.phone,
+        address: input.address,
+        reason: input.reason,
+        notes: input.notes,
+        total: String(total),
+      } as any).where(tenantWhere(purchaseReturns, ctx.tenantId, eq(purchaseReturns.id, input.id)));
+      await db.delete(purchaseReturnItems).where(tenantWhere(purchaseReturnItems, ctx.tenantId, eq(purchaseReturnItems.returnId, input.id)));
+      for (let i = 0; i < input.items.length; i++) {
+        const item = input.items[i];
+        await db.insert(purchaseReturnItems).values(withTenantId(ctx.tenantId, {
+          returnId: input.id,
+          itemId: item.itemId,
+          warehouseId: item.warehouseId,
+          quantity: item.quantity,
+          price: item.unitPrice,
+          discount: item.discount ?? "0",
+          cashDiscount: item.cashDiscount ?? "0",
+          priceType: item.priceType,
+          unit: item.unit,
+          tax: item.tax ?? "0",
+          total: totals[i],
+          batchId: item.batchId,
+        }) as any);
+      }
+      return { success: true };
+    }),
+    approve: protectedProcedure.input(z.number()).mutation(async ({ ctx, input }) => {
+      await assertEntityAction(ctx, "purchases", "purchaseReturnInvoice", "approve");
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const { finalizePurchaseReturn } = await import("./return-approval");
+      try {
+        await finalizePurchaseReturn(db, ctx.tenantId, ctx.user?.id, input);
+        return { success: true };
+      } catch (e: unknown) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: e instanceof Error ? e.message : "فشل اعتماد المردود" });
+      }
+    }),
+    unapprove: protectedProcedure.input(z.number()).mutation(async ({ ctx, input }) => {
+      await assertEntityAction(ctx, "purchases", "purchaseReturnInvoice", "unapprove");
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const { unfinalizePurchaseReturn } = await import("./return-approval");
+      try {
+        await unfinalizePurchaseReturn(db, ctx.tenantId, input);
+        return { success: true };
+      } catch (e: unknown) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: e instanceof Error ? e.message : "فشل فك اعتماد المردود" });
+      }
     }),
   }),
 });
@@ -3233,27 +3421,42 @@ const salesRouter = router({
     }),
   }),
   orders: router({
-    list: protectedProcedure.input(z.object({ page: z.number().default(1), limit: z.number().default(20) })).query(async ({ ctx, input }) => {
+    list: protectedProcedure.input(z.object({
+      ...orderReturnListFilterFields,
+    })).query(async ({ ctx, input }) => {
       await assertEntityAction(ctx, "sales", "saleOrder", "viewDocList");
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       const scope = await loadUserScopeFromCtx(db, ctx.saasUser);
       const offset = (input.page - 1) * input.limit;
-      const scopeFilters = [
+      const filters = [
         scopeWarehouseFilter(salesOrders, scope),
         scopeBranchFilter(customers, scope),
+        input.status ? eq(salesOrders.status, input.status as any) : undefined,
+        input.dateFrom ? gte(salesOrders.date, input.dateFrom as any) : undefined,
+        input.dateTo ? lte(salesOrders.date, input.dateTo as any) : undefined,
+        input.branchId ? eq(salesOrders.branchId, input.branchId) : undefined,
+        input.warehouseId ? eq(salesOrders.warehouseId, input.warehouseId) : undefined,
+        input.partyId ? eq(salesOrders.customerId, input.partyId) : undefined,
+        input.salesRepId ? eq(salesOrders.salesRepId, input.salesRepId) : undefined,
+        input.number ? like(salesOrders.number, `%${input.number}%`) : undefined,
+        input.referenceNumber ? like(salesOrders.referenceNumber, `%${input.referenceNumber}%`) : undefined,
+        input.search
+          ? or(like(salesOrders.number, `%${input.search}%`), like(customers.name, `%${input.search}%`))
+          : undefined,
       ].filter(Boolean);
-      const whereClause = tenantWhere(salesOrders, ctx.tenantId, ...(scopeFilters.length ? [and(...scopeFilters)] : []));
+      const whereClause = tenantWhere(salesOrders, ctx.tenantId, ...(filters as any[]));
       const rows = await db.select({
         id: salesOrders.id,
         number: salesOrders.number,
         date: salesOrders.date,
         total: salesOrders.total,
         status: salesOrders.status,
+        referenceNumber: salesOrders.referenceNumber,
         customerName: customers.name,
       }).from(salesOrders)
-        .where(whereClause)
         .leftJoin(customers, eq(salesOrders.customerId, customers.id))
+        .where(whereClause)
         .orderBy(desc(salesOrders.createdAt)).limit(input.limit).offset(offset);
       const [total] = await db.select({ count: count() }).from(salesOrders).where(whereClause);
       return { rows, total: total.count };
@@ -3272,9 +3475,13 @@ const salesRouter = router({
       const orderItems = await db.select({
         id: salesOrderItems.id,
         itemId: salesOrderItems.itemId,
+        warehouseId: salesOrderItems.warehouseId,
         quantity: salesOrderItems.quantity,
         price: salesOrderItems.price,
         discount: salesOrderItems.discount,
+        cashDiscount: salesOrderItems.cashDiscount,
+        priceType: salesOrderItems.priceType,
+        unit: salesOrderItems.unit,
         tax: salesOrderItems.tax,
         total: salesOrderItems.total,
         itemName: items.name,
@@ -3305,14 +3512,14 @@ const salesRouter = router({
     create: protectedProcedure.input(z.object({
       customerId: z.number(),
       date: z.string(),
-      expectedDate: z.string().optional(),
-      warehouseId: z.number().optional(),
-      notes: z.string().optional(),
+      salesRepId: z.number().optional(),
+      ...orderMegaHeaderFields,
       items: z.array(z.object({
         itemId: z.number(),
         quantity: z.string(),
         unitPrice: z.string(),
         notes: z.string().optional(),
+        ...orderMegaLineFields,
       })),
     })).mutation(async ({ ctx, input }) => {
       await assertEntityAction(ctx, "sales", "saleOrder", "add");
@@ -3329,26 +3536,42 @@ const salesRouter = router({
       }
       const [countResult] = await db.select({ count: count() }).from(salesOrders).where(tenantWhere(salesOrders, ctx.tenantId));
       const number = `SO-${String(countResult.count + 1).padStart(5, "0")}`;
-      const total = input.items.reduce((s, it) => s + (Number(it.quantity) * Number(it.unitPrice)), 0);
+      const { lineReturnTotal } = await import("./return-approval");
+      const totals = input.items.map((it) => lineReturnTotal(it.quantity, it.unitPrice, it.discount, it.cashDiscount, it.tax));
+      const total = totals.reduce((s, t) => s + Number(t), 0);
       const [result] = await db.insert(salesOrders).values(withTenantId(ctx.tenantId, {
         number, customerId: input.customerId,
         date: input.date as any,
         expectedDate: input.expectedDate as any,
         warehouseId: input.warehouseId,
+        branchId: input.branchId ?? customer?.branchId,
+        costCenterId: input.costCenterId,
+        salesRepId: input.salesRepId,
+        referenceNumber: input.referenceNumber,
+        phone: input.phone,
+        address: input.address,
+        currencyCode: input.currencyCode,
+        exchangeRate: input.exchangeRate,
         total: String(total),
         notes: input.notes,
         status: "draft",
+        createdBy: ctx.user?.id,
       }) as any);
       const orderId = (result as any).insertId;
-      for (const item of input.items) {
+      for (let i = 0; i < input.items.length; i++) {
+        const item = input.items[i];
         await db.insert(salesOrderItems).values(withTenantId(ctx.tenantId, {
           orderId,
           itemId: item.itemId,
+          warehouseId: item.warehouseId,
           quantity: item.quantity,
           price: item.unitPrice,
-          discount: "0",
-          tax: "0",
-          total: String(Number(item.quantity) * Number(item.unitPrice)),
+          discount: item.discount ?? "0",
+          cashDiscount: item.cashDiscount ?? "0",
+          priceType: item.priceType,
+          unit: item.unit,
+          tax: item.tax ?? "0",
+          total: totals[i],
         }) as any);
       }
       return { success: true, id: orderId, number };
@@ -3382,14 +3605,14 @@ const salesRouter = router({
       id: z.number(),
       customerId: z.number(),
       date: z.string(),
-      expectedDate: z.string().optional(),
-      warehouseId: z.number().optional(),
-      notes: z.string().optional(),
+      salesRepId: z.number().optional(),
+      ...orderMegaHeaderFields,
       items: z.array(z.object({
         itemId: z.number(),
         quantity: z.string(),
         unitPrice: z.string(),
         notes: z.string().optional(),
+        ...orderMegaLineFields,
       })),
     })).mutation(async ({ ctx, input }) => {
       await assertEntityAction(ctx, "sales", "saleOrder", "edit");
@@ -3404,20 +3627,40 @@ const salesRouter = router({
         .where(tenantWhere(customers, ctx.tenantId, eq(customers.id, input.customerId)));
       if (customer) assertEntityBranchAccess(scope, customer.branchId);
       assertWarehouseAccess(scope, input.warehouseId);
-      const total = input.items.reduce((s, it) => s + (Number(it.quantity) * Number(it.unitPrice)), 0);
+      const { lineReturnTotal } = await import("./return-approval");
+      const totals = input.items.map((it) => lineReturnTotal(it.quantity, it.unitPrice, it.discount, it.cashDiscount, it.tax));
+      const total = totals.reduce((s, t) => s + Number(t), 0);
       await db.update(salesOrders).set({
         customerId: input.customerId,
         date: input.date as any,
         expectedDate: input.expectedDate as any,
         warehouseId: input.warehouseId,
+        branchId: input.branchId ?? customer?.branchId,
+        costCenterId: input.costCenterId,
+        salesRepId: input.salesRepId,
+        referenceNumber: input.referenceNumber,
+        phone: input.phone,
+        address: input.address,
+        currencyCode: input.currencyCode,
+        exchangeRate: input.exchangeRate,
         total: String(total),
         notes: input.notes,
       } as any).where(tenantWhere(salesOrders, ctx.tenantId, eq(salesOrders.id, input.id)));
       await db.delete(salesOrderItems).where(tenantWhere(salesOrderItems, ctx.tenantId, eq(salesOrderItems.orderId, input.id)));
-      for (const item of input.items) {
+      for (let i = 0; i < input.items.length; i++) {
+        const item = input.items[i];
         await db.insert(salesOrderItems).values(withTenantId(ctx.tenantId, {
-          orderId: input.id, itemId: item.itemId, quantity: item.quantity, price: item.unitPrice,
-          discount: "0", tax: "0", total: String(Number(item.quantity) * Number(item.unitPrice)),
+          orderId: input.id,
+          itemId: item.itemId,
+          warehouseId: item.warehouseId,
+          quantity: item.quantity,
+          price: item.unitPrice,
+          discount: item.discount ?? "0",
+          cashDiscount: item.cashDiscount ?? "0",
+          priceType: item.priceType,
+          unit: item.unit,
+          tax: item.tax ?? "0",
+          total: totals[i],
         }) as any);
       }
       return { success: true };
@@ -3460,88 +3703,220 @@ const salesRouter = router({
       return { success: true };
     }),
   }),
+
   returns: router({
-    list: protectedProcedure.input(z.object({ page: z.number().default(1), limit: z.number().default(20) })).query(async ({ ctx, input }) => {
+    list: protectedProcedure.input(z.object({
+      ...orderReturnListFilterFields,
+    })).query(async ({ ctx, input }) => {
       await assertEntityAction(ctx, "sales", "saleReturnInvoice", "viewDocList");
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       const offset = (input.page - 1) * input.limit;
+      const filters = [
+        input.status ? eq(salesReturns.status, input.status as any) : undefined,
+        input.dateFrom ? gte(salesReturns.date, input.dateFrom as any) : undefined,
+        input.dateTo ? lte(salesReturns.date, input.dateTo as any) : undefined,
+        input.branchId ? eq(salesReturns.branchId, input.branchId) : undefined,
+        input.warehouseId ? eq(salesReturns.warehouseId, input.warehouseId) : undefined,
+        input.partyId ? eq(salesReturns.customerId, input.partyId) : undefined,
+        input.salesRepId ? eq(salesReturns.salesRepId, input.salesRepId) : undefined,
+        input.number ? like(salesReturns.number, `%${input.number}%`) : undefined,
+        input.referenceNumber ? like(salesReturns.referenceNumber, `%${input.referenceNumber}%`) : undefined,
+        input.search
+          ? or(like(salesReturns.number, `%${input.search}%`), like(customers.name, `%${input.search}%`))
+          : undefined,
+      ].filter(Boolean);
+      const whereClause = tenantWhere(salesReturns, ctx.tenantId, ...(filters as any[]));
       const rows = await db.select({
         id: salesReturns.id,
         number: salesReturns.number,
         date: salesReturns.date,
         total: salesReturns.total,
         status: salesReturns.status,
+        referenceNumber: salesReturns.referenceNumber,
         customerName: customers.name,
       }).from(salesReturns)
-        .where(tenantWhere(salesReturns, ctx.tenantId))
         .leftJoin(customers, eq(salesReturns.customerId, customers.id))
+        .where(whereClause)
         .orderBy(desc(salesReturns.createdAt)).limit(input.limit).offset(offset);
-      const [total] = await db.select({ count: count() }).from(salesReturns).where(tenantWhere(salesReturns, ctx.tenantId));
+      const [total] = await db.select({ count: count() }).from(salesReturns).where(whereClause);
       return { rows, total: total.count };
+    }),
+    byId: protectedProcedure.input(z.number()).query(async ({ ctx, input }) => {
+      await assertEntityAction(ctx, "sales", "saleReturnInvoice", "viewDoc");
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const [ret] = await db.select().from(salesReturns).where(tenantWhere(salesReturns, ctx.tenantId, eq(salesReturns.id, input)));
+      if (!ret) throw new TRPCError({ code: "NOT_FOUND" });
+      const lines = await db.select({
+        id: salesReturnItems.id,
+        itemId: salesReturnItems.itemId,
+        warehouseId: salesReturnItems.warehouseId,
+        quantity: salesReturnItems.quantity,
+        price: salesReturnItems.price,
+        discount: salesReturnItems.discount,
+        cashDiscount: salesReturnItems.cashDiscount,
+        priceType: salesReturnItems.priceType,
+        unit: salesReturnItems.unit,
+        tax: salesReturnItems.tax,
+        total: salesReturnItems.total,
+        batchId: salesReturnItems.batchId,
+        itemName: items.name,
+        itemCode: items.code,
+      }).from(salesReturnItems)
+        .leftJoin(items, eq(salesReturnItems.itemId, items.id))
+        .where(tenantWhere(salesReturnItems, ctx.tenantId, eq(salesReturnItems.returnId, input)));
+      return { ...ret, items: lines };
     }),
     create: protectedProcedure.input(z.object({
       customerId: z.number(),
       invoiceId: z.number().optional(),
       date: z.string(),
-      reason: z.string().optional(),
-      notes: z.string().optional(),
-      warehouseId: z.number().optional(),
+      salesRepId: z.number().optional(),
+      ...returnMegaHeaderFields,
       items: z.array(z.object({
         itemId: z.number(),
         quantity: z.string(),
         unitPrice: z.string(),
+        ...returnMegaLineFields,
+        batchId: z.number().optional(),
       })),
     })).mutation(async ({ ctx, input }) => {
       await assertEntityAction(ctx, "sales", "saleReturnInvoice", "add");
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       await assertDateNotInClosedPeriod(db, ctx.tenantId, input.date);
+      const scope = await loadUserScopeFromCtx(db, ctx.saasUser);
+      assertWarehouseAccess(scope, input.warehouseId);
+      const { lineReturnTotal } = await import("./return-approval");
       const [countResult] = await db.select({ count: count() }).from(salesReturns).where(tenantWhere(salesReturns, ctx.tenantId));
       const number = `SR-${String(countResult.count + 1).padStart(5, "0")}`;
-      const total = input.items.reduce((s, it) => s + (Number(it.quantity) * Number(it.unitPrice)), 0);
+      const totals = input.items.map((it) => lineReturnTotal(it.quantity, it.unitPrice, it.discount, it.cashDiscount, it.tax));
+      const total = totals.reduce((s, t) => s + Number(t), 0);
       const [result] = await db.insert(salesReturns).values(withTenantId(ctx.tenantId, {
         number, customerId: input.customerId,
         invoiceId: input.invoiceId,
         date: input.date as any,
-        total: String(total),
+        warehouseId: input.warehouseId,
+        branchId: input.branchId,
+        costCenterId: input.costCenterId,
+        salesRepId: input.salesRepId,
+        referenceNumber: input.referenceNumber,
+        cashAccountId: input.cashAccountId,
+        phone: input.phone,
+        address: input.address,
         reason: input.reason,
         notes: input.notes,
-        status: "confirmed",
+        total: String(total),
+        status: "draft",
+        createdBy: ctx.user?.id,
       }) as any);
       const retId = (result as any).insertId;
-      for (const item of input.items) {
-        const lineTotal = Number(item.quantity) * Number(item.unitPrice);
+      for (let i = 0; i < input.items.length; i++) {
+        const item = input.items[i];
         await db.insert(salesReturnItems).values(withTenantId(ctx.tenantId, {
           returnId: retId,
           itemId: item.itemId,
+          warehouseId: item.warehouseId,
           quantity: item.quantity,
           price: item.unitPrice,
-          total: String(lineTotal),
+          discount: item.discount ?? "0",
+          cashDiscount: item.cashDiscount ?? "0",
+          priceType: item.priceType,
+          unit: item.unit,
+          tax: item.tax ?? "0",
+          total: totals[i],
+          batchId: item.batchId,
         }) as any);
-        const { applyStockMovement } = await import("./inventory-stock");
-        await applyStockMovement(db, ctx.tenantId, {
-          itemId: item.itemId,
-          quantity: item.quantity,
-          direction: "in",
-          warehouseId: input.warehouseId,
-        });
       }
-      const [customer] = await db.select({ name: customers.name }).from(customers)
-        .where(tenantWhere(customers, ctx.tenantId, eq(customers.id, input.customerId)));
-      await postSalesReturnJournal(db, ctx.tenantId, ctx.user.id, {
-        number,
-        date: input.date,
-        total: String(total),
-        customerName: customer?.name,
-      });
-      await postSalesReturnCogsJournal(db, ctx.tenantId, ctx.user.id, {
-        number,
-        date: input.date,
-        items: input.items.map((it) => ({ itemId: it.itemId, quantity: it.quantity })),
-      });
-      await recalculateCustomerBalance(db, ctx.tenantId, input.customerId);
       return { success: true, id: retId, number };
+    }),
+    update: protectedProcedure.input(z.object({
+      id: z.number(),
+      customerId: z.number(),
+      invoiceId: z.number().optional(),
+      date: z.string(),
+      salesRepId: z.number().optional(),
+      ...returnMegaHeaderFields,
+      items: z.array(z.object({
+        itemId: z.number(),
+        quantity: z.string(),
+        unitPrice: z.string(),
+        ...returnMegaLineFields,
+        batchId: z.number().optional(),
+      })),
+    })).mutation(async ({ ctx, input }) => {
+      await assertEntityAction(ctx, "sales", "saleReturnInvoice", "edit");
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const [ret] = await db.select().from(salesReturns).where(tenantWhere(salesReturns, ctx.tenantId, eq(salesReturns.id, input.id)));
+      if (!ret) throw new TRPCError({ code: "NOT_FOUND" });
+      if (ret.status !== "draft") throw new TRPCError({ code: "BAD_REQUEST", message: "لا يمكن تعديل مردود غير مسودة — فك الاعتماد أولاً" });
+      await assertDateNotInClosedPeriod(db, ctx.tenantId, input.date);
+      const scope = await loadUserScopeFromCtx(db, ctx.saasUser);
+      assertWarehouseAccess(scope, input.warehouseId);
+      const { lineReturnTotal } = await import("./return-approval");
+      const totals = input.items.map((it) => lineReturnTotal(it.quantity, it.unitPrice, it.discount, it.cashDiscount, it.tax));
+      const total = totals.reduce((s, t) => s + Number(t), 0);
+      await db.update(salesReturns).set({
+        customerId: input.customerId,
+        invoiceId: input.invoiceId,
+        date: input.date as any,
+        warehouseId: input.warehouseId,
+        branchId: input.branchId,
+        costCenterId: input.costCenterId,
+        salesRepId: input.salesRepId,
+        referenceNumber: input.referenceNumber,
+        cashAccountId: input.cashAccountId,
+        phone: input.phone,
+        address: input.address,
+        reason: input.reason,
+        notes: input.notes,
+        total: String(total),
+      } as any).where(tenantWhere(salesReturns, ctx.tenantId, eq(salesReturns.id, input.id)));
+      await db.delete(salesReturnItems).where(tenantWhere(salesReturnItems, ctx.tenantId, eq(salesReturnItems.returnId, input.id)));
+      for (let i = 0; i < input.items.length; i++) {
+        const item = input.items[i];
+        await db.insert(salesReturnItems).values(withTenantId(ctx.tenantId, {
+          returnId: input.id,
+          itemId: item.itemId,
+          warehouseId: item.warehouseId,
+          quantity: item.quantity,
+          price: item.unitPrice,
+          discount: item.discount ?? "0",
+          cashDiscount: item.cashDiscount ?? "0",
+          priceType: item.priceType,
+          unit: item.unit,
+          tax: item.tax ?? "0",
+          total: totals[i],
+          batchId: item.batchId,
+        }) as any);
+      }
+      return { success: true };
+    }),
+    approve: protectedProcedure.input(z.number()).mutation(async ({ ctx, input }) => {
+      await assertEntityAction(ctx, "sales", "saleReturnInvoice", "approve");
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const { finalizeSalesReturn } = await import("./return-approval");
+      try {
+        await finalizeSalesReturn(db, ctx.tenantId, ctx.user?.id, input);
+        return { success: true };
+      } catch (e: unknown) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: e instanceof Error ? e.message : "فشل اعتماد المردود" });
+      }
+    }),
+    unapprove: protectedProcedure.input(z.number()).mutation(async ({ ctx, input }) => {
+      await assertEntityAction(ctx, "sales", "saleReturnInvoice", "unapprove");
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const { unfinalizeSalesReturn } = await import("./return-approval");
+      try {
+        await unfinalizeSalesReturn(db, ctx.tenantId, input);
+        return { success: true };
+      } catch (e: unknown) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: e instanceof Error ? e.message : "فشل فك اعتماد المردود" });
+      }
     }),
   }),
 });

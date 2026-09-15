@@ -470,6 +470,13 @@
       "when": 1788400000001,
       "tag": "0066_invoice_mega_a1_a5",
       "breakpoints": true
+    },
+    {
+      "idx": 67,
+      "version": "5",
+      "when": 1788400000002,
+      "tag": "0067_orders_returns_mega_a6",
+      "breakpoints": true
     }
   ]
 }

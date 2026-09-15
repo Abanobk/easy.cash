@@ -32,7 +32,7 @@ export const invoiceMegaLineFields = {
   deliveredQuantity: z.string().optional(),
 };
 
-/** فلاتر قائمة ميجا (A5) */
+/** فلاتر قائمة ميجا (A5) — فواتير */
 export const invoiceListFilterFields = {
   search: z.string().optional(),
   status: z.string().optional(),
@@ -51,6 +51,65 @@ export const invoiceListFilterFields = {
   partyId: z.number().optional(),
   salesRepId: z.number().optional(),
   paymentType: z.enum(["cash", "credit"]).optional(),
+};
+
+/** فلاتر مبسّطة لطلبات/مردودات (A6) */
+export const orderReturnListFilterFields = {
+  search: z.string().optional(),
+  status: z.string().optional(),
+  page: z.number().default(1),
+  limit: z.number().default(20),
+  dateFrom: z.string().optional(),
+  dateTo: z.string().optional(),
+  branchId: z.number().optional(),
+  number: z.string().optional(),
+  referenceNumber: z.string().optional(),
+  partyId: z.number().optional(),
+  salesRepId: z.number().optional(),
+  warehouseId: z.number().optional(),
+};
+
+export const returnMegaHeaderFields = {
+  warehouseId: z.number().optional(),
+  branchId: z.number().optional(),
+  costCenterId: z.number().optional(),
+  referenceNumber: z.string().optional(),
+  cashAccountId: z.number().optional(),
+  phone: z.string().optional(),
+  address: z.string().optional(),
+  reason: z.string().optional(),
+  notes: z.string().optional(),
+};
+
+export const returnMegaLineFields = {
+  warehouseId: z.number().optional(),
+  discount: z.string().default("0"),
+  cashDiscount: z.string().default("0"),
+  priceType: z.string().optional(),
+  unit: z.string().optional(),
+  tax: z.string().default("0"),
+};
+
+export const orderMegaHeaderFields = {
+  warehouseId: z.number().optional(),
+  branchId: z.number().optional(),
+  costCenterId: z.number().optional(),
+  referenceNumber: z.string().optional(),
+  phone: z.string().optional(),
+  address: z.string().optional(),
+  currencyCode: z.string().default("EGP"),
+  exchangeRate: z.string().default("1"),
+  notes: z.string().optional(),
+  expectedDate: z.string().optional(),
+};
+
+export const orderMegaLineFields = {
+  warehouseId: z.number().optional(),
+  discount: z.string().default("0"),
+  cashDiscount: z.string().default("0"),
+  priceType: z.string().optional(),
+  unit: z.string().optional(),
+  tax: z.string().default("0"),
 };
 
 export function collectionStatusSql(
