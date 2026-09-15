@@ -428,6 +428,13 @@
       "when": 1787900000000,
       "tag": "0060_inventory_adjustment_lines",
       "breakpoints": true
+    },
+    {
+      "idx": 61,
+      "version": "5",
+      "when": 1788000000000,
+      "tag": "0061_inventory_adjustment_mega_parity",
+      "breakpoints": true
     }
   ]
 }

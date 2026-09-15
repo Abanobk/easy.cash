@@ -865,8 +865,11 @@ export const inventoryAdjustments = mysqlTable("inventory_adjustments", {
   costCenterId: int("costCenterId"),
   /** الحساب المقابل لترحيل قيد التسوية — لو فاضي، التسوية بتتسجل من غير أي أثر محاسبي (زي القديم) */
   contraAccountId: int("contraAccountId"),
+  /** العميل — مطابقة ميجا InventoryCorrection (اختياري، مش له أثر محاسبي مباشر) */
+  customerId: int("customerId"),
   journalId: int("journalId"),
   createdBy: int("createdBy"),
+  approvedBy: int("approvedBy"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
 
@@ -881,6 +884,11 @@ export const inventoryAdjustmentItems = mysqlTable("inventory_adjustment_items",
   newQty: decimal("newQty", { precision: 15, scale: 3 }).notNull(),
   difference: decimal("difference", { precision: 15, scale: 3 }).default("0"),
   batchId: int("batchId"),
+  /** تكلفة الوحدة وقت التسوية — مطابقة ميجا InventoryCorrection (لقطة تاريخية، مش مرتبطة لايف بسعر الصنف) */
+  unitCost: decimal("unitCost", { precision: 15, scale: 4 }).default("0"),
+  productionDate: date("productionDate"),
+  expiryDate: date("expiryDate"),
+  unit: varchar("unit", { length: 50 }),
   batchNumber: varchar("batchNumber", { length: 100 }),
   notes: text("notes"),
 });

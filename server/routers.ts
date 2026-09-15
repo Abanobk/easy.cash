@@ -66,6 +66,7 @@ import {
   postLoanOriginJournal,
   postLoanInstallmentPayJournal,
   postInventoryAdjustmentJournal,
+  cancelPostedJournalByReference,
 } from "./auto-journal";
 import { getDebtAgingSummary } from "./debt-aging";
 import { calcPurchaseUnitCostAfterDiscount } from "../shared/invoice-line-calc";
@@ -6025,13 +6026,39 @@ const inventoryRouter = router({
     }),
   }),
   adjustments: router({
-    list: protectedProcedure.input(z.object({ page: z.number().default(1), limit: z.number().default(20) })).query(async ({ ctx, input }) => {
+    list: protectedProcedure.input(z.object({
+      page: z.number().default(1),
+      limit: z.number().default(20),
+      dateFrom: z.string().optional(),
+      dateTo: z.string().optional(),
+      warehouseId: z.number().optional(),
+      branchId: z.number().optional(),
+      customerId: z.number().optional(),
+      status: z.enum(["draft", "confirmed", "cancelled"]).optional(),
+      search: z.string().optional(),
+    })).query(async ({ ctx, input }) => {
       await assertEntityAction(ctx, "inventory", "stockAdjustment", "viewDocList");
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       const scope = await loadUserScopeFromCtx(db, ctx.saasUser);
       const offset = (input.page - 1) * input.limit;
-      const whereClause = tenantWhere(inventoryAdjustments, ctx.tenantId, scopeWarehouseFilter(inventoryAdjustments, scope));
+      const filters = [
+        scopeWarehouseFilter(inventoryAdjustments, scope),
+        input.dateFrom ? gte(inventoryAdjustments.date, input.dateFrom as any) : undefined,
+        input.dateTo ? lte(inventoryAdjustments.date, input.dateTo as any) : undefined,
+        input.warehouseId ? eq(inventoryAdjustments.warehouseId, input.warehouseId) : undefined,
+        input.branchId ? eq(inventoryAdjustments.branchId, input.branchId) : undefined,
+        input.customerId ? eq(inventoryAdjustments.customerId, input.customerId) : undefined,
+        input.status ? eq(inventoryAdjustments.status, input.status) : undefined,
+        input.search
+          ? or(
+              like(inventoryAdjustments.number, `%${input.search}%`),
+              like(inventoryAdjustments.reason, `%${input.search}%`),
+              like(inventoryAdjustments.reference, `%${input.search}%`),
+            )
+          : undefined,
+      ].filter(Boolean);
+      const whereClause = tenantWhere(inventoryAdjustments, ctx.tenantId, and(...(filters as any[])));
       const rows = await db.select({
         id: inventoryAdjustments.id,
         number: inventoryAdjustments.number,
@@ -6039,10 +6066,17 @@ const inventoryRouter = router({
         reason: inventoryAdjustments.reason,
         reference: inventoryAdjustments.reference,
         status: inventoryAdjustments.status,
+        warehouseId: inventoryAdjustments.warehouseId,
+        branchId: inventoryAdjustments.branchId,
+        customerId: inventoryAdjustments.customerId,
         warehouseName: warehouses.name,
+        createdBy: inventoryAdjustments.createdBy,
+        approvedBy: inventoryAdjustments.approvedBy,
+        createdByName: appUsers.name,
       }).from(inventoryAdjustments)
         .where(whereClause)
         .leftJoin(warehouses, eq(inventoryAdjustments.warehouseId, warehouses.id))
+        .leftJoin(appUsers, eq(inventoryAdjustments.createdBy, appUsers.id))
         .orderBy(desc(inventoryAdjustments.createdAt)).limit(input.limit).offset(offset);
       const [total] = await db.select({ count: count() }).from(inventoryAdjustments).where(whereClause);
       return { rows, total: total.count };
@@ -6071,11 +6105,20 @@ const inventoryRouter = router({
       branchId: z.number().optional(),
       costCenterId: z.number().optional(),
       contraAccountId: z.number().optional(),
+      customerId: z.number().optional(),
       notes: z.string().optional(),
+      /** حفظ معلق بدون حركة مخزون/قيد · اعتماد يرحّل فورًا — نفس منطق فك/إعادة الاعتماد لباقي المستندات */
+      confirm: z.boolean().default(true),
       items: z.array(z.object({
         itemId: z.number(),
         warehouseId: z.number().optional(),
-        actualQty: z.string(),
+        /** كمية موقّعة (موجب = وارد، سالب = صادر) — طريقة إدخال بديلة عن actualQty */
+        quantity: z.string().optional(),
+        actualQty: z.string().optional(),
+        unitCost: z.string().optional(),
+        unit: z.string().optional(),
+        productionDate: z.string().optional(),
+        expiryDate: z.string().optional(),
         batchNumber: z.string().optional(),
         notes: z.string().optional(),
       })),
@@ -6092,29 +6135,35 @@ const inventoryRouter = router({
       }
       const [countResult] = await db.select({ count: count() }).from(inventoryAdjustments).where(tenantWhere(inventoryAdjustments, ctx.tenantId));
       const number = `IA-${String(countResult.count + 1).padStart(5, "0")}`;
+      const status = input.confirm ? "confirmed" : "draft";
       const [result] = await db.insert(inventoryAdjustments).values(withTenantId(ctx.tenantId, {
         number, warehouseId: input.warehouseId, date: input.date as any,
         reason: input.notes, reference: input.reference, branchId: input.branchId,
         costCenterId: input.costCenterId, contraAccountId: input.contraAccountId,
-        status: "confirmed",
+        customerId: input.customerId, status,
+        createdBy: ctx.saasUser?.id,
+        approvedBy: input.confirm ? (ctx.saasUser?.id ?? null) : null,
       }) as any);
       const adjId = (result as any).insertId;
       const { applyStockMovement, getWarehouseItemQty } = await import("./inventory-stock");
 
       let netValue = 0;
-      const costMap = new Map<number, number>();
-      if (input.contraAccountId && input.items.length) {
+      const costMap = new Map<number, { averageCost: string | null; purchasePrice: string | null; unit: string | null }>();
+      if (input.items.length) {
         const itemIds = input.items.map((it) => it.itemId);
-        const costRows = await db.select({ id: items.id, averageCost: items.averageCost, purchasePrice: items.purchasePrice })
+        const itemRows = await db.select({ id: items.id, averageCost: items.averageCost, purchasePrice: items.purchasePrice, unit: items.unit })
           .from(items).where(tenantWhere(items, ctx.tenantId, inArray(items.id, itemIds)));
-        for (const r of costRows) costMap.set(r.id, Number(r.averageCost || 0) || Number(r.purchasePrice || 0));
+        for (const r of itemRows) costMap.set(r.id, r);
       }
 
       for (const item of input.items) {
         const lineWarehouseId = item.warehouseId ?? input.warehouseId;
         const currentQty = await getWarehouseItemQty(db, ctx.tenantId, item.itemId, lineWarehouseId);
-        const newQty = Number(item.actualQty);
+        const hasActual = item.actualQty != null && String(item.actualQty).trim() !== "";
+        const newQty = hasActual ? Number(item.actualQty) : currentQty + Number(item.quantity || 0);
         const difference = newQty - currentQty;
+        const meta = costMap.get(item.itemId);
+        const unitCost = Number(item.unitCost || meta?.averageCost || meta?.purchasePrice || 0);
         await db.insert(inventoryAdjustmentItems).values(withTenantId(ctx.tenantId, {
           adjustmentId: adjId,
           itemId: item.itemId,
@@ -6122,23 +6171,25 @@ const inventoryRouter = router({
           currentQty: String(currentQty),
           newQty: String(newQty),
           difference: String(difference),
+          unitCost: String(unitCost),
+          unit: item.unit || meta?.unit || null,
+          productionDate: item.productionDate || null,
+          expiryDate: item.expiryDate || null,
           batchNumber: item.batchNumber,
           notes: item.notes,
         }) as any);
-        if (difference !== 0) {
+        if (input.confirm && difference !== 0) {
           await applyStockMovement(db, ctx.tenantId, {
             itemId: item.itemId,
             quantity: Math.abs(difference),
             direction: difference >= 0 ? "in" : "out",
             warehouseId: lineWarehouseId,
           });
-        }
-        if (input.contraAccountId) {
-          netValue += difference * (costMap.get(item.itemId) ?? 0);
+          netValue += difference * unitCost;
         }
       }
 
-      if (input.contraAccountId) {
+      if (input.confirm && input.contraAccountId) {
         const journal = await postInventoryAdjustmentJournal(
           db, ctx.tenantId, ctx.user?.id,
           { id: adjId, number, date: input.date },
@@ -6151,7 +6202,120 @@ const inventoryRouter = router({
         }
       }
 
-      return { success: true, id: adjId, number };
+      return { success: true, id: adjId, number, status };
+    }),
+    /** اعتماد تسوية معلّقة — يرحّل المخزون والقيد المحاسبي (زي اعتماد فاتورة) */
+    confirm: protectedProcedure.input(z.object({ id: z.number() })).mutation(async ({ ctx, input }) => {
+      await assertEntityAction(ctx, "inventory", "stockAdjustment", "edit");
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const [row] = await db.select().from(inventoryAdjustments)
+        .where(tenantWhere(inventoryAdjustments, ctx.tenantId, eq(inventoryAdjustments.id, input.id)));
+      if (!row) throw new TRPCError({ code: "NOT_FOUND" });
+      if (row.status !== "draft") throw new TRPCError({ code: "BAD_REQUEST", message: "التسوية ليست معلقة" });
+      const adjDate = toDateStr(row.date);
+      await assertDateNotInClosedPeriod(db, ctx.tenantId, adjDate);
+      const scope = await loadUserScopeFromCtx(db, ctx.saasUser);
+      assertWarehouseAccess(scope, row.warehouseId);
+
+      const lines = await db.select().from(inventoryAdjustmentItems)
+        .where(tenantWhere(inventoryAdjustmentItems, ctx.tenantId, eq(inventoryAdjustmentItems.adjustmentId, row.id)));
+      const { applyStockMovement } = await import("./inventory-stock");
+      let netValue = 0;
+      for (const line of lines) {
+        const difference = Number(line.difference || 0);
+        if (difference === 0) continue;
+        await applyStockMovement(db, ctx.tenantId, {
+          itemId: line.itemId,
+          quantity: Math.abs(difference),
+          direction: difference >= 0 ? "in" : "out",
+          warehouseId: line.warehouseId ?? row.warehouseId,
+        });
+        netValue += difference * Number(line.unitCost || 0);
+      }
+      await db.update(inventoryAdjustments).set({
+        status: "confirmed",
+        approvedBy: ctx.saasUser?.id ?? null,
+      }).where(tenantWhere(inventoryAdjustments, ctx.tenantId, eq(inventoryAdjustments.id, row.id)));
+      if (row.contraAccountId) {
+        const journal = await postInventoryAdjustmentJournal(
+          db, ctx.tenantId, ctx.user?.id,
+          { id: row.id, number: row.number, date: adjDate },
+          row.contraAccountId, netValue, row.costCenterId ?? undefined,
+        );
+        if (!journal.skipped) {
+          await db.update(inventoryAdjustments).set({ journalId: journal.id }).where(
+            tenantWhere(inventoryAdjustments, ctx.tenantId, eq(inventoryAdjustments.id, row.id)),
+          );
+        }
+      }
+      return { success: true };
+    }),
+    /** فك اعتماد — يعكس المخزون والقيد ويعيد المسودة (زي فك اعتماد الفواتير) */
+    unconfirm: protectedProcedure.input(z.object({ id: z.number() })).mutation(async ({ ctx, input }) => {
+      await assertEntityAction(ctx, "inventory", "stockAdjustment", "edit");
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const [row] = await db.select().from(inventoryAdjustments)
+        .where(tenantWhere(inventoryAdjustments, ctx.tenantId, eq(inventoryAdjustments.id, input.id)));
+      if (!row) throw new TRPCError({ code: "NOT_FOUND" });
+      if (row.status !== "confirmed") throw new TRPCError({ code: "BAD_REQUEST", message: "التسوية ليست معتمدة" });
+      const adjDate = toDateStr(row.date);
+      await assertDateNotInClosedPeriod(db, ctx.tenantId, adjDate);
+      const scope = await loadUserScopeFromCtx(db, ctx.saasUser);
+      assertWarehouseAccess(scope, row.warehouseId);
+      const lines = await db.select().from(inventoryAdjustmentItems)
+        .where(tenantWhere(inventoryAdjustmentItems, ctx.tenantId, eq(inventoryAdjustmentItems.adjustmentId, row.id)));
+      const { applyStockMovement } = await import("./inventory-stock");
+      for (const line of lines) {
+        const difference = Number(line.difference || 0);
+        if (difference === 0) continue;
+        await applyStockMovement(db, ctx.tenantId, {
+          itemId: line.itemId,
+          quantity: Math.abs(difference),
+          direction: difference >= 0 ? "out" : "in",
+          warehouseId: line.warehouseId ?? row.warehouseId,
+          allowNegative: true,
+        });
+      }
+      if (row.journalId) {
+        await cancelPostedJournalByReference(db, ctx.tenantId, `INV-ADJ-${row.id}`);
+      }
+      await db.update(inventoryAdjustments).set({ status: "draft", approvedBy: null })
+        .where(tenantWhere(inventoryAdjustments, ctx.tenantId, eq(inventoryAdjustments.id, row.id)));
+      return { success: true };
+    }),
+    /** إلغاء — مسودة مباشرة أو عكس معتمد ثم إلغاء (زي إلغاء الفواتير) */
+    cancel: protectedProcedure.input(z.object({ id: z.number() })).mutation(async ({ ctx, input }) => {
+      await assertEntityAction(ctx, "inventory", "stockAdjustment", "deleteCancel");
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const [row] = await db.select().from(inventoryAdjustments)
+        .where(tenantWhere(inventoryAdjustments, ctx.tenantId, eq(inventoryAdjustments.id, input.id)));
+      if (!row) throw new TRPCError({ code: "NOT_FOUND" });
+      if (row.status === "cancelled") throw new TRPCError({ code: "BAD_REQUEST", message: "التسوية ملغاة مسبقاً" });
+      if (row.status === "confirmed") {
+        const lines = await db.select().from(inventoryAdjustmentItems)
+          .where(tenantWhere(inventoryAdjustmentItems, ctx.tenantId, eq(inventoryAdjustmentItems.adjustmentId, row.id)));
+        const { applyStockMovement } = await import("./inventory-stock");
+        for (const line of lines) {
+          const difference = Number(line.difference || 0);
+          if (difference === 0) continue;
+          await applyStockMovement(db, ctx.tenantId, {
+            itemId: line.itemId,
+            quantity: Math.abs(difference),
+            direction: difference >= 0 ? "out" : "in",
+            warehouseId: line.warehouseId ?? row.warehouseId,
+            allowNegative: true,
+          });
+        }
+        if (row.journalId) {
+          await cancelPostedJournalByReference(db, ctx.tenantId, `INV-ADJ-${row.id}`);
+        }
+      }
+      await db.update(inventoryAdjustments).set({ status: "cancelled", approvedBy: null })
+        .where(tenantWhere(inventoryAdjustments, ctx.tenantId, eq(inventoryAdjustments.id, row.id)));
+      return { success: true };
     }),
   }),
 });
