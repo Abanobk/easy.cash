@@ -18,18 +18,35 @@ export type FinanceTxListFiltersValue = {
 
 type Opt = { id: number; name: string };
 
+const DEFAULT_STATUS_OPTIONS: { value: string; label: string }[] = [
+  { value: "draft", label: "مسودة" },
+  { value: "confirmed", label: "معتمدة" },
+  { value: "cancelled", label: "ملغاة" },
+];
+
 export function FinanceTxListFilterBar({
   value,
   onChange,
   onClear,
   partyLabel,
   parties,
+  statusOptions = DEFAULT_STATUS_OPTIONS,
+  hideReferenceNumber = false,
+  numberLabel = "المسلسل",
+  referenceNumberLabel = "رقم المرجع",
+  searchPlaceholder = "رقم / بيان…",
 }: {
   value: FinanceTxListFiltersValue;
   onChange: (next: FinanceTxListFiltersValue) => void;
   onClear: () => void;
   partyLabel?: string;
   parties?: Opt[];
+  /** حالات مخصّصة (مثلاً شيكات: معلق/محصّل/مرتجع) */
+  statusOptions?: { value: string; label: string }[];
+  hideReferenceNumber?: boolean;
+  numberLabel?: string;
+  referenceNumberLabel?: string;
+  searchPlaceholder?: string;
 }) {
   const set = <K extends keyof FinanceTxListFiltersValue>(key: K, v: FinanceTxListFiltersValue[K]) =>
     onChange({ ...value, [key]: v });
@@ -51,9 +68,9 @@ export function FinanceTxListFilterBar({
             <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="الكل" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">الكل</SelectItem>
-              <SelectItem value="draft">مسودة</SelectItem>
-              <SelectItem value="confirmed">معتمدة</SelectItem>
-              <SelectItem value="cancelled">ملغاة</SelectItem>
+              {statusOptions.map((o) => (
+                <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </div>
@@ -70,16 +87,18 @@ export function FinanceTxListFilterBar({
           </div>
         )}
         <div>
-          <Label className="text-[10px] text-slate-500">المسلسل</Label>
+          <Label className="text-[10px] text-slate-500">{numberLabel}</Label>
           <Input className="h-8 text-xs" value={value.number || ""} onChange={(e) => set("number", e.target.value || undefined)} />
         </div>
-        <div>
-          <Label className="text-[10px] text-slate-500">رقم المرجع</Label>
-          <Input className="h-8 text-xs" value={value.referenceNumber || ""} onChange={(e) => set("referenceNumber", e.target.value || undefined)} />
-        </div>
+        {!hideReferenceNumber && (
+          <div>
+            <Label className="text-[10px] text-slate-500">{referenceNumberLabel}</Label>
+            <Input className="h-8 text-xs" value={value.referenceNumber || ""} onChange={(e) => set("referenceNumber", e.target.value || undefined)} />
+          </div>
+        )}
         <div>
           <Label className="text-[10px] text-slate-500">بحث</Label>
-          <Input className="h-8 text-xs" value={value.search || ""} onChange={(e) => set("search", e.target.value || undefined)} placeholder="رقم / بيان…" />
+          <Input className="h-8 text-xs" value={value.search || ""} onChange={(e) => set("search", e.target.value || undefined)} placeholder={searchPlaceholder} />
         </div>
       </div>
       <div className="flex justify-end">

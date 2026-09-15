@@ -29,7 +29,6 @@ function buildEmptyForm(type: BankTxType) {
     reference: "",
     referenceNumber: "",
     description: "",
-    notes: "",
     customerId: undefined as number | undefined,
     supplierId: undefined as number | undefined,
   };
@@ -271,11 +270,7 @@ export default function BankTransactions() {
           )}
           <div className="col-span-2">
             <Label className="text-xs font-medium text-slate-700 mb-1.5 block">البيان</Label>
-            <Input value={form.description} onChange={f("description")} className="h-9 text-sm" />
-          </div>
-          <div className="col-span-2">
-            <Label className="text-xs font-medium text-slate-700 mb-1.5 block">ملاحظات</Label>
-            <Textarea value={form.notes} onChange={f("notes")} className="text-sm resize-none" rows={2} />
+            <Textarea value={form.description} onChange={f("description")} className="text-sm resize-none" rows={2} placeholder="وصف المعاملة" />
           </div>
         </div>
       </FormModal>

@@ -15,6 +15,16 @@ import { BankAccountSearchSelect } from "@/components/BankAccountSearchSelect";
 import EntityPermissionGate from "@/components/EntityPermissionGate";
 import { Undo2 } from "lucide-react";
 import { PartySearchSelect } from "@/components/PartySearchSelect";
+import { FinanceTxListFilterBar, type FinanceTxListFiltersValue } from "@/components/finance/FinanceTxListFilterBar";
+import { useDebouncedValue } from "@/hooks/useDebouncedValue";
+
+const CHECK_STATUS_OPTIONS = [
+  { value: "pending", label: "معلق" },
+  { value: "deposited", label: "مودع" },
+  { value: "cleared", label: "محصّل" },
+  { value: "bounced", label: "مرتجع" },
+  { value: "cancelled", label: "ملغي" },
+];
 
 function buildEmptyForm(type: CheckTxType) {
   return {
@@ -41,16 +51,26 @@ export default function Checks() {
   const [page, setPage] = useState(1);
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState(() => buildEmptyForm(lockedType));
+  const [listFilters, setListFilters] = useState<FinanceTxListFiltersValue>({});
+  const debouncedSearch = useDebouncedValue(listFilters.search || "", 300);
 
   useEffect(() => {
     setForm(buildEmptyForm(lockedType));
     setPage(1);
+    setListFilters({});
   }, [lockedType]);
 
   const { data, isLoading, refetch } = trpc.bank.checks.list.useQuery({
     page,
     limit: 20,
     type: lockedType,
+    dateFrom: listFilters.dateFrom,
+    dateTo: listFilters.dateTo,
+    status: listFilters.status,
+    partyId: listFilters.partyId,
+    number: listFilters.number,
+    checkNumber: listFilters.referenceNumber,
+    search: debouncedSearch || undefined,
   });
   const { data: bankAccounts } = trpc.bank.accounts.list.useQuery();
   const { data: customers } = trpc.customers.list.useQuery({ page: 1, limit: 500 });
@@ -59,6 +79,9 @@ export default function Checks() {
     { date: form.date },
     { enabled: !!form.date },
   );
+
+  const partyRows = lockedType === "incoming" ? (customers?.rows || []) : (suppliers?.rows || []);
+  const partyLabel = lockedType === "incoming" ? "العميل" : "المورد";
 
   const createMut = trpc.bank.checks.create.useMutation({
     onSuccess: () => {
@@ -138,6 +161,17 @@ export default function Checks() {
 
   return (
     <ERPLayout title={meta.title}>
+      <FinanceTxListFilterBar
+        value={listFilters}
+        onChange={(next) => { setListFilters(next); setPage(1); }}
+        onClear={() => { setListFilters({}); setPage(1); }}
+        partyLabel={partyLabel}
+        parties={partyRows.map((p: any) => ({ id: p.id, name: p.name }))}
+        statusOptions={CHECK_STATUS_OPTIONS}
+        numberLabel="المرجع"
+        referenceNumberLabel="رقم الشيك"
+        searchPlaceholder="رقم شيك / بيان…"
+      />
       <DataTable
         title={meta.title}
         data={data?.rows}

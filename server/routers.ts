@@ -4811,13 +4811,38 @@ const bankRouter = router({
       type: z.enum(["incoming", "outgoing"]).optional(),
       page: z.number().default(1),
       limit: z.number().default(20),
+      dateFrom: z.string().optional(),
+      dateTo: z.string().optional(),
+      status: z.string().optional(),
+      partyId: z.number().optional(),
+      number: z.string().optional(),
+      checkNumber: z.string().optional(),
+      search: z.string().optional(),
     })).query(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       const offset = (input.page - 1) * input.limit;
-      const where = input.type ? eq(checks.type, input.type) : undefined;
-      const rows = await db.select().from(checks).where(tenantWhere(checks, ctx.tenantId, where)).orderBy(desc(checks.createdAt)).limit(input.limit).offset(offset);
-      const [total] = await db.select({ count: count() }).from(checks).where(tenantWhere(checks, ctx.tenantId, where));
+      const filters = [
+        input.type ? eq(checks.type, input.type) : undefined,
+        input.status ? eq(checks.status, input.status as any) : undefined,
+        input.dateFrom ? gte(checks.date, input.dateFrom as any) : undefined,
+        input.dateTo ? lte(checks.date, input.dateTo as any) : undefined,
+        input.number ? like(checks.number, `%${input.number}%`) : undefined,
+        input.checkNumber ? like(checks.checkNumber, `%${input.checkNumber}%`) : undefined,
+        input.partyId
+          ? or(eq(checks.customerId, input.partyId), eq(checks.supplierId, input.partyId))
+          : undefined,
+        input.search
+          ? or(
+              like(checks.number, `%${input.search}%`),
+              like(checks.checkNumber, `%${input.search}%`),
+              like(checks.description, `%${input.search}%`),
+            )
+          : undefined,
+      ].filter(Boolean);
+      const where = tenantWhere(checks, ctx.tenantId, ...(filters as any[]));
+      const rows = await db.select().from(checks).where(where).orderBy(desc(checks.createdAt)).limit(input.limit).offset(offset);
+      const [total] = await db.select({ count: count() }).from(checks).where(where);
       return { rows, total: total.count };
     }),
     create: protectedProcedure.input(z.object({
