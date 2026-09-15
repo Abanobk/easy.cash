@@ -1078,41 +1078,6 @@ const itemsRouter = router({
         .where(tenantWhere(items, ctx.tenantId, activeCond))
         .orderBy(codeLast, items.code, items.name, items.id);
     } catch (e: unknown) {
-      const raw = `${(e as any)?.cause?.message || ""} ${(e as any)?.message || ""}`;
-      // If an optional older column is missing, retry without trackSerial/averageCost
-      if (/Unknown column/i.test(raw)) {
-        const minimal = {
-          id: items.id,
-          tenantId: items.tenantId,
-          code: items.code,
-          barcode: items.barcode,
-          name: items.name,
-          categoryId: items.categoryId,
-          unit: items.unit,
-          purchasePrice: items.purchasePrice,
-          salePrice: items.salePrice,
-          minStock: items.minStock,
-          currentStock: items.currentStock,
-          taxRate: items.taxRate,
-          description: items.description,
-          isActive: items.isActive,
-          createdAt: items.createdAt,
-          updatedAt: items.updatedAt,
-        };
-        if (input?.forSalesInvoice) {
-          const conditions = [
-            activeCond,
-            or(isNull(items.categoryId), eq(itemCategories.showInSalesInvoices, true)),
-          ].filter(Boolean);
-          return await db.select(minimal).from(items)
-            .leftJoin(itemCategories, eq(items.categoryId, itemCategories.id))
-            .where(tenantWhere(items, ctx.tenantId, and(...(conditions as any[]))))
-            .orderBy(items.name, items.id);
-        }
-        return await db.select(minimal).from(items)
-          .where(tenantWhere(items, ctx.tenantId, activeCond))
-          .orderBy(items.name, items.id);
-      }
       throw new TRPCError({
         code: "INTERNAL_SERVER_ERROR",
         message: dbErrorMessage(e, "فشل تحميل الأصناف"),
