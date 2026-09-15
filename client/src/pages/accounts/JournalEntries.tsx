@@ -14,6 +14,14 @@ import { tenantPath, useTenantSlug } from "@/lib/tenant";
 import EntityPermissionGate from "@/components/EntityPermissionGate";
 import { AccountSearchSelect } from "@/components/AccountSearchSelect";
 
+type JournalListFilters = {
+  dateFrom?: string;
+  dateTo?: string;
+  status?: string;
+  number?: string;
+  search?: string;
+};
+
 type JournalLine = {
   accountId: number | undefined;
   debit: string;
@@ -33,8 +41,17 @@ export default function JournalEntries() {
   const [description, setDescription] = useState("");
   const [defaultCostCenterId, setDefaultCostCenterId] = useState<string>("");
   const [lines, setLines] = useState<JournalLine[]>([{ ...emptyLine }, { ...emptyLine }]);
+  const [listFilters, setListFilters] = useState<JournalListFilters>({});
 
-  const { data, isLoading, refetch } = trpc.accounts.journal.list.useQuery({ page, limit: 20 });
+  const { data, isLoading, refetch } = trpc.accounts.journal.list.useQuery({
+    page,
+    limit: 20,
+    dateFrom: listFilters.dateFrom,
+    dateTo: listFilters.dateTo,
+    status: listFilters.status,
+    number: listFilters.number,
+    search: listFilters.search,
+  });
   const { data: accountsList } = trpc.accounts.chart.useQuery();
   const { data: costCentersList } = trpc.costCenters.list.useQuery();
   const createMut = trpc.accounts.journal.create.useMutation({
@@ -82,6 +99,41 @@ export default function JournalEntries() {
 
   return (
     <ERPLayout title="قيود اليومية">
+      <div className="rounded-lg border border-slate-200 bg-slate-50/80 p-3 mb-3 space-y-3" dir="rtl">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+          <div>
+            <Label className="text-[10px] text-slate-500">من تاريخ</Label>
+            <Input type="date" className="h-8 text-xs" value={listFilters.dateFrom || ""} onChange={(e) => setListFilters((f) => ({ ...f, dateFrom: e.target.value || undefined }))} />
+          </div>
+          <div>
+            <Label className="text-[10px] text-slate-500">الى تاريخ</Label>
+            <Input type="date" className="h-8 text-xs" value={listFilters.dateTo || ""} onChange={(e) => setListFilters((f) => ({ ...f, dateTo: e.target.value || undefined }))} />
+          </div>
+          <div>
+            <Label className="text-[10px] text-slate-500">الحالة</Label>
+            <Select value={listFilters.status || "all"} onValueChange={(v) => setListFilters((f) => ({ ...f, status: v === "all" ? undefined : v }))}>
+              <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="الكل" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">الكل</SelectItem>
+                <SelectItem value="draft">مسودة</SelectItem>
+                <SelectItem value="posted">مرحّل</SelectItem>
+                <SelectItem value="cancelled">ملغي</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label className="text-[10px] text-slate-500">رقم القيد</Label>
+            <Input className="h-8 text-xs" value={listFilters.number || ""} onChange={(e) => setListFilters((f) => ({ ...f, number: e.target.value || undefined }))} />
+          </div>
+          <div>
+            <Label className="text-[10px] text-slate-500">بحث</Label>
+            <Input className="h-8 text-xs" value={listFilters.search || ""} onChange={(e) => setListFilters((f) => ({ ...f, search: e.target.value || undefined }))} placeholder="رقم / بيان / مرجع…" />
+          </div>
+        </div>
+        <div className="flex justify-end">
+          <Button type="button" variant="outline" size="sm" className="h-7 text-xs" onClick={() => setListFilters({})}>تفريغ</Button>
+        </div>
+      </div>
       <DataTable
         title="قيود اليومية"
         data={data?.rows}

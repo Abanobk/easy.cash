@@ -477,6 +477,20 @@
       "when": 1788400000002,
       "tag": "0067_orders_returns_mega_a6",
       "breakpoints": true
+    },
+    {
+      "idx": 68,
+      "version": "5",
+      "when": 1788400000003,
+      "tag": "0068_finance_docs_mega_d",
+      "breakpoints": true
+    },
+    {
+      "idx": 69,
+      "version": "5",
+      "when": 1788400000004,
+      "tag": "0069_sales_reps_contact_fields",
+      "breakpoints": true
     }
   ]
 }

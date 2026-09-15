@@ -33,13 +33,13 @@ const ACCOUNTING_FILTERS: Record<string, ReportEntityFilter[]> = {
   "accountingreports-customerssales": ["customer", "branch", "area", "rep", "paymentType"],
   "accountingreports-vendorspurchases": ["supplier", "branch", "paymentType"],
   // ميجا Payments.aspx: فرع، عملة، مندوب، منطقة، عميل/مورد…
-  "accountingreports-payments": ["customer", "supplier", "branch", "currency", "rep", "area"],
+  "accountingreports-payments": ["customer", "supplier", "branch", "currency", "rep", "area", "account"],
   // ميجا Dues.aspx: الفرع، العملة، من/الى، اسم الحساب، رقم المرجع، حالة السداد
   "accountingreports-dues": ["branch", "currency", "account", "paymentStatus"],
   // ميجا Checks CheckIn: فرع، عملة، استحقاق، مستلم، منطقة، مندوب، حالة الشيك…
-  "accountingreports-checks-checkin": ["customer", "branch", "currency", "area", "rep", "dueDate", "paymentStatus"],
+  "accountingreports-checks-checkin": ["customer", "branch", "currency", "area", "rep", "dueDate", "paymentStatus", "account"],
   // ميجا Checks CheckOut: فرع، عملة، استحقاق، مستفيد، حالة الشيك…
-  "accountingreports-checks-checkout": ["supplier", "branch", "currency", "dueDate", "paymentStatus"],
+  "accountingreports-checks-checkout": ["supplier", "branch", "currency", "dueDate", "paymentStatus", "account"],
   // ميجا CustomersInstallments.aspx: فرع، عملة، منطقة، عميل، حالة التحصيل…
   "accountingreports-customersinstallments": ["customer", "branch", "currency", "area", "paymentStatus"],
   "accountingreports-debitsages": ["customer", "branch", "area", "rep"],
@@ -48,8 +48,8 @@ const ACCOUNTING_FILTERS: Record<string, ReportEntityFilter[]> = {
   "accountingreports-creditsages": ["supplier", "branch"],
   "accountingreports-creditsagesbyyear": ["supplier", "branch"],
   "accountingreports-creditsagesbyhalfyear": ["supplier", "branch"],
-  "accountingreports-salesorders": ["customer", "branch", "area", "rep", "warehouse", "item", "category"],
-  "accountingreports-purchaseorders": ["supplier", "branch", "warehouse", "item", "category"],
+  "accountingreports-salesorders": ["customer", "branch", "area", "rep", "warehouse", "item", "category", "currency", "dueDate"],
+  "accountingreports-purchaseorders": ["supplier", "branch", "warehouse", "item", "category", "currency", "dueDate", "paymentStatus"],
   "accountingreports-matureinvoices": ["customer", "branch", "currency"],
   "accountingreports-maturereceipts": ["supplier", "branch", "currency"],
   "accountingreports-grossrepsalesbyitems": ["rep", "branch", "warehouse", "item", "category", "area", "customer"],
@@ -72,7 +72,7 @@ const ACCOUNTING_FILTERS: Record<string, ReportEntityFilter[]> = {
   "accountingreports-dashboard": ["branch", "currency"],
   "accountingreports-lastprices": ["item", "customer", "supplier", "branch", "category"],
   "accountingreports-monthlyexpenses": ["account", "costCenter", "branch"],
-  "accountingreports-productionorders": ["warehouse", "branch", "item"],
+  "accountingreports-productionorders": ["warehouse", "branch", "item", "category", "paymentStatus"],
   "accountingreports-productionmaterials": ["item", "warehouse", "branch"],
 };
 

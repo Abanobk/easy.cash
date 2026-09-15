@@ -68,8 +68,6 @@ import {
 } from "./user-scope";
 import { calculateMonthPayroll, payMonthPayroll } from "./hr-payroll";
 import {
-  postCashTransactionJournal,
-  postBankTransactionJournal,
   postPayrollJournal,
   postPurchaseInvoiceJournal,
   postSalesInvoiceJournal,
@@ -131,7 +129,6 @@ import { syncOperationalNotifications } from "./sync-operational-notifications";
 import { reconcileAllContactBalances, recalculateCustomerBalance, recalculateSupplierBalance } from "./contact-balances";
 import { sendOperationalAlertDigest } from "./alert-email";
 import { assertDateNotInClosedPeriod } from "./fiscal-period-guard";
-import { allocateCustomerPaymentFifo, allocateSupplierPaymentFifo } from "./payment-allocation";
 import { assertCustomerCreditLimit } from "./credit-limit-guard";
 import { bounceCheck, clearCheck, createCheckWithJournal, unapproveCheck } from "./check-actions";
 import {
@@ -394,6 +391,10 @@ const customersRouter = router({
     page: z.number().default(1),
     limit: z.number().default(20),
     branchId: z.number().optional(),
+    categoryId: z.number().optional(),
+    areaId: z.number().optional(),
+    salesRepId: z.number().optional(),
+    isActive: z.boolean().optional(),
   })).query(async ({ ctx, input }) => {
     // ملحوظة: مش بنقيّد هنا بـ viewDocList — الإندبوينت ده مشترك كمصدر بيانات (اختيار
     // عميل) لفواتير البيع والمعاملات في شاشات تانية كتير، مش بس شاشة إدارة العملاء.
@@ -409,6 +410,10 @@ const customersRouter = router({
         )
         : undefined,
       input.branchId != null ? eq(customers.branchId, input.branchId) : scopeBranchFilter(customers, scope),
+      input.categoryId != null ? eq(customers.categoryId, input.categoryId) : undefined,
+      input.areaId != null ? eq(customers.areaId, input.areaId) : undefined,
+      input.salesRepId != null ? eq(customers.salesRepId, input.salesRepId) : undefined,
+      input.isActive != null ? eq(customers.isActive, input.isActive) : undefined,
     );
     const rows = await db.select().from(customers).where(tenantWhere(customers, ctx.tenantId, where)).orderBy(desc(customers.createdAt)).limit(input.limit).offset(offset);
     const [total] = await db.select({ count: count() }).from(customers).where(tenantWhere(customers, ctx.tenantId, where));
@@ -663,6 +668,8 @@ const suppliersRouter = router({
     page: z.number().default(1),
     limit: z.number().default(20),
     branchId: z.number().optional(),
+    categoryId: z.number().optional(),
+    isActive: z.boolean().optional(),
   })).query(async ({ ctx, input }) => {
     // نفس ملحوظة العملاء: مصدر بيانات مشترك (اختيار مورد) لفواتير الشراء وشاشات تانية.
     const db = await getDb();
@@ -677,6 +684,8 @@ const suppliersRouter = router({
         )
         : undefined,
       input.branchId != null ? eq(suppliers.branchId, input.branchId) : scopeBranchFilter(suppliers, scope),
+      input.categoryId != null ? eq(suppliers.categoryId, input.categoryId) : undefined,
+      input.isActive != null ? eq(suppliers.isActive, input.isActive) : undefined,
     );
     const rows = await db.select().from(suppliers).where(tenantWhere(suppliers, ctx.tenantId, where)).orderBy(desc(suppliers.createdAt)).limit(input.limit).offset(offset);
     const [total] = await db.select({ count: count() }).from(suppliers).where(tenantWhere(suppliers, ctx.tenantId, where));
@@ -4319,12 +4328,35 @@ const accountsRouter = router({
     return reseedChartFromTemplate(db, ctx.tenantId);
   }),
   journal: router({
-    list: protectedProcedure.input(z.object({ page: z.number().default(1), limit: z.number().default(20), reference: z.string().optional() })).query(async ({ ctx, input }) => {
+    list: protectedProcedure.input(z.object({
+      page: z.number().default(1),
+      limit: z.number().default(20),
+      reference: z.string().optional(),
+      dateFrom: z.string().optional(),
+      dateTo: z.string().optional(),
+      status: z.string().optional(),
+      number: z.string().optional(),
+      search: z.string().optional(),
+    })).query(async ({ ctx, input }) => {
       await assertEntityAction(ctx, "accounts", "journalEntry", "viewDocList");
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       const offset = (input.page - 1) * input.limit;
-      const refFilter = input.reference ? eq(journalEntries.reference, input.reference) : undefined;
+      const filters = [
+        input.reference ? eq(journalEntries.reference, input.reference) : undefined,
+        input.dateFrom ? gte(journalEntries.date, input.dateFrom as any) : undefined,
+        input.dateTo ? lte(journalEntries.date, input.dateTo as any) : undefined,
+        input.status ? eq(journalEntries.status, input.status as any) : undefined,
+        input.number ? like(journalEntries.number, `%${input.number}%`) : undefined,
+        input.search
+          ? or(
+              like(journalEntries.number, `%${input.search}%`),
+              like(journalEntries.description, `%${input.search}%`),
+              like(journalEntries.reference, `%${input.search}%`),
+            )
+          : undefined,
+      ].filter(Boolean);
+      const where = tenantWhere(journalEntries, ctx.tenantId, ...(filters as any[]));
       const rows = await db.select({
         id: journalEntries.id,
         number: journalEntries.number,
@@ -4336,11 +4368,11 @@ const accountsRouter = router({
         totalDebit: sql<string>`COALESCE((SELECT SUM(${journalEntryLines.debit}) FROM ${journalEntryLines} WHERE ${journalEntryLines.entryId} = ${journalEntries.id}), 0)`,
         totalCredit: sql<string>`COALESCE((SELECT SUM(${journalEntryLines.credit}) FROM ${journalEntryLines} WHERE ${journalEntryLines.entryId} = ${journalEntries.id}), 0)`,
       }).from(journalEntries)
-        .where(tenantWhere(journalEntries, ctx.tenantId, refFilter))
+        .where(where)
         .orderBy(desc(journalEntries.createdAt))
         .limit(input.limit)
         .offset(offset);
-      const [total] = await db.select({ count: count() }).from(journalEntries).where(tenantWhere(journalEntries, ctx.tenantId, refFilter));
+      const [total] = await db.select({ count: count() }).from(journalEntries).where(where);
       return { rows, total: total.count };
     }),
     byId: protectedProcedure.input(z.number()).query(async ({ ctx, input }) => {
@@ -4459,6 +4491,13 @@ const cashRouter = router({
     type: z.string().optional(),
     page: z.number().default(1),
     limit: z.number().default(20),
+    dateFrom: z.string().optional(),
+    dateTo: z.string().optional(),
+    number: z.string().optional(),
+    referenceNumber: z.string().optional(),
+    partyId: z.number().optional(),
+    status: z.string().optional(),
+    search: z.string().optional(),
   })).query(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
@@ -4466,12 +4505,26 @@ const cashRouter = router({
     const offset = (input.page - 1) * input.limit;
     const typeFilter = input.type ? eq(cashTransactions.type, input.type as any) : undefined;
     const scopeFilter = scopeContactTransactionFilter(scope, cashTransactions.customerId, customers.branchId);
-    const where = tenantWhere(
-      cashTransactions,
-      ctx.tenantId,
+    const filters = [
       typeFilter,
       scopeFilter,
-    );
+      input.status ? eq(cashTransactions.status, input.status as any) : undefined,
+      input.dateFrom ? gte(cashTransactions.date, input.dateFrom as any) : undefined,
+      input.dateTo ? lte(cashTransactions.date, input.dateTo as any) : undefined,
+      input.number ? like(cashTransactions.number, `%${input.number}%`) : undefined,
+      input.referenceNumber ? like(cashTransactions.referenceNumber, `%${input.referenceNumber}%`) : undefined,
+      input.partyId
+        ? or(eq(cashTransactions.customerId, input.partyId), eq(cashTransactions.supplierId, input.partyId))
+        : undefined,
+      input.search
+        ? or(
+            like(cashTransactions.number, `%${input.search}%`),
+            like(cashTransactions.description, `%${input.search}%`),
+            like(customers.name, `%${input.search}%`),
+          )
+        : undefined,
+    ].filter(Boolean);
+    const where = tenantWhere(cashTransactions, ctx.tenantId, ...(filters as any[]));
     const rows = await db.select({
       id: cashTransactions.id,
       number: cashTransactions.number,
@@ -4480,8 +4533,11 @@ const cashRouter = router({
       amount: cashTransactions.amount,
       description: cashTransactions.description,
       reference: cashTransactions.reference,
+      referenceNumber: cashTransactions.referenceNumber,
+      status: cashTransactions.status,
       customerId: cashTransactions.customerId,
       supplierId: cashTransactions.supplierId,
+      customerName: customers.name,
       createdAt: cashTransactions.createdAt,
     }).from(cashTransactions)
       .leftJoin(customers, eq(cashTransactions.customerId, customers.id))
@@ -4502,6 +4558,8 @@ const cashRouter = router({
     amount: z.string(),
     description: z.string().optional(),
     reference: z.string().optional(),
+    referenceNumber: z.string().optional(),
+    branchId: z.number().optional(),
   })).mutation(async ({ ctx, input }) => {
     // "type" بيحدد أي عنصر من الأربعة في قسم "معاملات نقدية" — نفس الـprocedure بيخدمهم كلهم.
     const cashEntityForType: Record<string, string> = {
@@ -4529,46 +4587,44 @@ const cashRouter = router({
     }
     const [countResult] = await db.select({ count: count() }).from(cashTransactions).where(tenantWhere(cashTransactions, ctx.tenantId));
     const number = `CT-${String(countResult.count + 1).padStart(5, "0")}`;
-    await db.insert(cashTransactions).values(withTenantId(ctx.tenantId, { number, ...input, createdBy: ctx.user.id }) as any);
-    let customerName: string | undefined;
-    let supplierName: string | undefined;
-    if (input.customerId) {
-      const [c] = await db.select({ name: customers.name }).from(customers)
-        .where(tenantWhere(customers, ctx.tenantId, eq(customers.id, input.customerId)));
-      customerName = c?.name;
-    }
-    if (input.supplierId) {
-      const [s] = await db.select({ name: suppliers.name }).from(suppliers)
-        .where(tenantWhere(suppliers, ctx.tenantId, eq(suppliers.id, input.supplierId)));
-      supplierName = s?.name;
-    }
-    await postCashTransactionJournal(db, ctx.tenantId, ctx.user.id, {
-      number,
-      type: input.type,
-      date: input.date,
-      amount: input.amount,
-      description: input.description,
-      customerName,
-      supplierName,
-    });
+    // ميجا: الحفظ بيسجّل مسودة بلا قيد — الاعتماد هو اللي بيرحّل القيد ويوزّع الدفعة (FIFO)
+    await db.insert(cashTransactions).values(withTenantId(ctx.tenantId, { number, ...input, status: "draft", createdBy: ctx.user.id }) as any);
 
-    let allocations: { invoiceNumber: string; amount: string }[] | undefined;
-    let unallocated: string | undefined;
-    if (input.type === "receive_customer" && input.customerId) {
-      const result = await allocateCustomerPaymentFifo(db, ctx.tenantId, input.customerId, input.amount, {
-        referenceInvoiceNumber: input.reference,
-      });
-      allocations = result.allocations;
-      unallocated = result.unallocated;
-    } else if (input.type === "pay_supplier" && input.supplierId) {
-      const result = await allocateSupplierPaymentFifo(db, ctx.tenantId, input.supplierId, input.amount, {
-        referenceInvoiceNumber: input.reference,
-      });
-      allocations = result.allocations;
-      unallocated = result.unallocated;
-    }
-
-    return { success: true, number, allocations, unallocated };
+    return { success: true, number };
+  }),
+  approve: protectedProcedure.input(z.number()).mutation(async ({ ctx, input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    const [tx] = await db.select({ type: cashTransactions.type }).from(cashTransactions)
+      .where(tenantWhere(cashTransactions, ctx.tenantId, eq(cashTransactions.id, input)));
+    if (!tx) throw new TRPCError({ code: "NOT_FOUND" });
+    const cashEntityForType: Record<string, string> = {
+      receive: "cashReceipt",
+      receive_customer: "cashReceiptFromCustomer",
+      pay: "cashPayment",
+      pay_supplier: "cashPaymentToSupplier",
+      pay_customer: "cashPayment",
+    };
+    await assertEntityAction(ctx, "cash", cashEntityForType[tx.type] || "cashPayment", "approve");
+    const { finalizeCashTransaction } = await import("./cash-bank-approval");
+    return finalizeCashTransaction(db, ctx.tenantId, ctx.user?.id, input);
+  }),
+  unapprove: protectedProcedure.input(z.number()).mutation(async ({ ctx, input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    const [tx] = await db.select({ type: cashTransactions.type }).from(cashTransactions)
+      .where(tenantWhere(cashTransactions, ctx.tenantId, eq(cashTransactions.id, input)));
+    if (!tx) throw new TRPCError({ code: "NOT_FOUND" });
+    const cashEntityForType: Record<string, string> = {
+      receive: "cashReceipt",
+      receive_customer: "cashReceiptFromCustomer",
+      pay: "cashPayment",
+      pay_supplier: "cashPaymentToSupplier",
+      pay_customer: "cashPayment",
+    };
+    await assertEntityAction(ctx, "cash", cashEntityForType[tx.type] || "cashPayment", "unapprove");
+    const { unfinalizeCashTransaction } = await import("./cash-bank-approval");
+    return unfinalizeCashTransaction(db, ctx.tenantId, input);
   }),
 });
 
@@ -4612,6 +4668,13 @@ const bankRouter = router({
       type: z.enum(["deposit", "withdraw", "deposit_customer", "withdraw_supplier", "withdraw_customer"]).optional(),
       page: z.number().default(1),
       limit: z.number().default(20),
+      dateFrom: z.string().optional(),
+      dateTo: z.string().optional(),
+      number: z.string().optional(),
+      referenceNumber: z.string().optional(),
+      partyId: z.number().optional(),
+      status: z.string().optional(),
+      search: z.string().optional(),
     })).query(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
@@ -4619,7 +4682,26 @@ const bankRouter = router({
       const offset = (input.page - 1) * input.limit;
       const typeFilter = input.type ? eq(bankTransactions.type, input.type as any) : undefined;
       const scopeFilter = scopeContactTransactionFilter(scope, bankTransactions.customerId, customers.branchId);
-      const where = tenantWhere(bankTransactions, ctx.tenantId, typeFilter, scopeFilter);
+      const filters = [
+        typeFilter,
+        scopeFilter,
+        input.status ? eq(bankTransactions.status, input.status as any) : undefined,
+        input.dateFrom ? gte(bankTransactions.date, input.dateFrom as any) : undefined,
+        input.dateTo ? lte(bankTransactions.date, input.dateTo as any) : undefined,
+        input.number ? like(bankTransactions.number, `%${input.number}%`) : undefined,
+        input.referenceNumber ? like(bankTransactions.referenceNumber, `%${input.referenceNumber}%`) : undefined,
+        input.partyId
+          ? or(eq(bankTransactions.customerId, input.partyId), eq(bankTransactions.supplierId, input.partyId))
+          : undefined,
+        input.search
+          ? or(
+              like(bankTransactions.number, `%${input.search}%`),
+              like(bankTransactions.description, `%${input.search}%`),
+              like(customers.name, `%${input.search}%`),
+            )
+          : undefined,
+      ].filter(Boolean);
+      const where = tenantWhere(bankTransactions, ctx.tenantId, ...(filters as any[]));
       const rows = await db.select({
         id: bankTransactions.id,
         number: bankTransactions.number,
@@ -4628,9 +4710,12 @@ const bankRouter = router({
         amount: bankTransactions.amount,
         description: bankTransactions.description,
         reference: bankTransactions.reference,
+        referenceNumber: bankTransactions.referenceNumber,
+        status: bankTransactions.status,
         bankAccountId: bankTransactions.bankAccountId,
         customerId: bankTransactions.customerId,
         supplierId: bankTransactions.supplierId,
+        customerName: customers.name,
         createdAt: bankTransactions.createdAt,
       }).from(bankTransactions)
         .leftJoin(customers, eq(bankTransactions.customerId, customers.id))
@@ -4652,6 +4737,8 @@ const bankRouter = router({
       amount: z.string(),
       description: z.string().optional(),
       reference: z.string().optional(),
+      referenceNumber: z.string().optional(),
+      branchId: z.number().optional(),
     })).mutation(async ({ ctx, input }) => {
       // "type" بيحدد أي عنصر من عناصر قسم "معاملات بنكية".
       const bankEntityForType: Record<string, string> = {
@@ -4679,47 +4766,44 @@ const bankRouter = router({
       }
       const [countResult] = await db.select({ count: count() }).from(bankTransactions).where(tenantWhere(bankTransactions, ctx.tenantId));
       const number = `BT-${String(countResult.count + 1).padStart(5, "0")}`;
-      await db.insert(bankTransactions).values(withTenantId(ctx.tenantId, { number, ...input, createdBy: ctx.user.id }) as any);
-      let customerName: string | undefined;
-      let supplierName: string | undefined;
-      if (input.customerId) {
-        const [c] = await db.select({ name: customers.name }).from(customers)
-          .where(tenantWhere(customers, ctx.tenantId, eq(customers.id, input.customerId)));
-        customerName = c?.name;
-      }
-      if (input.supplierId) {
-        const [s] = await db.select({ name: suppliers.name }).from(suppliers)
-          .where(tenantWhere(suppliers, ctx.tenantId, eq(suppliers.id, input.supplierId)));
-        supplierName = s?.name;
-      }
-      await postBankTransactionJournal(db, ctx.tenantId, ctx.user.id, {
-        number,
-        type: input.type,
-        date: input.date,
-        amount: input.amount,
-        description: input.description,
-        customerName,
-        supplierName,
-        bankAccountId: input.bankAccountId,
-      });
+      // ميجا: الحفظ بيسجّل مسودة بلا قيد — الاعتماد هو اللي بيرحّل القيد ويوزّع الدفعة (FIFO)
+      await db.insert(bankTransactions).values(withTenantId(ctx.tenantId, { number, ...input, status: "draft", createdBy: ctx.user.id }) as any);
 
-      let allocations: { invoiceNumber: string; amount: string }[] | undefined;
-      let unallocated: string | undefined;
-      if (input.type === "deposit_customer" && input.customerId) {
-        const result = await allocateCustomerPaymentFifo(db, ctx.tenantId, input.customerId, input.amount, {
-          referenceInvoiceNumber: input.reference,
-        });
-        allocations = result.allocations;
-        unallocated = result.unallocated;
-      } else if (input.type === "withdraw_supplier" && input.supplierId) {
-        const result = await allocateSupplierPaymentFifo(db, ctx.tenantId, input.supplierId, input.amount, {
-          referenceInvoiceNumber: input.reference,
-        });
-        allocations = result.allocations;
-        unallocated = result.unallocated;
-      }
-
-      return { success: true, number, allocations, unallocated };
+      return { success: true, number };
+    }),
+    approve: protectedProcedure.input(z.number()).mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const [tx] = await db.select({ type: bankTransactions.type }).from(bankTransactions)
+        .where(tenantWhere(bankTransactions, ctx.tenantId, eq(bankTransactions.id, input)));
+      if (!tx) throw new TRPCError({ code: "NOT_FOUND" });
+      const bankEntityForType: Record<string, string> = {
+        deposit: "bankDeposit",
+        deposit_customer: "bankDepositFromCustomer",
+        withdraw: "bankWithdrawal",
+        withdraw_supplier: "bankWithdrawalToSupplier",
+        withdraw_customer: "bankWithdrawal",
+      };
+      await assertEntityAction(ctx, "bank", bankEntityForType[tx.type] || "bankWithdrawal", "approve");
+      const { finalizeBankTransaction } = await import("./cash-bank-approval");
+      return finalizeBankTransaction(db, ctx.tenantId, ctx.user?.id, input);
+    }),
+    unapprove: protectedProcedure.input(z.number()).mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const [tx] = await db.select({ type: bankTransactions.type }).from(bankTransactions)
+        .where(tenantWhere(bankTransactions, ctx.tenantId, eq(bankTransactions.id, input)));
+      if (!tx) throw new TRPCError({ code: "NOT_FOUND" });
+      const bankEntityForType: Record<string, string> = {
+        deposit: "bankDeposit",
+        deposit_customer: "bankDepositFromCustomer",
+        withdraw: "bankWithdrawal",
+        withdraw_supplier: "bankWithdrawalToSupplier",
+        withdraw_customer: "bankWithdrawal",
+      };
+      await assertEntityAction(ctx, "bank", bankEntityForType[tx.type] || "bankWithdrawal", "unapprove");
+      const { unfinalizeBankTransaction } = await import("./cash-bank-approval");
+      return unfinalizeBankTransaction(db, ctx.tenantId, input);
     }),
   }),
   checks: router({
@@ -5093,6 +5177,8 @@ const reportsRouter = router({
     batchNumber: z.string().optional(),
     expiryFrom: z.string().optional(),
     expiryTo: z.string().optional(),
+    qtyStatus: z.enum(["gt0", "eq0", "lt0", "nonzero"]).optional(),
+    netQtyStatus: z.enum(["gt0", "eq0", "lt0", "nonzero"]).optional(),
   })).query(async ({ ctx, input }) => {
     await assertEntityAction(ctx, "reports", "invreports-inventorysummary", "viewDoc");
     const db = await getDb();

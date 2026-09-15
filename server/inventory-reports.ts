@@ -41,7 +41,20 @@ export type InventoryReportFilters = {
   batchNumber?: string;
   expiryFrom?: string;
   expiryTo?: string;
+  /** ميجا InventorySummary: حالة الكمية — gt0 | eq0 | lt0 | nonzero */
+  qtyStatus?: "gt0" | "eq0" | "lt0" | "nonzero";
+  /** ميجا: حالة صافي الكمية — نفس القيم */
+  netQtyStatus?: "gt0" | "eq0" | "lt0" | "nonzero";
 };
+
+function matchesQtyStatus(qty: number, status?: "gt0" | "eq0" | "lt0" | "nonzero") {
+  if (!status) return true;
+  if (status === "gt0") return qty > 0;
+  if (status === "eq0") return qty === 0;
+  if (status === "lt0") return qty < 0;
+  if (status === "nonzero") return qty !== 0;
+  return true;
+}
 
 function warehouseAllowed(warehouseId: number | null | undefined, filters: InventoryReportFilters) {
   if (filters.warehouseId != null) return warehouseId === filters.warehouseId;
@@ -748,6 +761,7 @@ export async function inventoryStocktakeReport(db: Db, filters: InventoryReportF
           status: (qty <= 0 ? "zero" : (min > 0 && qty <= min ? "low" : "ok")) as "low" | "ok" | "zero",
         };
       })
+      .filter((r) => matchesQtyStatus(r.quantity, filters.qtyStatus) && matchesQtyStatus(r.netQty, filters.netQtyStatus))
       .sort((a, b) => a.name.localeCompare(b.name, "ar"));
   }
 
@@ -837,7 +851,9 @@ export async function inventoryStocktakeReport(db: Db, filters: InventoryReportF
     });
   }
 
-  return result.sort((a, b) => a.name.localeCompare(b.name, "ar") || a.warehouseName.localeCompare(b.warehouseName, "ar"));
+  return result
+    .filter((r) => matchesQtyStatus(r.quantity, filters.qtyStatus) && matchesQtyStatus(r.netQty, filters.netQtyStatus))
+    .sort((a, b) => a.name.localeCompare(b.name, "ar") || a.warehouseName.localeCompare(b.warehouseName, "ar"));
 }
 
 /**

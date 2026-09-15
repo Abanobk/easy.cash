@@ -1206,7 +1206,7 @@ export async function salesInvoicesReport(db: Db, filters: ReportFilters) {
           ? sql`exists (select 1 from sales_invoice_items sii inner join items it on it.id = sii.itemId where sii.invoiceId = ${salesInvoices.id} and it.categoryId = ${filters.categoryId} and sii.tenantId = ${filters.tenantId})`
           : undefined,
         filters.search
-          ? sql`(${salesInvoices.number} LIKE ${`%${filters.search}%`} OR ${customers.name} LIKE ${`%${filters.search}%`})`
+          ? sql`(${salesInvoices.number} LIKE ${`%${filters.search}%`} OR ${customers.name} LIKE ${`%${filters.search}%`} OR ${salesInvoices.referenceNumber} LIKE ${`%${filters.search}%`})`
           : undefined)))
     .orderBy(desc(salesInvoices.date));
 
@@ -1581,7 +1581,12 @@ export async function checksReport(db: Db, filters: ReportFilters, type: "incomi
         type === "incoming" && filters.customerId ? eq(checks.customerId, filters.customerId) : undefined,
         type === "outgoing" && filters.supplierId ? eq(checks.supplierId, filters.supplierId) : undefined,
         filters.branchId ? (type === "incoming" ? eq(customers.branchId, filters.branchId) : eq(suppliers.branchId, filters.branchId)) : undefined,
+        // ميجا CheckIn: منطقة + مندوب على العميل المستلم منه
+        type === "incoming" && filters.areaId ? eq(customers.areaId, filters.areaId) : undefined,
+        type === "incoming" && filters.repId ? eq(customers.salesRepId, filters.repId) : undefined,
+        filters.accountId ? eq(checks.bankAccountId, filters.accountId) : undefined,
         filters.paymentStatus === "paid" ? eq(checks.status, "cleared") : undefined,
+        filters.paymentStatus === "partial" ? eq(checks.status, "deposited") : undefined,
         filters.paymentStatus === "unpaid" ? inArray(checks.status, ["pending", "deposited"]) : undefined,
         filters.search
           ? sql`(${checks.number} LIKE ${`%${filters.search}%`} OR ${checks.checkNumber} LIKE ${`%${filters.search}%`} OR ${customers.name} LIKE ${`%${filters.search}%`} OR ${suppliers.name} LIKE ${`%${filters.search}%`})`
@@ -1848,9 +1853,11 @@ export async function salesByItemsReport(db: Db, filters: ReportFilters, monthly
     .leftJoin(items, eq(salesInvoiceItems.itemId, items.id))
     .where(tenantWhere(salesInvoiceItems, filters.tenantId,
       and(salesPostedFilter(), ...(dateParts.length ? [and(...dateParts)] : []),
+        ...(dueDateConds(salesInvoices, filters.dueDateFrom, filters.dueDateTo)),
         filters.itemId ? eq(salesInvoiceItems.itemId, filters.itemId) : undefined,
         filters.categoryId ? eq(items.categoryId, filters.categoryId) : undefined,
         filters.customerId ? eq(salesInvoices.customerId, filters.customerId) : undefined,
+        filters.areaId ? eq(customers.areaId, filters.areaId) : undefined,
         reportBranchCond(salesInvoices.branchId, filters),
         reportWarehouseCond(salesInvoices.warehouseId, filters),
         filters.repId
@@ -1914,6 +1921,7 @@ export async function salesByItemsReport(db: Db, filters: ReportFilters, monthly
   }).from(salesReturnItems)
     .innerJoin(salesReturns, eq(salesReturnItems.returnId, salesReturns.id))
     .leftJoin(items, eq(salesReturnItems.itemId, items.id))
+    .leftJoin(customers, eq(salesReturns.customerId, customers.id))
     .where(tenantWhere(salesReturnItems, filters.tenantId,
       and(
         eq(salesReturns.status, "confirmed"),
@@ -1921,6 +1929,8 @@ export async function salesByItemsReport(db: Db, filters: ReportFilters, monthly
         filters.itemId ? eq(salesReturnItems.itemId, filters.itemId) : undefined,
         filters.categoryId ? eq(items.categoryId, filters.categoryId) : undefined,
         filters.customerId ? eq(salesReturns.customerId, filters.customerId) : undefined,
+        filters.areaId ? eq(customers.areaId, filters.areaId) : undefined,
+        filters.repId ? eq(customers.salesRepId, filters.repId) : undefined,
       )));
 
   for (const r of returnRows) {
@@ -2627,6 +2637,7 @@ export async function itemsProfitsReport(db: Db, filters: ReportFilters) {
         filters.itemId ? eq(salesInvoiceItems.itemId, filters.itemId) : undefined,
         filters.categoryId ? eq(items.categoryId, filters.categoryId) : undefined,
         filters.customerId ? eq(salesInvoices.customerId, filters.customerId) : undefined,
+        filters.areaId ? eq(customers.areaId, filters.areaId) : undefined,
         reportBranchCond(salesInvoices.branchId, filters),
         reportWarehouseCond(salesInvoices.warehouseId, filters),
         filters.repId
@@ -2679,6 +2690,7 @@ export async function itemsProfitsReport(db: Db, filters: ReportFilters) {
   }).from(salesReturnItems)
     .innerJoin(salesReturns, eq(salesReturnItems.returnId, salesReturns.id))
     .leftJoin(items, eq(salesReturnItems.itemId, items.id))
+    .leftJoin(customers, eq(salesReturns.customerId, customers.id))
     .where(tenantWhere(salesReturnItems, filters.tenantId,
       and(
         eq(salesReturns.status, "confirmed"),
@@ -2686,6 +2698,8 @@ export async function itemsProfitsReport(db: Db, filters: ReportFilters) {
         filters.itemId ? eq(salesReturnItems.itemId, filters.itemId) : undefined,
         filters.categoryId ? eq(items.categoryId, filters.categoryId) : undefined,
         filters.customerId ? eq(salesReturns.customerId, filters.customerId) : undefined,
+        filters.areaId ? eq(customers.areaId, filters.areaId) : undefined,
+        filters.repId ? eq(customers.salesRepId, filters.repId) : undefined,
       )));
 
   for (const r of returnRows) {
@@ -3745,8 +3759,11 @@ export async function paymentsReport(db: Db, filters: ReportFilters) {
       filters.customerId ? eq(cashTransactions.customerId, filters.customerId) : undefined,
       filters.supplierId ? eq(cashTransactions.supplierId, filters.supplierId) : undefined,
       paymentCustomerBranchCond(filters),
+      filters.areaId ? eq(customers.areaId, filters.areaId) : undefined,
+      filters.repId ? eq(customers.salesRepId, filters.repId) : undefined,
+      filters.accountId ? eq(cashTransactions.accountId, filters.accountId) : undefined,
       filters.search
-        ? sql`(${cashTransactions.number} LIKE ${`%${filters.search}%`} OR ${customers.name} LIKE ${`%${filters.search}%`} OR ${suppliers.name} LIKE ${`%${filters.search}%`} OR ${cashTransactions.description} LIKE ${`%${filters.search}%`})`
+        ? sql`(${cashTransactions.number} LIKE ${`%${filters.search}%`} OR ${customers.name} LIKE ${`%${filters.search}%`} OR ${suppliers.name} LIKE ${`%${filters.search}%`} OR ${cashTransactions.description} LIKE ${`%${filters.search}%`} OR ${cashTransactions.reference} LIKE ${`%${filters.search}%`} OR ${cashTransactions.referenceNumber} LIKE ${`%${filters.search}%`})`
         : undefined))
     .orderBy(desc(cashTransactions.date));
 
@@ -3769,8 +3786,11 @@ export async function paymentsReport(db: Db, filters: ReportFilters) {
       filters.customerId ? eq(bankTransactions.customerId, filters.customerId) : undefined,
       filters.supplierId ? eq(bankTransactions.supplierId, filters.supplierId) : undefined,
       paymentCustomerBranchCond(filters),
+      filters.areaId ? eq(customers.areaId, filters.areaId) : undefined,
+      filters.repId ? eq(customers.salesRepId, filters.repId) : undefined,
+      filters.accountId ? eq(bankTransactions.bankAccountId, filters.accountId) : undefined,
       filters.search
-        ? sql`(${bankTransactions.number} LIKE ${`%${filters.search}%`} OR ${customers.name} LIKE ${`%${filters.search}%`} OR ${suppliers.name} LIKE ${`%${filters.search}%`} OR ${bankTransactions.description} LIKE ${`%${filters.search}%`})`
+        ? sql`(${bankTransactions.number} LIKE ${`%${filters.search}%`} OR ${customers.name} LIKE ${`%${filters.search}%`} OR ${suppliers.name} LIKE ${`%${filters.search}%`} OR ${bankTransactions.description} LIKE ${`%${filters.search}%`} OR ${bankTransactions.reference} LIKE ${`%${filters.search}%`} OR ${bankTransactions.referenceNumber} LIKE ${`%${filters.search}%`})`
         : undefined))
     .orderBy(desc(bankTransactions.date));
 

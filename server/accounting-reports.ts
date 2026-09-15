@@ -43,7 +43,7 @@ import {
   vendorsListReport,
   vendorsSummaryReport,
 } from "./accounting-data";
-import { and, desc, eq, gte, inArray, lte, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, like, lte, or, sql } from "drizzle-orm";
 import {
   bankTransactions,
   cashTransactions,
@@ -59,6 +59,7 @@ import {
   suppliers,
 } from "../drizzle/schema";
 import { tenantWhere } from "./tenant-scope";
+import { reportBranchCond, reportWarehouseCond } from "./accounting-data";
 
 /** drizzle/mysql2 يرجّع أعمدة date() ككائن Date حقيقي — String(x).slice(0,10) بيفقد السنة */
 function toDateStr(v: unknown): string {
@@ -81,10 +82,25 @@ async function productionOrdersReport(db: Db, f: ReportFilters) {
   if (f.dateTo) dateParts.push(lte(productionOrders.date, f.dateTo as any));
   if (f.warehouseId) dateParts.push(eq(productionOrders.warehouseId, f.warehouseId));
   if (f.itemId) dateParts.push(eq(productionOrders.productId, f.itemId));
+  if (f.categoryId) {
+    dateParts.push(sql`EXISTS (SELECT 1 FROM items pi WHERE pi.id = ${productionOrders.productId} AND pi.categoryId = ${f.categoryId})`);
+  }
+  // ميجا: حالة التسليم — نطابق أقرب حالات إيزي (مسودة/قيد التنفيذ/مكتمل) عبر paymentStatus الموجود في الـ hub
+  if (f.paymentStatus === "paid") dateParts.push(eq(productionOrders.status, "completed"));
+  else if (f.paymentStatus === "partial") dateParts.push(eq(productionOrders.status, "in_progress"));
+  else if (f.paymentStatus === "unpaid") dateParts.push(inArray(productionOrders.status, ["draft", "in_progress"]));
   if (f.branchId != null) {
     dateParts.push(sql`EXISTS (SELECT 1 FROM warehouses bw WHERE bw.id = ${productionOrders.warehouseId} AND bw.branchId = ${f.branchId})`);
   } else if (f.branchIds?.length) {
     dateParts.push(sql`EXISTS (SELECT 1 FROM warehouses bw WHERE bw.id = ${productionOrders.warehouseId} AND bw.branchId IN (${sql.join(f.branchIds.map((id) => sql`${id}`), sql`, `)}))`);
+  }
+  if (f.search) {
+    const q = `%${f.search}%`;
+    dateParts.push(or(
+      like(productionOrders.number, q),
+      like(productionOrders.batchNumber, q),
+      like(productionOrders.referenceNumber, q),
+    ));
   }
   const orders = await db.select({
     id: productionOrders.id,
@@ -494,45 +510,97 @@ const HANDLERS: Record<string, (db: Db, f: ReportFilters) => Promise<ReportRow[]
   "accountingreports-matureinvoices": matureInvoicesReport,
   "accountingreports-maturereceipts": matureReceiptsReport,
   "accountingreports-salesorders": async (db, f) => {
+    // ميجا SalesOrders.aspx: فرع·عملة·تاريخ·استحقاق(expected)·مخزن·فئة·صنف·منطقة·عميل·مندوب
     const dateParts = [];
     if (f.dateFrom) dateParts.push(gte(salesOrders.date, f.dateFrom as any));
     if (f.dateTo) dateParts.push(lte(salesOrders.date, f.dateTo as any));
+    if (f.dueDateFrom) dateParts.push(gte(salesOrders.expectedDate, f.dueDateFrom as any));
+    if (f.dueDateTo) dateParts.push(lte(salesOrders.expectedDate, f.dueDateTo as any));
     const rows = await db.select({
       number: salesOrders.number,
       date: salesOrders.date,
+      expectedDate: salesOrders.expectedDate,
       total: salesOrders.total,
       status: salesOrders.status,
+      referenceNumber: salesOrders.referenceNumber,
       customerName: customers.name,
     }).from(salesOrders)
-      .where(tenantWhere(salesOrders, f.tenantId, ...(dateParts.length ? [and(...dateParts)] : [])))
       .leftJoin(customers, eq(salesOrders.customerId, customers.id))
+      .where(tenantWhere(salesOrders, f.tenantId, and(
+        ...(dateParts.length ? dateParts : []),
+        f.customerId ? eq(salesOrders.customerId, f.customerId) : undefined,
+        reportBranchCond(salesOrders.branchId, f),
+        reportWarehouseCond(salesOrders.warehouseId, f),
+        f.currencyCode ? eq(salesOrders.currencyCode, f.currencyCode) : undefined,
+        f.areaId ? eq(customers.areaId, f.areaId) : undefined,
+        f.repId
+          ? sql`(${salesOrders.salesRepId} = ${f.repId} OR ${customers.salesRepId} = ${f.repId})`
+          : undefined,
+        f.itemId
+          ? sql`exists (select 1 from sales_order_items soi where soi.orderId = ${salesOrders.id} and soi.itemId = ${f.itemId} and soi.tenantId = ${f.tenantId})`
+          : undefined,
+        f.categoryId
+          ? sql`exists (select 1 from sales_order_items soi inner join items it on it.id = soi.itemId where soi.orderId = ${salesOrders.id} and it.categoryId = ${f.categoryId} and soi.tenantId = ${f.tenantId})`
+          : undefined,
+        f.search
+          ? sql`(${salesOrders.number} LIKE ${`%${f.search}%`} OR ${customers.name} LIKE ${`%${f.search}%`} OR ${salesOrders.referenceNumber} LIKE ${`%${f.search}%`})`
+          : undefined,
+      )))
       .orderBy(desc(salesOrders.date));
     return rows.map((r) => ({
       documentNumber: r.number,
       date: toDateStr(r.date),
+      dueDate: toDateStr(r.expectedDate),
       partyName: r.customerName || "",
+      referenceNumber: r.referenceNumber || "",
       total: Number(r.total),
       status: r.status,
     }));
   },
   "accountingreports-purchaseorders": async (db, f) => {
+    // ميجا PurchaseOrders.aspx: فرع·عملة·تاريخ·استحقاق·مخزن·فئة·صنف·مورد (+ حالة الطلب عبر paymentStatus)
     const dateParts = [];
     if (f.dateFrom) dateParts.push(gte(purchaseOrders.date, f.dateFrom as any));
     if (f.dateTo) dateParts.push(lte(purchaseOrders.date, f.dateTo as any));
+    if (f.dueDateFrom) dateParts.push(gte(purchaseOrders.expectedDate, f.dueDateFrom as any));
+    if (f.dueDateTo) dateParts.push(lte(purchaseOrders.expectedDate, f.dueDateTo as any));
+    // ميجا: تم الغاؤه / ليس له فاتورة معتمدة / له فاتورة معتمدة — أقرب حالات إيزي
+    if (f.paymentStatus === "paid") dateParts.push(inArray(purchaseOrders.status, ["received", "partial"]));
+    else if (f.paymentStatus === "unpaid") dateParts.push(inArray(purchaseOrders.status, ["draft", "confirmed"]));
+    else if (f.paymentStatus === "partial") dateParts.push(eq(purchaseOrders.status, "partial"));
     const rows = await db.select({
       number: purchaseOrders.number,
       date: purchaseOrders.date,
+      expectedDate: purchaseOrders.expectedDate,
       total: purchaseOrders.total,
       status: purchaseOrders.status,
+      referenceNumber: purchaseOrders.referenceNumber,
       supplierName: suppliers.name,
     }).from(purchaseOrders)
-      .where(tenantWhere(purchaseOrders, f.tenantId, ...(dateParts.length ? [and(...dateParts)] : [])))
       .leftJoin(suppliers, eq(purchaseOrders.supplierId, suppliers.id))
+      .where(tenantWhere(purchaseOrders, f.tenantId, and(
+        ...(dateParts.length ? dateParts : []),
+        f.supplierId ? eq(purchaseOrders.supplierId, f.supplierId) : undefined,
+        reportBranchCond(purchaseOrders.branchId, f),
+        reportWarehouseCond(purchaseOrders.warehouseId, f),
+        f.currencyCode ? eq(purchaseOrders.currencyCode, f.currencyCode) : undefined,
+        f.itemId
+          ? sql`exists (select 1 from purchase_order_items poi where poi.orderId = ${purchaseOrders.id} and poi.itemId = ${f.itemId} and poi.tenantId = ${f.tenantId})`
+          : undefined,
+        f.categoryId
+          ? sql`exists (select 1 from purchase_order_items poi inner join items it on it.id = poi.itemId where poi.orderId = ${purchaseOrders.id} and it.categoryId = ${f.categoryId} and poi.tenantId = ${f.tenantId})`
+          : undefined,
+        f.search
+          ? sql`(${purchaseOrders.number} LIKE ${`%${f.search}%`} OR ${suppliers.name} LIKE ${`%${f.search}%`} OR ${purchaseOrders.referenceNumber} LIKE ${`%${f.search}%`})`
+          : undefined,
+      )))
       .orderBy(desc(purchaseOrders.date));
     return rows.map((r) => ({
       documentNumber: r.number,
       date: toDateStr(r.date),
+      dueDate: toDateStr(r.expectedDate),
       partyName: r.supplierName || "",
+      referenceNumber: r.referenceNumber || "",
       total: Number(r.total),
       status: r.status,
     }));

@@ -64,6 +64,8 @@ type FilterInput = {
   batchNumber?: string;
   expiryFrom?: string;
   expiryTo?: string;
+  qtyStatus?: "gt0" | "eq0" | "lt0" | "nonzero";
+  netQtyStatus?: "gt0" | "eq0" | "lt0" | "nonzero";
 };
 
 function defaultDates() {
@@ -107,6 +109,8 @@ export default function InventoryReports() {
   const [batchNumber, setBatchNumber] = useState("");
   const [expiryFrom, setExpiryFrom] = useState("");
   const [expiryTo, setExpiryTo] = useState("");
+  const [qtyStatus, setQtyStatus] = useState<string>("all");
+  const [netQtyStatus, setNetQtyStatus] = useState<string>("all");
   const [query, setQuery] = useState<FilterInput>(() => ({ ...dates }));
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
 
@@ -120,6 +124,8 @@ export default function InventoryReports() {
     batchNumber: query.batchNumber,
     expiryFrom: query.expiryFrom,
     expiryTo: query.expiryTo,
+    qtyStatus: query.qtyStatus,
+    netQtyStatus: query.netQtyStatus,
   }), [query, reportMeta.needsDates, reportMeta.needsAsOfDate]);
 
   const selectedBranch = branchId !== "all" ? Number(branchId) : undefined;
@@ -200,6 +206,8 @@ export default function InventoryReports() {
   };
 
   const handleSearch = () => {
+    const qty = qtyStatus === "gt0" || qtyStatus === "eq0" || qtyStatus === "lt0" || qtyStatus === "nonzero" ? qtyStatus : undefined;
+    const netQty = netQtyStatus === "gt0" || netQtyStatus === "eq0" || netQtyStatus === "lt0" || netQtyStatus === "nonzero" ? netQtyStatus : undefined;
     setQuery({
       ...(reportMeta.needsDates ? { dateFrom, dateTo } : {}),
       ...(reportMeta.needsAsOfDate ? { dateTo } : {}),
@@ -210,6 +218,8 @@ export default function InventoryReports() {
       batchNumber: batchNumber.trim() || undefined,
       expiryFrom: expiryFrom || undefined,
       expiryTo: expiryTo || undefined,
+      qtyStatus: reportSlug === "stocktake" ? qty : undefined,
+      netQtyStatus: reportSlug === "stocktake" ? netQty : undefined,
     });
   };
 
@@ -454,6 +464,32 @@ export default function InventoryReports() {
                     <div>
                       <Label className="text-xs mb-1 block">انتهاء إلى</Label>
                       <Input type="date" value={expiryTo} onChange={(e) => setExpiryTo(e.target.value)} className="h-9 w-36" />
+                    </div>
+                    <div>
+                      <Label className="text-xs mb-1 block">حالة الكمية</Label>
+                      <Select value={qtyStatus} onValueChange={setQtyStatus}>
+                        <SelectTrigger className="h-9 w-40"><SelectValue placeholder="الكل" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">الكل</SelectItem>
+                          <SelectItem value="gt0">أكبر من الصفر</SelectItem>
+                          <SelectItem value="eq0">تساوي صفر</SelectItem>
+                          <SelectItem value="lt0">أقل من الصفر</SelectItem>
+                          <SelectItem value="nonzero">الكل ماعدا الصفر</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label className="text-xs mb-1 block">حالة صافي الكمية</Label>
+                      <Select value={netQtyStatus} onValueChange={setNetQtyStatus}>
+                        <SelectTrigger className="h-9 w-40"><SelectValue placeholder="الكل" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">الكل</SelectItem>
+                          <SelectItem value="gt0">أكبر من الصفر</SelectItem>
+                          <SelectItem value="eq0">تساوي صفر</SelectItem>
+                          <SelectItem value="lt0">أقل من الصفر</SelectItem>
+                          <SelectItem value="nonzero">الكل ماعدا الصفر</SelectItem>
+                        </SelectContent>
+                      </Select>
                     </div>
                   </>
                 )}

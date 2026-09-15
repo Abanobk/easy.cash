@@ -16,6 +16,7 @@ import { FileText, Upload } from "lucide-react";
 import { isoToDisplayDate } from "@/components/form/DateField";
 import { tenantPath, useTenantSlug } from "@/lib/tenant";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
+import { ContactListFilterBar, type ContactListFiltersValue } from "@/components/contacts/ContactListFilterBar";
 
 export default function Customers() {
   const tenantSlug = useTenantSlug();
@@ -27,9 +28,19 @@ export default function Customers() {
   const [editId, setEditId] = useState<number | null>(null);
   const [linkedSupplierId, setLinkedSupplierId] = useState<number | null>(null);
   const [form, setForm] = useState(emptyContactPartyForm());
+  const [listFilters, setListFilters] = useState<ContactListFiltersValue>({});
 
-  useEffect(() => setPage(1), [debouncedSearch]);
-  const { data, isLoading, refetch } = trpc.customers.list.useQuery({ page, limit: 20, search: debouncedSearch });
+  useEffect(() => setPage(1), [debouncedSearch, listFilters]);
+  const { data, isLoading, refetch } = trpc.customers.list.useQuery({
+    page,
+    limit: 20,
+    search: debouncedSearch,
+    branchId: listFilters.branchId,
+    categoryId: listFilters.categoryId,
+    areaId: listFilters.areaId,
+    salesRepId: listFilters.salesRepId,
+    isActive: listFilters.isActive === "active" ? true : listFilters.isActive === "inactive" ? false : undefined,
+  });
   const { data: categories } = trpc.contactCategories.list.useQuery();
   const { data: reps } = trpc.salesReps.list.useQuery();
   const { data: branchList } = trpc.settings.branches.list.useQuery();
@@ -81,6 +92,17 @@ export default function Customers() {
 
   return (
     <ERPLayout title="قائمة العملاء">
+      <ContactListFilterBar
+        value={listFilters}
+        onChange={setListFilters}
+        onClear={() => setListFilters({})}
+        branches={(branchList || []).map((b: any) => ({ id: b.id, name: b.name }))}
+        categories={(categories || []).map((c: any) => ({ id: c.id, name: c.name }))}
+        areas={(areas || []).map((a: any) => ({ id: a.id, name: a.name }))}
+        salesReps={(reps || []).map((r: any) => ({ id: r.id, name: r.name }))}
+        showArea
+        showSalesRep
+      />
       <DataTable
         title="العملاء"
         data={data?.rows}

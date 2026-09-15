@@ -16,6 +16,7 @@ import { FileText, Upload } from "lucide-react";
 import { isoToDisplayDate } from "@/components/form/DateField";
 import { tenantPath, useTenantSlug } from "@/lib/tenant";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
+import { ContactListFilterBar, type ContactListFiltersValue } from "@/components/contacts/ContactListFilterBar";
 
 export default function Suppliers() {
   const tenantSlug = useTenantSlug();
@@ -27,9 +28,17 @@ export default function Suppliers() {
   const [editId, setEditId] = useState<number | null>(null);
   const [linkedCustomerId, setLinkedCustomerId] = useState<number | null>(null);
   const [form, setForm] = useState(emptyContactPartyForm());
+  const [listFilters, setListFilters] = useState<ContactListFiltersValue>({});
 
-  useEffect(() => setPage(1), [debouncedSearch]);
-  const { data, isLoading, refetch } = trpc.suppliers.list.useQuery({ page, limit: 20, search: debouncedSearch });
+  useEffect(() => setPage(1), [debouncedSearch, listFilters]);
+  const { data, isLoading, refetch } = trpc.suppliers.list.useQuery({
+    page,
+    limit: 20,
+    search: debouncedSearch,
+    branchId: listFilters.branchId,
+    categoryId: listFilters.categoryId,
+    isActive: listFilters.isActive === "active" ? true : listFilters.isActive === "inactive" ? false : undefined,
+  });
   const { data: categories } = trpc.contactCategories.list.useQuery();
   const { data: branchList } = trpc.settings.branches.list.useQuery();
 
@@ -79,6 +88,13 @@ export default function Suppliers() {
 
   return (
     <ERPLayout title="قائمة الموردين">
+      <ContactListFilterBar
+        value={listFilters}
+        onChange={setListFilters}
+        onClear={() => setListFilters({})}
+        branches={(branchList || []).map((b: any) => ({ id: b.id, name: b.name }))}
+        categories={(categories || []).map((c: any) => ({ id: c.id, name: c.name }))}
+      />
       <DataTable
         title="الموردين"
         data={data?.rows}

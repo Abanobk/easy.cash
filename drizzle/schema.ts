@@ -685,7 +685,24 @@ export const cashTransactions = mysqlTable("cash_transactions", {
   accountId: int("accountId"),
   description: text("description"),
   reference: varchar("reference", { length: 100 }),
+  /** حفظ=مسودة بلا قيد · اعتماد=قيد مرحّل + توزيع FIFO (نمط ميجا للفواتير) */
+  status: mysqlEnum("status", ["draft", "confirmed", "cancelled"]).default("draft").notNull(),
+  referenceNumber: varchar("referenceNumber", { length: 100 }),
+  branchId: int("branchId"),
   createdBy: int("createdBy"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+/** سجل توزيع حركة نقدية (استلام/سداد) على الفواتير (FIFO) — لازم لفك الاعتماد بأمان */
+export const cashTransactionAllocations = mysqlTable("cash_transaction_allocations", {
+  id: int("id").autoincrement().primaryKey(),
+  tenantId: int("tenantId").notNull().default(1),
+  transactionId: int("transactionId").notNull(),
+  documentType: mysqlEnum("documentType", ["sales_invoice", "purchase_invoice"]).notNull(),
+  documentId: int("documentId").notNull(),
+  invoiceNumber: varchar("invoiceNumber", { length: 50 }).notNull(),
+  amount: decimal("amount", { precision: 15, scale: 2 }).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
 
@@ -716,7 +733,24 @@ export const bankTransactions = mysqlTable("bank_transactions", {
   amount: decimal("amount", { precision: 15, scale: 2 }).notNull(),
   description: text("description"),
   reference: varchar("reference", { length: 100 }),
+  /** حفظ=مسودة بلا قيد · اعتماد=قيد مرحّل + توزيع FIFO (نمط ميجا للفواتير) */
+  status: mysqlEnum("status", ["draft", "confirmed", "cancelled"]).default("draft").notNull(),
+  referenceNumber: varchar("referenceNumber", { length: 100 }),
+  branchId: int("branchId"),
   createdBy: int("createdBy"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+/** سجل توزيع حركة بنكية (إيداع/سحب) على الفواتير (FIFO) — لازم لفك الاعتماد بأمان */
+export const bankTransactionAllocations = mysqlTable("bank_transaction_allocations", {
+  id: int("id").autoincrement().primaryKey(),
+  tenantId: int("tenantId").notNull().default(1),
+  transactionId: int("transactionId").notNull(),
+  documentType: mysqlEnum("documentType", ["sales_invoice", "purchase_invoice"]).notNull(),
+  documentId: int("documentId").notNull(),
+  invoiceNumber: varchar("invoiceNumber", { length: 50 }).notNull(),
+  amount: decimal("amount", { precision: 15, scale: 2 }).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
 
@@ -1075,6 +1109,8 @@ export const salesReps = mysqlTable("sales_reps", {
   phone: varchar("phone", { length: 50 }),
   email: varchar("email", { length: 255 }),
   commissionRate: decimal("commissionRate", { precision: 10, scale: 4 }).default("0"),
+  address: varchar("address", { length: 500 }),
+  notes: text("notes"),
   isActive: boolean("isActive").default(true),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
