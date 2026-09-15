@@ -956,7 +956,7 @@ const itemsRouter = router({
       items.name,
       items.id,
     ] as const;
-    const baseQuery = db.select({
+    const listColsFull = {
       id: items.id,
       tenantId: items.tenantId,
       code: items.code,
@@ -986,17 +986,46 @@ const itemsRouter = router({
       isActive: items.isActive,
       createdAt: items.createdAt,
       updatedAt: items.updatedAt,
-    }).from(items);
-    const joined = input.forSalesInvoice
-      ? baseQuery.leftJoin(itemCategories, eq(items.categoryId, itemCategories.id))
-      : baseQuery;
-    const rows = await joined.where(tenantWhere(items, ctx.tenantId, where)).orderBy(...itemOrder).limit(input.limit).offset(offset);
-    const [total] = input.forSalesInvoice
-      ? await db.select({ count: count() }).from(items)
-          .leftJoin(itemCategories, eq(items.categoryId, itemCategories.id))
-          .where(tenantWhere(items, ctx.tenantId, where))
-      : await db.select({ count: count() }).from(items).where(tenantWhere(items, ctx.tenantId, where));
-    return { rows, total: total.count };
+    };
+    const listColsCore = {
+      id: items.id,
+      tenantId: items.tenantId,
+      code: items.code,
+      barcode: items.barcode,
+      name: items.name,
+      categoryId: items.categoryId,
+      unit: items.unit,
+      purchasePrice: items.purchasePrice,
+      averageCost: items.averageCost,
+      salePrice: items.salePrice,
+      minStock: items.minStock,
+      currentStock: items.currentStock,
+      taxRate: items.taxRate,
+      description: items.description,
+      isActive: items.isActive,
+      createdAt: items.createdAt,
+      updatedAt: items.updatedAt,
+    };
+    const runList = async (cols: Record<string, unknown>) => {
+      const baseQuery = db.select(cols as typeof listColsFull).from(items);
+      const joined = input.forSalesInvoice
+        ? baseQuery.leftJoin(itemCategories, eq(items.categoryId, itemCategories.id))
+        : baseQuery;
+      const rows = await joined.where(tenantWhere(items, ctx.tenantId, where)).orderBy(...itemOrder).limit(input.limit).offset(offset);
+      const [total] = input.forSalesInvoice
+        ? await db.select({ count: count() }).from(items)
+            .leftJoin(itemCategories, eq(items.categoryId, itemCategories.id))
+            .where(tenantWhere(items, ctx.tenantId, where))
+        : await db.select({ count: count() }).from(items).where(tenantWhere(items, ctx.tenantId, where));
+      return { rows, total: total.count };
+    };
+    try {
+      return await runList(listColsFull);
+    } catch (e: unknown) {
+      const raw = `${(e as any)?.cause?.message || ""} ${(e as any)?.message || ""}`;
+      if (/Unknown column/i.test(raw)) return await runList(listColsCore);
+      throw e;
+    }
   }),
   all: protectedProcedure.input(z.object({
     forSalesInvoice: z.boolean().optional(),
@@ -1005,8 +1034,28 @@ const itemsRouter = router({
   }).optional()).query(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-    // Avoid sql`... = ''` — some MySQL modes/drivers emit "" and the query fails.
-    // Empty codes sort last via CHAR_LENGTH, no string-literal quotes.
+    // Core columns only (0001+0011+0021). select() / full schema breaks when
+    // live DB has not applied later migrations (0058/0061/0062) — Unknown column.
+    const pickerCols = {
+      id: items.id,
+      tenantId: items.tenantId,
+      code: items.code,
+      barcode: items.barcode,
+      name: items.name,
+      categoryId: items.categoryId,
+      unit: items.unit,
+      purchasePrice: items.purchasePrice,
+      averageCost: items.averageCost,
+      salePrice: items.salePrice,
+      minStock: items.minStock,
+      currentStock: items.currentStock,
+      taxRate: items.taxRate,
+      trackSerial: items.trackSerial,
+      description: items.description,
+      isActive: items.isActive,
+      createdAt: items.createdAt,
+      updatedAt: items.updatedAt,
+    };
     const codeLast = sql`(CASE WHEN ${items.code} IS NULL OR CHAR_LENGTH(TRIM(${items.code})) = 0 THEN 1 ELSE 0 END)`;
     const activeCond = input?.includeInactive === false
       ? or(eq(items.isActive, true), isNull(items.isActive))
@@ -1020,46 +1069,50 @@ const itemsRouter = router({
             eq(itemCategories.showInSalesInvoices, true),
           ),
         ].filter(Boolean);
-        return await db.select({
+        return await db.select(pickerCols).from(items)
+          .leftJoin(itemCategories, eq(items.categoryId, itemCategories.id))
+          .where(tenantWhere(items, ctx.tenantId, and(...(conditions as any[]))))
+          .orderBy(codeLast, items.code, items.name, items.id);
+      }
+      return await db.select(pickerCols).from(items)
+        .where(tenantWhere(items, ctx.tenantId, activeCond))
+        .orderBy(codeLast, items.code, items.name, items.id);
+    } catch (e: unknown) {
+      const raw = `${(e as any)?.cause?.message || ""} ${(e as any)?.message || ""}`;
+      // If an optional older column is missing, retry without trackSerial/averageCost
+      if (/Unknown column/i.test(raw)) {
+        const minimal = {
           id: items.id,
           tenantId: items.tenantId,
           code: items.code,
           barcode: items.barcode,
           name: items.name,
           categoryId: items.categoryId,
-          altCategoryId: items.altCategoryId,
-          itemType: items.itemType,
           unit: items.unit,
           purchasePrice: items.purchasePrice,
-          averageCost: items.averageCost,
           salePrice: items.salePrice,
-          minPrice: items.minPrice,
-          maxPrice: items.maxPrice,
-          percentDiscount: items.percentDiscount,
-          cashDiscount: items.cashDiscount,
           minStock: items.minStock,
           currentStock: items.currentStock,
           taxRate: items.taxRate,
-          taxRate2: items.taxRate2,
-          taxRate3: items.taxRate3,
-          taxId: items.taxId,
-          tax2Id: items.tax2Id,
-          tax3Id: items.tax3Id,
-          trackSerial: items.trackSerial,
           description: items.description,
           isActive: items.isActive,
           createdAt: items.createdAt,
           updatedAt: items.updatedAt,
-        }).from(items)
-          .leftJoin(itemCategories, eq(items.categoryId, itemCategories.id))
-          .where(tenantWhere(items, ctx.tenantId, and(...(conditions as any[]))))
-          .orderBy(codeLast, items.code, items.name, items.id);
+        };
+        if (input?.forSalesInvoice) {
+          const conditions = [
+            activeCond,
+            or(isNull(items.categoryId), eq(itemCategories.showInSalesInvoices, true)),
+          ].filter(Boolean);
+          return await db.select(minimal).from(items)
+            .leftJoin(itemCategories, eq(items.categoryId, itemCategories.id))
+            .where(tenantWhere(items, ctx.tenantId, and(...(conditions as any[]))))
+            .orderBy(items.name, items.id);
+        }
+        return await db.select(minimal).from(items)
+          .where(tenantWhere(items, ctx.tenantId, activeCond))
+          .orderBy(items.name, items.id);
       }
-      // Plain select() — same proven path as before the picker fix
-      return await db.select().from(items)
-        .where(tenantWhere(items, ctx.tenantId, activeCond))
-        .orderBy(codeLast, items.code, items.name, items.id);
-    } catch (e: unknown) {
       throw new TRPCError({
         code: "INTERNAL_SERVER_ERROR",
         message: dbErrorMessage(e, "فشل تحميل الأصناف"),
