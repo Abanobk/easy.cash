@@ -37,6 +37,13 @@ import { eq, desc, count, sum, and, like, or, sql, gte, lte, lt, isNull, inArray
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { tenantWhere, withTenantId } from "./tenant-scope";
+import {
+  salesMegaHeaderFields,
+  purchaseMegaHeaderFields,
+  invoiceMegaLineFields,
+  invoiceListFilterFields,
+  collectionStatusSql,
+} from "./invoice-mega-fields";
 import { getTenantOwnerUserId } from "./tenant";
 import { assertUniqueEntityCode, resolveTypedEntityCode, partySearchCondition, codeSearchCondition } from "./entity-codes";
 import { compactRow, dbErrorMessage } from "./db-utils";
@@ -1572,10 +1579,7 @@ const warehousesRouter = router({
 const purchasesRouter = router({
   invoices: router({
     list: protectedProcedure.input(z.object({
-      search: z.string().optional(),
-      status: z.string().optional(),
-      page: z.number().default(1),
-      limit: z.number().default(20),
+      ...invoiceListFilterFields,
     })).query(async ({ ctx, input }) => {
       await assertEntityAction(ctx, "purchases", "purchaseInvoice", "viewDocList");
       const db = await getDb();
@@ -1586,10 +1590,23 @@ const purchasesRouter = router({
         scopeBranchFilter(purchaseInvoices, scope),
         scopeWarehouseFilter(purchaseInvoices, scope),
         input.status ? eq(purchaseInvoices.status, input.status as any) : undefined,
+        input.dateFrom ? gte(purchaseInvoices.date, input.dateFrom as any) : undefined,
+        input.dateTo ? lte(purchaseInvoices.date, input.dateTo as any) : undefined,
+        input.dueFrom ? gte(purchaseInvoices.dueDate, input.dueFrom as any) : undefined,
+        input.dueTo ? lte(purchaseInvoices.dueDate, input.dueTo as any) : undefined,
+        input.branchId ? eq(purchaseInvoices.branchId, input.branchId) : undefined,
+        input.currencyCode ? eq(purchaseInvoices.currencyCode, input.currencyCode) : undefined,
+        input.partyId ? eq(purchaseInvoices.supplierId, input.partyId) : undefined,
+        input.deliveryStatus ? eq(purchaseInvoices.deliveryStatus, input.deliveryStatus as any) : undefined,
+        input.number ? like(purchaseInvoices.number, `%${input.number}%`) : undefined,
+        input.referenceNumber ? like(purchaseInvoices.referenceNumber, `%${input.referenceNumber}%`) : undefined,
+        input.paymentType ? eq(purchaseInvoices.paymentType, input.paymentType) : undefined,
+        input.collectionStatus ? collectionStatusSql(purchaseInvoices.paid, purchaseInvoices.remaining, purchaseInvoices.total, input.collectionStatus) : undefined,
         input.search
           ? or(
             codeSearchCondition(purchaseInvoices.number, input.search),
             like(suppliers.name, `%${input.search}%`),
+            like(purchaseInvoices.referenceNumber, `%${input.search}%`),
           )
           : undefined,
       ].filter(Boolean);
@@ -1602,6 +1619,7 @@ const purchasesRouter = router({
         id: purchaseInvoices.id,
         number: purchaseInvoices.number,
         date: purchaseInvoices.date,
+        dueDate: purchaseInvoices.dueDate,
         total: purchaseInvoices.total,
         foreignTotal: purchaseInvoices.foreignTotal,
         currencyCode: purchaseInvoices.currencyCode,
@@ -1610,6 +1628,9 @@ const purchasesRouter = router({
         remaining: purchaseInvoices.remaining,
         status: purchaseInvoices.status,
         paymentType: purchaseInvoices.paymentType,
+        receiptType: purchaseInvoices.receiptType,
+        deliveryStatus: purchaseInvoices.deliveryStatus,
+        referenceNumber: purchaseInvoices.referenceNumber,
         supplierName: suppliers.name,
         branchName: branches.name,
       }).from(purchaseInvoices)
@@ -1642,6 +1663,10 @@ const purchasesRouter = router({
         quantity: purchaseInvoiceItems.quantity,
         price: purchaseInvoiceItems.price,
         discount: purchaseInvoiceItems.discount,
+        cashDiscount: purchaseInvoiceItems.cashDiscount,
+        priceType: purchaseInvoiceItems.priceType,
+        unit: purchaseInvoiceItems.unit,
+        deliveredQuantity: purchaseInvoiceItems.deliveredQuantity,
         tax: purchaseInvoiceItems.tax,
         tax2: purchaseInvoiceItems.tax2,
         tax3: purchaseInvoiceItems.tax3,
@@ -1650,6 +1675,9 @@ const purchasesRouter = router({
         total: purchaseInvoiceItems.total,
         itemName: items.name,
         itemUnit: items.unit,
+        itemBarcode: items.barcode,
+        itemMinPrice: items.minPrice,
+        itemMaxPrice: items.maxPrice,
       }).from(purchaseInvoiceItems)
         .leftJoin(items, eq(purchaseInvoiceItems.itemId, items.id))
         .where(tenantWhere(purchaseInvoiceItems, ctx.tenantId, eq(purchaseInvoiceItems.invoiceId, input)));
@@ -1712,6 +1740,12 @@ const purchasesRouter = router({
       total: z.string(),
       notes: z.string().optional(),
       referenceNumber: z.string().optional(),
+      cashAccountId: z.number().optional(),
+      shippingAccountId: z.number().optional(),
+      tempSupplierName: z.string().optional(),
+      tempAddress: z.string().optional(),
+      phone: z.string().optional(),
+      address: z.string().optional(),
       taxes: z.array(z.object({
         taxId: z.number().optional(),
         name: z.string().optional(),
@@ -1731,6 +1765,7 @@ const purchasesRouter = router({
         quantity: z.string(),
         price: z.string(),
         discount: z.string().default("0"),
+        ...invoiceMegaLineFields,
         tax: z.string().default("0"),
         taxId: z.number().optional(),
         tax2: z.string().default("0"),
@@ -1775,6 +1810,10 @@ const purchasesRouter = router({
       const settledCash = input.cashAmount ?? (isCash ? input.total : "0");
       const settledBank = input.bankAmount ?? "0";
       const paidTotal = Math.min(Number(input.total), Number(settledCash) + Number(settledBank));
+      const { computeDeliveryStatus, resolveInvoiceStockQuantity } = await import("./invoice-stock");
+      const deliveryStatus = postNow
+        ? computeDeliveryStatus(input.items, input.receiptType)
+        : "undelivered";
 
       const [result] = await db.insert(purchaseInvoices).values(withTenantId(ctx.tenantId, {
         number,
@@ -1789,6 +1828,13 @@ const purchasesRouter = router({
         bankAmount: settledBank,
         bankAccountId: input.bankAccountId,
         receiptType: input.receiptType,
+        cashAccountId: input.cashAccountId,
+        shippingAccountId: input.shippingAccountId,
+        tempSupplierName: input.tempSupplierName,
+        tempAddress: input.tempAddress,
+        phone: input.phone,
+        address: input.address,
+        deliveryStatus,
         subtotal: input.subtotal,
         discount: input.discount,
         tax: input.tax,
@@ -1819,6 +1865,12 @@ const purchasesRouter = router({
           : (item.warehouseId ?? input.warehouseId);
         if (postNow && meta!.affectsStock) {
           const { applyStockMovement } = await import("./inventory-stock");
+          const stockQty = resolveInvoiceStockQuantity({
+            deliveryOrReceiptType: (input as any).deliveryType ?? (input as any).receiptType,
+            quantity: item.quantity,
+            deliveredQuantity: item.deliveredQuantity,
+            itemLabel: meta?.name,
+          });
           const { updateAverageCostAfterPurchase } = await import("./inventory-cost");
           if (batches?.length) {
             for (const b of batches) {
@@ -1843,7 +1895,7 @@ const purchasesRouter = router({
           } else {
             await applyStockMovement(db, ctx.tenantId, {
               itemId: item.itemId,
-              quantity: item.quantity,
+              quantity: String(stockQty),
               direction: "in",
               warehouseId: lineWarehouseId,
               batchId: item.batchId,
@@ -1960,6 +2012,12 @@ const purchasesRouter = router({
       total: z.string(),
       notes: z.string().optional(),
       referenceNumber: z.string().optional(),
+      cashAccountId: z.number().optional(),
+      shippingAccountId: z.number().optional(),
+      tempSupplierName: z.string().optional(),
+      tempAddress: z.string().optional(),
+      phone: z.string().optional(),
+      address: z.string().optional(),
       taxes: z.array(z.object({
         taxId: z.number().optional(),
         name: z.string().optional(),
@@ -1979,6 +2037,7 @@ const purchasesRouter = router({
         quantity: z.string(),
         price: z.string(),
         discount: z.string().default("0"),
+        ...invoiceMegaLineFields,
         tax: z.string().default("0"),
         taxId: z.number().optional(),
         tax2: z.string().default("0"),
@@ -2019,6 +2078,10 @@ const purchasesRouter = router({
       const settledCash = input.cashAmount ?? (isCash ? input.total : "0");
       const settledBank = input.bankAmount ?? "0";
       const paidTotal = Math.min(Number(input.total), Number(settledCash) + Number(settledBank));
+      const { computeDeliveryStatus, resolveInvoiceStockQuantity } = await import("./invoice-stock");
+      const deliveryStatus = postNow
+        ? computeDeliveryStatus(input.items, input.receiptType)
+        : "undelivered";
 
       // نظّف الأسطر/الضرائب/المصروفات القديمة بالكامل — الفاتورة لسه مسودة، مفيش قيود أو حركة مخزون تعتمد عليها
       const oldItems = await db.select({ id: purchaseInvoiceItems.id }).from(purchaseInvoiceItems)
@@ -2042,6 +2105,13 @@ const purchasesRouter = router({
         bankAmount: settledBank,
         bankAccountId: input.bankAccountId,
         receiptType: input.receiptType,
+        cashAccountId: input.cashAccountId,
+        shippingAccountId: input.shippingAccountId,
+        tempSupplierName: input.tempSupplierName,
+        tempAddress: input.tempAddress,
+        phone: input.phone,
+        address: input.address,
+        deliveryStatus,
         subtotal: input.subtotal,
         discount: input.discount,
         tax: input.tax,
@@ -2071,6 +2141,12 @@ const purchasesRouter = router({
           : (item.warehouseId ?? input.warehouseId);
         if (postNow && meta!.affectsStock) {
           const { applyStockMovement } = await import("./inventory-stock");
+          const stockQty = resolveInvoiceStockQuantity({
+            deliveryOrReceiptType: (input as any).deliveryType ?? (input as any).receiptType,
+            quantity: item.quantity,
+            deliveredQuantity: item.deliveredQuantity,
+            itemLabel: meta?.name,
+          });
           const { updateAverageCostAfterPurchase } = await import("./inventory-cost");
           if (batches?.length) {
             for (const b of batches) {
@@ -2085,7 +2161,7 @@ const purchasesRouter = router({
             }
           } else {
             await applyStockMovement(db, ctx.tenantId, {
-              itemId: item.itemId, quantity: item.quantity, direction: "in", warehouseId: lineWarehouseId,
+              itemId: item.itemId, quantity: String(stockQty), direction: "in", warehouseId: lineWarehouseId,
               batchId: item.batchId, batchNumber: item.batchNumber, expiryDate: item.expiryDate,
               requireWarehouse: true,
             });
@@ -2473,11 +2549,7 @@ const purchasesRouter = router({
 const salesRouter = router({
   invoices: router({
     list: protectedProcedure.input(z.object({
-      search: z.string().optional(),
-      status: z.string().optional(),
-      paymentType: z.enum(["cash", "credit"]).optional(),
-      page: z.number().default(1),
-      limit: z.number().default(20),
+      ...invoiceListFilterFields,
     })).query(async ({ ctx, input }) => {
       await assertEntityAction(ctx, "sales", input.paymentType === "cash" ? "cashSaleInvoice" : "saleInvoice", "viewDocList");
       const db = await getDb();
@@ -2487,12 +2559,25 @@ const salesRouter = router({
       const filters = [
         input.paymentType ? eq(salesInvoices.paymentType, input.paymentType) : undefined,
         input.status ? eq(salesInvoices.status, input.status as any) : undefined,
+        input.dateFrom ? gte(salesInvoices.date, input.dateFrom as any) : undefined,
+        input.dateTo ? lte(salesInvoices.date, input.dateTo as any) : undefined,
+        input.dueFrom ? gte(salesInvoices.dueDate, input.dueFrom as any) : undefined,
+        input.dueTo ? lte(salesInvoices.dueDate, input.dueTo as any) : undefined,
+        input.branchId ? eq(salesInvoices.branchId, input.branchId) : undefined,
+        input.currencyCode ? eq(salesInvoices.currencyCode, input.currencyCode) : undefined,
+        input.partyId ? eq(salesInvoices.customerId, input.partyId) : undefined,
+        input.salesRepId ? eq(salesInvoices.salesRepId, input.salesRepId) : undefined,
+        input.deliveryStatus ? eq(salesInvoices.deliveryStatus, input.deliveryStatus as any) : undefined,
+        input.number ? like(salesInvoices.number, `%${input.number}%`) : undefined,
+        input.referenceNumber ? like(salesInvoices.referenceNumber, `%${input.referenceNumber}%`) : undefined,
+        input.collectionStatus ? collectionStatusSql(salesInvoices.paid, salesInvoices.remaining, salesInvoices.total, input.collectionStatus) : undefined,
         scopeBranchFilter(salesInvoices, scope),
         scopeWarehouseFilter(salesInvoices, scope),
         input.search
           ? or(
             codeSearchCondition(salesInvoices.number, input.search),
             like(customers.name, `%${input.search}%`),
+            like(salesInvoices.referenceNumber, `%${input.search}%`),
           )
           : undefined,
       ].filter(Boolean);
@@ -2505,6 +2590,7 @@ const salesRouter = router({
         id: salesInvoices.id,
         number: salesInvoices.number,
         date: salesInvoices.date,
+        dueDate: salesInvoices.dueDate,
         total: salesInvoices.total,
         foreignTotal: salesInvoices.foreignTotal,
         currencyCode: salesInvoices.currencyCode,
@@ -2513,6 +2599,10 @@ const salesRouter = router({
         remaining: salesInvoices.remaining,
         status: salesInvoices.status,
         paymentType: salesInvoices.paymentType,
+        deliveryType: salesInvoices.deliveryType,
+        deliveryStatus: salesInvoices.deliveryStatus,
+        referenceNumber: salesInvoices.referenceNumber,
+        salesRepId: salesInvoices.salesRepId,
         customerName: customers.name,
         branchName: branches.name,
       }).from(salesInvoices)
@@ -2545,6 +2635,10 @@ const salesRouter = router({
         quantity: salesInvoiceItems.quantity,
         price: salesInvoiceItems.price,
         discount: salesInvoiceItems.discount,
+        cashDiscount: salesInvoiceItems.cashDiscount,
+        priceType: salesInvoiceItems.priceType,
+        unit: salesInvoiceItems.unit,
+        deliveredQuantity: salesInvoiceItems.deliveredQuantity,
         tax: salesInvoiceItems.tax,
         tax2: salesInvoiceItems.tax2,
         tax3: salesInvoiceItems.tax3,
@@ -2553,6 +2647,9 @@ const salesRouter = router({
         total: salesInvoiceItems.total,
         itemName: items.name,
         itemUnit: items.unit,
+        itemBarcode: items.barcode,
+        itemMinPrice: items.minPrice,
+        itemMaxPrice: items.maxPrice,
       }).from(salesInvoiceItems)
         .leftJoin(items, eq(salesInvoiceItems.itemId, items.id))
         .where(tenantWhere(salesInvoiceItems, ctx.tenantId, eq(salesInvoiceItems.invoiceId, input)));
@@ -2641,6 +2738,15 @@ const salesRouter = router({
       cashAmount: z.string().optional(),
       bankAmount: z.string().optional(),
       bankAccountId: z.number().optional(),
+      referenceNumber: z.string().optional(),
+      deliveryType: z.enum(["full", "partial"]).default("full"),
+      cashAccountId: z.number().optional(),
+      shippingAccountId: z.number().optional(),
+      tempCustomerName: z.string().optional(),
+      tempAddress: z.string().optional(),
+      phone: z.string().optional(),
+      address: z.string().optional(),
+      salesRepId: z.number().optional(),
       approveNow: z.boolean().optional(),
       taxes: z.array(z.object({
         taxId: z.number().optional(),
@@ -2661,6 +2767,7 @@ const salesRouter = router({
         quantity: z.string(),
         price: z.string(),
         discount: z.string().default("0"),
+        ...invoiceMegaLineFields,
         tax: z.string().default("0"),
         taxId: z.number().optional(),
         tax2: z.string().default("0"),
@@ -2714,6 +2821,10 @@ const salesRouter = router({
       const settledCash = input.cashAmount ?? (isCash ? input.total : "0");
       const settledBank = input.bankAmount ?? "0";
       const paidTotal = Math.min(Number(input.total), Number(settledCash) + Number(settledBank));
+      const { computeDeliveryStatus, resolveInvoiceStockQuantity } = await import("./invoice-stock");
+      const deliveryStatus = postNow
+        ? computeDeliveryStatus(input.items, input.deliveryType)
+        : "undelivered";
 
       const [result] = await db.insert(salesInvoices).values(withTenantId(ctx.tenantId, {
         number,
@@ -2732,7 +2843,16 @@ const salesRouter = router({
         total: input.total,
         paid: isCash ? input.total : String(paidTotal),
         remaining: isCash ? "0" : String(Math.max(0, Number(input.total) - paidTotal)),
-        salesRepId: customer?.salesRepId ?? undefined,
+        salesRepId: input.salesRepId ?? customer?.salesRepId ?? undefined,
+        referenceNumber: input.referenceNumber,
+        deliveryType: input.deliveryType,
+        cashAccountId: input.cashAccountId,
+        shippingAccountId: input.shippingAccountId,
+        tempCustomerName: input.tempCustomerName,
+        tempAddress: input.tempAddress,
+        phone: input.phone,
+        address: input.address,
+        deliveryStatus,
         branchId: resolvedBranchId,
         costCenterId: input.costCenterId,
         currencyCode: input.currencyCode,
@@ -2758,6 +2878,12 @@ const salesRouter = router({
           : (item.warehouseId ?? input.warehouseId);
         if (postNow && meta!.affectsStock) {
           const { applyStockMovement } = await import("./inventory-stock");
+          const stockQty = resolveInvoiceStockQuantity({
+            deliveryOrReceiptType: (input as any).deliveryType ?? (input as any).receiptType,
+            quantity: item.quantity,
+            deliveredQuantity: item.deliveredQuantity,
+            itemLabel: meta?.name,
+          });
           if (batches?.length) {
             for (const b of batches) {
               await db.insert(salesInvoiceItemBatches).values(withTenantId(ctx.tenantId, {
@@ -2779,7 +2905,7 @@ const salesRouter = router({
           } else {
             await applyStockMovement(db, ctx.tenantId, {
               itemId: item.itemId,
-              quantity: item.quantity,
+              quantity: String(stockQty),
               direction: "out",
               warehouseId: lineWarehouseId,
               batchId: item.batchId,
@@ -2890,6 +3016,15 @@ const salesRouter = router({
       cashAmount: z.string().optional(),
       bankAmount: z.string().optional(),
       bankAccountId: z.number().optional(),
+      referenceNumber: z.string().optional(),
+      deliveryType: z.enum(["full", "partial"]).default("full"),
+      cashAccountId: z.number().optional(),
+      shippingAccountId: z.number().optional(),
+      tempCustomerName: z.string().optional(),
+      tempAddress: z.string().optional(),
+      phone: z.string().optional(),
+      address: z.string().optional(),
+      salesRepId: z.number().optional(),
       approveNow: z.boolean().optional(),
       taxes: z.array(z.object({
         taxId: z.number().optional(),
@@ -2910,6 +3045,7 @@ const salesRouter = router({
         quantity: z.string(),
         price: z.string(),
         discount: z.string().default("0"),
+        ...invoiceMegaLineFields,
         tax: z.string().default("0"),
         taxId: z.number().optional(),
         tax2: z.string().default("0"),
@@ -2954,6 +3090,10 @@ const salesRouter = router({
       const settledCash = input.cashAmount ?? (isCash ? input.total : "0");
       const settledBank = input.bankAmount ?? "0";
       const paidTotal = Math.min(Number(input.total), Number(settledCash) + Number(settledBank));
+      const { computeDeliveryStatus, resolveInvoiceStockQuantity } = await import("./invoice-stock");
+      const deliveryStatus = postNow
+        ? computeDeliveryStatus(input.items, input.deliveryType)
+        : "undelivered";
 
       const oldItems = await db.select({ id: salesInvoiceItems.id }).from(salesInvoiceItems)
         .where(tenantWhere(salesInvoiceItems, ctx.tenantId, eq(salesInvoiceItems.invoiceId, invId)));
@@ -2980,7 +3120,16 @@ const salesRouter = router({
         total: input.total,
         paid: isCash ? input.total : String(paidTotal),
         remaining: isCash ? "0" : String(Math.max(0, Number(input.total) - paidTotal)),
-        salesRepId: customer?.salesRepId ?? undefined,
+        salesRepId: input.salesRepId ?? customer?.salesRepId ?? undefined,
+        referenceNumber: input.referenceNumber,
+        deliveryType: input.deliveryType,
+        cashAccountId: input.cashAccountId,
+        shippingAccountId: input.shippingAccountId,
+        tempCustomerName: input.tempCustomerName,
+        tempAddress: input.tempAddress,
+        phone: input.phone,
+        address: input.address,
+        deliveryStatus,
         branchId: resolvedBranchId,
         costCenterId: input.costCenterId,
         currencyCode: input.currencyCode,
@@ -3005,6 +3154,12 @@ const salesRouter = router({
           : (item.warehouseId ?? input.warehouseId);
         if (postNow && meta!.affectsStock) {
           const { applyStockMovement } = await import("./inventory-stock");
+          const stockQty = resolveInvoiceStockQuantity({
+            deliveryOrReceiptType: (input as any).deliveryType ?? (input as any).receiptType,
+            quantity: item.quantity,
+            deliveredQuantity: item.deliveredQuantity,
+            itemLabel: meta?.name,
+          });
           if (batches?.length) {
             for (const b of batches) {
               await db.insert(salesInvoiceItemBatches).values(withTenantId(ctx.tenantId, {
@@ -3013,7 +3168,7 @@ const salesRouter = router({
               await applyStockMovement(db, ctx.tenantId, { itemId: item.itemId, quantity: b.quantity, direction: "out", warehouseId: lineWarehouseId, batchId: b.batchId, requireWarehouse: true });
             }
           } else {
-            await applyStockMovement(db, ctx.tenantId, { itemId: item.itemId, quantity: item.quantity, direction: "out", warehouseId: lineWarehouseId, batchId: item.batchId, requireWarehouse: true });
+            await applyStockMovement(db, ctx.tenantId, { itemId: item.itemId, quantity: String(stockQty), direction: "out", warehouseId: lineWarehouseId, batchId: item.batchId, requireWarehouse: true });
           }
           if (item.serialNumbers) {
             const { assignSalesSerials } = await import("./inventory-serials");

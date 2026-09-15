@@ -95,14 +95,14 @@
 
 | # | بند | مرجع Mega |
 |---|-----|-----------|
-| A1 | رأس الفاتورة الكامل (مندوب، مرجع، تليفون، خزينة/بنك رأس، شحن، مؤقت) | Invoice.aspx body |
-| A2 | سطر: كمية متاحة، نوع السعر، خصم نقدي، حدود السعر، فئة/باركود صريح | نفس |
-| A3 | نوع الاستلام كلي/جزئي + قواعد مخزن مرحلي | استلام كلي/جزئي |
-| A4 | تعليقات مستند + خيارات طباعة إنجليزي/إيصال | أزرار/checkboxes |
-| A5 | فلاتر قائمة الفواتير = فورم ميجا list | InvoicesList / ReceiptsList |
-| A6 | نفس الحزمة لمردود بيع/شراء ثم طلبات | Return* / *Order |
+| A1 | رأس الفاتورة الكامل (مندوب، مرجع، تليفون، خزينة/بنك رأس، شحن، مؤقت) | Invoice.aspx body — ✅ |
+| A2 | سطر: كمية متاحة، نوع السعر، خصم نقدي، حدود السعر، فئة/باركود صريح | نفس — ✅ |
+| A3 | نوع الاستلام كلي/جزئي + قواعد مخزن مرحلي | استلام كلي/جزئي — ✅ (`deliveredQuantity`) |
+| A4 | تعليقات مستند + خيارات طباعة إنجليزي/إيصال | أزرار/checkboxes — ✅ |
+| A5 | فلاتر قائمة الفواتير = فورم ميجا list | InvoicesList / ReceiptsList — ✅ |
+| A6 | نفس الحزمة لمردود بيع/شراء ثم طلبات | Return* / *Order — todo |
 
-**مخرجات:** تحديث `mega-sales-purchase-icons-parity.md` بجدول حقل×حالة (`done/partial/todo`).
+**مخرجات:** `0066_invoice_mega_a1_a5.sql` + تحديث `mega-sales-purchase-icons-parity.md`.
 
 ### مرحلة B — فلاتر التقارير الغنية (بعد ثبات الأعمدة)
 - ابدأ بأغنى 10: `sales` · `purchases` · `grosscustomersalesbyitems` · `checks-*` · `salesorders` · `invoiceprofits` · `itemsprofits` · `inventorysummary` · `productionorders` · `payments`.

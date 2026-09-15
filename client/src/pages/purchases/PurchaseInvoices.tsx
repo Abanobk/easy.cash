@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import ERPLayout from "@/components/ERPLayout";
 import { DataTable, statusBadge } from "@/components/DataTable";
 import { trpc } from "@/lib/trpc";
@@ -22,6 +22,8 @@ import { QuickAddDialog } from "@/components/invoices/QuickAddDialog";
 import { InvoiceTaxList, type InvoiceTaxLine } from "@/components/invoices/InvoiceTaxList";
 import { InvoiceExpenseList, type InvoiceExpenseLine } from "@/components/invoices/InvoiceExpenseList";
 import { PaymentSettlementBlock, type Settlement } from "@/components/invoices/PaymentSettlementBlock";
+import { InvoiceListFilterBar, type InvoiceListFiltersValue } from "@/components/invoices/InvoiceListFilterBar";
+import { DocumentCommentsButton } from "@/components/DocumentCommentsButton";
 import { BatchSplitEditor, type BatchSplitRow } from "@/components/invoices/BatchSplitEditor";
 import { findItemByScan } from "@/lib/barcode";
 import { printInvoiceQuick, printWarehouseNote } from "@/lib/print-invoice-quick";
@@ -34,6 +36,14 @@ interface InvoiceItem {
   quantity: string;
   price: string;
   discount: string;
+  cashDiscount: string;
+  priceType: string;
+  deliveredQuantity: string;
+  availableQty?: string;
+  minPrice?: string;
+  maxPrice?: string;
+  barcode?: string;
+  itemUnit?: string;
   tax: string;
   tax2: string;
   tax3: string;
@@ -44,10 +54,12 @@ interface InvoiceItem {
   serialNumbers: string;
   batches: BatchSplitRow[];
   lastPriceHint?: { price: number; date: string; number: string } | null;
+  extraPrices?: Array<{ priceName: string; price: string; percentDiscount?: string | null; cashDiscount?: string | null }>;
 }
 
 const emptyItem = (): InvoiceItem => ({
-  itemId: 0, quantity: "1", price: "0", discount: "0", tax: "0", tax2: "0", tax3: "0", total: "0",
+  itemId: 0, quantity: "1", price: "0", discount: "0", cashDiscount: "0", priceType: "", deliveredQuantity: "",
+  tax: "0", tax2: "0", tax3: "0", total: "0",
   warehouseId: undefined, batchNumber: "", expiryDate: "", serialNumbers: "", batches: [],
 });
 
@@ -64,6 +76,12 @@ const emptyForm = {
   exchangeRate: "1",
   referenceNumber: "",
   notes: "",
+  cashAccountId: undefined as number | undefined,
+  shippingAccountId: undefined as number | undefined,
+  tempSupplierName: "",
+  tempAddress: "",
+  phone: "",
+  address: "",
 };
 
 const emptySettlement: Settlement = { cashAmount: "0", bankAmount: "0", bankAccountId: undefined };
@@ -90,6 +108,9 @@ export default function PurchaseInvoices() {
   const [printAfterSave, setPrintAfterSave] = useState(false);
   const [printAfterApprove, setPrintAfterApprove] = useState(false);
   const [printNote, setPrintNote] = useState(false);
+  const [printEnglish, setPrintEnglish] = useState(false);
+  const [printReceipt, setPrintReceipt] = useState(false);
+  const [listFilters, setListFilters] = useState<InvoiceListFiltersValue>({});
   const [barcode, setBarcode] = useState("");
   const [quickAdd, setQuickAdd] = useState<{ kind: "item" | "supplier"; rowIdx?: number } | null>(null);
   const [paymentRow, setPaymentRow] = useState<any | null>(null);
@@ -97,14 +118,31 @@ export default function PurchaseInvoices() {
   const [lastApproveNow, setLastApproveNow] = useState(false);
 
   const utils = trpc.useUtils();
-  useEffect(() => setPage(1), [debouncedSearch]);
-  const { data, isLoading, refetch } = trpc.purchases.invoices.list.useQuery({ page, limit: 20, search: debouncedSearch || undefined });
+  useEffect(() => setPage(1), [debouncedSearch, listFilters]);
+  const { data, isLoading, refetch } = trpc.purchases.invoices.list.useQuery({
+    page, limit: 20, search: debouncedSearch || undefined,
+    dateFrom: listFilters.dateFrom, dateTo: listFilters.dateTo,
+    dueFrom: listFilters.dueFrom, dueTo: listFilters.dueTo,
+    branchId: listFilters.branchId, currencyCode: listFilters.currencyCode,
+    status: listFilters.status,
+    collectionStatus: listFilters.collectionStatus || undefined,
+    deliveryStatus: listFilters.deliveryStatus || undefined,
+    partyId: listFilters.partyId, number: listFilters.number,
+    referenceNumber: listFilters.referenceNumber,
+  });
   const { data: suppliers } = trpc.suppliers.list.useQuery({ page: 1, limit: 200 });
   const { data: allItems } = trpc.items.all.useQuery();
   const { data: warehouses } = trpc.warehouses.list.useQuery();
   const { data: branchList } = trpc.settings.branches.list.useQuery();
   const { data: costCentersList } = trpc.costCenters.list.useQuery();
-  const { data: exchangeRates } = trpc.parity.settings.exchangeRates.list.useQuery(undefined, { enabled: showForm });
+  const { data: exchangeRates } = trpc.parity.settings.exchangeRates.list.useQuery();
+  const { data: accountsChart } = trpc.accounts.chart.useQuery(undefined, { enabled: showForm });
+  const cashLikeAccounts = useMemo(() => (accountsChart || []).filter((a: any) => {
+    if (a.isParent) return false;
+    const n = String(a.name || "").toLowerCase();
+    const code = String(a.code || "");
+    return n.includes("نقد") || n.includes("خزينة") || n.includes("cash") || n.includes("صندوق") || /^11/.test(code);
+  }), [accountsChart]);
 
   const createMut = trpc.purchases.invoices.create.useMutation({
     onSuccess: async (res) => {
@@ -154,7 +192,7 @@ export default function PurchaseInvoices() {
   const resetForm = () => {
     setEditId(null);
     setForm(emptyForm); setInvoiceItems([]); setInvoiceTaxes([]); setInvoiceExpenses([]);
-    setSettlement(emptySettlement); setPrintAfterSave(false); setPrintAfterApprove(false); setPrintNote(false); setBarcode("");
+    setSettlement(emptySettlement); setPrintAfterSave(false); setPrintAfterApprove(false); setPrintNote(false); setPrintEnglish(false); setPrintReceipt(false); setBarcode("");
   };
 
   const closeForm = () => {
@@ -190,6 +228,12 @@ export default function PurchaseInvoices() {
         exchangeRate: inv.exchangeRate?.toString() || "1",
         referenceNumber: inv.referenceNumber || "",
         notes: inv.notes || "",
+        cashAccountId: (inv as any).cashAccountId ?? undefined,
+        shippingAccountId: (inv as any).shippingAccountId ?? undefined,
+        tempSupplierName: (inv as any).tempSupplierName || "",
+        tempAddress: (inv as any).tempAddress || "",
+        phone: (inv as any).phone || "",
+        address: (inv as any).address || "",
       });
       setSettlement({
         cashAmount: inv.cashAmount != null ? String(inv.cashAmount) : "0",
@@ -204,6 +248,13 @@ export default function PurchaseInvoices() {
         quantity: i.quantity?.toString() || "1",
         price: i.price?.toString() || "0",
         discount: i.discount?.toString() || "0",
+        cashDiscount: i.cashDiscount != null ? String(i.cashDiscount) : "0",
+        priceType: i.priceType || "",
+        deliveredQuantity: i.deliveredQuantity != null ? String(i.deliveredQuantity) : "",
+        itemUnit: i.unit || i.itemUnit || "",
+        minPrice: i.itemMinPrice != null ? String(i.itemMinPrice) : undefined,
+        maxPrice: i.itemMaxPrice != null ? String(i.itemMaxPrice) : undefined,
+        barcode: i.itemBarcode || undefined,
         tax: i.tax?.toString() || "0",
         tax2: i.tax2?.toString() || "0",
         tax3: i.tax3?.toString() || "0",
@@ -228,7 +279,7 @@ export default function PurchaseInvoices() {
         price: Number(i.price), total: Number(i.total),
       })),
       subtotal, discount: 0, tax: taxTotal, total, paymentType: form.paymentType,
-    });
+    }, { english: printEnglish, receipt: printReceipt });
   };
   const fireWarehouseNote = (number: string) => {
     printWarehouseNote({
@@ -248,6 +299,7 @@ export default function PurchaseInvoices() {
     try {
       const inv = await utils.purchases.invoices.byId.fetch(invoiceId);
       setForm({
+        ...emptyForm,
         supplierId: inv.supplierId,
         date: new Date().toISOString().split("T")[0],
         dueDate: "",
@@ -310,8 +362,9 @@ export default function PurchaseInvoices() {
       const q = Number(updated[idx].quantity) || 0;
       const p = Number(updated[idx].price) || 0;
       const d = Number(updated[idx].discount) || 0;
+      const cash = Number(updated[idx].cashDiscount) || 0;
       const t = (Number(updated[idx].tax) || 0) + (Number(updated[idx].tax2) || 0) + (Number(updated[idx].tax3) || 0);
-      const sub = q * p * (1 - d / 100);
+      const sub = Math.max(0, q * p * (1 - d / 100) - cash);
       updated[idx].total = (sub * (1 + t / 100)).toFixed(2);
       return updated;
     });
@@ -355,6 +408,14 @@ export default function PurchaseInvoices() {
         return !(row.warehouseId ?? form.warehouseId);
       });
       if (missingWh) { toast.error("يجب تحديد المخزن قبل الاعتماد (للأصناف المخزنية)"); return; }
+      if (form.receiptType === "partial") {
+        const bad = invoiceItems.some((row) => {
+          const d = Number(row.deliveredQuantity);
+          const q = Number(row.quantity);
+          return !(d > 0 && d <= q + 1e-9);
+        });
+        if (bad) { toast.error("عند الاستلام الجزئي: حدد كمية مسلَّمة لكل سطر"); return; }
+      }
     }
     const rate = Number(form.exchangeRate) || 1;
     const totalBase = toBaseAmount(total, form.currencyCode, rate);
@@ -379,6 +440,12 @@ export default function PurchaseInvoices() {
       tax: toBaseAmount(taxTotal, form.currencyCode, rate).toFixed(2),
       total: totalBase.toFixed(2),
       referenceNumber: form.referenceNumber || undefined,
+      cashAccountId: form.cashAccountId,
+      shippingAccountId: form.shippingAccountId,
+      tempSupplierName: form.tempSupplierName || undefined,
+      tempAddress: form.tempAddress || undefined,
+      phone: form.phone || undefined,
+      address: form.address || undefined,
       notes: form.notes,
       taxes: invoiceTaxes.filter((t) => Number(t.amount) > 0).map((t) => ({ ...t, amount: t.amount })),
       expenses: invoiceExpenses
@@ -389,6 +456,10 @@ export default function PurchaseInvoices() {
         quantity: i.quantity,
         price: foreign ? (Number(i.price) * rate).toFixed(2) : i.price,
         discount: i.discount,
+        cashDiscount: i.cashDiscount || "0",
+        priceType: i.priceType || undefined,
+        unit: i.itemUnit || undefined,
+        deliveredQuantity: form.receiptType === "partial" ? i.deliveredQuantity : (i.deliveredQuantity || i.quantity),
         tax: i.tax,
         tax2: i.tax2,
         tax3: i.tax3,
@@ -409,6 +480,7 @@ export default function PurchaseInvoices() {
       <ERPLayout title={editId ? "تعديل فاتورة شراء" : "فاتورة شراء جديدة"}>
         <div className="space-y-4">
           <Button variant="ghost" size="sm" onClick={closeForm} className="gap-1 text-slate-600"><ArrowRight size={16} />العودة للقائمة</Button>
+          <DocumentCommentsButton documentType="purchase_invoice" documentId={editId} />
           <Card className="border-0 shadow-sm">
             <CardHeader className="pb-3 border-b border-slate-100"><CardTitle className="text-sm font-semibold text-slate-800">بيانات الفاتورة</CardTitle></CardHeader>
             <CardContent className="pt-4">
@@ -491,6 +563,16 @@ export default function PurchaseInvoices() {
                   </Select>
                 </div>
                 <div><Label className="text-xs font-medium text-slate-700 mb-1.5 block">رقم المرجع</Label><Input value={form.referenceNumber} onChange={(e) => setForm((p) => ({ ...p, referenceNumber: e.target.value }))} placeholder="رقم فاتورة المورد" className="h-9 text-sm" /></div>
+                <div><Label className="text-xs font-medium text-slate-700 mb-1.5 block">تليفون</Label><Input value={form.phone} onChange={(e) => setForm((p) => ({ ...p, phone: e.target.value }))} className="h-9 text-sm" /></div>
+                <div><Label className="text-xs font-medium text-slate-700 mb-1.5 block">العنوان</Label><Input value={form.address} onChange={(e) => setForm((p) => ({ ...p, address: e.target.value }))} className="h-9 text-sm" /></div>
+                <div><Label className="text-xs font-medium text-slate-700 mb-1.5 block">حساب الخزينة</Label>
+                  <Select value={form.cashAccountId?.toString() || "none"} onValueChange={(v) => setForm((p) => ({ ...p, cashAccountId: v === "none" ? undefined : Number(v) }))}>
+                    <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="اختر" /></SelectTrigger>
+                    <SelectContent><SelectItem value="none">—</SelectItem>{cashLikeAccounts.map((a: any) => <SelectItem key={a.id} value={String(a.id)}>{a.code} — {a.name}</SelectItem>)}</SelectContent>
+                  </Select>
+                </div>
+                <div><Label className="text-xs font-medium text-slate-700 mb-1.5 block">اسم مورد مؤقت</Label><Input value={form.tempSupplierName} onChange={(e) => setForm((p) => ({ ...p, tempSupplierName: e.target.value }))} className="h-9 text-sm" /></div>
+                <div><Label className="text-xs font-medium text-slate-700 mb-1.5 block">عنوان مؤقت</Label><Input value={form.tempAddress} onChange={(e) => setForm((p) => ({ ...p, tempAddress: e.target.value }))} className="h-9 text-sm" /></div>
                 <div className="col-span-2"><Label className="text-xs font-medium text-slate-700 mb-1.5 block">ملاحظات</Label><Input value={form.notes} onChange={(e) => setForm((p) => ({ ...p, notes: e.target.value }))} placeholder="ملاحظات" className="h-9 text-sm" /></div>
               </div>
             </CardContent>
@@ -522,8 +604,10 @@ export default function PurchaseInvoices() {
                     <th className="px-3 py-2 text-right text-xs font-semibold text-slate-600 min-w-[160px]">الصنف</th>
                     <th className="px-3 py-2 text-right text-xs font-semibold text-slate-600 w-32">المخزن</th>
                     <th className="px-3 py-2 text-right text-xs font-semibold text-slate-600 w-20">الكمية</th>
+                    {form.receiptType === "partial" && <th className="px-3 py-2 text-right text-xs font-semibold text-slate-600 w-24">مسلَّم</th>}
                     <th className="px-3 py-2 text-right text-xs font-semibold text-slate-600 w-24">السعر</th>
                     <th className="px-3 py-2 text-right text-xs font-semibold text-slate-600 w-16">خصم %</th>
+                    <th className="px-3 py-2 text-right text-xs font-semibold text-slate-600 w-20">خصم نقدي</th>
                     <th className="px-3 py-2 text-right text-xs font-semibold text-slate-600 w-16">ض1 %</th>
                     <th className="px-3 py-2 text-right text-xs font-semibold text-slate-600 w-16">ض2 %</th>
                     <th className="px-3 py-2 text-right text-xs font-semibold text-slate-600 w-16">ض3 %</th>
@@ -563,8 +647,12 @@ export default function PurchaseInvoices() {
                           </Select>
                         </td>
                         <td className="px-3 py-2"><Input value={item.quantity} onChange={(e) => updateItem(idx, "quantity", e.target.value)} type="number" className="h-8 text-xs w-full" /></td>
+                        {form.receiptType === "partial" && (
+                          <td className="px-3 py-2"><Input value={item.deliveredQuantity} onChange={(e) => updateItem(idx, "deliveredQuantity", e.target.value)} type="number" className="h-8 text-xs w-full" /></td>
+                        )}
                         <td className="px-3 py-2"><Input value={item.price} onChange={(e) => updateItem(idx, "price", e.target.value)} type="number" className="h-8 text-xs w-full" /></td>
                         <td className="px-3 py-2"><Input value={item.discount} onChange={(e) => updateItem(idx, "discount", e.target.value)} type="number" className="h-8 text-xs w-full" /></td>
+                        <td className="px-3 py-2"><Input value={item.cashDiscount} onChange={(e) => updateItem(idx, "cashDiscount", e.target.value)} type="number" className="h-8 text-xs w-full" /></td>
                         <td className="px-3 py-2"><Input value={item.tax} onChange={(e) => updateItem(idx, "tax", e.target.value)} type="number" className="h-8 text-xs w-full" /></td>
                         <td className="px-3 py-2"><Input value={item.tax2} onChange={(e) => updateItem(idx, "tax2", e.target.value)} type="number" className="h-8 text-xs w-full" /></td>
                         <td className="px-3 py-2"><Input value={item.tax3} onChange={(e) => updateItem(idx, "tax3", e.target.value)} type="number" className="h-8 text-xs w-full" /></td>
@@ -621,6 +709,8 @@ export default function PurchaseInvoices() {
               <div className="flex flex-wrap gap-4 border-t border-slate-100 pt-3">
                 <label className="flex items-center gap-2 text-xs text-slate-600"><Checkbox checked={printAfterSave} onCheckedChange={(v) => setPrintAfterSave(!!v)} />طباعة بعد الحفظ</label>
                 <label className="flex items-center gap-2 text-xs text-slate-600"><Checkbox checked={printAfterApprove} onCheckedChange={(v) => setPrintAfterApprove(!!v)} />طباعة بعد الاعتماد</label>
+                <label className="flex items-center gap-2 text-xs text-slate-600"><Checkbox checked={printEnglish} onCheckedChange={(v) => setPrintEnglish(!!v)} />طباعة بالانجليزية</label>
+                <label className="flex items-center gap-2 text-xs text-slate-600"><Checkbox checked={printReceipt} onCheckedChange={(v) => setPrintReceipt(!!v)} />طباعة كايصال</label>
                 <label className="flex items-center gap-2 text-xs text-slate-600"><Checkbox checked={printNote} onCheckedChange={(v) => setPrintNote(!!v)} />طباعة إذن المخزن مع الفاتورة</label>
               </div>
             </CardContent>
@@ -651,6 +741,15 @@ export default function PurchaseInvoices() {
 
   return (
     <ERPLayout title="فواتير الشراء">
+      <InvoiceListFilterBar
+        value={listFilters}
+        onChange={(v) => { setListFilters(v); setPage(1); }}
+        onClear={() => { setListFilters({}); setPage(1); }}
+        partyLabel="المورد"
+        parties={(suppliers?.rows || []).map((s) => ({ id: s.id, name: s.name }))}
+        branches={(branchList || []).map((b: { id: number; name: string }) => ({ id: b.id, name: b.name }))}
+        currencies={["EGP", ...((exchangeRates || []).map((r: Record<string, unknown>) => String(r.code)).filter((c: string) => c && c !== "EGP"))]}
+      />
       <DataTable
         title="فواتير الشراء"
         data={data?.rows}

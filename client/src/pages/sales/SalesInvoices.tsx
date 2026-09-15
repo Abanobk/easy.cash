@@ -25,6 +25,8 @@ import { QuickAddDialog } from "@/components/invoices/QuickAddDialog";
 import { InvoiceTaxList, type InvoiceTaxLine } from "@/components/invoices/InvoiceTaxList";
 import { InvoiceExpenseList, type InvoiceExpenseLine } from "@/components/invoices/InvoiceExpenseList";
 import { PaymentSettlementBlock, type Settlement } from "@/components/invoices/PaymentSettlementBlock";
+import { InvoiceListFilterBar, type InvoiceListFiltersValue } from "@/components/invoices/InvoiceListFilterBar";
+import { DocumentCommentsButton } from "@/components/DocumentCommentsButton";
 import { findItemByScan } from "@/lib/barcode";
 import { printInvoiceQuick, printWarehouseNote } from "@/lib/print-invoice-quick";
 import { Copy } from "lucide-react";
@@ -38,6 +40,14 @@ interface InvoiceItem {
   quantity: string;
   price: string;
   discount: string;
+  cashDiscount: string;
+  priceType: string;
+  deliveredQuantity: string;
+  availableQty?: string;
+  minPrice?: string;
+  maxPrice?: string;
+  barcode?: string;
+  categoryId?: number | null;
   tax: string;
   tax2: string;
   tax3: string;
@@ -46,6 +56,7 @@ interface InvoiceItem {
   batchId?: number;
   warehouseId?: number;
   lastPriceHint?: { price: number; date: string; number: string } | null;
+  extraPrices?: Array<{ priceName: string; price: string; percentDiscount?: string | null; cashDiscount?: string | null }>;
 }
 
 const emptyForm = {
@@ -60,6 +71,15 @@ const emptyForm = {
   exchangeRate: "1",
   additions: "0",
   notes: "",
+  referenceNumber: "",
+  deliveryType: "full" as "full" | "partial",
+  salesRepId: undefined as number | undefined,
+  cashAccountId: undefined as number | undefined,
+  shippingAccountId: undefined as number | undefined,
+  tempCustomerName: "",
+  tempAddress: "",
+  phone: "",
+  address: "",
 };
 
 const emptySettlement: Settlement = { cashAmount: "0", bankAmount: "0", bankAccountId: undefined };
@@ -109,9 +129,18 @@ function recalcLineTotal(row: InvoiceItem) {
   const q = Number(row.quantity) || 0;
   const p = Number(row.price) || 0;
   const d = Number(row.discount) || 0;
+  const cash = Number(row.cashDiscount) || 0;
   const t = (Number(row.tax) || 0) + (Number(row.tax2) || 0) + (Number(row.tax3) || 0);
-  const subtotal = q * p * (1 - d / 100);
+  const subtotal = Math.max(0, q * p * (1 - d / 100) - cash);
   return { ...row, total: (subtotal * (1 + t / 100)).toFixed(2) };
+}
+
+function emptyLine(): InvoiceItem {
+  return {
+    itemId: 0, itemName: "", itemUnit: "", quantity: "1", price: "0", discount: "0",
+    cashDiscount: "0", priceType: "", deliveredQuantity: "", tax: "0", tax2: "0", tax3: "0",
+    total: "0", serialNumbers: "", batchId: undefined, warehouseId: undefined,
+  };
 }
 
 export default function SalesInvoices() {
@@ -134,6 +163,9 @@ export default function SalesInvoices() {
   const [printAfterSave, setPrintAfterSave] = useState(false);
   const [printAfterApprove, setPrintAfterApprove] = useState(false);
   const [printNote, setPrintNote] = useState(false);
+  const [printEnglish, setPrintEnglish] = useState(false);
+  const [printReceipt, setPrintReceipt] = useState(false);
+  const [listFilters, setListFilters] = useState<InvoiceListFiltersValue>({});
   const [lastApproveNow, setLastApproveNow] = useState(false);
   const [barcode, setBarcode] = useState("");
   const [quickAdd, setQuickAdd] = useState<{ kind: "item" | "customer"; rowIdx?: number } | null>(null);
@@ -154,20 +186,52 @@ export default function SalesInvoices() {
   const newInvoiceLabel = isCashMode ? "فاتورة نقدية جديدة" : "فاتورة جديدة";
 
   const utils = trpc.useUtils();
-  useEffect(() => setPage(1), [debouncedSearch]);
+  useEffect(() => setPage(1), [debouncedSearch, listFilters]);
   const { data, isLoading, refetch } = trpc.sales.invoices.list.useQuery({
     page,
     limit: 20,
     search: debouncedSearch || undefined,
     paymentType: isCashMode ? "cash" : undefined,
+    dateFrom: listFilters.dateFrom,
+    dateTo: listFilters.dateTo,
+    dueFrom: listFilters.dueFrom,
+    dueTo: listFilters.dueTo,
+    branchId: listFilters.branchId,
+    currencyCode: listFilters.currencyCode,
+    status: listFilters.status,
+    collectionStatus: listFilters.collectionStatus || undefined,
+    deliveryStatus: listFilters.deliveryStatus || undefined,
+    partyId: listFilters.partyId,
+    salesRepId: listFilters.salesRepId,
+    number: listFilters.number,
+    referenceNumber: listFilters.referenceNumber,
   });
   const { data: customers } = trpc.customers.list.useQuery({ page: 1, limit: 200 });
   const { data: allItems } = trpc.items.all.useQuery({ forSalesInvoice: true });
   const { data: warehouses } = trpc.warehouses.list.useQuery();
   const { data: branchList } = trpc.settings.branches.list.useQuery();
   const { data: costCentersList } = trpc.costCenters.list.useQuery();
+  const { data: salesReps } = trpc.salesReps.list.useQuery(undefined, { enabled: showForm || true });
+  const { data: accountsChart } = trpc.accounts.chart.useQuery(undefined, { enabled: showForm });
+  const cashLikeAccounts = useMemo(() => {
+    const rows = accountsChart || [];
+    return rows.filter((a: any) => {
+      if (a.isParent) return false;
+      const n = String(a.name || "").toLowerCase();
+      const code = String(a.code || "");
+      return n.includes("نقد") || n.includes("خزينة") || n.includes("cash") || n.includes("صندوق") || /^11/.test(code);
+    });
+  }, [accountsChart]);
+  const shippingAccounts = useMemo(() => {
+    const rows = accountsChart || [];
+    return rows.filter((a: any) => {
+      if (a.isParent) return false;
+      const n = String(a.name || "");
+      return n.includes("شحن") || n.includes("نقل") || n.includes("shipping");
+    });
+  }, [accountsChart]);
   const { data: activeOffers } = trpc.parity.inventory.offers.active.useQuery(undefined, { enabled: showForm });
-  const { data: exchangeRates } = trpc.parity.settings.exchangeRates.list.useQuery(undefined, { enabled: showForm });
+  const { data: exchangeRates } = trpc.parity.settings.exchangeRates.list.useQuery();
   const createMut = trpc.sales.invoices.create.useMutation({
     onSuccess: (res) => {
       toast.success(res.pendingApproval ? `تم الحفظ ${res.number} — بانتظار الاعتماد` : (lastApproveNow ? `تم اعتماد الفاتورة ${res.number}` : `تم حفظ المسودة ${res.number} بدون أثر مخزني`));
@@ -219,7 +283,7 @@ export default function SalesInvoices() {
     setForm({ ...emptyForm, paymentType: "cash" });
     setInvoiceItems([]);
     setInvoiceTaxes([]); setInvoiceExpenses([]); setSettlement(emptySettlement);
-    setPrintAfterSave(false); setPrintAfterApprove(false); setPrintNote(false); setBarcode("");
+    setPrintAfterSave(false); setPrintAfterApprove(false); setPrintNote(false); setPrintEnglish(false); setPrintReceipt(false); setBarcode("");
   };
 
   /** فتح فاتورة مسودة (بعد فك اعتماد أو معلقة أصلاً) للتعديل — بنعيد استخدام نفس فورم الإنشاء الغني */
@@ -239,6 +303,15 @@ export default function SalesInvoices() {
         exchangeRate: inv.exchangeRate?.toString() || "1",
         additions: inv.additions != null ? String(inv.additions) : "0",
         notes: inv.notes || "",
+        referenceNumber: (inv as any).referenceNumber || "",
+        deliveryType: ((inv as any).deliveryType as "full" | "partial") || "full",
+        salesRepId: (inv as any).salesRepId ?? undefined,
+        cashAccountId: (inv as any).cashAccountId ?? undefined,
+        shippingAccountId: (inv as any).shippingAccountId ?? undefined,
+        tempCustomerName: (inv as any).tempCustomerName || "",
+        tempAddress: (inv as any).tempAddress || "",
+        phone: (inv as any).phone || "",
+        address: (inv as any).address || "",
       });
       setSettlement({
         cashAmount: inv.cashAmount != null ? String(inv.cashAmount) : "0",
@@ -250,10 +323,16 @@ export default function SalesInvoices() {
       setInvoiceItems(inv.items.map((i: any) => ({
         itemId: i.itemId,
         itemName: i.itemName || "",
-        itemUnit: i.itemUnit || "",
+        itemUnit: i.unit || i.itemUnit || "",
         quantity: i.quantity?.toString() || "1",
         price: i.price?.toString() || "0",
         discount: i.discount?.toString() || "0",
+        cashDiscount: i.cashDiscount != null ? String(i.cashDiscount) : "0",
+        priceType: i.priceType || "",
+        deliveredQuantity: i.deliveredQuantity != null ? String(i.deliveredQuantity) : "",
+        minPrice: i.itemMinPrice != null ? String(i.itemMinPrice) : undefined,
+        maxPrice: i.itemMaxPrice != null ? String(i.itemMaxPrice) : undefined,
+        barcode: i.itemBarcode || undefined,
         tax: i.tax?.toString() || "0",
         tax2: i.tax2?.toString() || "0",
         tax3: i.tax3?.toString() || "0",
@@ -271,10 +350,10 @@ export default function SalesInvoices() {
   const firePrint = (number: string) => {
     printInvoiceQuick({
       title: "فاتورة مبيعات", number, date: form.date, partyLabel: "العميل",
-      partyName: customers?.rows.find((c) => c.id === form.customerId)?.name || "",
+      partyName: form.tempCustomerName || customers?.rows.find((c) => c.id === form.customerId)?.name || "",
       lines: invoiceItems.map((i) => ({ name: i.itemName, quantity: Number(i.quantity), unit: i.itemUnit, price: Number(i.price), total: Number(i.total) })),
       subtotal, discount: 0, tax: taxTotal, total, paymentType: form.paymentType,
-    });
+    }, { english: printEnglish, receipt: printReceipt });
   };
 
   const fireWarehouseNote = (number: string) => {
@@ -309,6 +388,7 @@ export default function SalesInvoices() {
     try {
       const inv = await utils.sales.invoices.byId.fetch(invoiceId);
       setForm({
+        ...emptyForm,
         customerId: inv.customerId,
         date: new Date().toISOString().split("T")[0],
         dueDate: "",
@@ -320,14 +400,24 @@ export default function SalesInvoices() {
         exchangeRate: inv.exchangeRate?.toString() || "1",
         additions: inv.additions != null ? String(inv.additions) : "0",
         notes: `نسخة من الفاتورة ${inv.number}`,
+        referenceNumber: (inv as any).referenceNumber || "",
+        deliveryType: ((inv as any).deliveryType as "full" | "partial") || "full",
+        salesRepId: (inv as any).salesRepId ?? undefined,
+        cashAccountId: (inv as any).cashAccountId ?? undefined,
+        shippingAccountId: (inv as any).shippingAccountId ?? undefined,
+        phone: (inv as any).phone || "",
+        address: (inv as any).address || "",
       });
       setInvoiceItems(inv.items.map((i) => ({
+        ...emptyLine(),
         itemId: i.itemId,
         itemName: i.itemName || "",
         itemUnit: i.itemUnit || "",
         quantity: i.quantity?.toString() || "1",
         price: i.price?.toString() || "0",
         discount: i.discount?.toString() || "0",
+        cashDiscount: (i as any).cashDiscount != null ? String((i as any).cashDiscount) : "0",
+        priceType: (i as any).priceType || "",
         tax: i.tax?.toString() || "0",
         tax2: "0",
         tax3: "0",
@@ -346,7 +436,15 @@ export default function SalesInvoices() {
   };
 
   const addItem = () => {
-    setInvoiceItems((prev) => [...prev, { itemId: 0, itemName: "", itemUnit: "", quantity: "1", price: "0", discount: "0", tax: "0", tax2: "0", tax3: "0", total: "0", serialNumbers: "", batchId: undefined, warehouseId: undefined }]);
+    setInvoiceItems((prev) => [...prev, emptyLine()]);
+  };
+
+  const refreshAvailable = async (rowIdx: number, itemId: number, warehouseId?: number) => {
+    if (!itemId || !warehouseId) return;
+    try {
+      const res = await utils.inventory.qtyAtWarehouse.fetch({ itemId, warehouseId });
+      setInvoiceItems((prev) => prev.map((it, i) => (i === rowIdx ? { ...it, availableQty: String(res.quantity) } : it)));
+    } catch { /* ignore */ }
   };
 
   /**
@@ -388,10 +486,37 @@ export default function SalesInvoices() {
           updated[idx].tax = item.taxRate?.toString() || "0";
           updated[idx].tax2 = (item as any).taxRate2 != null ? String((item as any).taxRate2) : "0";
           updated[idx].tax3 = (item as any).taxRate3 != null ? String((item as any).taxRate3) : "0";
+          updated[idx].minPrice = (item as any).minPrice != null ? String((item as any).minPrice) : undefined;
+          updated[idx].maxPrice = (item as any).maxPrice != null ? String((item as any).maxPrice) : undefined;
+          updated[idx].barcode = (item as any).barcode || undefined;
+          updated[idx].categoryId = item.categoryId ?? null;
+          updated[idx].cashDiscount = (item as any).cashDiscount != null ? String((item as any).cashDiscount) : "0";
+          updated[idx].priceType = "";
           const offerPct = bestOfferDiscount(Number(value), item.categoryId, activeOffers as ActiveOffer[] | undefined);
           if (offerPct > 0) updated[idx].discount = String(offerPct);
         }
         void applyItemHint(idx, Number(value), updated[idx].price);
+        void (async () => {
+          try {
+            const extras = await utils.items.extraPrices.list.fetch({ itemId: Number(value) });
+            setInvoiceItems((prev2) => prev2.map((it, i) => i === idx ? { ...it, extraPrices: extras as any } : it));
+          } catch { /* ignore */ }
+          await refreshAvailable(idx, Number(value), updated[idx].warehouseId ?? form.warehouseId);
+        })();
+      }
+      if (field === "warehouseId") {
+        void refreshAvailable(idx, updated[idx].itemId, value === "default" ? form.warehouseId : Number(value));
+      }
+      if (field === "priceType") {
+        const ep = updated[idx].extraPrices?.find((e) => e.priceName === value);
+        if (ep) {
+          updated[idx].price = String(ep.price);
+          if (ep.percentDiscount) updated[idx].discount = String(ep.percentDiscount);
+          if (ep.cashDiscount) updated[idx].cashDiscount = String(ep.cashDiscount);
+        }
+      }
+      if (field === "quantity" && form.deliveryType === "full") {
+        updated[idx].deliveredQuantity = value;
       }
       updated[idx] = recalcLineTotal(updated[idx]);
       return updated;
@@ -413,8 +538,9 @@ export default function SalesInvoices() {
     setBarcode("");
   };
 
-  const subtotal = invoiceItems.reduce((s, i) => s + Number(i.quantity) * Number(i.price) * (1 - Number(i.discount) / 100), 0);
-  const taxTotal = invoiceItems.reduce((s, i) => s + Number(i.total) - Number(i.quantity) * Number(i.price) * (1 - Number(i.discount) / 100), 0)
+  const lineNet = (i: InvoiceItem) => Math.max(0, Number(i.quantity) * Number(i.price) * (1 - Number(i.discount) / 100) - (Number(i.cashDiscount) || 0));
+  const subtotal = invoiceItems.reduce((s, i) => s + lineNet(i), 0);
+  const taxTotal = invoiceItems.reduce((s, i) => s + Number(i.total) - lineNet(i), 0)
     + invoiceTaxes.reduce((s, t) => s + Number(t.amount), 0);
   const additionsAmt = Number(form.additions) || 0;
   const total = (invoiceItems.reduce((s, i) => s + Number(i.total), 0) + invoiceTaxes.reduce((s, t) => s + Number(t.amount), 0)) + additionsAmt;
@@ -460,6 +586,27 @@ export default function SalesInvoices() {
         return !(row.warehouseId ?? form.warehouseId);
       });
       if (missingWh) { toast.error("يجب تحديد المخزن قبل الاعتماد (للأصناف المخزنية)"); return; }
+      if (form.deliveryType === "partial") {
+        const bad = invoiceItems.some((row) => {
+          const d = Number(row.deliveredQuantity);
+          const q = Number(row.quantity);
+          return !(d > 0 && d <= q + 1e-9);
+        });
+        if (bad) { toast.error("عند الاستلام الجزئي: حدد كمية مسلَّمة لكل سطر (أكبر من صفر ولا تتجاوز كمية الفاتورة)"); return; }
+      }
+      for (const row of invoiceItems) {
+        const p = Number(row.price);
+        const minP = row.minPrice != null && row.minPrice !== "" ? Number(row.minPrice) : null;
+        const maxP = row.maxPrice != null && row.maxPrice !== "" ? Number(row.maxPrice) : null;
+        if (minP != null && minP > 0 && p + 1e-9 < minP) {
+          toast.error(`سعر «${row.itemName}» أقل من الحد الأدنى (${minP})`);
+          return;
+        }
+        if (maxP != null && maxP > 0 && p - 1e-9 > maxP) {
+          toast.error(`سعر «${row.itemName}» أعلى من الحد الأقصى (${maxP})`);
+          return;
+        }
+      }
     }
     const rate = Number(form.exchangeRate) || 1;
     const payload = {
@@ -483,6 +630,15 @@ export default function SalesInvoices() {
       total: toBaseAmount(total, form.currencyCode, rate).toFixed(2),
       additions: form.additions || "0",
       notes: form.notes,
+      referenceNumber: form.referenceNumber || undefined,
+      deliveryType: form.deliveryType,
+      salesRepId: form.salesRepId,
+      cashAccountId: form.cashAccountId,
+      shippingAccountId: form.shippingAccountId,
+      tempCustomerName: form.tempCustomerName || undefined,
+      tempAddress: form.tempAddress || undefined,
+      phone: form.phone || undefined,
+      address: form.address || undefined,
       taxes: invoiceTaxes.filter((t) => Number(t.amount) > 0),
       expenses: invoiceExpenses
         .filter((e): e is InvoiceExpenseLine & { creditAccountId: number } => Number(e.amount) > 0 && e.creditAccountId != null)
@@ -492,6 +648,12 @@ export default function SalesInvoices() {
         quantity: i.quantity,
         price: foreign ? (Number(i.price) * rate).toFixed(2) : i.price,
         discount: i.discount,
+        cashDiscount: i.cashDiscount || "0",
+        priceType: i.priceType || undefined,
+        unit: i.itemUnit || undefined,
+        deliveredQuantity: form.deliveryType === "partial"
+          ? i.deliveredQuantity
+          : (i.deliveredQuantity || i.quantity),
         tax: i.tax,
         tax2: i.tax2,
         tax3: i.tax3,
@@ -509,11 +671,16 @@ export default function SalesInvoices() {
     return (
       <ERPLayout title={editId ? "تعديل فاتورة مبيعات" : (isCashMode ? "فاتورة مبيعات نقدية جديدة" : "فاتورة مبيعات جديدة")}>
         <div className="space-y-4">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <Button variant="ghost" size="sm" onClick={closeForm} className="gap-1 text-slate-600">
               <ArrowRight size={16} />
               العودة للقائمة
             </Button>
+            <DocumentCommentsButton
+              documentType="sales_invoice"
+              documentId={editId}
+              documentNumber={editId ? undefined : undefined}
+            />
           </div>
 
           <Card className="border-0 shadow-sm">
@@ -542,7 +709,18 @@ export default function SalesInvoices() {
                 <div className="col-span-2">
                   <Label className="text-xs font-medium text-slate-700 mb-1.5 block">العميل *</Label>
                   <div className="flex gap-1">
-                    <Select value={form.customerId?.toString() || ""} onValueChange={(v) => setForm((p) => ({ ...p, customerId: Number(v) }))}>
+                    <Select value={form.customerId?.toString() || ""} onValueChange={(v) => {
+                      const id = Number(v);
+                      const c = customers?.rows.find((x) => x.id === id) as any;
+                      setForm((p) => ({
+                        ...p,
+                        customerId: id,
+                        phone: c?.phone || p.phone,
+                        address: c?.address || p.address,
+                        salesRepId: c?.salesRepId ?? p.salesRepId,
+                        branchId: p.branchId ?? c?.branchId ?? undefined,
+                      }));
+                    }}>
                       <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="اختر العميل" /></SelectTrigger>
                       <SelectContent>
                         {customers?.rows.map((c) => <SelectItem key={c.id} value={c.id.toString()}>{c.name}</SelectItem>)}
@@ -615,6 +793,68 @@ export default function SalesInvoices() {
                   </Select>
                 </div>
                 <div>
+                  <Label className="text-xs font-medium text-slate-700 mb-1.5 block">مندوب المبيعات</Label>
+                  <Select value={form.salesRepId?.toString() || "none"} onValueChange={(v) => setForm((p) => ({ ...p, salesRepId: v === "none" ? undefined : Number(v) }))}>
+                    <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="بدون" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">بدون</SelectItem>
+                      {(salesReps || []).map((r: { id: number; name: string }) => <SelectItem key={r.id} value={r.id.toString()}>{r.name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label className="text-xs font-medium text-slate-700 mb-1.5 block">رقم المرجع</Label>
+                  <Input value={form.referenceNumber} onChange={(e) => setForm((p) => ({ ...p, referenceNumber: e.target.value }))} className="h-9 text-sm" />
+                </div>
+                <div>
+                  <Label className="text-xs font-medium text-slate-700 mb-1.5 block">تليفون</Label>
+                  <Input value={form.phone} onChange={(e) => setForm((p) => ({ ...p, phone: e.target.value }))} className="h-9 text-sm" />
+                </div>
+                <div>
+                  <Label className="text-xs font-medium text-slate-700 mb-1.5 block">العنوان</Label>
+                  <Input value={form.address} onChange={(e) => setForm((p) => ({ ...p, address: e.target.value }))} className="h-9 text-sm" />
+                </div>
+                <div>
+                  <Label className="text-xs font-medium text-slate-700 mb-1.5 block">نوع الاستلام</Label>
+                  <Select value={form.deliveryType} onValueChange={(v) => setForm((p) => ({ ...p, deliveryType: v as "full" | "partial" }))}>
+                    <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="full">استلام كلي</SelectItem>
+                      <SelectItem value="partial">استلام جزئي</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label className="text-xs font-medium text-slate-700 mb-1.5 block">حساب الخزينة</Label>
+                  <Select value={form.cashAccountId?.toString() || "none"} onValueChange={(v) => setForm((p) => ({ ...p, cashAccountId: v === "none" ? undefined : Number(v) }))}>
+                    <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="اختر" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">—</SelectItem>
+                      {cashLikeAccounts.map((a: any) => <SelectItem key={a.id} value={String(a.id)}>{a.code} — {a.name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label className="text-xs font-medium text-slate-700 mb-1.5 block">حساب شركة الشحن</Label>
+                  <Select value={form.shippingAccountId?.toString() || "none"} onValueChange={(v) => setForm((p) => ({ ...p, shippingAccountId: v === "none" ? undefined : Number(v) }))}>
+                    <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="اختر" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">—</SelectItem>
+                      {(shippingAccounts.length ? shippingAccounts : (accountsChart || []).filter((a: any) => !a.isParent)).map((a: any) => (
+                        <SelectItem key={a.id} value={String(a.id)}>{a.code} — {a.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label className="text-xs font-medium text-slate-700 mb-1.5 block">اسم عميل مؤقت</Label>
+                  <Input value={form.tempCustomerName} onChange={(e) => setForm((p) => ({ ...p, tempCustomerName: e.target.value }))} className="h-9 text-sm" />
+                </div>
+                <div>
+                  <Label className="text-xs font-medium text-slate-700 mb-1.5 block">عنوان مؤقت</Label>
+                  <Input value={form.tempAddress} onChange={(e) => setForm((p) => ({ ...p, tempAddress: e.target.value }))} className="h-9 text-sm" />
+                </div>
+                <div>
                   <Label className="text-xs font-medium text-slate-700 mb-1.5 block">نوع الدفع</Label>
                   {isCashMode ? (
                     <Input value="نقدي" readOnly className="h-9 text-sm bg-slate-50" />
@@ -669,8 +909,11 @@ export default function SalesInvoices() {
                       <th className="px-3 py-2 text-right text-xs font-semibold text-slate-600 min-w-[160px]">الصنف</th>
                       <th className="px-3 py-2 text-right text-xs font-semibold text-slate-600 w-32">المخزن</th>
                       <th className="px-3 py-2 text-right text-xs font-semibold text-slate-600 w-20">الكمية</th>
+                      {form.deliveryType === "partial" && <th className="px-3 py-2 text-right text-xs font-semibold text-slate-600 w-24">مسلَّم</th>}
+                      <th className="px-3 py-2 text-right text-xs font-semibold text-slate-600 w-28">نوع السعر</th>
                       <th className="px-3 py-2 text-right text-xs font-semibold text-slate-600 w-24">السعر</th>
                       <th className="px-3 py-2 text-right text-xs font-semibold text-slate-600 w-16">خصم %</th>
+                      <th className="px-3 py-2 text-right text-xs font-semibold text-slate-600 w-20">خصم نقدي</th>
                       <th className="px-3 py-2 text-right text-xs font-semibold text-slate-600 w-16">ض1 %</th>
                       <th className="px-3 py-2 text-right text-xs font-semibold text-slate-600 w-16">ض2 %</th>
                       <th className="px-3 py-2 text-right text-xs font-semibold text-slate-600 w-16">ض3 %</th>
@@ -698,13 +941,23 @@ export default function SalesInvoices() {
                           {item.lastPriceHint && (
                             <div className="text-[10px] text-slate-400 mt-0.5">آخر سعر لهذا العميل: {item.lastPriceHint.price.toLocaleString("en-US")} ({item.lastPriceHint.date})</div>
                           )}
+                          <div className="text-[10px] text-slate-400 mt-0.5 space-x-1 space-x-reverse">
+                            {item.barcode && <span>باركود: {item.barcode}</span>}
+                            {item.availableQty != null && <span>· الكمية المتاحة: {item.availableQty}</span>}
+                            {(item.minPrice || item.maxPrice) && (
+                              <span>· حدود السعر: {item.minPrice || "—"} / {item.maxPrice || "—"}</span>
+                            )}
+                          </div>
                         </td>
                         <td className="px-3 py-2">
-                          <Select value={item.warehouseId?.toString() || "default"} onValueChange={(v) => setInvoiceItems((prev) => {
-                            const next = [...prev];
-                            next[idx] = { ...next[idx], warehouseId: v === "default" ? undefined : Number(v) };
-                            return next;
-                          })}>
+                          <Select value={item.warehouseId?.toString() || "default"} onValueChange={(v) => {
+                            setInvoiceItems((prev) => {
+                              const next = [...prev];
+                              next[idx] = { ...next[idx], warehouseId: v === "default" ? undefined : Number(v) };
+                              return next;
+                            });
+                            void refreshAvailable(idx, item.itemId, v === "default" ? form.warehouseId : Number(v));
+                          }}>
                             <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
                             <SelectContent>
                               <SelectItem value="default">(افتراضي)</SelectItem>
@@ -713,8 +966,23 @@ export default function SalesInvoices() {
                           </Select>
                         </td>
                         <td className="px-3 py-2"><Input value={item.quantity} onChange={(e) => updateItem(idx, "quantity", e.target.value)} type="number" className="h-8 text-xs w-full" /></td>
+                        {form.deliveryType === "partial" && (
+                          <td className="px-3 py-2"><Input value={item.deliveredQuantity} onChange={(e) => updateItem(idx, "deliveredQuantity", e.target.value)} type="number" className="h-8 text-xs w-full" placeholder="مسلَّم" /></td>
+                        )}
+                        <td className="px-3 py-2">
+                          <Select value={item.priceType || "default"} onValueChange={(v) => updateItem(idx, "priceType", v === "default" ? "" : v)}>
+                            <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="افتراضي" /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="default">افتراضي</SelectItem>
+                              {(item.extraPrices || []).map((ep) => (
+                                <SelectItem key={ep.priceName} value={ep.priceName}>{ep.priceName}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </td>
                         <td className="px-3 py-2"><Input value={item.price} onChange={(e) => updateItem(idx, "price", e.target.value)} type="number" className="h-8 text-xs w-full" /></td>
                         <td className="px-3 py-2"><Input value={item.discount} onChange={(e) => updateItem(idx, "discount", e.target.value)} type="number" className="h-8 text-xs w-full" /></td>
+                        <td className="px-3 py-2"><Input value={item.cashDiscount} onChange={(e) => updateItem(idx, "cashDiscount", e.target.value)} type="number" className="h-8 text-xs w-full" /></td>
                         <td className="px-3 py-2"><Input value={item.tax} onChange={(e) => updateItem(idx, "tax", e.target.value)} type="number" className="h-8 text-xs w-full" /></td>
                         <td className="px-3 py-2"><Input value={item.tax2} onChange={(e) => updateItem(idx, "tax2", e.target.value)} type="number" className="h-8 text-xs w-full" /></td>
                         <td className="px-3 py-2"><Input value={item.tax3} onChange={(e) => updateItem(idx, "tax3", e.target.value)} type="number" className="h-8 text-xs w-full" /></td>
@@ -749,7 +1017,7 @@ export default function SalesInvoices() {
                       </tr>
                     ))}
                     {invoiceItems.length === 0 && (
-                      <tr><td colSpan={12} className="py-8 text-center text-slate-400 text-xs">اضغط "إضافة صنف" أو امسح سيريل نمبر لإضافة أصناف للفاتورة</td></tr>
+                      <tr><td colSpan={16} className="py-8 text-center text-slate-400 text-xs">اضغط "إضافة صنف" أو امسح سيريل نمبر لإضافة أصناف للفاتورة</td></tr>
                     )}
                   </tbody>
                 </table>
@@ -801,6 +1069,8 @@ export default function SalesInvoices() {
               <div className="flex flex-wrap gap-4 border-t border-slate-100 pt-3">
                 <label className="flex items-center gap-2 text-xs text-slate-600"><Checkbox checked={printAfterSave} onCheckedChange={(v) => setPrintAfterSave(!!v)} />طباعة بعد الحفظ</label>
                 <label className="flex items-center gap-2 text-xs text-slate-600"><Checkbox checked={printAfterApprove} onCheckedChange={(v) => setPrintAfterApprove(!!v)} />طباعة بعد الاعتماد</label>
+                <label className="flex items-center gap-2 text-xs text-slate-600"><Checkbox checked={printEnglish} onCheckedChange={(v) => setPrintEnglish(!!v)} />طباعة بالانجليزية</label>
+                <label className="flex items-center gap-2 text-xs text-slate-600"><Checkbox checked={printReceipt} onCheckedChange={(v) => setPrintReceipt(!!v)} />طباعة كايصال</label>
                 <label className="flex items-center gap-2 text-xs text-slate-600"><Checkbox checked={printNote} onCheckedChange={(v) => setPrintNote(!!v)} />طباعة إذن صرف مخزن مع الفاتورة</label>
               </div>
             </CardContent>
@@ -835,6 +1105,17 @@ export default function SalesInvoices() {
 
   return (
     <ERPLayout title={pageTitle}>
+      <InvoiceListFilterBar
+        value={listFilters}
+        onChange={(v) => { setListFilters(v); setPage(1); }}
+        onClear={() => { setListFilters({}); setPage(1); }}
+        partyLabel="العميل"
+        parties={(customers?.rows || []).map((c) => ({ id: c.id, name: c.name }))}
+        branches={(branchList || []).map((b: any) => ({ id: b.id, name: b.name }))}
+        salesReps={(salesReps || []).map((r: any) => ({ id: r.id, name: r.name }))}
+        currencies={["EGP", ...((exchangeRates || []).map((r: any) => String(r.code)).filter((c: string) => c && c !== "EGP"))]}
+        showSalesRep
+      />
       <DataTable
         title={pageTitle}
         data={data?.rows}
@@ -860,6 +1141,14 @@ export default function SalesInvoices() {
               {Number(row.remaining).toLocaleString("en-US")} ج.م
             </span>
           ) },
+          { key: "deliveryStatus", label: "التسليم", render: (row) => {
+            const d = (row as any).deliveryStatus;
+            if (d === "delivered") return "تم";
+            if (d === "partial") return "جزئي";
+            if (d === "undelivered") return "لم يُسلَّم";
+            return "—";
+          } },
+          { key: "referenceNumber", label: "المرجع", render: (row) => (row as any).referenceNumber || "—" },
           { key: "status", label: "الحالة", render: (row) => statusBadge(row.status || "draft") },
         ]}
         actions={(row) => (

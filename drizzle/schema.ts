@@ -329,6 +329,16 @@ export const purchaseInvoices = mysqlTable("purchase_invoices", {
   bankAmount: decimal("bankAmount", { precision: 15, scale: 2 }).default("0"),
   bankAccountId: int("bankAccountId"),
   receiptType: mysqlEnum("receiptType", ["full", "partial"]).default("full"),
+  /** حالة التسليم الفعلية للمخزن — مطابقة فلتر «حالة التسليم» في قائمة ميجا */
+  deliveryStatus: mysqlEnum("deliveryStatus", ["undelivered", "partial", "delivered"]).default("undelivered"),
+  /** حساب الخزينة (دليل الحسابات) — رأس فاتورة ميجا */
+  cashAccountId: int("cashAccountId"),
+  /** حساب شركة الشحن */
+  shippingAccountId: int("shippingAccountId"),
+  tempSupplierName: varchar("tempSupplierName", { length: 255 }),
+  tempAddress: varchar("tempAddress", { length: 500 }),
+  phone: varchar("phone", { length: 50 }),
+  address: varchar("address", { length: 500 }),
   subtotal: decimal("subtotal", { precision: 15, scale: 2 }).default("0"),
   discount: decimal("discount", { precision: 15, scale: 2 }).default("0"),
   tax: decimal("tax", { precision: 15, scale: 2 }).default("0"),
@@ -359,6 +369,12 @@ export const purchaseInvoiceItems = mysqlTable("purchase_invoice_items", {
   quantity: decimal("quantity", { precision: 15, scale: 3 }).notNull(),
   price: decimal("price", { precision: 15, scale: 2 }).notNull(),
   discount: decimal("discount", { precision: 5, scale: 2 }).default("0"),
+  /** خصم نقدي (مبلغ) — ميجا على سطر الفاتورة */
+  cashDiscount: decimal("cashDiscount", { precision: 15, scale: 2 }).default("0"),
+  priceType: varchar("priceType", { length: 100 }),
+  unit: varchar("unit", { length: 50 }),
+  /** الكمية المسلَّمة للمخزن — عند استلام جزئي أقل من quantity */
+  deliveredQuantity: decimal("deliveredQuantity", { precision: 15, scale: 3 }),
   tax: decimal("tax", { precision: 5, scale: 2 }).default("0"),
   taxId: int("taxId"),
   tax2: decimal("tax2", { precision: 5, scale: 2 }).default("0"),
@@ -481,6 +497,17 @@ export const salesInvoices = mysqlTable("sales_invoices", {
   /** جزء السداد عن طريق البنك المحدد في bankAccountId */
   bankAmount: decimal("bankAmount", { precision: 15, scale: 2 }).default("0"),
   bankAccountId: int("bankAccountId"),
+  /** رقم المرجع — مطابقة رأس فاتورة ميجا */
+  referenceNumber: varchar("referenceNumber", { length: 100 }),
+  /** نوع الاستلام: كلي / جزئي — مطابقة ميجا */
+  deliveryType: mysqlEnum("deliveryType", ["full", "partial"]).default("full"),
+  deliveryStatus: mysqlEnum("deliveryStatus", ["undelivered", "partial", "delivered"]).default("undelivered"),
+  cashAccountId: int("cashAccountId"),
+  shippingAccountId: int("shippingAccountId"),
+  tempCustomerName: varchar("tempCustomerName", { length: 255 }),
+  tempAddress: varchar("tempAddress", { length: 500 }),
+  phone: varchar("phone", { length: 50 }),
+  address: varchar("address", { length: 500 }),
   subtotal: decimal("subtotal", { precision: 15, scale: 2 }).default("0"),
   discount: decimal("discount", { precision: 15, scale: 2 }).default("0"),
   tax: decimal("tax", { precision: 15, scale: 2 }).default("0"),
@@ -517,6 +544,10 @@ export const salesInvoiceItems = mysqlTable("sales_invoice_items", {
   quantity: decimal("quantity", { precision: 15, scale: 3 }).notNull(),
   price: decimal("price", { precision: 15, scale: 2 }).notNull(),
   discount: decimal("discount", { precision: 5, scale: 2 }).default("0"),
+  cashDiscount: decimal("cashDiscount", { precision: 15, scale: 2 }).default("0"),
+  priceType: varchar("priceType", { length: 100 }),
+  unit: varchar("unit", { length: 50 }),
+  deliveredQuantity: decimal("deliveredQuantity", { precision: 15, scale: 3 }),
   tax: decimal("tax", { precision: 5, scale: 2 }).default("0"),
   taxId: int("taxId"),
   tax2: decimal("tax2", { precision: 5, scale: 2 }).default("0"),

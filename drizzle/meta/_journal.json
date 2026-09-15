@@ -463,6 +463,13 @@
       "when": 1788400000000,
       "tag": "0065_inventory_full_depth",
       "breakpoints": true
+    },
+    {
+      "idx": 66,
+      "version": "5",
+      "when": 1788400000001,
+      "tag": "0066_invoice_mega_a1_a5",
+      "breakpoints": true
     }
   ]
 }

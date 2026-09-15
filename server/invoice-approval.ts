@@ -25,7 +25,13 @@ import {
 import { cancelPostedJournalByReference, postPurchaseInvoiceJournal, postSalesCogsJournal, postSalesInvoiceJournal } from "./auto-journal";
 import { recalculateCustomerBalance, recalculateSupplierBalance } from "./contact-balances";
 import { applyStockMovement, resolveWarehouseId } from "./inventory-stock";
-import { loadInvoiceItemStockMeta, requireInvoiceLineWarehouse, itemAffectsWarehouseStock } from "./invoice-stock";
+import {
+  loadInvoiceItemStockMeta,
+  requireInvoiceLineWarehouse,
+  itemAffectsWarehouseStock,
+  resolveInvoiceStockQuantity,
+  computeDeliveryStatus,
+} from "./invoice-stock";
 import { updateAverageCostAfterPurchase, recalculateItemAverageCost } from "./inventory-cost";
 import { assertDateNotInClosedPeriod } from "./fiscal-period-guard";
 import { downstreamMessage, findDownstreamStockConsumers } from "./reversal-guards";
@@ -89,6 +95,7 @@ export async function finalizeSalesInvoice(
       id: salesInvoiceItems.id,
       itemId: salesInvoiceItems.itemId,
       quantity: salesInvoiceItems.quantity,
+      deliveredQuantity: salesInvoiceItems.deliveredQuantity,
       warehouseId: salesInvoiceItems.warehouseId,
       batchId: salesInvoiceItems.batchId,
     })
@@ -100,6 +107,12 @@ export async function finalizeSalesInvoice(
     const meta = itemMeta.get(line.itemId);
     if (meta && !meta.affectsStock) continue;
     const lineWarehouseId = requireInvoiceLineWarehouse(line.warehouseId, inv.warehouseId, meta?.name);
+    const stockQty = resolveInvoiceStockQuantity({
+      deliveryOrReceiptType: (inv as any).deliveryType,
+      quantity: line.quantity,
+      deliveredQuantity: line.deliveredQuantity,
+      itemLabel: meta?.name,
+    });
     const splits = await db
       .select()
       .from(salesInvoiceItemBatches)
@@ -118,7 +131,7 @@ export async function finalizeSalesInvoice(
     } else {
       await applyStockMovement(db, tenantId, {
         itemId: line.itemId,
-        quantity: line.quantity,
+        quantity: String(stockQty),
         direction: "out",
         warehouseId: lineWarehouseId,
         batchId: line.batchId,
@@ -128,9 +141,10 @@ export async function finalizeSalesInvoice(
   }
 
   const isCash = inv.paymentType === "cash";
+  const deliveryStatus = computeDeliveryStatus(lineItems, (inv as any).deliveryType);
   await db
     .update(salesInvoices)
-    .set({ status: isCash ? "paid" : "confirmed" } as any)
+    .set({ status: isCash ? "paid" : "confirmed", deliveryStatus } as any)
     .where(tenantWhere(salesInvoices, tenantId, eq(salesInvoices.id, invoiceId)));
 
   const extraTaxes = await db.select().from(salesInvoiceTaxes)
@@ -194,6 +208,7 @@ export async function finalizePurchaseInvoice(
       id: purchaseInvoiceItems.id,
       itemId: purchaseInvoiceItems.itemId,
       quantity: purchaseInvoiceItems.quantity,
+      deliveredQuantity: purchaseInvoiceItems.deliveredQuantity,
       price: purchaseInvoiceItems.price,
       warehouseId: purchaseInvoiceItems.warehouseId,
       batchId: purchaseInvoiceItems.batchId,
@@ -206,6 +221,12 @@ export async function finalizePurchaseInvoice(
     const meta = itemMeta.get(line.itemId);
     if (meta && !meta.affectsStock) continue;
     const lineWarehouseId = requireInvoiceLineWarehouse(line.warehouseId, inv.warehouseId, meta?.name);
+    const stockQty = resolveInvoiceStockQuantity({
+      deliveryOrReceiptType: (inv as any).receiptType,
+      quantity: line.quantity,
+      deliveredQuantity: line.deliveredQuantity,
+      itemLabel: meta?.name,
+    });
     const splits = await db
       .select()
       .from(purchaseInvoiceItemBatches)
@@ -226,7 +247,7 @@ export async function finalizePurchaseInvoice(
     } else {
       await applyStockMovement(db, tenantId, {
         itemId: line.itemId,
-        quantity: line.quantity,
+        quantity: String(stockQty),
         direction: "in",
         warehouseId: lineWarehouseId,
         batchId: line.batchId,
@@ -237,16 +258,17 @@ export async function finalizePurchaseInvoice(
       db,
       tenantId,
       line.itemId,
-      Number(line.quantity),
+      stockQty,
       Number(line.price),
       lineWarehouseId,
     );
   }
 
   const isCash = inv.paymentType === "cash";
+  const deliveryStatus = computeDeliveryStatus(lineItems, (inv as any).receiptType);
   await db
     .update(purchaseInvoices)
-    .set({ status: isCash ? "paid" : "confirmed" } as any)
+    .set({ status: isCash ? "paid" : "confirmed", deliveryStatus } as any)
     .where(tenantWhere(purchaseInvoices, tenantId, eq(purchaseInvoices.id, invoiceId)));
 
   const extraTaxes = await db.select().from(purchaseInvoiceTaxes)
